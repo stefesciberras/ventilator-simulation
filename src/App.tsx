@@ -10,7 +10,7 @@ const initialVentilator: VentilatorSettings = {
 }
 
 const initialPatient: PatientSettings = {
-  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, inspiratoryTime: 1,
+  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1,
 }
 
 const WINDOW_SAMPLES = 1200
@@ -124,7 +124,7 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.6</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.7</span></div>
       </header>
 
       <div className="workspace">

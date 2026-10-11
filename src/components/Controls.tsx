@@ -44,10 +44,10 @@ export function VentilatorControls({ settings, onChange }: { settings: Ventilato
 export function PatientControls({ settings, onChange }: { settings: PatientSettings; onChange: (next: PatientSettings) => void }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const presets: Record<string, Partial<PatientSettings>> = {
-    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, inspiratoryTime: 1 },
-    ARDS: { compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, inspiratoryTime: 0.8 },
-    COPD: { compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, inspiratoryTime: 0.9 },
-    Asthma: { compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, inspiratoryTime: 0.8 },
+    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1 },
+    ARDS: { compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8 },
+    COPD: { compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9 },
+    Asthma: { compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8 },
   }
   return (
     <section className="control-section">
@@ -58,7 +58,7 @@ export function PatientControls({ settings, onChange }: { settings: PatientSetti
       <Slider label="Expiratory resistance" value={settings.expiratoryResistance} unit=" cmH₂O/L/s" min={3} max={50} onChange={(v) => patch({ expiratoryResistance: v })} />
       <Slider label="Spontaneous RR" value={settings.spontaneousRate} unit="/min" min={0} max={35} onChange={(v) => patch({ spontaneousRate: v })} />
       <Slider label="Inspiratory effort" value={settings.effort} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ effort: v })} />
-      <Slider label="Patient Ti" value={settings.inspiratoryTime} unit=" s" min={0.4} max={2} step={0.1} onChange={(v) => patch({ inspiratoryTime: v })} />
+      <Slider label="Neural inspiratory time" value={settings.neuralInspiratoryTime} unit=" s" min={0.3} max={3} step={0.1} onChange={(v) => patch({ neuralInspiratoryTime: v })} />
     </section>
   )
 }
