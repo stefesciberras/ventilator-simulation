@@ -2,6 +2,11 @@ import type { Measurements, PatientSettings, Sample, VentilatorSettings } from '
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
+interface SimulationOptions {
+  inspiratoryHoldRequestTime?: number | null
+  inspiratoryHoldDuration?: number
+}
+
 function patientMusclePressure(t: number, patient: PatientSettings): number {
   if (patient.spontaneousRate <= 0 || patient.effort <= 0) return 0
   const cycle = 60 / patient.spontaneousRate
@@ -22,14 +27,19 @@ export function generateWaveforms(
   patient: PatientSettings,
   duration = 30,
   dt = 0.01,
+  options: SimulationOptions = {},
 ): Sample[] {
   const samples: Sample[] = []
   const complianceL = patient.compliance / 1000
+  const holdDuration = Math.max(0.2, options.inspiratoryHoldDuration ?? 2)
   let volume = 0
   let breathStart = -100
   let lastMandatory = -100
   let breathActive = false
   let inspiredThisBreath = 0
+  let holdActive = false
+  let holdUntil = -1
+  let holdUsed = false
 
   for (let t = 0; t <= duration; t += dt) {
     const pmus = patientMusclePressure(t, patient)
@@ -38,7 +48,7 @@ export function generateWaveforms(
     const patientTrigger = isPatientTrigger(t, dt, patient)
     const triggerAllowed = patient.effort >= ventilator.triggerSensitivity
 
-    if (!breathActive && (mandatoryDue || (patientTrigger && triggerAllowed))) {
+    if (!breathActive && !holdActive && (mandatoryDue || (patientTrigger && triggerAllowed))) {
       breathActive = true
       breathStart = t
       inspiredThisBreath = 0
@@ -46,23 +56,52 @@ export function generateWaveforms(
     }
 
     const elapsed = t - breathStart
-    let inspiration = breathActive
+    let inspiration = breathActive || holdActive
     let flowLs = 0
     let pressure = ventilator.peep
+    const holdRequested = options.inspiratoryHoldRequestTime != null && !holdUsed && t >= options.inspiratoryHoldRequestTime
 
-    if (breathActive && ventilator.mode === 'VC-AC') {
-      const targetFlow = ventilator.tidalVolume / 1000 / Math.max(ventilator.inspiratoryTime, 0.2)
-      if (elapsed >= ventilator.inspiratoryTime || inspiredThisBreath >= ventilator.tidalVolume / 1000) {
+    if (holdActive) {
+      if (t < holdUntil) {
+        inspiration = true
+        flowLs = 0
+        pressure = ventilator.peep + volume / complianceL - pmus
+      } else {
+        holdActive = false
         breathActive = false
         inspiration = false
+      }
+    } else if (breathActive && ventilator.mode === 'VC-AC') {
+      const targetFlow = ventilator.tidalVolume / 1000 / Math.max(ventilator.inspiratoryTime, 0.2)
+      if (elapsed >= ventilator.inspiratoryTime || inspiredThisBreath >= ventilator.tidalVolume / 1000) {
+        if (holdRequested) {
+          holdActive = true
+          holdUsed = true
+          holdUntil = t + holdDuration
+          inspiration = true
+          flowLs = 0
+          pressure = ventilator.peep + volume / complianceL - pmus
+        } else {
+          breathActive = false
+          inspiration = false
+        }
       } else {
         flowLs = targetFlow
         pressure = ventilator.peep + volume / complianceL + patient.resistance * flowLs - pmus
       }
     } else if (breathActive && ventilator.mode === 'PC-AC') {
       if (elapsed >= ventilator.inspiratoryTime) {
-        breathActive = false
-        inspiration = false
+        if (holdRequested) {
+          holdActive = true
+          holdUsed = true
+          holdUntil = t + holdDuration
+          inspiration = true
+          flowLs = 0
+          pressure = ventilator.peep + volume / complianceL - pmus
+        } else {
+          breathActive = false
+          inspiration = false
+        }
       } else {
         pressure = ventilator.peep + ventilator.pressureControl
         flowLs = (ventilator.pressureControl - volume / complianceL + pmus) / Math.max(patient.resistance, 0.5)
@@ -89,7 +128,7 @@ export function generateWaveforms(
 
     const dv = flowLs * dt
     volume = clamp(volume + dv, 0, 2.5)
-    if (inspiration) inspiredThisBreath += Math.max(dv, 0)
+    if (inspiration && !holdActive) inspiredThisBreath += Math.max(dv, 0)
 
     samples.push({
       time: Number(t.toFixed(4)),
@@ -109,12 +148,16 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
     return { respiratoryRate: 0, tidalVolume: 0, minuteVentilation: 0, peakPressure: 0, meanPressure: 0, peep: ventilator.peep }
   }
 
+  const latestTime = samples[samples.length - 1].time
+  const minuteSamples = samples.filter((sample) => sample.time >= latestTime - 60)
+  const pressureSamples = samples.filter((sample) => sample.time >= latestTime - 20)
+
   const starts: number[] = []
-  const breathVolumes: number[] = []
+  const completedBreaths: Array<{ endTime: number; volume: number }> = []
   let inBreath = false
   let maxVolume = 0
 
-  for (const sample of samples) {
+  for (const sample of minuteSamples) {
     if (sample.phase === 'inspiration' && !inBreath) {
       inBreath = true
       starts.push(sample.time)
@@ -122,23 +165,31 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
     }
     if (inBreath) maxVolume = Math.max(maxVolume, sample.volume)
     if (sample.phase === 'expiration' && inBreath) {
-      breathVolumes.push(maxVolume)
+      completedBreaths.push({ endTime: sample.time, volume: maxVolume })
       inBreath = false
     }
   }
 
-  const intervals = starts.slice(1).map((t, index) => t - starts[index]).filter((v) => v > 0.2)
+  const intervals = starts.slice(1).map((t, index) => t - starts[index]).filter((value) => value > 0.2)
   const avgInterval = intervals.length ? intervals.reduce((a, b) => a + b, 0) / intervals.length : 0
   const rr = avgInterval > 0 ? 60 / avgInterval : 0
-  const recentVolumes = breathVolumes.slice(-4)
+  const recentVolumes = completedBreaths.slice(-4).map((breath) => breath.volume)
   const vt = recentVolumes.length ? recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length : 0
-  const peakPressure = Math.max(...samples.map((s) => s.pressure))
-  const meanPressure = samples.reduce((sum, s) => sum + s.pressure, 0) / samples.length
+
+  const minuteStart = Math.max(minuteSamples[0]?.time ?? latestTime, latestTime - 60)
+  const minuteDuration = Math.max(0.01, latestTime - minuteStart)
+  const expiredVolumeLitres = completedBreaths
+    .filter((breath) => breath.endTime >= minuteStart)
+    .reduce((sum, breath) => sum + breath.volume / 1000, 0)
+  const minuteVentilation = expiredVolumeLitres * (60 / minuteDuration)
+
+  const peakPressure = Math.max(...pressureSamples.map((sample) => sample.pressure))
+  const meanPressure = pressureSamples.reduce((sum, sample) => sum + sample.pressure, 0) / Math.max(1, pressureSamples.length)
 
   return {
     respiratoryRate: rr,
     tidalVolume: vt,
-    minuteVentilation: (rr * vt) / 1000,
+    minuteVentilation,
     peakPressure,
     meanPressure,
     peep: ventilator.peep,
