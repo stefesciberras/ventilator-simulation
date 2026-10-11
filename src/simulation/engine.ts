@@ -16,12 +16,6 @@ function patientMusclePressure(t: number, patient: PatientSettings): number {
   return patient.effort * Math.sin(Math.PI * x) ** 2
 }
 
-function isPatientTrigger(t: number, dt: number, patient: PatientSettings): boolean {
-  if (patient.spontaneousRate <= 0 || patient.effort <= 0) return false
-  const cycle = 60 / patient.spontaneousRate
-  return (t % cycle) < dt
-}
-
 export function generateWaveforms(
   ventilator: VentilatorSettings,
   patient: PatientSettings,
@@ -34,25 +28,30 @@ export function generateWaveforms(
   const holdDuration = Math.max(0.2, options.inspiratoryHoldDuration ?? 2)
   let volume = 0
   let breathStart = -100
-  let lastMandatory = -100
+  let lastAssistedBreath = -100
   let breathActive = false
   let inspiredThisBreath = 0
   let holdActive = false
   let holdUntil = -1
   let holdUsed = false
+  let previousPmus = 0
 
   for (let t = 0; t <= duration; t += dt) {
     const pmus = patientMusclePressure(t, patient)
     const mandatoryCycle = 60 / Math.max(ventilator.rate, 1)
-    const mandatoryDue = ventilator.mode !== 'PSV' && t - lastMandatory >= mandatoryCycle - dt / 2
-    const patientTrigger = isPatientTrigger(t, dt, patient)
-    const triggerAllowed = patient.effort >= ventilator.triggerSensitivity
+    const mandatoryDue = ventilator.mode !== 'PSV' && t - lastAssistedBreath >= mandatoryCycle - dt / 2
+    const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
+    const patientTrigger = pmus >= triggerThreshold && previousPmus < triggerThreshold
 
-    if (!breathActive && !holdActive && (mandatoryDue || (patientTrigger && triggerAllowed))) {
+    if (!breathActive && !holdActive && (mandatoryDue || patientTrigger)) {
       breathActive = true
       breathStart = t
       inspiredThisBreath = 0
-      if (mandatoryDue) lastMandatory = t
+
+      // In assist-control modes, either a time-triggered or patient-triggered breath
+      // resets the mandatory timing interval. This prevents an immediately queued
+      // mandatory breath after a patient-triggered assisted breath.
+      if (ventilator.mode !== 'PSV') lastAssistedBreath = t
     }
 
     const elapsed = t - breathStart
@@ -122,8 +121,20 @@ export function generateWaveforms(
 
     if (!inspiration) {
       const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
-      flowLs = volume > 0 ? -volume / tau : 0
-      pressure = ventilator.peep
+      const passiveExpiratoryFlow = volume > 0 ? -volume / tau : 0
+
+      // Before the trigger threshold is reached, the patient's inspiratory effort
+      // is allowed to alter the circuit rather than being hidden by a hard PEEP
+      // clamp. This creates the clinically expected trigger deflection: expiratory
+      // flow is reduced/reversed and Paw dips below PEEP before support starts.
+      if (pmus > 0) {
+        const effortFlow = pmus / Math.max(patient.resistance, 0.5)
+        flowLs = passiveExpiratoryFlow + effortFlow
+        pressure = ventilator.peep - Math.min(pmus, triggerThreshold)
+      } else {
+        flowLs = passiveExpiratoryFlow
+        pressure = ventilator.peep
+      }
     }
 
     const dv = flowLs * dt
@@ -138,6 +149,8 @@ export function generateWaveforms(
       musclePressure: pmus,
       phase: inspiration ? 'inspiration' : 'expiration',
     })
+
+    previousPmus = pmus
   }
 
   return samples
