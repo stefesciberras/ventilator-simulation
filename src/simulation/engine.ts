@@ -26,6 +26,7 @@ export function generateWaveforms(
   const samples: Sample[] = []
   const complianceL = patient.compliance / 1000
   const holdDuration = Math.max(0.2, options.inspiratoryHoldDuration ?? 2)
+  const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
   let volume = 0
   let breathStart = -100
   let lastAssistedBreath = -100
@@ -35,9 +36,11 @@ export function generateWaveforms(
   let holdUntil = -1
   let holdUsed = false
   let previousPmus = 0
+  let suppressedEffortCycle = -1
 
   for (let t = 0; t <= duration; t += dt) {
     const pmus = patientMusclePressure(t, patient)
+    const spontaneousCycleIndex = Number.isFinite(spontaneousCycle) ? Math.floor((t + dt * 0.1) / spontaneousCycle) : -1
     const mandatoryCycle = 60 / Math.max(ventilator.rate, 1)
     const mandatoryDue = ventilator.mode !== 'PSV' && t - lastAssistedBreath >= mandatoryCycle - dt / 2
     const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
@@ -71,6 +74,7 @@ export function generateWaveforms(
         holdActive = false
         breathActive = false
         inspiration = false
+        if (pmus > 0) suppressedEffortCycle = spontaneousCycleIndex
       }
     } else if (breathActive && ventilator.mode === 'VC-AC') {
       const targetFlow = ventilator.tidalVolume / 1000 / Math.max(ventilator.inspiratoryTime, 0.2)
@@ -85,6 +89,7 @@ export function generateWaveforms(
         } else {
           breathActive = false
           inspiration = false
+          if (pmus > 0) suppressedEffortCycle = spontaneousCycleIndex
         }
       } else {
         flowLs = targetFlow
@@ -102,6 +107,7 @@ export function generateWaveforms(
         } else {
           breathActive = false
           inspiration = false
+          if (pmus > 0) suppressedEffortCycle = spontaneousCycleIndex
         }
       } else {
         pressure = ventilator.peep + ventilator.pressureControl
@@ -118,18 +124,23 @@ export function generateWaveforms(
       if (cycleOff || timeLimit) {
         breathActive = false
         inspiration = false
+        if (pmus > 0) suppressedEffortCycle = spontaneousCycleIndex
       }
     }
 
     if (!inspiration) {
       const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
+      // Passive single-compartment expiration: dV/dt = -V/(Rexp*C).
+      // This gives an immediate negative peak at cycling followed by a smooth
+      // exponential return of expiratory flow toward zero.
       const passiveExpiratoryFlow = volume > 0 ? -volume / tau : 0
+      const residualEffortSuppressed = spontaneousCycleIndex === suppressedEffortCycle
 
-      // Before the trigger threshold is reached, the patient's inspiratory effort
-      // is allowed to alter the circuit rather than being hidden by a hard PEEP
-      // clamp. This creates the clinically expected trigger deflection: expiratory
-      // flow is reduced/reversed and Paw dips below PEEP before support starts.
-      if (pmus > 0) {
+      // Patient effort is exposed only while it is an uncaptured pre-trigger effort.
+      // Once a supported/mandatory inspiration has cycled off, residual Pmus from
+      // that same spontaneous effort must not pull Paw below PEEP or round off the
+      // expiratory-flow peak. A new spontaneous cycle can create a new trigger notch.
+      if (pmus > 0 && !residualEffortSuppressed) {
         const effortFlow = pmus / Math.max(patient.resistance, 0.5)
         flowLs = passiveExpiratoryFlow + effortFlow
         pressure = ventilator.peep - Math.min(pmus, triggerThreshold)
