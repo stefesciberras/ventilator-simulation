@@ -19,14 +19,42 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>
 }
 
+function PauseIcon({ paused }: { paused: boolean }) {
+  return paused ? (
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+  ) : (
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z" fill="currentColor" /></svg>
+  )
+}
+
+function NebuliserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 4h8v4H8zM7 9h10l1 10H6L7 9z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M12 1.5v2M9 2.4l1 1.5M15 2.4l-1 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function AlarmSilenceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.5 9a5.5 5.5 0 0 1 9.7-3.6M17.5 9v5l2 2H8.5M10 19h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export default function App() {
   const [ventilator, setVentilator] = useState(initialVentilator)
   const [patient, setPatient] = useState(initialPatient)
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [nebuliser, setNebuliser] = useState(false)
+  const [alarmSilenced, setAlarmSilenced] = useState(false)
   const [frozen, setFrozen] = useState(false)
   const [frozenSamples, setFrozenSamples] = useState<Sample[] | null>(null)
   const [cursor, setCursor] = useState(0)
+  const [traceCursor, setTraceCursor] = useState(Math.floor(WINDOW_SAMPLES * 0.7))
 
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
   const generated = useMemo(() => generateWaveforms(effectiveVentilator, patient, 30), [effectiveVentilator, patient])
@@ -47,9 +75,25 @@ export default function App() {
   const movingSamples = useMemo(() => generated.slice(cursor, cursor + WINDOW_SAMPLES), [generated, cursor])
   const samples = frozen && frozenSamples ? frozenSamples : movingSamples
   const measures = useMemo(() => calculateMeasurements(samples, effectiveVentilator), [samples, effectiveVentilator])
+  const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
+
+  useEffect(() => {
+    if (!frozen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      event.preventDefault()
+      const direction = event.key === 'ArrowLeft' ? -1 : 1
+      setTraceCursor((current) => Math.max(0, Math.min(samples.length - 1, current + direction)))
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [frozen, samples.length])
 
   const toggleFreeze = () => {
-    if (!frozen) setFrozenSamples(movingSamples)
+    if (!frozen) {
+      setFrozenSamples(movingSamples)
+      setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
+    }
     setFrozen((value) => !value)
   }
 
@@ -57,7 +101,7 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="status-cluster"><span className="status-dot" />SIMULATION ACTIVE <span className="version">v0.1</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.2</span></div>
       </header>
 
       <div className="workspace">
@@ -67,27 +111,31 @@ export default function App() {
             <div className="screen-settings"><span>FiO₂ <b>{Math.round(effectiveVentilator.fio2 * 100)}%</b></span><span>PEEP <b>{ventilator.peep}</b></span></div>
           </div>
 
-          <div className="waveforms">
-            <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" />
-            <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" />
-            <Waveform samples={samples} signal="volume" label="Volume" unit="mL" min={0} max={900} accent="#83e28f" />
-          </div>
+          <div className="screen-body">
+            <div className="waveforms">
+              <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime />
+              <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
+              <Waveform samples={samples} signal="volume" label="Volume" unit="mL" min={0} max={900} accent="#83e28f" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
+            </div>
 
-          <div className="metrics-row">
-            <Metric label="RR" value={measures.respiratoryRate.toFixed(0)} unit="/min" />
-            <Metric label="VTe" value={measures.tidalVolume.toFixed(0)} unit="mL" />
-            <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
-            <Metric label="Ppeak" value={measures.peakPressure.toFixed(0)} unit="cmH₂O" />
-            <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
-            <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
+            <aside className="metrics-panel" aria-label="Measured values">
+              <div className="metrics-title">Measured</div>
+              <Metric label="RR" value={measures.respiratoryRate.toFixed(0)} unit="/min" />
+              <Metric label="VTe" value={measures.tidalVolume.toFixed(0)} unit="mL" />
+              <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
+              <Metric label="Ppeak" value={measures.peakPressure.toFixed(0)} unit="cmH₂O" />
+              <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
+              <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
+              {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
+            </aside>
           </div>
 
           <div className="action-bar">
-            <button className={oxygenBoost ? 'active amber' : ''} onClick={() => setOxygenBoost((v) => !v)}>O₂ enrichment</button>
-            <button className={nebuliser ? 'active blue' : ''} onClick={() => setNebuliser((v) => !v)}>Nebuliser</button>
-            <button onClick={toggleFreeze}>{frozen ? 'Resume' : 'Freeze'}</button>
-            <button disabled>Inspiratory hold</button>
-            <button disabled>Alarm silence</button>
+            <button className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`} onClick={() => setOxygenBoost((v) => !v)} title="O₂ enrichment" aria-label="O₂ enrichment">O₂</button>
+            <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
+            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume simulation' : 'Pause and freeze waveforms'} aria-label={frozen ? 'Resume simulation' : 'Pause simulation'}><PauseIcon paused={frozen} /></button>
+            <button className="hardware-button" disabled>Inspiratory hold</button>
+            <button className={`hardware-button icon-button alarm-button ${alarmSilenced ? 'active' : ''}`} onClick={() => setAlarmSilenced((v) => !v)} title="Alarm silence" aria-label="Alarm silence"><AlarmSilenceIcon /></button>
           </div>
         </section>
 
