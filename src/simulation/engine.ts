@@ -42,11 +42,13 @@ export function generateWaveforms(
     const mandatoryDue = ventilator.mode !== 'PSV' && t - lastAssistedBreath >= mandatoryCycle - dt / 2
     const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
     const patientTrigger = pmus >= triggerThreshold && previousPmus < triggerThreshold
+    let breathTrigger: Sample['breathTrigger']
 
     if (!breathActive && !holdActive && (mandatoryDue || patientTrigger)) {
       breathActive = true
       breathStart = t
       inspiredThisBreath = 0
+      breathTrigger = patientTrigger ? 'patient' : 'mandatory'
 
       // In assist-control modes, either a time-triggered or patient-triggered breath
       // resets the mandatory timing interval. This prevents an immediately queued
@@ -148,6 +150,7 @@ export function generateWaveforms(
       volume: volume * 1000,
       musclePressure: pmus,
       phase: inspiration ? 'inspiration' : 'expiration',
+      breathTrigger,
     })
 
     previousPmus = pmus
