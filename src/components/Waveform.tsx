@@ -22,6 +22,7 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const draggingRef = useRef(false)
   const selectedSample = samples[Math.min(cursorIndex, Math.max(0, samples.length - 1))]
+  const screenStartTime = samples[0]?.time ?? 0
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -112,7 +113,7 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
       <div className="waveform-label"><strong>{label}</strong><span>{unit}</span></div>
       {frozen && selectedSample && (
         <div className="trace-readout">
-          {showTime && <div className="trace-time">t {selectedSample.time.toFixed(2)} s</div>}
+          {showTime && <div className="trace-time">t {(selectedSample.time - screenStartTime).toFixed(2)} s</div>}
           <div><strong>{selectedSample[signal].toFixed(valuePrecision)}</strong><span>{unit}</span></div>
         </div>
       )}
