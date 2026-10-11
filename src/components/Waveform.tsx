@@ -69,6 +69,26 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
     })
     ctx.stroke()
 
+    // Patient-triggered breaths are marked on Paw with a small green downward
+    // triangle. Mandatory breaths remain unmarked, making assisted breaths easy
+    // to identify without cluttering the pressure trace.
+    if (signal === 'pressure') {
+      samples.forEach((sample, index) => {
+        if (sample.breathTrigger !== 'patient') return
+        const x = (index / Math.max(1, samples.length - 1)) * width
+        const pressureY = Math.max(0, Math.min(height, toY(sample.pressure)))
+        const tipY = Math.max(12, pressureY - 4)
+
+        ctx.fillStyle = '#78e08f'
+        ctx.beginPath()
+        ctx.moveTo(x, tipY)
+        ctx.lineTo(x - 5.5, tipY - 9)
+        ctx.lineTo(x + 5.5, tipY - 9)
+        ctx.closePath()
+        ctx.fill()
+      })
+    }
+
     if (frozen) {
       const clampedCursor = Math.min(cursorIndex, samples.length - 1)
       const x = (clampedCursor / Math.max(1, samples.length - 1)) * width
