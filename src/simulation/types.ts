@@ -28,6 +28,7 @@ export interface Sample {
   volume: number
   musclePressure: number
   phase: 'inspiration' | 'expiration'
+  breathTrigger?: 'mandatory' | 'patient'
 }
 
 export interface Measurements {
