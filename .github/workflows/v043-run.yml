@@ -1,0 +1,29 @@
+name: v043 run
+"on":
+  push:
+    branches:
+      - chatgpt/v0.43-mobile-alarms-diagnostics
+    paths:
+      - .github/workflows/v043-run.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.43-mobile-alarms-diagnostics
+      - name: Apply v0.43 patch
+        run: python .github/scripts/patch_v043.py
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/alarm.css
+          git commit -m "v0.43: fix mobile alarm sliders and diagnostics"
+          git push origin HEAD:chatgpt/v0.43-mobile-alarms-diagnostics
