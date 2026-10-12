@@ -50,6 +50,15 @@ function BreathingToggleIcon({ off }: { off: boolean }) {
   )
 }
 
+function SyncWindowIcon() {
+  return (
+    <svg viewBox="0 0 28 28" aria-hidden="true">
+      <path d="M4 14h20" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M8 9v10M20 9v10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity=".75" />
+    </svg>
+  )
+}
+
 export function VentilatorControls({ settings, onChange, onReset }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void; onReset: () => void }) {
   const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })
   const currentIeRatio = ieRatioFrom(settings)
@@ -128,6 +137,31 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
         <>
           <Slider label="PEEP" value={settings.peep} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ peep: v })} />
           {settings.mode !== 'PSV' && <Slider label={isSimvMode(settings.mode) ? 'SIMV rate' : 'Rate'} value={settings.rate} unit="/min" min={5} max={35} onChange={setRate} />}
+          {isSimvMode(settings.mode) && (
+            <div className="sync-window-control">
+              <div className="sync-window-slider">
+                <Slider
+                  label="Threshold window"
+                  value={settings.simvSyncWindowPercent ?? 25}
+                  unit="% cycle"
+                  min={5}
+                  max={75}
+                  step={5}
+                  onChange={(v) => patch({ simvSyncWindowPercent: v })}
+                />
+              </div>
+              <button
+                type="button"
+                className={`sync-window-toggle ${settings.showSimvSyncWindow ? 'on' : ''}`}
+                onClick={() => patch({ showSimvSyncWindow: !settings.showSimvSyncWindow })}
+                title={settings.showSimvSyncWindow ? 'Hide synchronization window on Paw trace' : 'Highlight synchronization window on Paw trace'}
+                aria-label={settings.showSimvSyncWindow ? 'Hide synchronization window' : 'Show synchronization window'}
+                aria-pressed={settings.showSimvSyncWindow}
+              >
+                <SyncWindowIcon />
+              </button>
+            </div>
+          )}
           {usesTidalVolume(settings.mode) && <Slider label={settings.mode === 'VG-PC' ? 'Target tidal volume' : 'Tidal volume'} value={settings.tidalVolume} unit=" mL" min={250} max={800} step={10} onChange={setTidalVolume} />}
           {hasConventionalMandatoryTiming(settings.mode) && (
             <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
