@@ -407,6 +407,40 @@ export function useTeachingSession({
     return () => button.removeEventListener('click', protectInstructorPause, true)
   }, [role])
 
+  // Realtime remains the fast path, but the teaching session row is authoritative.
+  // Refreshing it once per second makes instructor pause/resume resilient to a
+  // dropped postgres_changes notification without affecting candidate-local pause.
+  useEffect(() => {
+    if (role !== 'candidate' || !session?.id) return
+    let active = true
+    const sessionId = session.id
+
+    const refreshAuthoritativeSession = async () => {
+      try {
+        const fresh = await fetchTeachingSession(sessionId)
+        if (!active || roleRef.current !== 'candidate') return
+        storeSession(fresh)
+        if (fresh.status === 'ended') {
+          setConnection('idle')
+          setError('The instructor ended this teaching session.')
+          roleRef.current = 'standalone'
+          setRole('standalone')
+          return
+        }
+        applyCandidateSession(fresh)
+      } catch {
+        // Realtime and the next refresh can recover independently.
+      }
+    }
+
+    void refreshAuthoritativeSession()
+    const timer = window.setInterval(() => void refreshAuthoritativeSession(), 1000)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [role, session?.id])
+
   useEffect(() => {
     if (role !== 'candidate' || !session?.id) return
     const sendHeartbeat = () => {
