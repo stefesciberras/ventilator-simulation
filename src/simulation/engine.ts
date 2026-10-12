@@ -351,7 +351,16 @@ export function stepSimulation(
       flowLs = targetFlow
       const elasticPressure = state.volume / complianceL
       const resistivePressure = patient.resistance * flowLs
-      pressure = ventilator.peep + elasticPressure + resistivePressure - pmus
+      // In VC the patient's inspiratory effort should visibly pull Paw down mainly when
+      // inspiratory demand exceeds the fixed ventilator flow. When set flow meets demand,
+      // a patient-triggered mandatory breath retains a near-passive pressure ramp.
+      const estimatedPatientFlowDemand = pmus / Math.max(patient.resistance, 0.5)
+      const excessDemand = Math.max(0, estimatedPatientFlowDemand - targetFlow)
+      const starvationFraction = estimatedPatientFlowDemand > 0
+        ? clamp(excessDemand / estimatedPatientFlowDemand, 0, 1)
+        : 0
+      const flowStarvationPressure = pmus * starvationFraction
+      pressure = ventilator.peep + elasticPressure + resistivePressure - flowStarvationPressure
     }
   } else if (state.breathActive && state.activeBreathType === 'pc') {
     if (elapsed >= ventilator.inspiratoryTime) {
