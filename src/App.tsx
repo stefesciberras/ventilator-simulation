@@ -15,7 +15,7 @@ const initialPatient: PatientSettings = {
 
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
-const HISTORY_START = MINUTE_SAMPLES
+const SIMULATION_START = 0
 const SIMULATION_DURATION = 150
 
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
@@ -56,35 +56,39 @@ export default function App() {
   const [alarmSilenced, setAlarmSilenced] = useState(false)
   const [frozen, setFrozen] = useState(false)
   const [frozenSamples, setFrozenSamples] = useState<Sample[] | null>(null)
-  const [cursor, setCursor] = useState(HISTORY_START)
+  const [cursor, setCursor] = useState(SIMULATION_START)
   const [traceCursor, setTraceCursor] = useState(Math.floor(WINDOW_SAMPLES * 0.7))
   const [inspiratoryHoldRequestTime, setInspiratoryHoldRequestTime] = useState<number | null>(null)
+  const [inspiratoryHoldReleaseTime, setInspiratoryHoldReleaseTime] = useState<number | null>(null)
   const [expiratoryHoldRequestTime, setExpiratoryHoldRequestTime] = useState<number | null>(null)
+  const [expiratoryHoldReleaseTime, setExpiratoryHoldReleaseTime] = useState<number | null>(null)
 
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
   const generated = useMemo(
     () => generateWaveforms(effectiveVentilator, patient, SIMULATION_DURATION, 0.01, {
       inspiratoryHoldRequestTime,
-      inspiratoryHoldDuration: 2,
+      inspiratoryHoldReleaseTime,
       expiratoryHoldRequestTime,
-      expiratoryHoldDuration: 2,
+      expiratoryHoldReleaseTime,
     }),
-    [effectiveVentilator, patient, inspiratoryHoldRequestTime, expiratoryHoldRequestTime],
+    [effectiveVentilator, patient, inspiratoryHoldRequestTime, inspiratoryHoldReleaseTime, expiratoryHoldRequestTime, expiratoryHoldReleaseTime],
   )
-  const maxCursor = Math.max(HISTORY_START + 1, generated.length - WINDOW_SAMPLES)
+  const maxCursor = Math.max(SIMULATION_START + 1, generated.length - WINDOW_SAMPLES)
 
   useEffect(() => {
     if (frozen) return
-    const timer = window.setInterval(() => setCursor((current) => current + 10 >= maxCursor ? HISTORY_START : current + 10), 100)
+    const timer = window.setInterval(() => setCursor((current) => current + 10 >= maxCursor ? SIMULATION_START : current + 10), 100)
     return () => window.clearInterval(timer)
   }, [frozen, maxCursor])
 
   useEffect(() => {
-    setCursor(HISTORY_START)
+    setCursor(SIMULATION_START)
     setFrozen(false)
     setFrozenSamples(null)
     setInspiratoryHoldRequestTime(null)
+    setInspiratoryHoldReleaseTime(null)
     setExpiratoryHoldRequestTime(null)
+    setExpiratoryHoldReleaseTime(null)
   }, [ventilator, patient, oxygenBoost])
 
   const movingSamples = useMemo(() => generated.slice(cursor, cursor + WINDOW_SAMPLES), [generated, cursor])
@@ -97,8 +101,8 @@ export default function App() {
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
   const currentSimulationTime = movingSamples[movingSamples.length - 1]?.time ?? 0
-  const inspiratoryHoldIndicatorActive = inspiratoryHoldRequestTime != null && currentSimulationTime - inspiratoryHoldRequestTime < 8
-  const expiratoryHoldIndicatorActive = expiratoryHoldRequestTime != null && currentSimulationTime - expiratoryHoldRequestTime < 8
+  const inspiratoryHoldPressed = inspiratoryHoldRequestTime != null && inspiratoryHoldReleaseTime == null
+  const expiratoryHoldPressed = expiratoryHoldRequestTime != null && expiratoryHoldReleaseTime == null
   const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
 
   useEffect(() => {
@@ -113,31 +117,62 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [frozen, samples.length])
 
+  // A hold-release freezes only after the generator has re-rendered with the final
+  // release time. This guarantees the frozen trace contains the complete manoeuvre.
+  useEffect(() => {
+    if (!frozen || frozenSamples) return
+    setFrozenSamples(movingSamples)
+    setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
+  }, [frozen, frozenSamples, movingSamples])
+
   const toggleFreeze = () => {
     if (!frozen) {
       setFrozenSamples(movingSamples)
       setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
+      setFrozen(true)
+    } else {
+      setFrozen(false)
+      setFrozenSamples(null)
     }
-    setFrozen((value) => !value)
   }
 
-  const startInspiratoryHold = () => {
-    if (frozen || ventilator.mode === 'PSV') return
+  const beginInspiratoryHold = () => {
+    if (frozen || ventilator.mode === 'PSV' || inspiratoryHoldPressed) return
     setExpiratoryHoldRequestTime(null)
+    setExpiratoryHoldReleaseTime(null)
     setInspiratoryHoldRequestTime(currentSimulationTime)
+    setInspiratoryHoldReleaseTime(null)
   }
 
-  const startExpiratoryHold = () => {
-    if (frozen) return
-    setInspiratoryHoldRequestTime(null)
-    setExpiratoryHoldRequestTime(currentSimulationTime)
+  const releaseInspiratoryHold = () => {
+    if (!inspiratoryHoldPressed) return
+    setInspiratoryHoldReleaseTime(currentSimulationTime)
+    setFrozenSamples(null)
+    setFrozen(true)
   }
+
+  const beginExpiratoryHold = () => {
+    if (frozen || expiratoryHoldPressed) return
+    setInspiratoryHoldRequestTime(null)
+    setInspiratoryHoldReleaseTime(null)
+    setExpiratoryHoldRequestTime(currentSimulationTime)
+    setExpiratoryHoldReleaseTime(null)
+  }
+
+  const releaseExpiratoryHold = () => {
+    if (!expiratoryHoldPressed) return
+    setExpiratoryHoldReleaseTime(currentSimulationTime)
+    setFrozenSamples(null)
+    setFrozen(true)
+  }
+
+  const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.9</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.10</span></div>
       </header>
 
       <div className="workspace">
@@ -178,8 +213,26 @@ export default function App() {
             <button className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`} onClick={() => setOxygenBoost((v) => !v)} title="O₂ enrichment" aria-label="O₂ enrichment">O₂</button>
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
             <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume simulation' : 'Pause and freeze waveforms'} aria-label={frozen ? 'Resume simulation' : 'Pause simulation'}><PauseIcon paused={frozen} /></button>
-            <button className={`hardware-button ${inspiratoryHoldIndicatorActive ? 'active' : ''}`} onClick={startInspiratoryHold} disabled={frozen || ventilator.mode === 'PSV'} title={ventilator.mode === 'PSV' ? 'Inspiratory hold is available during mandatory ventilation' : 'Perform a 2 second end-inspiratory hold'}>Inspiratory hold</button>
-            <button className={`hardware-button ${expiratoryHoldIndicatorActive ? 'active' : ''}`} onClick={startExpiratoryHold} disabled={frozen} title="Perform a 2 second expiratory occlusion to measure total PEEP and intrinsic PEEP">Expiratory hold</button>
+            <button
+              className={`hardware-button ${inspiratoryHoldPressed ? 'active' : ''}`}
+              disabled={frozen || ventilator.mode === 'PSV'}
+              title={ventilator.mode === 'PSV' ? 'Inspiratory hold is available during mandatory ventilation' : 'Press and hold for an inspiratory occlusion; release to freeze the trace'}
+              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginInspiratoryHold() }}
+              onPointerUp={releaseInspiratoryHold}
+              onPointerCancel={releaseInspiratoryHold}
+              onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginInspiratoryHold() } }}
+              onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseInspiratoryHold() } }}
+            >Inspiratory hold</button>
+            <button
+              className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
+              disabled={frozen}
+              title="Press and hold for an end-expiratory occlusion; release to freeze and measure total/intrinsic PEEP"
+              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
+              onPointerUp={releaseExpiratoryHold}
+              onPointerCancel={releaseExpiratoryHold}
+              onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
+              onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
+            >Expiratory hold</button>
             <button className={`hardware-button icon-button alarm-button ${alarmSilenced ? 'active' : ''}`} onClick={() => setAlarmSilenced((v) => !v)} title="Alarm silence" aria-label="Alarm silence"><AlarmSilenceIcon /></button>
           </div>
         </section>

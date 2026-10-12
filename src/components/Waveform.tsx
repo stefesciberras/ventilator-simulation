@@ -51,9 +51,20 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke()
     }
 
-    if (!samples.length) return
     const range = max - min
     const toY = (value: number) => height - ((value - min) / range) * height
+
+    // A dedicated zero axis makes incomplete return to baseline immediately visible,
+    // particularly persistent expiratory flow and trapped end-expiratory volume.
+    if (min <= 0 && max >= 0) {
+      const zeroY = Math.max(0.5, Math.min(height - 0.5, toY(0)))
+      ctx.strokeStyle = 'rgba(190, 202, 212, 0.24)'
+      ctx.lineWidth = 1.1
+      ctx.beginPath(); ctx.moveTo(0, zeroY); ctx.lineTo(width, zeroY); ctx.stroke()
+    }
+
+    if (!samples.length) return
+
     ctx.strokeStyle = accent
     ctx.lineWidth = 2
     ctx.lineJoin = 'round'
@@ -69,9 +80,6 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
     })
     ctx.stroke()
 
-    // Patient-triggered breaths are marked on Paw with a small green downward
-    // triangle. Mandatory breaths remain unmarked, making assisted breaths easy
-    // to identify without cluttering the pressure trace.
     if (signal === 'pressure') {
       samples.forEach((sample, index) => {
         if (sample.breathTrigger !== 'patient') return
