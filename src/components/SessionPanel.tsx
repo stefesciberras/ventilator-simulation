@@ -8,6 +8,7 @@ import {
   type TeachingSessionRow,
 } from '../session/supabase'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
+import '../instructor.css'
 
 interface SessionPanelProps {
   role: SessionRole
@@ -95,7 +96,23 @@ export function SessionPanel({
   const [displayName, setDisplayName] = useState('')
   const [simulatorExpanded, setSimulatorExpanded] = useState(false)
   const [dashboardMembers, setDashboardMembers] = useState<SessionMemberRow[]>([])
+  const [rosterError, setRosterError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const body = document.body
+    const instructorMode = role === 'instructor'
+    body.classList.toggle('eduvent-instructor-mode', instructorMode)
+    body.classList.toggle('eduvent-instructor-simulator-open', instructorMode && simulatorExpanded)
+    return () => {
+      body.classList.remove('eduvent-instructor-mode')
+      body.classList.remove('eduvent-instructor-simulator-open')
+    }
+  }, [role, simulatorExpanded])
+
+  useEffect(() => {
+    if (role !== 'instructor') setSimulatorExpanded(false)
+  }, [role])
 
   useEffect(() => {
     if (role !== 'instructor') return
@@ -106,6 +123,7 @@ export function SessionPanel({
   useEffect(() => {
     if (role !== 'instructor' || !session?.id) {
       setDashboardMembers([])
+      setRosterError(null)
       return
     }
 
@@ -113,9 +131,12 @@ export function SessionPanel({
     const refresh = async () => {
       try {
         const rows = await fetchSessionMembers(session.id)
-        if (active) setDashboardMembers(rows)
-      } catch {
-        // Keep the most recent roster visible through brief network interruptions.
+        if (active) {
+          setDashboardMembers(rows)
+          setRosterError(null)
+        }
+      } catch (cause) {
+        if (active) setRosterError(cause instanceof Error ? cause.message : 'Unable to refresh candidate roster.')
       }
     }
 
@@ -129,7 +150,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.46'
+    if (version) version.textContent = 'v0.47'
   }, [])
 
   const candidates = useMemo(() => dashboardMembers.filter((member) => member.role === 'candidate'), [dashboardMembers])
@@ -209,13 +230,15 @@ export function SessionPanel({
 
         <div className="instructor-simulator-toggle-row">
           <div>
-            <strong>Instructor simulator</strong>
-            <span>{simulatorExpanded ? 'Full ventilator visible' : 'Collapsed to keep the candidate dashboard primary'}</span>
+            <strong>Ventilator display</strong>
+            <span>{simulatorExpanded ? 'Waveforms and measured values are visible' : 'Hidden while you manage the teaching session'}</span>
           </div>
           <button type="button" className="session-secondary-button" onClick={() => setSimulatorExpanded((value) => !value)}>
-            {simulatorExpanded ? 'Collapse simulator' : 'Show simulator'}
+            {simulatorExpanded ? 'Hide ventilator display' : 'Show ventilator display'}
           </button>
         </div>
+
+        {session?.simulation_paused && <div className="instructor-pause-banner">All candidate simulations are paused by the instructor.</div>}
 
         <div className="session-domain-grid">
           <div className={`session-domain-card ${session?.sync_patient ? 'shared' : ''}`}>
@@ -248,6 +271,7 @@ export function SessionPanel({
             <div><span className="session-kicker">Live room</span><h3>Candidates</h3></div>
             <span>{onlineCandidates}/{candidates.length} online</span>
           </div>
+          {rosterError && <div className="session-warning">Candidate roster: {rosterError}</div>}
           {candidates.length ? (
             <div className="candidate-card-list">
               {candidates.map((member) => <CandidateCard key={member.id} member={member} now={now} />)}
@@ -283,6 +307,7 @@ export function SessionPanel({
           </span>
         </div>
       </div>
+      {session?.simulation_paused && <div className="session-warning">Simulation paused by instructor. The instructor controls when it resumes.</div>}
       {connection === 'reconnecting' && <div className="session-warning">Connection lost. Simulation continues with the last received settings while EDUVENT reconnects.</div>}
       {error && <div className="session-error" role="alert">{error}</div>}
       <button type="button" className="session-secondary-button" onClick={() => void onLeaveSession()}>Leave session</button>
