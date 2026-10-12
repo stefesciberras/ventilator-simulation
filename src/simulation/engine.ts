@@ -151,8 +151,6 @@ function aprvSample(
 
   if (high && !previousHigh) state.breathStart = t
 
-  // APRV volume is referenced to the Plow equilibrium volume. Phigh provides the
-  // sustained distending pressure; release to Plow permits passive expiration.
   const distendingPressure = high ? pHigh - pLow : 0
   const elasticPressure = state.volume / complianceL
   const drivingPressure = distendingPressure - elasticPressure + pmus
@@ -351,9 +349,6 @@ export function stepSimulation(
       flowLs = targetFlow
       const elasticPressure = state.volume / complianceL
       const resistivePressure = patient.resistance * flowLs
-      // In VC the patient's inspiratory effort should visibly pull Paw down mainly when
-      // inspiratory demand exceeds the fixed ventilator flow. When set flow meets demand,
-      // a patient-triggered mandatory breath retains a near-passive pressure ramp.
       const estimatedPatientFlowDemand = pmus / Math.max(patient.resistance, 0.5)
       const excessDemand = Math.max(0, estimatedPatientFlowDemand - targetFlow)
       const starvationFraction = estimatedPatientFlowDemand > 0
@@ -388,8 +383,13 @@ export function stepSimulation(
         pressure = ventilator.peep + state.volume / complianceL - pmus
       } else {
         const targetVolume = Math.max(ventilator.tidalVolume / 1000, 0.05)
-        const volumeError = (targetVolume - state.inspiredThisBreath) / targetVolume
-        const pressureAdjustment = clamp(volumeError * 4, -1, 1)
+        const volumeErrorFraction = (targetVolume - state.inspiredThisBreath) / targetVolume
+        const deadband = 0.03
+        let pressureAdjustment = 0
+        if (Math.abs(volumeErrorFraction) > deadband) {
+          const adjustmentMagnitude = clamp(Math.abs(volumeErrorFraction) * 10, 1, 3)
+          pressureAdjustment = Math.sign(volumeErrorFraction) * adjustmentMagnitude
+        }
         state.vgPressureControl = clamp(state.vgPressureControl + pressureAdjustment, 5, 40)
         finishBreath(state, t, postCycleReleaseGuard)
         inspiration = false
