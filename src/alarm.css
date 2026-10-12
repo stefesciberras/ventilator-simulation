@@ -24,12 +24,8 @@
 .metrics-actions { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 7px 8px; border-bottom: 1px solid #26343c; background: #10181d; }
 .metrics-actions button { min-height: 38px; padding: 6px 7px; border-radius: 6px; font-size: 9px; font-weight: 700; }
 .metrics-alarm-limits { color: #e6edf0; background: #182229; border-color: #40525d; }
-.metrics-alarm-silence { display: grid; place-items: center; padding: 5px !important; color: #17130a; background: linear-gradient(#f2cf55,#d8a92b); border-color: #f3d86b; }
-.metrics-alarm-silence svg { width: 22px; height: 22px; }
-.metrics-alarm-silence.active { color: #201908; background: linear-gradient(#cda12c,#ae801c); border-color: #e1ba45; }
+.action-bar .alarm-silence-bottom { margin-left: auto; }
 @media (max-width: 680px) {
   .alarm-dialog-backdrop { position: fixed; }
-  .metrics-actions { grid-column: 1 / -1; grid-template-columns: 1fr 48px; }
+  .metrics-actions { grid-column: 1 / -1; grid-template-columns: 1fr; }
 }
-
-.action-bar .alarm-silence-bottom { margin-left: auto; }
