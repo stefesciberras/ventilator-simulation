@@ -17,162 +17,143 @@ jobs:
         run: |
           from pathlib import Path
 
-          def replace_once(path, old, new, label):
-              p = Path(path)
-              text = p.read_text()
-              if old not in text:
-                  raise SystemExit(f'{label} marker not found in {path}')
-              p.write_text(text.replace(old, new, 1))
-
-          # Controls: support disabled/greyed sliders and disable trigger sensitivity + ETS at PS=0.
           p = Path('src/components/Controls.tsx')
           text = p.read_text()
-          text = text.replace("  onChange: (value: number) => void\n}", "  onChange: (value: number) => void\n  disabled?: boolean\n}", 1)
-          text = text.replace("function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange }: SliderProps) {", "function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange, disabled = false }: SliderProps) {", 1)
-          text = text.replace('<label className="control-row">', '<label className={`control-row ${disabled ? \'disabled\' : \'\'}`}>', 1)
-          old_input = '<input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />'
-          new_input = '<input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} />'
-          if old_input not in text: raise SystemExit('Slider input marker not found')
-          text = text.replace(old_input, new_input, 1)
+          replacements = [
+              ("  onChange: (value: number) => void\n}", "  onChange: (value: number) => void\n  disabled?: boolean\n}"),
+              ("function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange }: SliderProps) {", "function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange, disabled = false }: SliderProps) {"),
+              ('<label className="control-row">', '<label className={`control-row ${disabled ? \'disabled\' : \'\'}`}>'),
+              ('<input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />', '<input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} />'),
+          ]
+          for old, new in replacements:
+              if old not in text: raise SystemExit(f'Controls marker not found: {old[:40]}')
+              text = text.replace(old, new, 1)
           modes = "  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV', 'BIPAP']\n"
           if modes not in text: raise SystemExit('modes marker not found')
           text = text.replace(modes, modes + "  const zeroPressureSupport = (settings.mode === 'PSV' || isSimvMode(settings.mode)) && settings.pressureSupport <= 0.001\n", 1)
-          old_flow = '<Slider label="Flow trigger" value={settings.flowTriggerSensitivity ?? 2} unit=" L/min" min={0.5} max={10} step={0.5} onChange={(v) => patch({ flowTriggerSensitivity: v })} />'
-          new_flow = '<Slider label="Flow trigger" value={settings.flowTriggerSensitivity ?? 2} unit=" L/min" min={0.5} max={10} step={0.5} disabled={zeroPressureSupport} onChange={(v) => patch({ flowTriggerSensitivity: v })} />'
-          if old_flow not in text: raise SystemExit('flow trigger slider marker not found')
-          text = text.replace(old_flow, new_flow, 1)
-          old_pressure = '<Slider label="Pressure trigger" value={settings.triggerSensitivity} unit=" cmH₂O below PEEP" min={0.5} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />'
-          new_pressure = '<Slider label="Pressure trigger" value={settings.triggerSensitivity} unit=" cmH₂O below PEEP" min={0.5} max={8} step={0.5} disabled={zeroPressureSupport} onChange={(v) => patch({ triggerSensitivity: v })} />'
-          if old_pressure not in text: raise SystemExit('pressure trigger slider marker not found')
-          text = text.replace(old_pressure, new_pressure, 1)
-          old_ets = '<Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} onChange={(v) => patch({ terminationSensitivity: v })} />'
-          new_ets = '<Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} disabled={zeroPressureSupport} onChange={(v) => patch({ terminationSensitivity: v })} />'
-          if old_ets not in text: raise SystemExit('ETS slider marker not found')
-          text = text.replace(old_ets, new_ets, 1)
+          slider_replacements = [
+              ('<Slider label="Flow trigger" value={settings.flowTriggerSensitivity ?? 2} unit=" L/min" min={0.5} max={10} step={0.5} onChange={(v) => patch({ flowTriggerSensitivity: v })} />', '<Slider label="Flow trigger" value={settings.flowTriggerSensitivity ?? 2} unit=" L/min" min={0.5} max={10} step={0.5} disabled={zeroPressureSupport} onChange={(v) => patch({ flowTriggerSensitivity: v })} />'),
+              ('<Slider label="Pressure trigger" value={settings.triggerSensitivity} unit=" cmH₂O below PEEP" min={0.5} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />', '<Slider label="Pressure trigger" value={settings.triggerSensitivity} unit=" cmH₂O below PEEP" min={0.5} max={8} step={0.5} disabled={zeroPressureSupport} onChange={(v) => patch({ triggerSensitivity: v })} />'),
+              ('<Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} onChange={(v) => patch({ terminationSensitivity: v })} />', '<Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} disabled={zeroPressureSupport} onChange={(v) => patch({ terminationSensitivity: v })} />'),
+          ]
+          for old, new in slider_replacements:
+              if old not in text: raise SystemExit(f'Slider marker not found: {old[:40]}')
+              text = text.replace(old, new, 1)
           p.write_text(text)
 
-          # App UI: move diagnostics to round top icon, reorder measured I:E then EtCO2 with spacer, bump version.
           p = Path('src/App.tsx')
           text = p.read_text()
-          alarm_icon_end = """function AlarmSilenceIcon() {
-  return (
-    <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">
-      <path d=\"M6.5 9a5.5 5.5 0 0 1 9.7-3.6M17.5 9v5l2 2H8.5M10 19h4\" fill=\"none\" stroke=\"currentColor\" strokeWidth=\"1.8\" strokeLinecap=\"round\" strokeLinejoin=\"round\" />
-      <path d=\"M3 3l18 18\" stroke=\"currentColor\" strokeWidth=\"2\" strokeLinecap=\"round\" />
-    </svg>
-  )
-}
-"""
-          diagnostic_icon = alarm_icon_end + """
-function DiagnosticIcon({ copied }: { copied: boolean }) {
-  return copied ? (
-    <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 12.5l4 4L19 7\" fill=\"none\" stroke=\"currentColor\" strokeWidth=\"2.2\" strokeLinecap=\"round\" strokeLinejoin=\"round\" /></svg>
-  ) : (
-    <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">
-      <rect x=\"4.5\" y=\"4.5\" width=\"15\" height=\"15\" rx=\"2.5\" fill=\"none\" stroke=\"currentColor\" strokeWidth=\"1.7\" />
-      <path d=\"M7.5 13h2l1.4-4 2.2 7 1.5-4H17\" fill=\"none\" stroke=\"currentColor\" strokeWidth=\"1.7\" strokeLinecap=\"round\" strokeLinejoin=\"round\" />
-    </svg>
-  )
-}
-"""
-          if alarm_icon_end not in text: raise SystemExit('alarm icon marker not found')
-          text = text.replace(alarm_icon_end, diagnostic_icon, 1)
+          icon_marker = "\nfunction calculateMeasuredIERatio(samples: Sample[]): number | null {"
+          diagnostic_icon = "\n".join([
+              "",
+              "function DiagnosticIcon({ copied }: { copied: boolean }) {",
+              "  return copied ? (",
+              "    <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 12.5l4 4L19 7\" fill=\"none\" stroke=\"currentColor\" strokeWidth=\"2.2\" strokeLinecap=\"round\" strokeLinejoin=\"round\" /></svg>",
+              "  ) : (",
+              "    <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">",
+              "      <rect x=\"4.5\" y=\"4.5\" width=\"15\" height=\"15\" rx=\"2.5\" fill=\"none\" stroke=\"currentColor\" strokeWidth=\"1.7\" />",
+              "      <path d=\"M7.5 13h2l1.4-4 2.2 7 1.5-4H17\" fill=\"none\" stroke=\"currentColor\" strokeWidth=\"1.7\" strokeLinecap=\"round\" strokeLinejoin=\"round\" />",
+              "    </svg>",
+              "  )",
+              "}",
+              "",
+              "function calculateMeasuredIERatio(samples: Sample[]): number | null {",
+          ])
+          if icon_marker not in text: raise SystemExit('diagnostic icon insertion marker not found')
+          text = text.replace(icon_marker, diagnostic_icon, 1)
           old_status = '<div className="status-cluster"><span className={`status-dot ${frozen ? \'paused\' : \'\'}`} />{frozen ? \'SIMULATION PAUSED\' : \'SIMULATION ACTIVE\'} <span className="version">v0.37</span></div>'
-          new_status = """<div className=\"status-cluster\">
-          <span className={`status-dot ${frozen ? 'paused' : ''}`} />
-          <span>{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>
-          <button
-            className={`top-diagnostic-button ${diagnosticCopied ? 'active copied' : ''}`}
-            type=\"button\"
-            onClick={copyDiagnostics}
-            title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
-            aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
-          ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className=\"version\">v0.38</span>
-        </div>"""
+          new_status = "\n".join([
+              '<div className="status-cluster">',
+              "          <span className={`status-dot ${frozen ? 'paused' : ''}`} />",
+              "          <span>{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>",
+              "          <button",
+              "            className={`top-diagnostic-button ${diagnosticCopied ? 'active copied' : ''}`}",
+              '            type="button"',
+              "            onClick={copyDiagnostics}",
+              "            title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}",
+              "            aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}",
+              "          ><DiagnosticIcon copied={diagnosticCopied} /></button>",
+              '          <span className="version">v0.38</span>',
+              '        </div>',
+          ])
           if old_status not in text: raise SystemExit('top status marker not found')
           text = text.replace(old_status, new_status, 1)
-          old_metrics = """              <Metric label=\"Pmean\" value={measures.meanPressure.toFixed(1)} unit=\"cmH₂O\" />
-              <Metric label=\"EtCO₂\" value={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)} unit=\"mmHg\" />
-              <Metric label=\"I:E measured\" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit=\"\" />
-"""
-          new_metrics = """              <Metric label=\"Pmean\" value={measures.meanPressure.toFixed(1)} unit=\"cmH₂O\" />
-              <Metric label=\"I:E measured\" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit=\"\" />
-              <div className=\"metrics-spacer\" aria-hidden=\"true\" />
-              <Metric label=\"EtCO₂\" value={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)} unit=\"mmHg\" />
-"""
-          if old_metrics not in text: raise SystemExit('metrics order marker not found')
+          old_metrics = "\n".join([
+              '              <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />',
+              '              <Metric label="EtCO₂" value={endTidalCO2 == null ? \'—\' : endTidalCO2.toFixed(0)} unit="mmHg" />',
+              '              <Metric label="I:E measured" value={measuredIERatio == null ? \'—\' : `1:${measuredIERatio.toFixed(1)}`} unit="" />',
+          ]) + "\n"
+          new_metrics = "\n".join([
+              '              <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />',
+              '              <Metric label="I:E measured" value={measuredIERatio == null ? \'—\' : `1:${measuredIERatio.toFixed(1)}`} unit="" />',
+              '              <div className="metrics-spacer" aria-hidden="true" />',
+              '              <Metric label="EtCO₂" value={endTidalCO2 == null ? \'—\' : endTidalCO2.toFixed(0)} unit="mmHg" />',
+          ]) + "\n"
+          if old_metrics not in text: raise SystemExit('metrics marker not found')
           text = text.replace(old_metrics, new_metrics, 1)
-          old_diag_button = "            <button className={`hardware-button diagnostic-button ${diagnosticCopied ? 'active blue' : ''}`} onClick={copyDiagnostics} title=\"Copy current settings and visible raw waveform as diagnostic JSON\" aria-label=\"Copy diagnostic JSON\">{diagnosticCopied ? 'Copied' : 'Diagnostic'}</button>\n"
-          if old_diag_button not in text: raise SystemExit('action diagnostic button marker not found')
-          text = text.replace(old_diag_button, '', 1)
-          if "appVersion: '0.37'" not in text: raise SystemExit('diagnostic version marker not found')
+          old_diag = "            <button className={`hardware-button diagnostic-button ${diagnosticCopied ? 'active blue' : ''}`} onClick={copyDiagnostics} title=\"Copy current settings and visible raw waveform as diagnostic JSON\" aria-label=\"Copy diagnostic JSON\">{diagnosticCopied ? 'Copied' : 'Diagnostic'}</button>\n"
+          if old_diag not in text: raise SystemExit('bottom diagnostic marker not found')
+          text = text.replace(old_diag, '', 1)
+          if "appVersion: '0.37'" not in text: raise SystemExit('app version marker not found')
           text = text.replace("appVersion: '0.37'", "appVersion: '0.38'", 1)
           p.write_text(text)
 
-          # CSS for top round diagnostic button, measured-value spacer and disabled controls.
           p = Path('src/styles.css')
           text = p.read_text()
-          status_marker = ".status-dot.paused { background: #e8b94e; box-shadow: 0 0 12px rgba(232,185,78,.75); }\n"
-          status_css = status_marker + ".top-diagnostic-button { flex: 0 0 34px; width: 34px; height: 34px; min-width: 34px; padding: 6px; display: grid; place-items: center; border-radius: 50%; color: #91a8b2; background: #141f25; border-color: #3c505b; }\n.top-diagnostic-button svg { width: 20px; height: 20px; }\n.top-diagnostic-button:hover:not(:disabled) { color: #c9eaf4; border-color: #6a8998; background: #1b2b33; }\n.top-diagnostic-button.copied { color: #8ee6ff; border-color: #53c8ed; background: #173542; }\n"
-          if status_marker not in text: raise SystemExit('status CSS marker not found')
-          text = text.replace(status_marker, status_css, 1)
-          metric_marker = ".metric small { margin-left: 4px; font-size: 8px; color: #768891; }\n"
-          metric_css = metric_marker + ".metrics-spacer { flex: 0 0 12px; min-height: 12px; border-bottom: 1px solid #26343c; background: #091014; }\n"
-          if metric_marker not in text: raise SystemExit('metric CSS marker not found')
-          text = text.replace(metric_marker, metric_css, 1)
-          input_marker = 'input[type="range"] { width: 100%; accent-color: #61bedd; }\n'
-          disabled_css = input_marker + ".control-row.disabled { opacity: .38; }\n.control-row.disabled input[type=\"range\"] { cursor: not-allowed; filter: grayscale(1); }\n"
-          if input_marker not in text: raise SystemExit('range CSS marker not found')
-          text = text.replace(input_marker, disabled_css, 1)
-          mobile_marker = "  .metrics-title { grid-column: 1 / -1; }\n"
-          mobile_css = mobile_marker + "  .metrics-spacer { grid-column: 1 / -1; width: 100%; }\n"
-          if mobile_marker not in text: raise SystemExit('mobile metrics marker not found')
-          text = text.replace(mobile_marker, mobile_css, 1)
+          css_replacements = [
+              ('.status-dot.paused { background: #e8b94e; box-shadow: 0 0 12px rgba(232,185,78,.75); }\n', '.status-dot.paused { background: #e8b94e; box-shadow: 0 0 12px rgba(232,185,78,.75); }\n.top-diagnostic-button { flex: 0 0 34px; width: 34px; height: 34px; min-width: 34px; padding: 6px; display: grid; place-items: center; border-radius: 50%; color: #91a8b2; background: #141f25; border-color: #3c505b; }\n.top-diagnostic-button svg { width: 20px; height: 20px; }\n.top-diagnostic-button:hover:not(:disabled) { color: #c9eaf4; border-color: #6a8998; background: #1b2b33; }\n.top-diagnostic-button.copied { color: #8ee6ff; border-color: #53c8ed; background: #173542; }\n'),
+              ('.metric small { margin-left: 4px; font-size: 8px; color: #768891; }\n', '.metric small { margin-left: 4px; font-size: 8px; color: #768891; }\n.metrics-spacer { flex: 0 0 12px; min-height: 12px; border-bottom: 1px solid #26343c; background: #091014; }\n'),
+              ('input[type="range"] { width: 100%; accent-color: #61bedd; }\n', 'input[type="range"] { width: 100%; accent-color: #61bedd; }\n.control-row.disabled { opacity: .38; }\n.control-row.disabled input[type="range"] { cursor: not-allowed; filter: grayscale(1); }\n'),
+              ('  .metrics-title { grid-column: 1 / -1; }\n', '  .metrics-title { grid-column: 1 / -1; }\n  .metrics-spacer { grid-column: 1 / -1; width: 100%; }\n'),
+          ]
+          for old, new in css_replacements:
+              if old not in text: raise SystemExit(f'CSS marker not found: {old[:30]}')
+              text = text.replace(old, new, 1)
           p.write_text(text)
 
-          # Engine: give flow-triggered breaths a 150 ms response delay so Paw can deflect before support begins.
           p = Path('src/simulation/engine.ts')
           text = p.read_text()
-          text = text.replace("  expiratoryTriggerReady: boolean\n", "  expiratoryTriggerReady: boolean\n  flowTriggerDetectedAt: number | null\n", 1)
-          text = text.replace("    expiratoryTriggerReady: true,\n", "    expiratoryTriggerReady: true,\n    flowTriggerDetectedAt: null,\n", 1)
-          adopt_marker = "  state.expiratoryTriggerReady = true\n  state.peakExpiratoryFlowMagnitude = 0\n"
-          adopt_new = "  state.expiratoryTriggerReady = true\n  state.flowTriggerDetectedAt = null\n  state.peakExpiratoryFlowMagnitude = 0\n"
-          if adopt_marker not in text: raise SystemExit('adopt mode trigger marker not found')
-          text = text.replace(adopt_marker, adopt_new, 1)
-          refractory = "  const triggerRefractoryPeriod = 0.12\n  const expiratoryTriggerFraction = 0.25\n"
-          if refractory not in text: raise SystemExit('trigger constants marker not found')
-          text = text.replace(refractory, "  const triggerRefractoryPeriod = 0.12\n  const flowTriggerResponseDelay = 0.15\n  const expiratoryTriggerFraction = 0.25\n", 1)
-          old_trigger = """  const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
-  const triggerSignalMet = ventilator.triggerType === 'flow'
-    ? predictedPatientFlowLmin >= flowTriggerSensitivity
-    : predictedAirwayPressure <= pressureTriggerLevel
-"""
-          new_trigger = """  const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
-  const rawTriggerSignalMet = ventilator.triggerType === 'flow'
-    ? predictedPatientFlowLmin >= flowTriggerSensitivity
-    : predictedAirwayPressure <= pressureTriggerLevel
-  const triggerDetectionEligible = !state.breathActive && !state.inspiratoryHoldActive && !state.expiratoryHoldActive
-  let triggerSignalMet = rawTriggerSignalMet
-
-  if (ventilator.triggerType === 'flow') {
-    if (!triggerDetectionEligible) {
-      state.flowTriggerDetectedAt = null
-      triggerSignalMet = false
-    } else {
-      if (rawTriggerSignalMet && state.flowTriggerDetectedAt == null) state.flowTriggerDetectedAt = t
-      triggerSignalMet = state.flowTriggerDetectedAt != null && t - state.flowTriggerDetectedAt >= flowTriggerResponseDelay
-    }
-  } else {
-    state.flowTriggerDetectedAt = null
-  }
-"""
-          if old_trigger not in text: raise SystemExit('trigger detector block not found')
+          engine_replacements = [
+              ('  expiratoryTriggerReady: boolean\n', '  expiratoryTriggerReady: boolean\n  flowTriggerDetectedAt: number | null\n'),
+              ('    expiratoryTriggerReady: true,\n', '    expiratoryTriggerReady: true,\n    flowTriggerDetectedAt: null,\n'),
+              ('  state.expiratoryTriggerReady = true\n  state.peakExpiratoryFlowMagnitude = 0\n', '  state.expiratoryTriggerReady = true\n  state.flowTriggerDetectedAt = null\n  state.peakExpiratoryFlowMagnitude = 0\n'),
+              ('  const triggerRefractoryPeriod = 0.12\n  const expiratoryTriggerFraction = 0.25\n', '  const triggerRefractoryPeriod = 0.12\n  const flowTriggerResponseDelay = 0.15\n  const expiratoryTriggerFraction = 0.25\n'),
+          ]
+          for old, new in engine_replacements:
+              if old not in text: raise SystemExit(f'Engine marker not found: {old[:35]}')
+              text = text.replace(old, new, 1)
+          old_trigger = "\n".join([
+              '  const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity',
+              "  const triggerSignalMet = ventilator.triggerType === 'flow'",
+              '    ? predictedPatientFlowLmin >= flowTriggerSensitivity',
+              '    : predictedAirwayPressure <= pressureTriggerLevel',
+          ]) + "\n"
+          new_trigger = "\n".join([
+              '  const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity',
+              "  const rawTriggerSignalMet = ventilator.triggerType === 'flow'",
+              '    ? predictedPatientFlowLmin >= flowTriggerSensitivity',
+              '    : predictedAirwayPressure <= pressureTriggerLevel',
+              '  const triggerDetectionEligible = !state.breathActive && !state.inspiratoryHoldActive && !state.expiratoryHoldActive',
+              '  let triggerSignalMet = rawTriggerSignalMet',
+              '',
+              "  if (ventilator.triggerType === 'flow') {",
+              '    if (!triggerDetectionEligible) {',
+              '      state.flowTriggerDetectedAt = null',
+              '      triggerSignalMet = false',
+              '    } else {',
+              '      if (rawTriggerSignalMet && state.flowTriggerDetectedAt == null) state.flowTriggerDetectedAt = t',
+              '      triggerSignalMet = state.flowTriggerDetectedAt != null && t - state.flowTriggerDetectedAt >= flowTriggerResponseDelay',
+              '    }',
+              '  } else {',
+              '    state.flowTriggerDetectedAt = null',
+              '  }',
+          ]) + "\n"
+          if old_trigger not in text: raise SystemExit('trigger block not found')
           text = text.replace(old_trigger, new_trigger, 1)
-          breath_marker = "    state.expiratoryTriggerReady = false\n\n    if (mode === 'VC-AC')"
+          breath_old = "    state.expiratoryTriggerReady = false\n\n    if (mode === 'VC-AC')"
           breath_new = "    state.expiratoryTriggerReady = false\n    state.flowTriggerDetectedAt = null\n\n    if (mode === 'VC-AC')"
-          if breath_marker not in text: raise SystemExit('breath-start trigger marker not found')
-          text = text.replace(breath_marker, breath_new, 1)
+          if breath_old not in text: raise SystemExit('breath-start marker not found')
+          text = text.replace(breath_old, breath_new, 1)
           p.write_text(text)
 
       - name: Install
