@@ -472,7 +472,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.22</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.23</span></div>
       </header>
 
       <div className="workspace">
@@ -566,7 +566,6 @@ export default function App() {
               <div className="metrics-title">Measured</div>
               <div className="metrics-actions">
                 <button className="metrics-alarm-limits" type="button" onClick={() => setAlarmDialogOpen(true)} title="Set alarm limits">Alarm limits</button>
-                <button className={`metrics-alarm-silence ${alarmSilenced ? 'active' : ''}`} type="button" onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
               </div>
               <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
               <Metric label="VTe" value={eventMeasures.tidalVolume.toFixed(0)} unit="mL" />
@@ -602,6 +601,7 @@ export default function App() {
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
             >Expiratory hold</button>
+            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
         </section>
 
