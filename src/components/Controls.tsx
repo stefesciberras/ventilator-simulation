@@ -164,8 +164,8 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
   const triggerControls = (
     <div className="trigger-controls">
       <div className="trigger-type-selector" role="group" aria-label="Trigger type">
-        <button type="button" className={settings.triggerType !== 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'pressure' })}>Pressure</button>
-        <button type="button" className={settings.triggerType === 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'flow' })}>Flow</button>
+        <button type="button" disabled={zeroPressureSupport} className={settings.triggerType !== 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'pressure' })}>Pressure</button>
+        <button type="button" disabled={zeroPressureSupport} className={settings.triggerType === 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'flow' })}>Flow</button>
       </div>
       {settings.triggerType === 'flow' ? (
         <Slider label="Flow trigger" value={settings.flowTriggerSensitivity ?? 2} unit=" L/min" min={0.5} max={10} step={0.5} disabled={zeroPressureSupport} onChange={(v) => patch({ flowTriggerSensitivity: v })} />

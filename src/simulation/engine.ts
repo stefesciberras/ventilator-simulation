@@ -25,7 +25,7 @@ export interface SimulationState {
   peakInspiratoryFlow: number
   peakExpiratoryFlowMagnitude: number
   expiratoryTriggerReady: boolean
-  flowTriggerDetectedAt: number | null
+  triggerDetectedAt: number | null
   inspiratoryHoldActive: boolean
   expiratoryHoldActive: boolean
   previousPmus: number
@@ -61,7 +61,7 @@ export function createSimulationState(): SimulationState {
     peakInspiratoryFlow: 0,
     peakExpiratoryFlowMagnitude: 0,
     expiratoryTriggerReady: true,
-    flowTriggerDetectedAt: null,
+    triggerDetectedAt: null,
     inspiratoryHoldActive: false,
     expiratoryHoldActive: false,
     previousPmus: 0,
@@ -264,7 +264,7 @@ function adoptMode(
   state.lastMode = mode
   state.modeStartTime = t
   state.expiratoryTriggerReady = true
-  state.flowTriggerDetectedAt = null
+  state.triggerDetectedAt = null
   state.peakExpiratoryFlowMagnitude = 0
   if (mode === 'BIPAP') {
     state.bipapHigh = true
@@ -454,7 +454,7 @@ export function stepSimulation(
 
   const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
   const triggerRefractoryPeriod = 0.12
-  const flowTriggerResponseDelay = 0.15
+  const triggerResponseDelay = 0.15
   const expiratoryTriggerFraction = 0.25
   const spontaneousCycleIndex = Number.isFinite(spontaneousCycle) ? Math.floor((t + dt * 0.1) / spontaneousCycle) : -1
 
@@ -479,22 +479,20 @@ export function stepSimulation(
   const predictedPatientFlowLmin = predictedPatientFlowLs * 60
   const predictedAirwayPressure = ventilator.peep - Math.max(0, triggerNetDrivingPressure)
   const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
-  const rawTriggerSignalMet = ventilator.triggerType === 'flow'
+  const supportTriggeringDisabled =
+    (mode === 'PSV' || isSimv(mode)) && ventilator.pressureSupport <= 0.001
+  const rawTriggerSignalMet = !supportTriggeringDisabled && (ventilator.triggerType === 'flow'
     ? predictedPatientFlowLmin >= flowTriggerSensitivity
-    : predictedAirwayPressure <= pressureTriggerLevel
+    : predictedAirwayPressure <= pressureTriggerLevel)
   const triggerDetectionEligible = !state.breathActive && !state.inspiratoryHoldActive && !state.expiratoryHoldActive
   let triggerSignalMet = rawTriggerSignalMet
 
-  if (ventilator.triggerType === 'flow') {
-    if (!triggerDetectionEligible) {
-      state.flowTriggerDetectedAt = null
-      triggerSignalMet = false
-    } else {
-      if (rawTriggerSignalMet && state.flowTriggerDetectedAt == null) state.flowTriggerDetectedAt = t
-      triggerSignalMet = state.flowTriggerDetectedAt != null && t - state.flowTriggerDetectedAt >= flowTriggerResponseDelay
-    }
+  if (!triggerDetectionEligible || supportTriggeringDisabled) {
+    state.triggerDetectedAt = null
+    triggerSignalMet = false
   } else {
-    state.flowTriggerDetectedAt = null
+    if (rawTriggerSignalMet && state.triggerDetectedAt == null) state.triggerDetectedAt = t
+    triggerSignalMet = state.triggerDetectedAt != null && t - state.triggerDetectedAt >= triggerResponseDelay
   }
 
   if ((state.breathActive || state.inspiratoryHoldActive) && pmus > 0.1 && state.breathsDuringEffort === 0) {
@@ -564,7 +562,7 @@ export function stepSimulation(
     state.peakInspiratoryFlow = 0
     state.peakExpiratoryFlowMagnitude = 0
     state.expiratoryTriggerReady = false
-    state.flowTriggerDetectedAt = null
+    state.triggerDetectedAt = null
 
     if (mode === 'VC-AC') state.activeBreathType = 'vc'
     else if (mode === 'PC-AC') state.activeBreathType = 'pc'
@@ -749,15 +747,29 @@ export function stepSimulation(
   state.volume = clamp(state.volume + dv, 0, 2.5)
   if (inspiration && !state.inspiratoryHoldActive) state.inspiredThisBreath += Math.max(dv, 0)
 
+  // With PS = 0, PSV becomes CPAP (and SIMV has unassisted spontaneous
+  // breaths between mandatory breaths): the patient's neural inspiration is
+  // still a real respiratory phase, but it must not create a ventilator
+  // trigger event or a pressure-supported breath.
+  const unassistedSpontaneousInspiration =
+    supportTriggeringDisabled &&
+    !inspiration &&
+    !state.expiratoryHoldActive &&
+    pmus > 0.1
+  const sampleInspiration = inspiration || unassistedSpontaneousInspiration
+  if (supportTriggeringDisabled && pmus <= 0.1 && state.previousPmus > 0.1) {
+    state.expirationStartTime = t
+  }
+
   const sample: Sample = {
     time: Number(t.toFixed(4)),
     pressure: clamp(pressure, -5, 80),
     flow: flowLs * 60,
     volume: state.volume * 1000,
     musclePressure: pmus,
-    co2: capnogramValue(!inspiration, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
+    co2: capnogramValue(!sampleInspiration, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
     oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
-    phase: inspiration ? 'inspiration' : 'expiration',
+    phase: sampleInspiration ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,
     expiratoryHold: state.expiratoryHoldActive,
