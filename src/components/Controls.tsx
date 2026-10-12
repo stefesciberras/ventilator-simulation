@@ -114,6 +114,20 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
 
   const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV', 'BIPAP']
 
+  const triggerControls = (
+    <div className="trigger-controls">
+      <div className="trigger-type-selector" role="group" aria-label="Trigger type">
+        <button type="button" className={settings.triggerType !== 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'pressure' })}>Pressure</button>
+        <button type="button" className={settings.triggerType === 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'flow' })}>Flow</button>
+      </div>
+      {settings.triggerType === 'flow' ? (
+        <Slider label="Flow trigger" value={settings.flowTriggerSensitivity ?? 2} unit=" L/min" min={0.5} max={10} step={0.5} onChange={(v) => patch({ flowTriggerSensitivity: v })} />
+      ) : (
+        <Slider label="Pressure trigger" value={settings.triggerSensitivity} unit=" cmH₂O below PEEP" min={0.5} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />
+      )}
+    </div>
+  )
+
   return (
     <section className="control-section ventilator-settings-section">
       <div className="control-section-title">
@@ -148,7 +162,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
           <Slider label="PEEP" value={settings.peep} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ peep: v })} />
           <Slider label="Rate" value={settings.rate} unit="/min" min={5} max={35} onChange={setRate} />
           <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
-          <Slider label="Trigger" value={settings.triggerSensitivity} unit=" cmH₂O" min={1} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />
+          {triggerControls}
         </>
       ) : (
         <>
@@ -195,7 +209,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
           {(settings.mode === 'PSV' || isSimvMode(settings.mode)) && (
             <Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} onChange={(v) => patch({ terminationSensitivity: v })} />
           )}
-          <Slider label="Trigger" value={settings.triggerSensitivity} unit=" cmH₂O" min={1} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />
+          {triggerControls}
         </>
       )}
     </section>
