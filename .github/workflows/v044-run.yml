@@ -1,0 +1,29 @@
+name: v044 run
+"on":
+  push:
+    branches:
+      - chatgpt/v0.44-ui-scale-mobile-sliders
+    paths:
+      - .github/workflows/v044-run.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.44-ui-scale-mobile-sliders
+      - name: Apply v0.44 patch
+        run: python .github/scripts/patch_v044.py
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/styles.css src/alarm.css
+          git commit -m "v0.44: fix waveform scales and mobile alarm sliders"
+          git push origin HEAD:chatgpt/v0.44-ui-scale-mobile-sliders
