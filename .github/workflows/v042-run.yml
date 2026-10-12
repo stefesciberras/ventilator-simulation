@@ -1,0 +1,31 @@
+name: v042 run
+"on":
+  push:
+    branches:
+      - chatgpt/v0.42-alarm-priority-vertical
+    paths:
+      - .github/workflows/v042-run.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.42-alarm-priority-vertical
+      - name: Apply v0.42 patch
+        run: |
+          echo 'BASE64_PLACEHOLDER' | base64 -d > /tmp/patch_v042.py
+          python /tmp/patch_v042.py
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/alarm.css
+          git commit -m "v0.42: vertical alarm limits and priority escalation"
+          git push origin HEAD:chatgpt/v0.42-alarm-priority-vertical
