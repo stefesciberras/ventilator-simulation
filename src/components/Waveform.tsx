@@ -16,9 +16,10 @@ interface WaveformProps {
   cursorIndex?: number
   onCursorChange?: (index: number) => void
   showTime?: boolean
+  showSimvSyncWindow?: boolean
 }
 
-export function Waveform({ samples, signal, label, unit, min, max, accent, frozen = false, cursorIndex = 0, onCursorChange, showTime = false }: WaveformProps) {
+export function Waveform({ samples, signal, label, unit, min, max, accent, frozen = false, cursorIndex = 0, onCursorChange, showTime = false, showSimvSyncWindow = false }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const draggingRef = useRef(false)
   const selectedSample = samples[Math.min(cursorIndex, Math.max(0, samples.length - 1))]
@@ -61,6 +62,29 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
       ctx.strokeStyle = 'rgba(190, 202, 212, 0.24)'
       ctx.lineWidth = 1.1
       ctx.beginPath(); ctx.moveTo(0, zeroY); ctx.lineTo(width, zeroY); ctx.stroke()
+
+      if (signal === 'pressure' && showSimvSyncWindow && samples.length) {
+        ctx.strokeStyle = '#f1a23c'
+        ctx.lineWidth = 3.2
+        ctx.lineCap = 'round'
+
+        let segmentStart = -1
+        const drawSegment = (start: number, end: number) => {
+          const x1 = (start / Math.max(1, samples.length - 1)) * width
+          const x2 = (end / Math.max(1, samples.length - 1)) * width
+          ctx.beginPath(); ctx.moveTo(x1, zeroY); ctx.lineTo(x2, zeroY); ctx.stroke()
+        }
+
+        samples.forEach((sample, index) => {
+          if (sample.simvSyncWindow && segmentStart < 0) segmentStart = index
+          const atEnd = index === samples.length - 1
+          if (segmentStart >= 0 && (!sample.simvSyncWindow || atEnd)) {
+            const segmentEnd = sample.simvSyncWindow && atEnd ? index : Math.max(segmentStart, index - 1)
+            drawSegment(segmentStart, segmentEnd)
+            segmentStart = -1
+          }
+        })
+      }
     }
 
     if (!samples.length) return
@@ -104,7 +128,7 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
       ctx.lineWidth = 1.5
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke()
     }
-  }, [samples, signal, min, max, accent, frozen, cursorIndex])
+  }, [samples, signal, min, max, accent, frozen, cursorIndex, showSimvSyncWindow])
 
   const updateCursorFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!frozen || !onCursorChange || !samples.length) return
