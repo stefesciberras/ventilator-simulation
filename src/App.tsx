@@ -7,7 +7,7 @@ import type { PatientSettings, Sample, VentilatorSettings } from './simulation/t
 
 const initialVentilator: VentilatorSettings = {
   mode: 'VC-AC', fio2: 0.35, peep: 5, rate: 14, tidalVolume: 500, inspiratoryTime: 1,
-  inspiratoryFlow: 30, plateauPercent: 0, pressureControl: 15, pressureSupport: 10, triggerSensitivity: 2, terminationSensitivity: 25,
+  inspiratoryFlow: 30, plateauPercent: 0, pressureControl: 15, pressureSupport: 10, triggerType: 'pressure', triggerSensitivity: 2, flowTriggerSensitivity: 2, terminationSensitivity: 25,
   simvSyncWindowPercent: 25, showSimvSyncWindow: false,
   pHigh: 24, pLow: 5, tHigh: 4, tLow: 0.5,
 }
@@ -508,7 +508,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.29</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.30</span></div>
       </header>
 
       <div className="workspace">

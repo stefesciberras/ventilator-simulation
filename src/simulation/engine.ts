@@ -198,16 +198,26 @@ function twoLevelSample(
     )
     const nominalTe = Math.max(0.2, nominalCycle - nominalTi)
     const phaseElapsed = Math.max(0, t - state.bipapPhaseStart)
-    const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
-    const effortStarting = pmus >= triggerThreshold && state.previousPmus < triggerThreshold
-    const effortEnding = pmus < triggerThreshold && state.previousPmus >= triggerThreshold
+    const elasticPressure = state.volume / complianceL
+    const netPatientDrivingPressure = pmus - elasticPressure
+    const effortResistance = netPatientDrivingPressure >= 0
+      ? Math.max(patient.resistance, 0.5)
+      : Math.max(patient.expiratoryResistance, 0.5)
+    const patientFlowLmin = (netPatientDrivingPressure / effortResistance) * 60
+    const patientAirwayPressure = ventilator.peep - Math.max(0, netPatientDrivingPressure)
+    const pressureTriggerLevel = ventilator.peep - Math.max(0.1, ventilator.triggerSensitivity)
+    const triggerSignalMet = ventilator.triggerType === 'flow'
+      ? patientFlowLmin >= Math.max(0.1, ventilator.flowTriggerSensitivity ?? 2)
+      : patientAirwayPressure <= pressureTriggerLevel
+    const effortActive = pmus > 0.1
+    const effortEnding = !effortActive && state.previousPmus > 0.1
 
     if (state.bipapHigh) {
       const syncWindow = clamp(nominalTi * 0.25, 0.12, 0.6)
       const syncStart = Math.max(0.2, nominalTi - syncWindow)
       const maximumTi = nominalTi + syncWindow
       const synchronizedCycleOff = phaseElapsed >= syncStart && effortEnding
-      const nominalCycleOff = phaseElapsed >= nominalTi && pmus < triggerThreshold
+      const nominalCycleOff = phaseElapsed >= nominalTi && !effortActive
       const forcedCycleOff = phaseElapsed >= maximumTi
 
       if (synchronizedCycleOff || nominalCycleOff || forcedCycleOff) {
@@ -218,7 +228,7 @@ function twoLevelSample(
     } else {
       const syncWindow = clamp(nominalTe * 0.25, 0.12, 0.8)
       const syncStart = Math.max(0.2, nominalTe - syncWindow)
-      const synchronizedCycleOn = phaseElapsed >= syncStart && effortStarting
+      const synchronizedCycleOn = phaseElapsed >= syncStart && triggerSignalMet
       const mandatoryCycleOn = phaseElapsed >= nominalTe
 
       if (synchronizedCycleOn || mandatoryCycleOn) {
@@ -331,29 +341,33 @@ export function stepSimulation(
     state.breathsDuringEffort = 0
   }
 
-  const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
+  const pressureTriggerSensitivity = Math.max(0.1, ventilator.triggerSensitivity)
+  const flowTriggerSensitivity = Math.max(0.1, ventilator.flowTriggerSensitivity ?? 2)
 
-  // During expiration, trapped volume leaves alveolar pressure above set PEEP.
-  // The patient must first overcome this intrinsic-PEEP load before the usual
-  // pressure-trigger sensitivity can be reached. This allows weak efforts to
-  // deform the expiratory waveform without necessarily triggering assistance.
-  const intrinsicPeepBarrier =
-    !state.breathActive &&
-    !state.inspiratoryHoldActive &&
-    !state.expiratoryHoldActive
-      ? Math.max(0, state.volume / complianceL)
-      : 0
-  const effectiveTriggerThreshold = triggerThreshold + intrinsicPeepBarrier
+  // Predict the patient-generated signal during expiration. Trapped elastic
+  // pressure (auto-PEEP) must be overcome before Paw can fall below set PEEP
+  // or inspiratory flow can become positive. Pressure sensitivity is therefore
+  // explicitly a gradient from set PEEP, not an absolute airway pressure.
+  const triggerElasticPressure = state.volume / complianceL
+  const triggerNetDrivingPressure = pmus - triggerElasticPressure
+  const triggerEffortResistance = triggerNetDrivingPressure >= 0
+    ? Math.max(patient.resistance, 0.5)
+    : Math.max(patient.expiratoryResistance, 0.5)
+  const predictedPatientFlowLs = triggerNetDrivingPressure / triggerEffortResistance
+  const predictedPatientFlowLmin = predictedPatientFlowLs * 60
+  const predictedAirwayPressure = ventilator.peep - Math.max(0, triggerNetDrivingPressure)
+  const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
+  const triggerSignalMet = ventilator.triggerType === 'flow'
+    ? predictedPatientFlowLmin >= flowTriggerSensitivity
+    : predictedAirwayPressure <= pressureTriggerLevel
 
-  if ((state.breathActive || state.inspiratoryHoldActive) && pmus >= triggerThreshold && state.breathsDuringEffort === 0) {
+  if ((state.breathActive || state.inspiratoryHoldActive) && pmus > 0.1 && state.breathsDuringEffort === 0) {
     state.breathsDuringEffort = 1
   }
 
-  const thresholdCrossing =
-    pmus >= effectiveTriggerThreshold &&
-    state.previousPmus < effectiveTriggerThreshold
+  const firstEffortTrigger = triggerSignalMet && state.breathsDuringEffort === 0
   const persistentEffortRetrigger =
-    pmus >= effectiveTriggerThreshold &&
+    triggerSignalMet &&
     state.breathsDuringEffort > 0 &&
     state.breathsDuringEffort < 2 &&
     t - state.lastBreathEnd >= triggerRefractoryPeriod
@@ -366,13 +380,13 @@ export function stepSimulation(
   const ongoingEffortAfterGate =
     mandatoryMode &&
     patientTriggerAllowed &&
-    pmus >= effectiveTriggerThreshold
+    triggerSignalMet
   const patientTrigger =
     !state.breathActive &&
     !state.inspiratoryHoldActive &&
     !state.expiratoryHoldActive &&
     patientTriggerAllowed &&
-    (thresholdCrossing || persistentEffortRetrigger || ongoingEffortAfterGate)
+    (firstEffortTrigger || persistentEffortRetrigger || ongoingEffortAfterGate)
 
   const simvMode = isSimv(mode)
   const assistControlMode = isAssistControl(mode)
@@ -577,13 +591,11 @@ export function stepSimulation(
         : Math.max(patient.expiratoryResistance, 0.5)
 
       // Before intrinsic PEEP is overcome, inspiratory effort merely slows
-      // expiration. Once pmus exceeds the trapped elastic pressure, flow can
-      // reverse and Paw can dip. If the remaining deflection is still smaller
-      // than trigger sensitivity, the effort is ineffective and no assisted
-      // breath is delivered.
+      // expiration. Once it is overcome, flow reverses and Paw falls below
+      // set PEEP. Those actual simulated signals are what the selected trigger
+      // detector sees.
       flowLs = netPatientDrivingPressure / effortResistance
-      const triggerDeflection = Math.max(0, pmus - elasticPressure)
-      pressure = ventilator.peep - Math.min(triggerDeflection, triggerThreshold)
+      pressure = ventilator.peep - Math.max(0, netPatientDrivingPressure)
     } else {
       flowLs = passiveExpiratoryFlow
       pressure = ventilator.peep

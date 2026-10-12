@@ -21,7 +21,9 @@ export interface VentilatorSettings {
   plateauPercent: number
   pressureControl: number
   pressureSupport: number
+  triggerType: 'pressure' | 'flow'
   triggerSensitivity: number
+  flowTriggerSensitivity: number
   terminationSensitivity: number
   simvSyncWindowPercent: number
   showSimvSyncWindow: boolean
