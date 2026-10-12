@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { SessionConnection, SessionRole } from '../session/useTeachingSession'
-import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
+import {
+  closeTeachingSessionChannel,
+  fetchSessionMembers,
+  subscribeToSessionMembers,
+  type SessionMemberRow,
+  type TeachingSessionRow,
+} from '../session/supabase'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 
 interface SessionPanelProps {
   role: SessionRole
   connection: SessionConnection
   session: TeachingSessionRow | null
-  members?: SessionMemberRow[]
   error: string | null
   onStartInstructor: () => Promise<void>
   onJoinCandidate: (sessionKey: string, displayName: string) => Promise<void>
@@ -77,7 +82,6 @@ export function SessionPanel({
   role,
   connection,
   session,
-  members = [],
   error,
   onStartInstructor,
   onJoinCandidate,
@@ -90,6 +94,7 @@ export function SessionPanel({
   const [sessionKey, setSessionKey] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [simulatorExpanded, setSimulatorExpanded] = useState(false)
+  const [dashboardMembers, setDashboardMembers] = useState<SessionMemberRow[]>([])
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -98,7 +103,36 @@ export function SessionPanel({
     return () => window.clearInterval(timer)
   }, [role])
 
-  const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
+  useEffect(() => {
+    if (role !== 'instructor' || !session?.id) {
+      setDashboardMembers([])
+      return
+    }
+
+    let active = true
+    const refresh = async () => {
+      try {
+        const rows = await fetchSessionMembers(session.id)
+        if (active) setDashboardMembers(rows)
+      } catch {
+        // Keep the most recent roster visible through brief network interruptions.
+      }
+    }
+
+    void refresh()
+    const channel = subscribeToSessionMembers(session.id, () => void refresh())
+    return () => {
+      active = false
+      void closeTeachingSessionChannel(channel)
+    }
+  }, [role, session?.id])
+
+  useEffect(() => {
+    const version = document.querySelector<HTMLElement>('.version')
+    if (version) version.textContent = 'v0.46'
+  }, [])
+
+  const candidates = useMemo(() => dashboardMembers.filter((member) => member.role === 'candidate'), [dashboardMembers])
   const onlineCandidates = candidates.filter((member) => {
     const lastSeen = new Date(member.last_seen).getTime()
     return Number.isFinite(lastSeen) && now - lastSeen <= 30000
