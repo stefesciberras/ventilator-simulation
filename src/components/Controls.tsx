@@ -28,7 +28,7 @@ function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange
   )
 }
 
-export function VentilatorControls({ settings, onChange }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void }) {
+export function VentilatorControls({ settings, onChange, onReset }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void; onReset: () => void }) {
   const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })
   const currentIeRatio = ieRatioFrom(settings)
 
@@ -69,8 +69,11 @@ export function VentilatorControls({ settings, onChange }: { settings: Ventilato
   }
 
   return (
-    <section className="control-section">
-      <h2>Ventilator settings</h2>
+    <section className="control-section ventilator-settings-section">
+      <div className="control-section-title">
+        <h2>Ventilator settings</h2>
+        <button className="reset-settings-button" type="button" onClick={onReset}>Reset vent</button>
+      </div>
       <div className="mode-buttons">
         {(['VC-AC', 'PC-AC', 'PSV'] as VentilatorMode[]).map((mode) => (
           <button key={mode} className={settings.mode === mode ? 'selected' : ''} onClick={() => setMode(mode)}>{mode}</button>
@@ -121,7 +124,7 @@ export function VentilatorControls({ settings, onChange }: { settings: Ventilato
   )
 }
 
-export function PatientControls({ settings, onChange }: { settings: PatientSettings; onChange: (next: PatientSettings) => void }) {
+export function PatientControls({ settings, onChange, onReset }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const presets: Record<string, Partial<PatientSettings>> = {
     Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1 },
@@ -130,8 +133,11 @@ export function PatientControls({ settings, onChange }: { settings: PatientSetti
     Asthma: { compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8 },
   }
   return (
-    <section className="control-section">
-      <h2>Patient</h2>
+    <section className="control-section patient-section">
+      <div className="control-section-title">
+        <h2>Patient settings</h2>
+        <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset patient</button>
+      </div>
       <div className="preset-row">{Object.keys(presets).map((name) => <button key={name} onClick={() => patch(presets[name])}>{name}</button>)}</div>
       <Slider label="Compliance" value={settings.compliance} unit=" mL/cmH₂O" min={15} max={100} onChange={(v) => patch({ compliance: v })} />
       <Slider label="Airway resistance" value={settings.resistance} unit=" cmH₂O/L/s" min={3} max={40} onChange={(v) => patch({ resistance: v })} />
