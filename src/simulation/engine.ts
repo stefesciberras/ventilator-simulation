@@ -320,10 +320,13 @@ export function stepSimulation(
     t - state.lastBreathEnd >= triggerRefractoryPeriod
 
   const mandatoryMode = mode !== 'PSV'
-  const patientTriggerAllowed = !mandatoryMode || state.expiratoryTriggerReady
+  const patientTriggerAllowed =
+    !mandatoryMode ||
+    state.expiratoryTriggerReady ||
+    t - state.lastBreathEnd >= triggerRefractoryPeriod
   const ongoingEffortAfterGate =
     mandatoryMode &&
-    state.expiratoryTriggerReady &&
+    patientTriggerAllowed &&
     pmus >= effectiveTriggerThreshold
   const patientTrigger =
     !state.breathActive &&
@@ -525,8 +528,7 @@ export function stepSimulation(
 
     const exposePatientEffort =
       pmus > 0 &&
-      t >= state.suppressEffortUntil &&
-      (!mandatoryMode || state.expiratoryTriggerReady)
+      t >= state.suppressEffortUntil
 
     if (exposePatientEffort) {
       const elasticPressure = state.volume / complianceL
