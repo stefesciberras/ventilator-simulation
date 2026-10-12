@@ -22,6 +22,8 @@ export interface VentilatorSettings {
   pressureSupport: number
   triggerSensitivity: number
   terminationSensitivity: number
+  simvSyncWindowPercent: number
+  showSimvSyncWindow: boolean
   pHigh: number
   pLow: number
   tHigh: number
@@ -35,8 +37,10 @@ export interface Sample {
   volume: number
   musclePressure: number
   phase: 'inspiration' | 'expiration'
+  mode: VentilatorMode
   breathTrigger?: 'mandatory' | 'patient'
   expiratoryHold?: boolean
+  simvSyncWindow?: boolean
 }
 
 export interface Measurements {
