@@ -1,0 +1,70 @@
+name: Apply v0.37 PSV zero-support cycling
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.37-psv-zero-support-cycle
+    paths:
+      - .github/workflows/apply-v037-psv-zero-support.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.37-psv-zero-support-cycle
+
+      - name: Apply source changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          engine = Path('src/simulation/engine.ts')
+          text = engine.read_text()
+          old = """    const terminationFraction = clamp(ventilator.terminationSensitivity, 5, 80) / 100
+    const cycleOff = elapsed > 0.2 && state.peakInspiratoryFlow > 0.01 && flowLs <= state.peakInspiratoryFlow * terminationFraction
+    const timeLimit = elapsed >= Math.max(patient.neuralInspiratoryTime * 1.5, 1.5)
+"""
+          new = """    const terminationFraction = clamp(ventilator.terminationSensitivity, 5, 80) / 100
+    // At PS = 0 there is no elevated pressure-support level to cycle off.
+    // Treat the breath as CPAP after triggering and keep the demand valve at
+    // PEEP until inspiratory flow has effectively ended. Applying ETS to the
+    // patient's own decelerating flow caused a false early cycle and a second
+    // Paw notch while neural inspiration was still active.
+    const zeroSupport = ventilator.pressureSupport <= 0.001
+    const cycleOff = zeroSupport
+      ? elapsed > 0.2 && state.peakInspiratoryFlow > 0.01 && flowLs <= 0.01
+      : elapsed > 0.2 && state.peakInspiratoryFlow > 0.01 && flowLs <= state.peakInspiratoryFlow * terminationFraction
+    const timeLimit = elapsed >= Math.max(patient.neuralInspiratoryTime * 1.5, 1.5)
+"""
+          if old not in text:
+              raise SystemExit('PSV cycle-off block not found')
+          engine.write_text(text.replace(old, new, 1))
+
+          app = Path('src/App.tsx')
+          text = app.read_text()
+          if "appVersion: '0.36'" not in text:
+              raise SystemExit('diagnostic version marker not found')
+          text = text.replace("appVersion: '0.36'", "appVersion: '0.37'", 1)
+          if '<span className="version">v0.36</span>' not in text:
+              raise SystemExit('display version marker not found')
+          text = text.replace('<span className="version">v0.36</span>', '<span className="version">v0.37</span>', 1)
+          app.write_text(text)
+
+      - name: Install
+        run: npm install --no-package-lock
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit v0.37
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/simulation/engine.ts src/App.tsx
+          git commit -m "v0.37: fix zero-support PSV cycling pressure notch"
+          git push origin HEAD:chatgpt/v0.37-psv-zero-support-cycle
