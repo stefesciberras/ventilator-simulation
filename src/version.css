@@ -1,0 +1,8 @@
+.version {
+  font-size: 0;
+}
+
+.version::after {
+  content: 'v0.46';
+  font-size: 11px;
+}
