@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Sample } from '../simulation/types'
 
@@ -19,11 +19,60 @@ interface WaveformProps {
   showSimvSyncWindow?: boolean
 }
 
+function roundedDownToTen(value: number): number {
+  return Math.floor(value / 10) * 10
+}
+
+function roundedUpToTen(value: number): number {
+  return Math.ceil(value / 10) * 10
+}
+
+function autoscale(samples: Sample[], signal: Signal, fallbackMin: number, fallbackMax: number): { min: number; max: number } {
+  if (!samples.length) return { min: fallbackMin, max: fallbackMax }
+
+  let observedMin = Number.POSITIVE_INFINITY
+  let observedMax = Number.NEGATIVE_INFINITY
+
+  for (const sample of samples) {
+    const value = sample[signal]
+    if (!Number.isFinite(value)) continue
+    observedMin = Math.min(observedMin, value)
+    observedMax = Math.max(observedMax, value)
+  }
+
+  if (!Number.isFinite(observedMin) || !Number.isFinite(observedMax)) {
+    return { min: fallbackMin, max: fallbackMax }
+  }
+
+  // Flow is intentionally symmetrical around zero so inspiratory and expiratory
+  // flow remain visually comparable as the trace rescales.
+  if (signal === 'flow') {
+    const largestMagnitude = Math.max(Math.abs(observedMin), Math.abs(observedMax))
+    const limit = Math.max(10, roundedUpToTen(largestMagnitude))
+    return { min: -limit, max: limit }
+  }
+
+  // All other traces retain zero in view. This also protects against unusual
+  // negative Paw excursions or positive Pes values without clipping them.
+  let scaledMin = observedMin < 0 ? roundedDownToTen(observedMin) : 0
+  let scaledMax = observedMax > 0 ? roundedUpToTen(observedMax) : 0
+
+  if (scaledMax - scaledMin < 10) {
+    if (scaledMax === 0 && scaledMin < 0) scaledMin = Math.min(scaledMin, -10)
+    else scaledMax = Math.max(10, scaledMax)
+  }
+
+  return { min: scaledMin, max: scaledMax }
+}
+
 export function Waveform({ samples, signal, label, unit, min, max, accent, frozen = false, cursorIndex = 0, onCursorChange, showTime = false, showSimvSyncWindow = false }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const draggingRef = useRef(false)
   const selectedSample = samples[Math.min(cursorIndex, Math.max(0, samples.length - 1))]
   const screenStartTime = samples[0]?.time ?? 0
+  const scale = useMemo(() => autoscale(samples, signal, min, max), [samples, signal, min, max])
+  const scaleMin = scale.min
+  const scaleMax = scale.max
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -45,19 +94,19 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
     ctx.lineWidth = 1
     for (let i = 1; i < 8; i++) {
       const x = (width * i) / 8
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(width * i / 8, height); ctx.stroke()
     }
     for (let i = 1; i < 4; i++) {
       const y = (height * i) / 4
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke()
     }
 
-    const range = max - min
-    const toY = (value: number) => height - ((value - min) / range) * height
+    const range = Math.max(1, scaleMax - scaleMin)
+    const toY = (value: number) => height - ((value - scaleMin) / range) * height
 
     // A dedicated zero axis makes incomplete return to baseline immediately visible,
     // particularly persistent expiratory flow and trapped end-expiratory volume.
-    if (min <= 0 && max >= 0) {
+    if (scaleMin <= 0 && scaleMax >= 0) {
       const zeroY = Math.max(0.5, Math.min(height - 0.5, toY(0)))
       ctx.strokeStyle = 'rgba(190, 202, 212, 0.24)'
       ctx.lineWidth = 1.1
@@ -98,7 +147,9 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
     samples.forEach((sample, index) => {
       const x = (index / Math.max(1, samples.length - 1)) * width
       const value = sample[signal]
-      const y = Math.max(0, Math.min(height, toY(value)))
+      // Keep half the stroke inside the canvas even when a value sits exactly on
+      // a rounded scale boundary.
+      const y = Math.max(1, Math.min(height - 1, toY(value)))
       if (index === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     })
@@ -108,7 +159,7 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
       samples.forEach((sample, index) => {
         if (sample.breathTrigger !== 'patient') return
         const x = (index / Math.max(1, samples.length - 1)) * width
-        const pressureY = Math.max(0, Math.min(height, toY(sample.pressure)))
+        const pressureY = Math.max(1, Math.min(height - 1, toY(sample.pressure)))
         const tipY = Math.max(12, pressureY - 4)
 
         ctx.fillStyle = '#78e08f'
@@ -128,7 +179,7 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
       ctx.lineWidth = 1.5
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke()
     }
-  }, [samples, signal, min, max, accent, frozen, cursorIndex, showSimvSyncWindow])
+  }, [samples, signal, scaleMin, scaleMax, accent, frozen, cursorIndex, showSimvSyncWindow])
 
   const updateCursorFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!frozen || !onCursorChange || !samples.length) return
@@ -177,7 +228,7 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
         </div>
       )}
       <canvas ref={canvasRef} className="waveform-canvas" />
-      <div className="waveform-scale"><span>{max}</span><span>{min}</span></div>
+      <div className="waveform-scale"><span>{scaleMax}</span><span>{scaleMin}</span></div>
     </div>
   )
 }
