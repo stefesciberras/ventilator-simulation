@@ -1,0 +1,17 @@
+.screen-body { position: relative; }
+.alarm-banner { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 15px; font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #17130a; border-bottom: 1px solid rgba(255,255,255,.16); }
+.alarm-banner.yellow { background: linear-gradient(90deg,#f2c94c,#dfae2b); }
+.alarm-banner.red { color: #fff; background: linear-gradient(90deg,#c93636,#9f1f1f); }
+.alarm-banner span { margin-left: auto; font-size: 9px; opacity: .82; }
+.alarm-dialog-backdrop { position: absolute; inset: 0; z-index: 12; display: grid; place-items: center; padding: 24px; background: rgba(2,5,7,.68); backdrop-filter: blur(2px); }
+.alarm-dialog { width: min(360px, 92%); padding: 16px; border: 1px solid #455761; border-radius: 12px; background: #11191e; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
+.alarm-dialog-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; color: #f2f7f9; }
+.alarm-dialog-title strong { text-transform: uppercase; letter-spacing: .09em; font-size: 13px; }
+.alarm-dialog-title button { width: 34px; height: 34px; padding: 0; font-size: 22px; line-height: 1; }
+.alarm-dialog label { display: block; padding: 11px 0; border-top: 1px solid #27343c; }
+.alarm-dialog label > span { display: block; margin-bottom: 6px; color: #a9b8bf; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
+.alarm-dialog label > div { display: flex; align-items: center; gap: 8px; }
+.alarm-dialog input[type="number"] { width: 100px; padding: 8px 9px; border: 1px solid #41525c; border-radius: 6px; color: #eef6f8; background: #091015; }
+.alarm-dialog small { color: #82949d; font-size: 10px; }
+.alarm-dialog-done { width: 100%; margin-top: 10px; font-weight: 700; }
+@media (max-width: 680px) { .alarm-dialog-backdrop { position: fixed; } }
