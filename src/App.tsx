@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
+import { SessionPanel } from './components/SessionPanel'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
 import { copyDiagnosticSnapshot } from './diagnostics'
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
+import { useTeachingSession } from './session/useTeachingSession'
+import './session.css'
 
 const initialVentilator: VentilatorSettings = {
   mode: 'VC-AC', fio2: 0.35, peep: 5, rate: 14, tidalVolume: 500, inspiratoryTime: 1,
@@ -464,6 +467,15 @@ export default function App() {
   })
   const [diagnosticCopied, setDiagnosticCopied] = useState(false)
 
+  const teachingSession = useTeachingSession({
+    patient,
+    ventilator,
+    patientTransitionSeconds,
+    setPatient,
+    setVentilator,
+    setPatientTransitionSeconds,
+  })
+
   const simulationStateRef = useRef(createSimulationState())
   const simulationTimeRef = useRef(0)
   const effectivePatientRef = useRef<PatientSettings>({ ...patient })
@@ -787,7 +799,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.44',
+      appVersion: '0.45',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -866,7 +878,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.44</span>
+          <span className="version">v0.45</span>
         </div>
       </header>
 
@@ -1030,8 +1042,26 @@ export default function App() {
         </section>
 
         <aside className="control-panel">
-          <VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} />
-          <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} />
+          <SessionPanel
+            role={teachingSession.role}
+            connection={teachingSession.connection}
+            session={teachingSession.session}
+            error={teachingSession.error}
+            onStartInstructor={teachingSession.startInstructor}
+            onJoinCandidate={teachingSession.joinCandidate}
+            onLeaveSession={teachingSession.leaveSession}
+            onEndInstructorSession={teachingSession.endInstructorSession}
+            onUpdatePolicy={teachingSession.updatePolicy}
+            onBroadcastNow={teachingSession.broadcastNow}
+          />
+          <fieldset className={`session-lock-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
+            {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
+            <VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} />
+          </fieldset>
+          <fieldset className={`session-lock-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
+            {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
+            <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} />
+          </fieldset>
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
         </aside>
       </div>

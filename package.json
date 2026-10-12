@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "latest",
     "react": "latest",
     "react-dom": "latest"
   },
