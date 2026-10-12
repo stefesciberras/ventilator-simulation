@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { Waveform } from './components/Waveform'
-import { calculateMeasurements, generateWaveforms } from './simulation/engine'
+import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
 
 const initialVentilator: VentilatorSettings = {
@@ -17,8 +17,9 @@ const VENTILATOR_STORAGE_KEY = 'eduvent.ventilator-settings'
 const PATIENT_STORAGE_KEY = 'eduvent.patient-settings'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
-const SIMULATION_START = 0
-const SIMULATION_DURATION = 150
+const HISTORY_SAMPLES = 7200
+const DT = 0.01
+const TICK_STEPS = 10
 
 function loadStoredSettings<T extends object>(key: string, defaults: T): T {
   if (typeof window === 'undefined') return { ...defaults }
@@ -71,12 +72,26 @@ export default function App() {
   const [alarmSilenced, setAlarmSilenced] = useState(false)
   const [frozen, setFrozen] = useState(false)
   const [frozenSamples, setFrozenSamples] = useState<Sample[] | null>(null)
-  const [cursor, setCursor] = useState(SIMULATION_START)
   const [traceCursor, setTraceCursor] = useState(Math.floor(WINDOW_SAMPLES * 0.7))
   const [inspiratoryHoldRequestTime, setInspiratoryHoldRequestTime] = useState<number | null>(null)
   const [inspiratoryHoldReleaseTime, setInspiratoryHoldReleaseTime] = useState<number | null>(null)
   const [expiratoryHoldRequestTime, setExpiratoryHoldRequestTime] = useState<number | null>(null)
   const [expiratoryHoldReleaseTime, setExpiratoryHoldReleaseTime] = useState<number | null>(null)
+
+  const simulationStateRef = useRef(createSimulationState())
+  const simulationTimeRef = useRef(0)
+  const [timeline, setTimeline] = useState<Sample[]>(() => {
+    const initialSamples = advanceSimulation(
+      simulationStateRef.current,
+      ventilator,
+      patient,
+      0,
+      WINDOW_SAMPLES,
+      DT,
+    )
+    simulationTimeRef.current = WINDOW_SAMPLES * DT
+    return initialSamples
+  })
 
   useEffect(() => {
     window.localStorage.setItem(VENTILATOR_STORAGE_KEY, JSON.stringify(ventilator))
@@ -87,43 +102,41 @@ export default function App() {
   }, [patient])
 
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
-  const generated = useMemo(
-    () => generateWaveforms(effectiveVentilator, patient, SIMULATION_DURATION, 0.01, {
-      inspiratoryHoldRequestTime,
-      inspiratoryHoldReleaseTime,
-      expiratoryHoldRequestTime,
-      expiratoryHoldReleaseTime,
-    }),
-    [effectiveVentilator, patient, inspiratoryHoldRequestTime, inspiratoryHoldReleaseTime, expiratoryHoldRequestTime, expiratoryHoldReleaseTime],
-  )
-  const maxCursor = Math.max(SIMULATION_START + 1, generated.length - WINDOW_SAMPLES)
+  const holdOptions = useMemo(() => ({
+    inspiratoryHoldRequestTime,
+    inspiratoryHoldReleaseTime,
+    expiratoryHoldRequestTime,
+    expiratoryHoldReleaseTime,
+  }), [inspiratoryHoldRequestTime, inspiratoryHoldReleaseTime, expiratoryHoldRequestTime, expiratoryHoldReleaseTime])
 
   useEffect(() => {
     if (frozen) return
-    const timer = window.setInterval(() => setCursor((current) => current + 10 >= maxCursor ? SIMULATION_START : current + 10), 100)
+    const timer = window.setInterval(() => {
+      const startTime = simulationTimeRef.current
+      const nextSamples = advanceSimulation(
+        simulationStateRef.current,
+        effectiveVentilator,
+        patient,
+        startTime,
+        TICK_STEPS,
+        DT,
+        holdOptions,
+      )
+      simulationTimeRef.current = startTime + TICK_STEPS * DT
+      setTimeline((current) => {
+        const combined = [...current, ...nextSamples]
+        return combined.length > HISTORY_SAMPLES ? combined.slice(-HISTORY_SAMPLES) : combined
+      })
+    }, 100)
     return () => window.clearInterval(timer)
-  }, [frozen, maxCursor])
+  }, [effectiveVentilator, patient, frozen, holdOptions])
 
-  useEffect(() => {
-    setCursor(SIMULATION_START)
-    setFrozen(false)
-    setFrozenSamples(null)
-    setInspiratoryHoldRequestTime(null)
-    setInspiratoryHoldReleaseTime(null)
-    setExpiratoryHoldRequestTime(null)
-    setExpiratoryHoldReleaseTime(null)
-  }, [ventilator, patient, oxygenBoost])
-
-  const movingSamples = useMemo(() => generated.slice(cursor, cursor + WINDOW_SAMPLES), [generated, cursor])
+  const movingSamples = useMemo(() => timeline.slice(-WINDOW_SAMPLES), [timeline])
   const samples = frozen && frozenSamples ? frozenSamples : movingSamples
-  const measurementEnd = Math.min(generated.length, cursor + WINDOW_SAMPLES)
-  const measurementSamples = useMemo(
-    () => generated.slice(Math.max(0, measurementEnd - MINUTE_SAMPLES), measurementEnd),
-    [generated, measurementEnd],
-  )
+  const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
-  const currentSimulationTime = movingSamples[movingSamples.length - 1]?.time ?? 0
+  const currentSimulationTime = movingSamples[movingSamples.length - 1]?.time ?? simulationTimeRef.current
   const inspiratoryHoldPressed = inspiratoryHoldRequestTime != null && inspiratoryHoldReleaseTime == null
   const expiratoryHoldPressed = expiratoryHoldRequestTime != null && expiratoryHoldReleaseTime == null
   const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
@@ -168,7 +181,8 @@ export default function App() {
   const releaseInspiratoryHold = () => {
     if (!inspiratoryHoldPressed) return
     setInspiratoryHoldReleaseTime(currentSimulationTime)
-    setFrozenSamples(null)
+    setFrozenSamples(movingSamples)
+    setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
     setFrozen(true)
   }
 
@@ -183,7 +197,8 @@ export default function App() {
   const releaseExpiratoryHold = () => {
     if (!expiratoryHoldPressed) return
     setExpiratoryHoldReleaseTime(currentSimulationTime)
-    setFrozenSamples(null)
+    setFrozenSamples(movingSamples)
+    setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
     setFrozen(true)
   }
 
@@ -195,7 +210,7 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.14</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.15</span></div>
       </header>
 
       <div className="workspace">
