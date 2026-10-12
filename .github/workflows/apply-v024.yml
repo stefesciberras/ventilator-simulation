@@ -1,8 +1,8 @@
-name: Apply v0.24 mode/BIPAP patch
+name: Apply v0.24 patch
 on:
   push:
-    branches: [chatgpt/v0.24-mode-menu-bipap]
-    paths: [.github/workflows/apply-v024.yml]
+    branches:
+      - chatgpt/v0.24-mode-menu-bipap
 permissions:
   contents: write
 jobs:
@@ -12,62 +12,60 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: chatgpt/v0.24-mode-menu-bipap
-      - name: Apply v0.24 changes
-        shell: python
+      - name: Patch files
         run: |
+          python3 <<'PY'
           from pathlib import Path
 
-          def replace(path, old, new, count=-1):
+          def rep(path, old, new, count=-1):
               p = Path(path)
-              text = p.read_text()
-              if old not in text:
-                  raise SystemExit(f'Pattern not found in {path}: {old[:100]!r}')
-              p.write_text(text.replace(old, new, count))
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f'Pattern missing in {path}: {old[:80]}')
+              p.write_text(s.replace(old, new, count))
 
-          replace('src/simulation/types.ts',
-            "export type VentilatorMode = 'VC-AC' | 'PC-AC' | 'PSV' | 'SIMV-VC' | 'SIMV-PC' | 'VG-PC' | 'APRV'",
-            "export type VentilatorMode = 'VC-AC' | 'PC-AC' | 'PSV' | 'SIMV-VC' | 'SIMV-PC' | 'VG-PC' | 'APRV' | 'BIPAP'")
+          rep('src/simulation/types.ts',
+              "export type VentilatorMode = 'VC-AC' | 'PC-AC' | 'PSV' | 'SIMV-VC' | 'SIMV-PC' | 'VG-PC' | 'APRV'",
+              "export type VentilatorMode = 'VC-AC' | 'PC-AC' | 'PSV' | 'SIMV-VC' | 'SIMV-PC' | 'VG-PC' | 'APRV' | 'BIPAP'")
 
-          replace('src/components/Controls.tsx', "import { useRef } from 'react'", "import { useRef, useState } from 'react'")
-          replace('src/components/Controls.tsx',
-            "const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV'",
-            "const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV' && mode !== 'BIPAP'")
-          replace('src/components/Controls.tsx',
-            "  const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })\n  const currentIeRatio = ieRatioFrom(settings)",
-            "  const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })\n  const currentIeRatio = ieRatioFrom(settings)\n  const [modeMenuOpen, setModeMenuOpen] = useState(false)")
-          replace('src/components/Controls.tsx', "    onChange(next)\n  }", "    onChange(next)\n    setModeMenuOpen(false)\n  }", 1)
-          replace('src/components/Controls.tsx',
-            "  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV']",
-            "  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV', 'BIPAP']")
-          replace('src/components/Controls.tsx',
-            "      <div className=\"mode-buttons\">\n        {modes.map((mode) => (\n          <button key={mode} className={settings.mode === mode ? 'selected' : ''} onClick={() => setMode(mode)}>{mode}</button>\n        ))}\n      </div>",
-            "      <div className=\"mode-selector\">\n        <button\n          className={`mode-menu-button ${modeMenuOpen ? 'selected' : ''}`}\n          type=\"button\"\n          onClick={() => setModeMenuOpen((open) => !open)}\n          aria-haspopup=\"menu\"\n          aria-expanded={modeMenuOpen}\n        >\n          <span>MODE</span><strong>{settings.mode}</strong><span className=\"mode-menu-chevron\">▾</span>\n        </button>\n        {modeMenuOpen && (\n          <div className=\"mode-menu\" role=\"menu\" aria-label=\"Ventilation mode\">\n            {modes.map((mode) => (\n              <button key={mode} role=\"menuitem\" className={settings.mode === mode ? 'selected' : ''} onClick={() => setMode(mode)}>{mode}</button>\n            ))}\n          </div>\n        )}\n      </div>")
-          replace('src/components/Controls.tsx', "      {settings.mode === 'APRV' ? (", "      {(settings.mode === 'APRV' || settings.mode === 'BIPAP') ? (")
+          rep('src/components/Controls.tsx', "import { useRef } from 'react'", "import { useRef, useState } from 'react'")
+          rep('src/components/Controls.tsx',
+              "const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV'",
+              "const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV' && mode !== 'BIPAP'")
+          rep('src/components/Controls.tsx',
+              "  const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })\n  const currentIeRatio = ieRatioFrom(settings)",
+              "  const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })\n  const currentIeRatio = ieRatioFrom(settings)\n  const [modeMenuOpen, setModeMenuOpen] = useState(false)")
+          rep('src/components/Controls.tsx', "    onChange(next)\n  }", "    onChange(next)\n    setModeMenuOpen(false)\n  }", 1)
+          rep('src/components/Controls.tsx',
+              "  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV']",
+              "  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV', 'BIPAP']")
+          rep('src/components/Controls.tsx',
+              "      <div className=\"mode-buttons\">\n        {modes.map((mode) => (\n          <button key={mode} className={settings.mode === mode ? 'selected' : ''} onClick={() => setMode(mode)}>{mode}</button>\n        ))}\n      </div>",
+              "      <div className=\"mode-selector\">\n        <button className={`mode-menu-button ${modeMenuOpen ? 'selected' : ''}`} type=\"button\" onClick={() => setModeMenuOpen((open) => !open)} aria-haspopup=\"menu\" aria-expanded={modeMenuOpen}>\n          <span>MODE</span><strong>{settings.mode}</strong><span className=\"mode-menu-chevron\">▾</span>\n        </button>\n        {modeMenuOpen && (\n          <div className=\"mode-menu\" role=\"menu\" aria-label=\"Ventilation mode\">\n            {modes.map((mode) => (\n              <button key={mode} role=\"menuitem\" className={settings.mode === mode ? 'selected' : ''} onClick={() => setMode(mode)}>{mode}</button>\n            ))}\n          </div>\n        )}\n      </div>")
+          rep('src/components/Controls.tsx', "      {settings.mode === 'APRV' ? (", "      {(settings.mode === 'APRV' || settings.mode === 'BIPAP') ? (")
 
-          replace('src/simulation/engine.ts', "function aprvPhaseHigh(state: SimulationState, ventilator: VentilatorSettings, t: number): boolean {", "function twoLevelPhaseHigh(state: SimulationState, ventilator: VentilatorSettings, t: number): boolean {")
-          replace('src/simulation/engine.ts',
-            "function aprvSample(\n  state: SimulationState,\n  ventilator: VentilatorSettings,\n  patient: PatientSettings,\n  t: number,\n  dt: number,\n  pmus: number,\n  complianceL: number,\n): Sample {",
-            "function twoLevelSample(\n  state: SimulationState,\n  ventilator: VentilatorSettings,\n  patient: PatientSettings,\n  t: number,\n  dt: number,\n  pmus: number,\n  complianceL: number,\n  mode: 'APRV' | 'BIPAP',\n): Sample {")
-          replace('src/simulation/engine.ts', "  const targetPressure = high ? pHigh : pLow", "  const targetPressure = high ? pHigh : pLow\n  const spontaneousPressureDeflection = high ? clamp(pmus * 0.35, 0, 6) : 0")
-          replace('src/simulation/engine.ts', "    pressure: clamp(targetPressure, -5, 80),", "    pressure: clamp(targetPressure - spontaneousPressureDeflection, -5, 80),")
-          replace('src/simulation/engine.ts', "    mode: 'APRV',", "    mode,")
-          replace('src/simulation/engine.ts', "    if (state.lastMode === 'APRV') canAdoptMode = canAdoptMode && !aprvPhaseHigh(state, ventilator, t)", "    if (state.lastMode === 'APRV' || state.lastMode === 'BIPAP') canAdoptMode = canAdoptMode && !twoLevelPhaseHigh(state, ventilator, t)")
-          replace('src/simulation/engine.ts', "  if (mode === 'APRV') {\n    return aprvSample(state, ventilator, patient, t, dt, pmus, complianceL)\n  }", "  if (mode === 'APRV' || mode === 'BIPAP') {\n    return twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode)\n  }")
-          replace('src/simulation/engine.ts', "  const displayedPeep = latestMode === 'APRV' ? ventilator.pLow : ventilator.peep", "  const displayedPeep = (latestMode === 'APRV' || latestMode === 'BIPAP') ? ventilator.pLow : ventilator.peep")
-          replace('src/simulation/engine.ts', "  const expiratoryHoldSamples = latestMode === 'APRV' ? [] : minuteSamples.filter((sample) => sample.expiratoryHold)", "  const expiratoryHoldSamples = (latestMode === 'APRV' || latestMode === 'BIPAP') ? [] : minuteSamples.filter((sample) => sample.expiratoryHold)")
+          rep('src/simulation/engine.ts', "function aprvPhaseHigh(state: SimulationState, ventilator: VentilatorSettings, t: number): boolean {", "function twoLevelPhaseHigh(state: SimulationState, ventilator: VentilatorSettings, t: number): boolean {")
+          rep('src/simulation/engine.ts',
+              "function aprvSample(\n  state: SimulationState,\n  ventilator: VentilatorSettings,\n  patient: PatientSettings,\n  t: number,\n  dt: number,\n  pmus: number,\n  complianceL: number,\n): Sample {",
+              "function twoLevelSample(\n  state: SimulationState,\n  ventilator: VentilatorSettings,\n  patient: PatientSettings,\n  t: number,\n  dt: number,\n  pmus: number,\n  complianceL: number,\n  mode: 'APRV' | 'BIPAP',\n): Sample {")
+          rep('src/simulation/engine.ts', "  const targetPressure = high ? pHigh : pLow", "  const targetPressure = high ? pHigh : pLow\n  const spontaneousPressureDeflection = high ? clamp(pmus * 0.35, 0, 6) : 0")
+          rep('src/simulation/engine.ts', "    pressure: clamp(targetPressure, -5, 80),", "    pressure: clamp(targetPressure - spontaneousPressureDeflection, -5, 80),")
+          rep('src/simulation/engine.ts', "    mode: 'APRV',", "    mode,")
+          rep('src/simulation/engine.ts', "    if (state.lastMode === 'APRV') canAdoptMode = canAdoptMode && !aprvPhaseHigh(state, ventilator, t)", "    if (state.lastMode === 'APRV' || state.lastMode === 'BIPAP') canAdoptMode = canAdoptMode && !twoLevelPhaseHigh(state, ventilator, t)")
+          rep('src/simulation/engine.ts', "  if (mode === 'APRV') {\n    return aprvSample(state, ventilator, patient, t, dt, pmus, complianceL)\n  }", "  if (mode === 'APRV' || mode === 'BIPAP') {\n    return twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode)\n  }")
+          rep('src/simulation/engine.ts', "  const displayedPeep = latestMode === 'APRV' ? ventilator.pLow : ventilator.peep", "  const displayedPeep = (latestMode === 'APRV' || latestMode === 'BIPAP') ? ventilator.pLow : ventilator.peep")
+          rep('src/simulation/engine.ts', "  const expiratoryHoldSamples = latestMode === 'APRV' ? [] : minuteSamples.filter((sample) => sample.expiratoryHold)", "  const expiratoryHoldSamples = (latestMode === 'APRV' || latestMode === 'BIPAP') ? [] : minuteSamples.filter((sample) => sample.expiratoryHold)")
 
-          replace('src/App.tsx', "  const conventionalTimedMode = activeMode !== 'PSV' && activeMode !== 'APRV'", "  const conventionalTimedMode = activeMode !== 'PSV' && activeMode !== 'APRV' && activeMode !== 'BIPAP'")
-          replace('src/App.tsx', "  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV'", "  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV' && activeMode !== 'BIPAP'")
-          replace('src/App.tsx', "<span className=\"version\">v0.22</span>", "<span className=\"version\">v0.24</span>")
-          replace('src/App.tsx', "              {activeMode === 'APRV' ? (", "              {(activeMode === 'APRV' || activeMode === 'BIPAP') ? (")
-          replace('src/App.tsx', "                <button className={`metrics-alarm-silence ${alarmSilenced ? 'active' : ''}`} type=\"button\" onClick={silenceAlarm} title=\"Silence alarm sound for 2 minutes\" aria-label=\"Silence alarm sound for 2 minutes\"><AlarmSilenceIcon /></button>\n", "")
-          replace('src/App.tsx',
-            "              disabled={frozen || activeMode === 'APRV'}\n              title={activeMode === 'APRV' ? 'Expiratory hold is unavailable in APRV' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}",
-            "              disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}\n              title={(activeMode === 'APRV' || activeMode === 'BIPAP') ? 'Expiratory hold is unavailable in two-level pressure modes' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}")
-          replace('src/App.tsx', "            >Expiratory hold</button>\n          </div>", "            >Expiratory hold</button>\n            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title=\"Silence alarm sound for 2 minutes\" aria-label=\"Silence alarm sound for 2 minutes\"><AlarmSilenceIcon /></button>\n          </div>")
+          rep('src/App.tsx', "  const conventionalTimedMode = activeMode !== 'PSV' && activeMode !== 'APRV'", "  const conventionalTimedMode = activeMode !== 'PSV' && activeMode !== 'APRV' && activeMode !== 'BIPAP'")
+          rep('src/App.tsx', "  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV'", "  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV' && activeMode !== 'BIPAP'")
+          rep('src/App.tsx', "<span className=\"version\">v0.22</span>", "<span className=\"version\">v0.24</span>")
+          rep('src/App.tsx', "              {activeMode === 'APRV' ? (", "              {(activeMode === 'APRV' || activeMode === 'BIPAP') ? (")
+          rep('src/App.tsx', "                <button className={`metrics-alarm-silence ${alarmSilenced ? 'active' : ''}`} type=\"button\" onClick={silenceAlarm} title=\"Silence alarm sound for 2 minutes\" aria-label=\"Silence alarm sound for 2 minutes\"><AlarmSilenceIcon /></button>\n", "")
+          rep('src/App.tsx', "              disabled={frozen || activeMode === 'APRV'}\n              title={activeMode === 'APRV' ? 'Expiratory hold is unavailable in APRV' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}", "              disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}\n              title={(activeMode === 'APRV' || activeMode === 'BIPAP') ? 'Expiratory hold is unavailable in two-level pressure modes' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}")
+          rep('src/App.tsx', "            >Expiratory hold</button>\n          </div>", "            >Expiratory hold</button>\n            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title=\"Silence alarm sound for 2 minutes\" aria-label=\"Silence alarm sound for 2 minutes\"><AlarmSilenceIcon /></button>\n          </div>")
 
           p = Path('src/styles.css')
-          text = p.read_text()
+          s = p.read_text()
           anchor = ".mode-buttons button { padding: 8px 4px; font-size: 10px; white-space: nowrap; }"
           css = """
 .mode-selector { position: relative; margin-bottom: 14px; }
@@ -78,18 +76,17 @@ jobs:
 .mode-menu { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 6px); display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; padding: 8px; border: 1px solid #41545f; border-radius: 10px; background: #0e171c; box-shadow: 0 14px 36px rgba(0,0,0,.55); }
 .mode-menu button { padding: 9px 6px; font-size: 10px; white-space: nowrap; }
 """
-          if anchor not in text: raise SystemExit('mode CSS anchor not found')
-          p.write_text(text.replace(anchor, anchor + css))
+          if anchor not in s: raise SystemExit('mode CSS anchor missing')
+          p.write_text(s.replace(anchor, anchor + css))
 
           p = Path('src/alarm.css')
-          text = p.read_text().replace('.metrics-actions { display: grid; grid-template-columns: 1fr 42px;', '.metrics-actions { display: grid; grid-template-columns: 1fr;')
-          if '.action-bar .alarm-silence-bottom' not in text:
-              text += '\n.action-bar .alarm-silence-bottom { margin-left: auto; }\n'
-          p.write_text(text)
+          s = p.read_text().replace('.metrics-actions { display: grid; grid-template-columns: 1fr 42px;', '.metrics-actions { display: grid; grid-template-columns: 1fr;')
+          if '.action-bar .alarm-silence-bottom' not in s:
+              s += '\n.action-bar .alarm-silence-bottom { margin-left: auto; }\n'
+          p.write_text(s)
+          PY
 
-          Path('.github/workflows/apply-v024.yml').unlink()
-      - name: Commit patch
-        run: |
+          rm .github/workflows/apply-v024.yml
           git config user.name "stefesciberras"
           git config user.email "43134239+stefesciberras@users.noreply.github.com"
           git add -A
