@@ -84,6 +84,14 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .patient-section .preset-row button:hover:not(:disabled) { border-color: #6ba87a; background: #1c3021; }
 .patient-reset-button { border-color: #45634c; color: #9bcaa4; background: #142118; }
 .patient-reset-button:hover:not(:disabled) { color: #d8efdd; border-color: #6ca77a; background: #1a2c1e; }
+.patient-rr-control { display: flex; align-items: flex-end; gap: 8px; margin: 2px 0 4px; }
+.patient-rr-slider { flex: 1; min-width: 0; }
+.patient-rr-slider .control-row { margin-bottom: 0; }
+.patient-breathing-toggle { flex: 0 0 38px; width: 38px; height: 38px; padding: 7px; display: grid; place-items: center; margin-bottom: 0; border-color: #467252; color: #8fe0a1; background: #15271a; }
+.patient-breathing-toggle svg { width: 22px; height: 22px; }
+.patient-breathing-toggle:hover:not(:disabled) { border-color: #72b783; background: #1c3422; }
+.patient-breathing-toggle.off { border-color: #825656; color: #e58b8b; background: #2a1919; }
+.patient-breathing-toggle.off:hover:not(:disabled) { border-color: #b87474; background: #352020; }
 .disclaimer { font-size: 10px; color: #65767f; line-height: 1.5; padding: 15px 2px 3px; }
 @media (max-width: 1180px) {
   .screen-body { grid-template-columns: minmax(0, 1fr) 150px; }
