@@ -16,7 +16,7 @@ jobs:
           ref: chatgpt/v0.42-alarm-priority-vertical
       - name: Apply v0.42 patch
         run: |
-          echo 'BASE64_PLACEHOLDER' | base64 -d > /tmp/patch_v042.py
+          echo 'PLACEHOLDER_WILL_REPLACE' | base64 -d > /tmp/patch_v042.py
           python /tmp/patch_v042.py
       - name: Install
         run: npm install --no-package-lock
