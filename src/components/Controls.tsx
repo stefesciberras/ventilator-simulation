@@ -10,6 +10,7 @@ interface SliderProps {
   step?: number
   displayValue?: string
   onChange: (value: number) => void
+  disabled?: boolean
 }
 
 const MIN_IE = 0.5
@@ -30,11 +31,11 @@ const isSimvMode = (mode: VentilatorMode) => mode === 'SIMV-VC' || mode === 'SIM
 const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV' && mode !== 'BIPAP'
 const usesTidalVolume = (mode: VentilatorMode) => isVolumeMandatoryMode(mode) || mode === 'VG-PC'
 
-function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange }: SliderProps) {
+function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange, disabled = false }: SliderProps) {
   return (
-    <label className="control-row">
+    <label className={`control-row ${disabled ? 'disabled' : ''}`}>
       <div className="control-heading"><span>{label}</span><strong>{displayValue ?? `${value}${unit}`}</strong></div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} />
     </label>
   )
 }
@@ -158,6 +159,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
   }
 
   const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV', 'BIPAP']
+  const zeroPressureSupport = (settings.mode === 'PSV' || isSimvMode(settings.mode)) && settings.pressureSupport <= 0.001
 
   const triggerControls = (
     <div className="trigger-controls">
@@ -166,9 +168,9 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
         <button type="button" className={settings.triggerType === 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'flow' })}>Flow</button>
       </div>
       {settings.triggerType === 'flow' ? (
-        <Slider label="Flow trigger" value={settings.flowTriggerSensitivity ?? 2} unit=" L/min" min={0.5} max={10} step={0.5} onChange={(v) => patch({ flowTriggerSensitivity: v })} />
+        <Slider label="Flow trigger" value={settings.flowTriggerSensitivity ?? 2} unit=" L/min" min={0.5} max={10} step={0.5} disabled={zeroPressureSupport} onChange={(v) => patch({ flowTriggerSensitivity: v })} />
       ) : (
-        <Slider label="Pressure trigger" value={settings.triggerSensitivity} unit=" cmH₂O below PEEP" min={0.5} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />
+        <Slider label="Pressure trigger" value={settings.triggerSensitivity} unit=" cmH₂O below PEEP" min={0.5} max={8} step={0.5} disabled={zeroPressureSupport} onChange={(v) => patch({ triggerSensitivity: v })} />
       )}
     </div>
   )
@@ -252,7 +254,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
           {settings.mode === 'VG-PC' && <Slider label="Starting pressure" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />}
           {(settings.mode === 'PSV' || isSimvMode(settings.mode)) && <Slider label="Pressure support" value={settings.pressureSupport} unit=" cmH₂O" min={0} max={25} onChange={(v) => patch({ pressureSupport: v })} />}
           {(settings.mode === 'PSV' || isSimvMode(settings.mode)) && (
-            <Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} onChange={(v) => patch({ terminationSensitivity: v })} />
+            <Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} disabled={zeroPressureSupport} onChange={(v) => patch({ terminationSensitivity: v })} />
           )}
           {triggerControls}
         </>
