@@ -74,6 +74,7 @@ h1 { margin: 2px 0 0; font-size: clamp(20px, 2vw, 30px); font-weight: 650; lette
 .reset-settings-button:hover:not(:disabled) { color: #e3edf0; }
 .mode-buttons, .preset-row { display: grid; gap: 6px; margin-bottom: 14px; }
 .mode-buttons { grid-template-columns: repeat(3, 1fr); }
+.mode-buttons button { padding: 8px 4px; font-size: 10px; white-space: nowrap; }
 .preset-row { grid-template-columns: repeat(4, 1fr); }
 .preset-row button { padding: 7px 3px; font-size: 11px; }
 .control-row { display: block; margin: 12px 0; }
