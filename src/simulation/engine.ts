@@ -1,4 +1,4 @@
-import type { Measurements, PatientSettings, Sample, VentilatorSettings } from './types'
+import type { Measurements, PatientSettings, Sample, VentilatorMode, VentilatorSettings } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -9,12 +9,17 @@ export interface SimulationOptions {
   expiratoryHoldReleaseTime?: number | null
 }
 
+type ActiveBreathType = 'vc' | 'pc' | 'ps' | 'vg-pc' | null
+
 export interface SimulationState {
+  lastMode: VentilatorMode | null
   volume: number
   breathStart: number
   lastAssistedBreath: number
+  lastMandatoryBreath: number
   lastBreathEnd: number
   breathActive: boolean
+  activeBreathType: ActiveBreathType
   inspiredThisBreath: number
   peakInspiratoryFlow: number
   peakExpiratoryFlowMagnitude: number
@@ -25,15 +30,20 @@ export interface SimulationState {
   effortCycleIndex: number
   breathsDuringEffort: number
   suppressEffortUntil: number
+  vgPressureControl: number
+  vgSettingPressure: number
 }
 
 export function createSimulationState(): SimulationState {
   return {
+    lastMode: null,
     volume: 0,
     breathStart: -100,
     lastAssistedBreath: -100,
+    lastMandatoryBreath: -100,
     lastBreathEnd: -100,
     breathActive: false,
+    activeBreathType: null,
     inspiredThisBreath: 0,
     peakInspiratoryFlow: 0,
     peakExpiratoryFlowMagnitude: 0,
@@ -44,6 +54,8 @@ export function createSimulationState(): SimulationState {
     effortCycleIndex: -1,
     breathsDuringEffort: 0,
     suppressEffortUntil: -100,
+    vgPressureControl: 15,
+    vgSettingPressure: 15,
   }
 }
 
@@ -62,6 +74,64 @@ function isRequestHeld(t: number, requestTime?: number | null, releaseTime?: num
   return releaseTime == null || t < releaseTime
 }
 
+function isSimv(mode: VentilatorMode): boolean {
+  return mode === 'SIMV-VC' || mode === 'SIMV-PC'
+}
+
+function isAssistControl(mode: VentilatorMode): boolean {
+  return mode === 'VC-AC' || mode === 'PC-AC' || mode === 'VG-PC'
+}
+
+function finishBreath(state: SimulationState, t: number, postCycleReleaseGuard: number) {
+  state.breathActive = false
+  state.activeBreathType = null
+  state.lastBreathEnd = t
+  state.suppressEffortUntil = t + postCycleReleaseGuard
+}
+
+function aprvSample(
+  state: SimulationState,
+  ventilator: VentilatorSettings,
+  patient: PatientSettings,
+  t: number,
+  dt: number,
+  pmus: number,
+  complianceL: number,
+): Sample {
+  const tHigh = Math.max(ventilator.tHigh, 0.1)
+  const tLow = Math.max(ventilator.tLow, 0.05)
+  const cycle = tHigh + tLow
+  const phase = ((t % cycle) + cycle) % cycle
+  const previousPhase = ((((t - dt) % cycle) + cycle) % cycle)
+  const high = phase < tHigh
+  const previousHigh = previousPhase < tHigh
+  const pHigh = Math.max(ventilator.pHigh, ventilator.pLow + 1)
+  const pLow = Math.min(ventilator.pLow, pHigh - 1)
+  const targetPressure = high ? pHigh : pLow
+
+  // APRV volume is referenced to the Plow equilibrium volume. Phigh provides the
+  // sustained distending pressure; release to Plow permits passive expiration.
+  const distendingPressure = high ? pHigh - pLow : 0
+  const elasticPressure = state.volume / complianceL
+  const drivingPressure = distendingPressure - elasticPressure + pmus
+  const resistance = drivingPressure >= 0 ? Math.max(patient.resistance, 0.5) : Math.max(patient.expiratoryResistance, 0.5)
+  const flowLs = drivingPressure / resistance
+
+  state.volume = clamp(state.volume + flowLs * dt, 0, 2.5)
+  state.previousPmus = pmus
+
+  return {
+    time: Number(t.toFixed(4)),
+    pressure: clamp(targetPressure, -5, 80),
+    flow: flowLs * 60,
+    volume: state.volume * 1000,
+    musclePressure: pmus,
+    phase: high ? 'inspiration' : 'expiration',
+    breathTrigger: high && !previousHigh ? 'mandatory' : undefined,
+    expiratoryHold: false,
+  }
+}
+
 export function stepSimulation(
   state: SimulationState,
   ventilator: VentilatorSettings,
@@ -71,11 +141,36 @@ export function stepSimulation(
   options: SimulationOptions = {},
 ): Sample {
   const complianceL = Math.max(patient.compliance / 1000, 0.001)
+  const mandatoryCycle = 60 / Math.max(ventilator.rate, 1)
+  const postCycleReleaseGuard = 0.06
+
+  if (state.lastMode !== ventilator.mode) {
+    state.lastMode = ventilator.mode
+    state.breathActive = false
+    state.activeBreathType = null
+    state.inspiratoryHoldActive = false
+    state.expiratoryHoldActive = false
+    state.expiratoryTriggerReady = true
+    state.lastAssistedBreath = t - mandatoryCycle
+    state.lastMandatoryBreath = t - mandatoryCycle
+    state.vgPressureControl = clamp(ventilator.pressureControl, 5, 40)
+    state.vgSettingPressure = ventilator.pressureControl
+  }
+
+  if (ventilator.mode === 'VG-PC' && Math.abs(state.vgSettingPressure - ventilator.pressureControl) > 0.001) {
+    state.vgPressureControl = clamp(ventilator.pressureControl, 5, 40)
+    state.vgSettingPressure = ventilator.pressureControl
+  }
+
+  const pmus = patientMusclePressure(t, patient)
+
+  if (ventilator.mode === 'APRV') {
+    return aprvSample(state, ventilator, patient, t, dt, pmus, complianceL)
+  }
+
   const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
   const triggerRefractoryPeriod = 0.12
-  const postCycleReleaseGuard = 0.06
   const expiratoryTriggerFraction = 0.25
-  const pmus = patientMusclePressure(t, patient)
   const spontaneousCycleIndex = Number.isFinite(spontaneousCycle) ? Math.floor((t + dt * 0.1) / spontaneousCycle) : -1
 
   if (spontaneousCycleIndex !== state.effortCycleIndex) {
@@ -83,7 +178,6 @@ export function stepSimulation(
     state.breathsDuringEffort = 0
   }
 
-  const mandatoryCycle = 60 / Math.max(ventilator.rate, 1)
   const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
 
   if ((state.breathActive || state.inspiratoryHoldActive) && pmus >= triggerThreshold && state.breathsDuringEffort === 0) {
@@ -107,8 +201,25 @@ export function stepSimulation(
     patientTriggerAllowed &&
     (thresholdCrossing || persistentEffortRetrigger || ongoingEffortAfterGate)
 
-  const mandatoryDue = mandatoryMode && t - state.lastAssistedBreath >= mandatoryCycle - dt / 2
-  const breathDue = mandatoryDue || patientTrigger
+  const simvMode = isSimv(ventilator.mode)
+  const assistControlMode = isAssistControl(ventilator.mode)
+  const mandatoryDue = assistControlMode
+    ? t - state.lastAssistedBreath >= mandatoryCycle - dt / 2
+    : simvMode
+      ? t - state.lastMandatoryBreath >= mandatoryCycle - dt / 2
+      : false
+
+  const timeToNextSimvBreath = mandatoryCycle - (t - state.lastMandatoryBreath)
+  const syncWindow = Math.min(0.5, mandatoryCycle * 0.2)
+  const synchronizedSimvTrigger =
+    simvMode &&
+    patientTrigger &&
+    !mandatoryDue &&
+    timeToNextSimvBreath >= 0 &&
+    timeToNextSimvBreath <= syncWindow
+
+  const mandatoryEvent = mandatoryDue || synchronizedSimvTrigger
+  const breathDue = mandatoryEvent || patientTrigger
   const expiratoryHoldRequested = isRequestHeld(t, options.expiratoryHoldRequestTime, options.expiratoryHoldReleaseTime)
   let breathTrigger: Sample['breathTrigger']
 
@@ -128,6 +239,13 @@ export function stepSimulation(
     state.peakExpiratoryFlowMagnitude = 0
     state.expiratoryTriggerReady = false
 
+    if (ventilator.mode === 'VC-AC') state.activeBreathType = 'vc'
+    else if (ventilator.mode === 'PC-AC') state.activeBreathType = 'pc'
+    else if (ventilator.mode === 'VG-PC') state.activeBreathType = 'vg-pc'
+    else if (ventilator.mode === 'SIMV-VC') state.activeBreathType = mandatoryEvent ? 'vc' : 'ps'
+    else if (ventilator.mode === 'SIMV-PC') state.activeBreathType = mandatoryEvent ? 'pc' : 'ps'
+    else state.activeBreathType = 'ps'
+
     if (patientTrigger) {
       breathTrigger = 'patient'
       state.breathsDuringEffort += 1
@@ -136,7 +254,8 @@ export function stepSimulation(
       if (pmus > 0) state.breathsDuringEffort = Math.max(state.breathsDuringEffort, 1)
     }
 
-    if (mandatoryMode) state.lastAssistedBreath = t
+    if (assistControlMode) state.lastAssistedBreath = t
+    if (simvMode && mandatoryEvent) state.lastMandatoryBreath = t
   }
 
   const elapsed = t - state.breathStart
@@ -149,8 +268,6 @@ export function stepSimulation(
     inspiration = false
     if (expiratoryHoldRequested) {
       flowLs = 0
-      // During a true expiratory occlusion an active inspiratory effort is still
-      // transmitted to airway pressure, just as it is during an inspiratory hold.
       pressure = ventilator.peep + state.volume / complianceL - pmus
     } else {
       state.expiratoryHoldActive = false
@@ -162,12 +279,10 @@ export function stepSimulation(
       pressure = ventilator.peep + state.volume / complianceL - pmus
     } else {
       state.inspiratoryHoldActive = false
-      state.breathActive = false
+      finishBreath(state, t, postCycleReleaseGuard)
       inspiration = false
-      state.lastBreathEnd = t
-      state.suppressEffortUntil = t + postCycleReleaseGuard
     }
-  } else if (state.breathActive && ventilator.mode === 'VC-AC') {
+  } else if (state.breathActive && state.activeBreathType === 'vc') {
     const plateauFraction = clamp(ventilator.plateauPercent ?? 0, 0, 20) / 100
     const flowTime = Math.max(ventilator.inspiratoryTime * (1 - plateauFraction), 0.05)
     const targetFlow = Math.max(ventilator.inspiratoryFlow, 1) / 60
@@ -182,14 +297,10 @@ export function stepSimulation(
         flowLs = 0
         pressure = ventilator.peep + state.volume / complianceL - pmus
       } else {
-        state.breathActive = false
+        finishBreath(state, t, postCycleReleaseGuard)
         inspiration = false
-        state.lastBreathEnd = t
-        state.suppressEffortUntil = t + postCycleReleaseGuard
       }
     } else if (flowPhaseComplete) {
-      // Automatic end-inspiratory plateau. Total Ti (and therefore I:E) is unchanged;
-      // only the flow-delivery portion of inspiration is shortened.
       flowLs = 0
       pressure = ventilator.peep + state.volume / complianceL - pmus
     } else {
@@ -198,7 +309,7 @@ export function stepSimulation(
       const resistivePressure = patient.resistance * flowLs
       pressure = ventilator.peep + elasticPressure + resistivePressure - pmus
     }
-  } else if (state.breathActive && ventilator.mode === 'PC-AC') {
+  } else if (state.breathActive && state.activeBreathType === 'pc') {
     if (elapsed >= ventilator.inspiratoryTime) {
       if (inspiratoryHoldRequested) {
         state.inspiratoryHoldActive = true
@@ -206,10 +317,8 @@ export function stepSimulation(
         flowLs = 0
         pressure = ventilator.peep + state.volume / complianceL - pmus
       } else {
-        state.breathActive = false
+        finishBreath(state, t, postCycleReleaseGuard)
         inspiration = false
-        state.lastBreathEnd = t
-        state.suppressEffortUntil = t + postCycleReleaseGuard
       }
     } else {
       pressure = ventilator.peep + ventilator.pressureControl
@@ -217,7 +326,28 @@ export function stepSimulation(
       const availableDrivingPressure = ventilator.pressureControl - elasticPressure + pmus
       flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
     }
-  } else if (state.breathActive && ventilator.mode === 'PSV') {
+  } else if (state.breathActive && state.activeBreathType === 'vg-pc') {
+    if (elapsed >= ventilator.inspiratoryTime) {
+      if (inspiratoryHoldRequested) {
+        state.inspiratoryHoldActive = true
+        inspiration = true
+        flowLs = 0
+        pressure = ventilator.peep + state.volume / complianceL - pmus
+      } else {
+        const targetVolume = Math.max(ventilator.tidalVolume / 1000, 0.05)
+        const volumeError = (targetVolume - state.inspiredThisBreath) / targetVolume
+        const pressureAdjustment = clamp(volumeError * 4, -1, 1)
+        state.vgPressureControl = clamp(state.vgPressureControl + pressureAdjustment, 5, 40)
+        finishBreath(state, t, postCycleReleaseGuard)
+        inspiration = false
+      }
+    } else {
+      pressure = ventilator.peep + state.vgPressureControl
+      const elasticPressure = state.volume / complianceL
+      const availableDrivingPressure = state.vgPressureControl - elasticPressure + pmus
+      flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
+    }
+  } else if (state.breathActive && state.activeBreathType === 'ps') {
     pressure = ventilator.peep + ventilator.pressureSupport
     const elasticPressure = state.volume / complianceL
     const availableDrivingPressure = ventilator.pressureSupport - elasticPressure + pmus
@@ -227,10 +357,8 @@ export function stepSimulation(
     const cycleOff = elapsed > 0.2 && state.peakInspiratoryFlow > 0.01 && flowLs <= state.peakInspiratoryFlow * terminationFraction
     const timeLimit = elapsed >= Math.max(patient.neuralInspiratoryTime * 1.5, 1.5)
     if (cycleOff || timeLimit) {
-      state.breathActive = false
+      finishBreath(state, t, postCycleReleaseGuard)
       inspiration = false
-      state.lastBreathEnd = t
-      state.suppressEffortUntil = t + postCycleReleaseGuard
     }
   }
 
@@ -313,6 +441,8 @@ export function generateWaveforms(
 }
 
 export function calculateMeasurements(samples: Sample[], ventilator: VentilatorSettings): Measurements {
+  const displayedPeep = ventilator.mode === 'APRV' ? ventilator.pLow : ventilator.peep
+
   if (samples.length === 0) {
     return {
       respiratoryRate: 0,
@@ -320,7 +450,7 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
       minuteVentilation: 0,
       peakPressure: 0,
       meanPressure: 0,
-      peep: ventilator.peep,
+      peep: displayedPeep,
       totalPeep: null,
       autoPeep: null,
     }
@@ -355,7 +485,7 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
     previousVolume = sample.volume
   }
 
-  const intervals = starts.slice(1).map((t, index) => t - starts[index]).filter((value) => value > 0.2)
+  const intervals = starts.slice(1).map((time, index) => time - starts[index]).filter((value) => value > 0.2)
   const avgInterval = intervals.length ? intervals.reduce((a, b) => a + b, 0) / intervals.length : 0
   const rr = avgInterval > 0 ? 60 / avgInterval : 0
   const recentVolumes = completedBreaths.slice(-4).map((breath) => breath.tidalVolume)
@@ -371,10 +501,10 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
   const peakPressure = Math.max(...pressureSamples.map((sample) => sample.pressure))
   const meanPressure = pressureSamples.reduce((sum, sample) => sum + sample.pressure, 0) / Math.max(1, pressureSamples.length)
 
-  const expiratoryHoldSamples = minuteSamples.filter((sample) => sample.expiratoryHold)
+  const expiratoryHoldSamples = ventilator.mode === 'APRV' ? [] : minuteSamples.filter((sample) => sample.expiratoryHold)
   const lastExpiratoryHoldSample = expiratoryHoldSamples[expiratoryHoldSamples.length - 1]
   const totalPeep = lastExpiratoryHoldSample ? lastExpiratoryHoldSample.pressure : null
-  const autoPeep = totalPeep == null ? null : Math.max(0, totalPeep - ventilator.peep)
+  const autoPeep = totalPeep == null ? null : Math.max(0, totalPeep - displayedPeep)
 
   return {
     respiratoryRate: rr,
@@ -382,7 +512,7 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
     minuteVentilation,
     peakPressure,
     meanPressure,
-    peep: ventilator.peep,
+    peep: displayedPeep,
     totalPeep,
     autoPeep,
   }
