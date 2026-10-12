@@ -287,7 +287,16 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 
 export default function App() {
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
-  const [patient, setPatient] = useState<PatientSettings>(() => loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient))
+  const [patient, setPatient] = useState<PatientSettings>(() => {
+    const stored = loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient)
+    // v0.34 shipped 30% rise / 35% release as the default. Migrate that exact
+    // profile once to the corrected sinusoidal normal default so existing local
+    // settings do not preserve the transient flat-topped model after upgrade.
+    if (stored.effortRisePercent === 30 && stored.effortRelaxationPercent === 35) {
+      return { ...stored, effortRisePercent: 50, effortRelaxationPercent: 50 }
+    }
+    return stored
+  })
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
     const stored = Number(window.localStorage.getItem(PATIENT_TRANSITION_STORAGE_KEY) ?? 0)
