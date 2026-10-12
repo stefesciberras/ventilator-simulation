@@ -8,7 +8,7 @@
   to { background: linear-gradient(90deg,#f23b3b,#c41616); box-shadow: inset 0 -1px 0 rgba(255,255,255,.28), 0 0 16px rgba(242,59,59,.45); }
 }
 .alarm-dialog-backdrop { position: absolute; inset: 0; z-index: 12; display: grid; place-items: center; padding: 24px; background: rgba(2,5,7,.68); backdrop-filter: blur(2px); }
-.alarm-dialog { width: min(410px, 94%); padding: 16px; border: 1px solid #455761; border-radius: 12px; background: #11191e; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
+.alarm-dialog { width: min(560px, 96%); max-height: min(82vh, 720px); overflow-y: auto; padding: 16px; border: 1px solid #455761; border-radius: 12px; background: #11191e; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
 .alarm-dialog-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; color: #f2f7f9; }
 .alarm-dialog-title strong { text-transform: uppercase; letter-spacing: .09em; font-size: 13px; }
 .alarm-dialog-title button { width: 34px; height: 34px; padding: 0; font-size: 22px; line-height: 1; }
@@ -33,3 +33,26 @@
 }
 
 .action-bar .alarm-silence-bottom { margin-left: auto; }
+
+.dual-alarm-section { display: grid; gap: 10px; padding: 4px 0 8px; }
+.dual-alarm-card { padding: 10px 12px 8px; border: 1px solid #2c3b44; border-radius: 9px; background: #0b1217; }
+.dual-alarm-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.dual-alarm-heading > span { color: #a9b8bf; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.dual-alarm-heading > strong { color: #eef6f8; font-size: 14px; }
+.dual-alarm-heading small { color: #82949d; font-size: 9px; font-weight: 500; }
+.dual-range-wrap { position: relative; height: 24px; margin: 0 2px; }
+.dual-range-track, .dual-range-active { position: absolute; top: 10px; height: 5px; border-radius: 999px; pointer-events: none; }
+.dual-range-track { left: 0; right: 0; background: #3f4b52; }
+.dual-range-active { background: #e6b83c; }
+.dual-range-input { position: absolute; inset: 0; width: 100% !important; height: 24px; margin: 0; background: transparent; pointer-events: none; appearance: none; -webkit-appearance: none; }
+.dual-range-input::-webkit-slider-runnable-track { height: 5px; background: transparent; }
+.dual-range-input::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: -5.5px; border: 2px solid #f7dda0; border-radius: 50%; background: #d8a92b; pointer-events: auto; -webkit-appearance: none; cursor: ew-resize; box-shadow: 0 1px 4px rgba(0,0,0,.55); }
+.dual-range-input::-moz-range-track { height: 5px; background: transparent; }
+.dual-range-input::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid #f7dda0; border-radius: 50%; background: #d8a92b; pointer-events: auto; cursor: ew-resize; box-shadow: 0 1px 4px rgba(0,0,0,.55); }
+.dual-range-input.low { z-index: 3; }
+.dual-range-input.high { z-index: 4; }
+.dual-range-scale { display: flex; justify-content: space-between; color: #667982; font-size: 9px; }
+.oxygen-failure-alarm-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; padding: 10px 12px; border: 1px solid #2c3b44; border-radius: 9px; background: #0b1217; }
+.oxygen-failure-alarm-row span { color: #a9b8bf; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.oxygen-failure-alarm-row strong { color: #eef6f8; font-size: 12px; }
+.oxygen-failure-alarm-row small { grid-column: 1 / -1; color: #667982; font-size: 9px; }
