@@ -87,8 +87,32 @@ function patientMusclePressure(t: number, patient: PatientSettings): number {
   const phase = ((t % cycle) + cycle) % cycle
   const neuralTi = Math.max(patient.neuralInspiratoryTime, 0.1)
   if (phase >= neuralTi) return 0
-  const x = phase / neuralTi
-  return patient.effort * Math.sin(Math.PI * x) ** 2
+
+  // Active-breathing model: smooth contraction, optional plateau, then smooth relaxation.
+  // Rise and relaxation are specified independently because trigger delay depends strongly
+  // on dPmus/dt, not just on peak effort. If their requested durations exceed neural Ti,
+  // they are proportionally compressed and the plateau disappears.
+  let riseTime = clamp(patient.effortRiseTime ?? 0.3, 0.02, neuralTi)
+  let relaxationTime = clamp(patient.effortRelaxationTime ?? 0.35, 0.02, neuralTi)
+  const edgeTime = riseTime + relaxationTime
+  if (edgeTime > neuralTi) {
+    const scale = neuralTi / edgeTime
+    riseTime *= scale
+    relaxationTime *= scale
+  }
+  const relaxationStart = neuralTi - relaxationTime
+
+  if (phase < riseTime) {
+    const x = phase / Math.max(riseTime, 0.001)
+    const shape = 0.5 - 0.5 * Math.cos(Math.PI * x)
+    return patient.effort * shape
+  }
+
+  if (phase < relaxationStart) return patient.effort
+
+  const x = (phase - relaxationStart) / Math.max(relaxationTime, 0.001)
+  const shape = 0.5 + 0.5 * Math.cos(Math.PI * clamp(x, 0, 1))
+  return patient.effort * shape
 }
 
 function effectiveRespiratoryRate(state: SimulationState, ventilator: VentilatorSettings, patient: PatientSettings, t: number): number {
