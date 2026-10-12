@@ -48,20 +48,20 @@ function EffortPhaseControl({
   relaxationPercent: number
   onChange: (risePercent: number, relaxationPercent: number) => void
 }) {
-  const riseEnd = clamp(Math.round(risePercent / 5) * 5, 5, 90)
-  const relaxationStart = clamp(100 - Math.round(relaxationPercent / 5) * 5, 10, 95)
-  const normalizedRiseEnd = Math.min(riseEnd, relaxationStart - 5)
-  const normalizedRelaxationStart = Math.max(relaxationStart, normalizedRiseEnd + 5)
+  const riseEnd = clamp(Math.round(risePercent / 5) * 5, 5, 95)
+  const relaxationStart = clamp(100 - Math.round(relaxationPercent / 5) * 5, 5, 95)
+  const normalizedRiseEnd = Math.min(riseEnd, relaxationStart)
+  const normalizedRelaxationStart = Math.max(relaxationStart, normalizedRiseEnd)
   const plateauPercent = normalizedRelaxationStart - normalizedRiseEnd
   const normalizedRelaxationPercent = 100 - normalizedRelaxationStart
 
   const setRiseEnd = (value: number) => {
-    const nextRise = clamp(value, 5, normalizedRelaxationStart - 5)
+    const nextRise = clamp(value, 5, normalizedRelaxationStart)
     onChange(nextRise, normalizedRelaxationPercent)
   }
 
   const setRelaxationStart = (value: number) => {
-    const nextStart = clamp(value, normalizedRiseEnd + 5, 95)
+    const nextStart = clamp(value, normalizedRiseEnd, 95)
     onChange(normalizedRiseEnd, 100 - nextStart)
   }
 
@@ -72,12 +72,12 @@ function EffortPhaseControl({
         <span className="effort-phase-segment rise" style={{ left: 0, width: `${normalizedRiseEnd}%` }} />
         <span className="effort-phase-segment plateau" style={{ left: `${normalizedRiseEnd}%`, width: `${plateauPercent}%` }} />
         <span className="effort-phase-segment relaxation" style={{ left: `${normalizedRelaxationStart}%`, width: `${normalizedRelaxationPercent}%` }} />
-        <input className="effort-phase-range rise-handle" type="range" min={5} max={90} step={5} value={normalizedRiseEnd} onChange={(event) => setRiseEnd(Number(event.target.value))} aria-label="End of effort rise as percent of neural inspiratory time" />
-        <input className="effort-phase-range relaxation-handle" type="range" min={10} max={95} step={5} value={normalizedRelaxationStart} onChange={(event) => setRelaxationStart(Number(event.target.value))} aria-label="Start of effort relaxation as percent of neural inspiratory time" />
+        <input className="effort-phase-range rise-handle" type="range" min={5} max={95} step={5} value={normalizedRiseEnd} onChange={(event) => setRiseEnd(Number(event.target.value))} aria-label="End of effort rise as percent of neural inspiratory time" />
+        <input className="effort-phase-range relaxation-handle" type="range" min={5} max={95} step={5} value={normalizedRelaxationStart} onChange={(event) => setRelaxationStart(Number(event.target.value))} aria-label="Start of effort relaxation as percent of neural inspiratory time" />
       </div>
       <div className="effort-phase-values">
         <span>Rise <b>{normalizedRiseEnd}%</b></span>
-        <span>Plateau <b>{plateauPercent}%</b></span>
+        <span>Hold <b>{plateauPercent}%</b></span>
         <span>Relax <b>{normalizedRelaxationPercent}%</b></span>
       </div>
     </div>
@@ -276,7 +276,7 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
   }
 
   const presets: Record<string, Partial<PatientSettings>> = {
-    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 30, effortRelaxationPercent: 35 },
+    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50 },
     ARDS: { compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25 },
     COPD: { compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40 },
     Asthma: { compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30 },

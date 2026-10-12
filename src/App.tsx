@@ -13,7 +13,7 @@ const initialVentilator: VentilatorSettings = {
 }
 
 const initialPatient: PatientSettings = {
-  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 30, effortRelaxationPercent: 35, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
+  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
 }
 
 interface AlarmLimits {
@@ -287,7 +287,16 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 
 export default function App() {
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
-  const [patient, setPatient] = useState<PatientSettings>(() => loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient))
+  const [patient, setPatient] = useState<PatientSettings>(() => {
+    const stored = loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient)
+    // v0.34 shipped 30% rise / 35% release as the default. Migrate that exact
+    // profile once to the corrected sinusoidal normal default so existing local
+    // settings do not preserve the transient flat-topped model after upgrade.
+    if (stored.effortRisePercent === 30 && stored.effortRelaxationPercent === 35) {
+      return { ...stored, effortRisePercent: 50, effortRelaxationPercent: 50 }
+    }
+    return stored
+  })
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
     const stored = Number(window.localStorage.getItem(PATIENT_TRANSITION_STORAGE_KEY) ?? 0)
@@ -594,7 +603,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.34</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.35</span></div>
       </header>
 
       <div className="workspace">
