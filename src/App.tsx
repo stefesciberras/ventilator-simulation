@@ -165,6 +165,9 @@ function calculateMeasuredIERatio(samples: Sample[]): number | null {
 function getLatestBreathStart(samples: Sample[]): number | null {
   for (let index = samples.length - 1; index >= 0; index -= 1) {
     if (samples[index].breathTrigger) return samples[index].time
+    if (index > 0 && samples[index - 1].phase === 'expiration' && samples[index].phase === 'inspiration') {
+      return samples[index].time
+    }
   }
   return null
 }
@@ -600,7 +603,7 @@ export default function App() {
 
   const copyDiagnostics = async () => {
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.38',
+      appVersion: '0.39',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -659,7 +662,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.38</span>
+          <span className="version">v0.39</span>
         </div>
       </header>
 
