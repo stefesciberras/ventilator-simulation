@@ -97,20 +97,24 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>
 }
 
-function DualAlarmSlider({ label, unit, min, max, step, low, high, onLowChange, onHighChange }: { label: string; unit: string; min: number; max: number; step: number; low: number; high: number; onLowChange: (value: number) => void; onHighChange: (value: number) => void }) {
+function VerticalDualAlarmSlider({ label, unit, min, max, step, low, high, onLowChange, onHighChange }: { label: string; unit: string; min: number; max: number; step: number; low: number; high: number; onLowChange: (value: number) => void; onHighChange: (value: number) => void }) {
   const span = Math.max(0.0001, max - min)
   const lowPct = ((low - min) / span) * 100
   const highPct = ((high - min) / span) * 100
   return (
-    <div className="dual-alarm-card">
-      <div className="dual-alarm-heading"><span>{label}</span><strong>{low}–{high} <small>{unit}</small></strong></div>
-      <div className="dual-range-wrap">
-        <div className="dual-range-track" />
-        <div className="dual-range-active" style={{ left: `${lowPct}%`, width: `${Math.max(0, highPct - lowPct)}%` }} />
-        <input className="dual-range-input low" type="range" min={min} max={max} step={step} value={low} onChange={(event) => onLowChange(Number(event.target.value))} aria-label={`${label} minimum alarm limit`} />
-        <input className="dual-range-input high" type="range" min={min} max={max} step={step} value={high} onChange={(event) => onHighChange(Number(event.target.value))} aria-label={`${label} maximum alarm limit`} />
+    <div className="alarm-slider-card vertical-dual-card">
+      <span>{label}</span>
+      <strong>{low}–{high} <small>{unit}</small></strong>
+      <div className="vertical-dual-slider-wrap">
+        <em>{max}</em>
+        <div className="vertical-dual-range">
+          <div className="vertical-dual-track" />
+          <div className="vertical-dual-active" style={{ bottom: `${lowPct}%`, height: `${Math.max(0, highPct - lowPct)}%` }} />
+          <input className="vertical-dual-input low" type="range" min={min} max={max} step={step} value={low} onChange={(event) => onLowChange(Number(event.target.value))} aria-label={`${label} minimum alarm limit`} />
+          <input className="vertical-dual-input high" type="range" min={min} max={max} step={step} value={high} onChange={(event) => onHighChange(Number(event.target.value))} aria-label={`${label} maximum alarm limit`} />
+        </div>
+        <em>{min}</em>
       </div>
-      <div className="dual-range-scale"><span>{min}</span><span>{max}</span></div>
     </div>
   )
 }
@@ -539,8 +543,6 @@ export default function App() {
     () => isHighPressureAlarmActive(timeline, alarmLimits.peakPressure),
     [timeline, alarmLimits.peakPressure],
   )
-  const co2LowAlarmActive = endTidalCO2 != null && endTidalCO2 < alarmLimits.co2Min
-  const co2HighAlarmActive = endTidalCO2 != null && endTidalCO2 > alarmLimits.co2Max
   const minuteVentilationAvailable = measures.minuteVentilation > 0 || currentSimulationTime >= 5
   const minuteVentilationLowAlarmActive = minuteVentilationAvailable && measures.minuteVentilation < alarmLimits.minuteVentilationMin
   const minuteVentilationHighAlarmActive = minuteVentilationAvailable && measures.minuteVentilation > alarmLimits.minuteVentilationMax
@@ -556,8 +558,6 @@ export default function App() {
   const alarmConditions = {
     apnea: apneaAlarmActive,
     pressure: pressureAlarmActive,
-    co2Low: co2LowAlarmActive,
-    co2High: co2HighAlarmActive,
     minuteVentilationLow: minuteVentilationLowAlarmActive,
     minuteVentilationHigh: minuteVentilationHighAlarmActive,
     tidalVolumeLow: tidalVolumeLowAlarmActive,
@@ -580,8 +580,6 @@ export default function App() {
   }, [
     apneaAlarmActive,
     pressureAlarmActive,
-    co2LowAlarmActive,
-    co2HighAlarmActive,
     minuteVentilationLowAlarmActive,
     minuteVentilationHighAlarmActive,
     tidalVolumeLowAlarmActive,
@@ -592,17 +590,17 @@ export default function App() {
     currentSimulationTime,
   ])
 
-  const activeAlarmOnsets = Object.values(alarmOnsets).filter((value): value is number => value != null)
-  const earliestAlarmOnset = activeAlarmOnsets.length ? Math.min(...activeAlarmOnsets) : null
   const anyAlarmActive = Object.values(alarmConditions).some(Boolean)
-  const alarmLevel = anyAlarmActive
-    ? earliestAlarmOnset != null && currentSimulationTime - earliestAlarmOnset >= 15 ? 'red' : 'yellow'
-    : null
+  const criticalAlarmKeys = ['pressure', 'apnea', 'oxygenFailure'] as const
+  const criticalEscalated = criticalAlarmKeys.some((key) => {
+    if (!alarmConditions[key]) return false
+    const onset = alarmOnsets[key]
+    return onset != null && currentSimulationTime - onset >= 15
+  })
+  const alarmLevel = anyAlarmActive ? (criticalEscalated ? 'red' : 'yellow') : null
   const alarmLabels = [
     pressureAlarmActive ? 'HIGH PRESSURE' : null,
     apneaAlarmActive ? 'APNOEA' : null,
-    co2LowAlarmActive ? 'LOW EtCO₂' : null,
-    co2HighAlarmActive ? 'HIGH EtCO₂' : null,
     minuteVentilationLowAlarmActive ? 'LOW MINUTE VENTILATION' : null,
     minuteVentilationHighAlarmActive ? 'HIGH MINUTE VENTILATION' : null,
     tidalVolumeLowAlarmActive ? 'LOW TIDAL VOLUME' : null,
@@ -718,7 +716,7 @@ export default function App() {
 
   const copyDiagnostics = async () => {
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.41',
+      appVersion: '0.42',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -733,8 +731,6 @@ export default function App() {
       alarms: {
         apneaActive: apneaAlarmActive,
         highPressureActive: pressureAlarmActive,
-        co2LowActive: co2LowAlarmActive,
-        co2HighActive: co2HighAlarmActive,
         minuteVentilationLowActive: minuteVentilationLowAlarmActive,
         minuteVentilationHighActive: minuteVentilationHighAlarmActive,
         tidalVolumeLowActive: tidalVolumeLowAlarmActive,
@@ -792,7 +788,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.41</span>
+          <span className="version">v0.42</span>
         </div>
       </header>
 
@@ -843,9 +839,10 @@ export default function App() {
               <div className="alarm-dialog-backdrop" onClick={() => setAlarmDialogOpen(false)}>
                 <section className="alarm-dialog" role="dialog" aria-modal="true" aria-label="Alarm limits" onClick={(event) => event.stopPropagation()}>
                   <div className="alarm-dialog-title"><strong>Alarm limits</strong><button type="button" onClick={() => setAlarmDialogOpen(false)}>×</button></div>
-                  <div className="alarm-slider-grid">
-                    <label className="alarm-slider-card">
+                  <div className="alarm-slider-grid five-alarm-grid">
+                    <label className="alarm-slider-card critical-alarm-card">
                       <span>Peak pressure</span>
+                      <small className="alarm-priority">Critical</small>
                       <strong>{alarmLimits.peakPressure} <small>cmH₂O</small></strong>
                       <div className="vertical-slider-wrap">
                         <em>60</em>
@@ -853,8 +850,12 @@ export default function App() {
                         <em>0</em>
                       </div>
                     </label>
-                    <label className="alarm-slider-card">
+                    <VerticalDualAlarmSlider label="Minute ventilation" unit="L/min" min={0} max={20} step={0.5} low={alarmLimits.minuteVentilationMin} high={alarmLimits.minuteVentilationMax} onLowChange={(value) => setAlarmLimits((current) => ({ ...current, minuteVentilationMin: Math.min(value, current.minuteVentilationMax) }))} onHighChange={(value) => setAlarmLimits((current) => ({ ...current, minuteVentilationMax: Math.max(value, current.minuteVentilationMin) }))} />
+                    <VerticalDualAlarmSlider label="Tidal volume" unit="mL" min={0} max={1000} step={10} low={alarmLimits.tidalVolumeMin} high={alarmLimits.tidalVolumeMax} onLowChange={(value) => setAlarmLimits((current) => ({ ...current, tidalVolumeMin: Math.min(value, current.tidalVolumeMax) }))} onHighChange={(value) => setAlarmLimits((current) => ({ ...current, tidalVolumeMax: Math.max(value, current.tidalVolumeMin) }))} />
+                    <VerticalDualAlarmSlider label="Respiratory rate" unit="/min" min={0} max={40} step={1} low={alarmLimits.respiratoryRateMin} high={alarmLimits.respiratoryRateMax} onLowChange={(value) => setAlarmLimits((current) => ({ ...current, respiratoryRateMin: Math.min(value, current.respiratoryRateMax) }))} onHighChange={(value) => setAlarmLimits((current) => ({ ...current, respiratoryRateMax: Math.max(value, current.respiratoryRateMin) }))} />
+                    <label className="alarm-slider-card critical-alarm-card">
                       <span>Apnoea time</span>
+                      <small className="alarm-priority">Critical</small>
                       <strong>{alarmLimits.apneaTime} <small>s</small></strong>
                       <div className="vertical-slider-wrap">
                         <em>120</em>
@@ -862,13 +863,6 @@ export default function App() {
                         <em>15</em>
                       </div>
                     </label>
-                  </div>
-                  <div className="dual-alarm-section">
-                    <DualAlarmSlider label="EtCO₂" unit="mmHg" min={0} max={100} step={1} low={alarmLimits.co2Min} high={alarmLimits.co2Max} onLowChange={(value) => setAlarmLimits((current) => ({ ...current, co2Min: Math.min(value, current.co2Max) }))} onHighChange={(value) => setAlarmLimits((current) => ({ ...current, co2Max: Math.max(value, current.co2Min) }))} />
-                    <DualAlarmSlider label="Minute ventilation" unit="L/min" min={0} max={20} step={0.5} low={alarmLimits.minuteVentilationMin} high={alarmLimits.minuteVentilationMax} onLowChange={(value) => setAlarmLimits((current) => ({ ...current, minuteVentilationMin: Math.min(value, current.minuteVentilationMax) }))} onHighChange={(value) => setAlarmLimits((current) => ({ ...current, minuteVentilationMax: Math.max(value, current.minuteVentilationMin) }))} />
-                    <DualAlarmSlider label="Tidal volume" unit="mL" min={0} max={1000} step={10} low={alarmLimits.tidalVolumeMin} high={alarmLimits.tidalVolumeMax} onLowChange={(value) => setAlarmLimits((current) => ({ ...current, tidalVolumeMin: Math.min(value, current.tidalVolumeMax) }))} onHighChange={(value) => setAlarmLimits((current) => ({ ...current, tidalVolumeMax: Math.max(value, current.tidalVolumeMin) }))} />
-                    <DualAlarmSlider label="Respiratory rate" unit="/min" min={0} max={40} step={1} low={alarmLimits.respiratoryRateMin} high={alarmLimits.respiratoryRateMax} onLowChange={(value) => setAlarmLimits((current) => ({ ...current, respiratoryRateMin: Math.min(value, current.respiratoryRateMax) }))} onHighChange={(value) => setAlarmLimits((current) => ({ ...current, respiratoryRateMax: Math.max(value, current.respiratoryRateMin) }))} />
-                    <div className="oxygen-failure-alarm-row"><span>Oxygen failure</span><strong>Enabled</strong><small>Scenario control coming in instructor mode</small></div>
                   </div>
                   <button className="alarm-dialog-done" type="button" onClick={() => setAlarmDialogOpen(false)}>Done</button>
                 </section>
