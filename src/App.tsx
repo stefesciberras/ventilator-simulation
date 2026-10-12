@@ -7,6 +7,7 @@ import type { PatientSettings, Sample, VentilatorSettings } from './simulation/t
 const initialVentilator: VentilatorSettings = {
   mode: 'VC-AC', fio2: 0.35, peep: 5, rate: 14, tidalVolume: 500, inspiratoryTime: 1,
   inspiratoryFlow: 30, plateauPercent: 0, pressureControl: 15, pressureSupport: 10, triggerSensitivity: 2, terminationSensitivity: 25,
+  pHigh: 24, pLow: 5, tHigh: 4, tLow: 0.5,
 }
 
 const initialPatient: PatientSettings = {
@@ -140,6 +141,10 @@ export default function App() {
   const inspiratoryHoldPressed = inspiratoryHoldRequestTime != null && inspiratoryHoldReleaseTime == null
   const expiratoryHoldPressed = expiratoryHoldRequestTime != null && expiratoryHoldReleaseTime == null
   const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
+  const conventionalTimedMode = ventilator.mode !== 'PSV' && ventilator.mode !== 'APRV'
+  const volumeMandatoryMode = ventilator.mode === 'VC-AC' || ventilator.mode === 'SIMV-VC'
+  const simvMode = ventilator.mode === 'SIMV-VC' || ventilator.mode === 'SIMV-PC'
+  const manualHoldAvailable = ventilator.mode !== 'PSV' && ventilator.mode !== 'APRV'
 
   useEffect(() => {
     if (!frozen) return
@@ -171,7 +176,7 @@ export default function App() {
   }
 
   const beginInspiratoryHold = () => {
-    if (frozen || ventilator.mode === 'PSV' || inspiratoryHoldPressed) return
+    if (frozen || !manualHoldAvailable || inspiratoryHoldPressed) return
     setExpiratoryHoldRequestTime(null)
     setExpiratoryHoldReleaseTime(null)
     setInspiratoryHoldRequestTime(currentSimulationTime)
@@ -187,7 +192,7 @@ export default function App() {
   }
 
   const beginExpiratoryHold = () => {
-    if (frozen || expiratoryHoldPressed) return
+    if (frozen || ventilator.mode === 'APRV' || expiratoryHoldPressed) return
     setInspiratoryHoldRequestTime(null)
     setInspiratoryHoldReleaseTime(null)
     setExpiratoryHoldRequestTime(currentSimulationTime)
@@ -220,7 +225,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.16</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.17</span></div>
       </header>
 
       <div className="workspace">
@@ -229,11 +234,24 @@ export default function App() {
             <div className="mode-title"><span>Mode</span><strong>{ventilator.mode}</strong></div>
             <div className="screen-settings">
               <span>FiO₂ <b>{Math.round(effectiveVentilator.fio2 * 100)}%</b></span>
-              <span>PEEP <b>{ventilator.peep}</b></span>
-              {ventilator.mode !== 'PSV' && <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>}
-              {ventilator.mode === 'VC-AC' && <span>Flow <b>{ventilator.inspiratoryFlow.toFixed(0)} L/min</b></span>}
-              {ventilator.mode === 'VC-AC' && <span>Plateau <b>{ventilator.plateauPercent ?? 0}%</b></span>}
-              {ventilator.mode === 'PSV' && <span>ETS <b>{ventilator.terminationSensitivity}%</b></span>}
+              {ventilator.mode === 'APRV' ? (
+                <>
+                  <span>Phigh <b>{ventilator.pHigh}</b></span>
+                  <span>Plow <b>{ventilator.pLow}</b></span>
+                  <span>Thigh <b>{ventilator.tHigh.toFixed(1)} s</b></span>
+                  <span>Tlow <b>{ventilator.tLow.toFixed(2)} s</b></span>
+                </>
+              ) : (
+                <>
+                  <span>PEEP <b>{ventilator.peep}</b></span>
+                  {conventionalTimedMode && <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>}
+                  {volumeMandatoryMode && <span>Flow <b>{ventilator.inspiratoryFlow.toFixed(0)} L/min</b></span>}
+                  {volumeMandatoryMode && <span>Plateau <b>{ventilator.plateauPercent ?? 0}%</b></span>}
+                  {ventilator.mode === 'VG-PC' && <span>VT target <b>{ventilator.tidalVolume} mL</b></span>}
+                  {(ventilator.mode === 'PSV' || simvMode) && <span>PS <b>{ventilator.pressureSupport}</b></span>}
+                  {(ventilator.mode === 'PSV' || simvMode) && <span>ETS <b>{ventilator.terminationSensitivity}%</b></span>}
+                </>
+              )}
             </div>
           </div>
 
@@ -251,7 +269,7 @@ export default function App() {
               <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
               <Metric label="Ppeak" value={measures.peakPressure.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
-              <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
+              <Metric label={ventilator.mode === 'APRV' ? 'Plow' : 'PEEP'} value={measures.peep.toFixed(0)} unit="cmH₂O" />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
           </div>
@@ -262,8 +280,8 @@ export default function App() {
             <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume simulation' : 'Pause and freeze waveforms'} aria-label={frozen ? 'Resume simulation' : 'Pause simulation'}><PauseIcon paused={frozen} /></button>
             <button
               className={`hardware-button ${inspiratoryHoldPressed ? 'active' : ''}`}
-              disabled={frozen || ventilator.mode === 'PSV'}
-              title={ventilator.mode === 'PSV' ? 'Inspiratory hold is available during mandatory ventilation' : 'Press and hold for an inspiratory occlusion; release to freeze the trace'}
+              disabled={frozen || !manualHoldAvailable}
+              title={!manualHoldAvailable ? 'Inspiratory hold is unavailable in this mode' : 'Press and hold for an inspiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginInspiratoryHold() }}
               onPointerUp={releaseInspiratoryHold}
               onPointerCancel={releaseInspiratoryHold}
@@ -272,8 +290,8 @@ export default function App() {
             >Inspiratory hold</button>
             <button
               className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
-              disabled={frozen}
-              title="Press and hold for an end-expiratory occlusion; release to freeze the trace"
+              disabled={frozen || ventilator.mode === 'APRV'}
+              title={ventilator.mode === 'APRV' ? 'Expiratory hold is unavailable in APRV' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
               onPointerUp={releaseExpiratoryHold}
               onPointerCancel={releaseExpiratoryHold}

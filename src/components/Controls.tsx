@@ -24,6 +24,12 @@ const flowFor = (tidalVolumeMl: number, inspiratoryTime: number, plateauPercent:
   return (tidalVolumeMl / 1000) / flowTime * 60
 }
 
+const isVolumeMandatoryMode = (mode: VentilatorMode) => mode === 'VC-AC' || mode === 'SIMV-VC'
+const isPressureMandatoryMode = (mode: VentilatorMode) => mode === 'PC-AC' || mode === 'SIMV-PC'
+const isSimvMode = (mode: VentilatorMode) => mode === 'SIMV-VC' || mode === 'SIMV-PC'
+const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV'
+const usesTidalVolume = (mode: VentilatorMode) => isVolumeMandatoryMode(mode) || mode === 'VG-PC'
+
 function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange }: SliderProps) {
   return (
     <label className="control-row">
@@ -50,14 +56,14 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
 
   const setMode = (mode: VentilatorMode) => {
     const next = { ...settings, mode }
-    if (mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, next.inspiratoryTime, next.plateauPercent ?? 0)
+    if (isVolumeMandatoryMode(mode)) next.inspiratoryFlow = flowFor(next.tidalVolume, next.inspiratoryTime, next.plateauPercent ?? 0)
     onChange(next)
   }
 
   const setRate = (rate: number) => {
     const inspiratoryTime = cycleTime(rate) / (1 + currentIeRatio)
     const next: VentilatorSettings = { ...settings, rate, inspiratoryTime }
-    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
+    if (isVolumeMandatoryMode(settings.mode)) next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
     onChange(next)
   }
 
@@ -65,13 +71,13 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
     const boundedRatio = clamp(ratio, MIN_IE, MAX_IE)
     const inspiratoryTime = cycleTime(settings.rate) / (1 + boundedRatio)
     const next: VentilatorSettings = { ...settings, inspiratoryTime }
-    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
+    if (isVolumeMandatoryMode(settings.mode)) next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
     onChange(next)
   }
 
   const setTidalVolume = (tidalVolume: number) => {
     const next: VentilatorSettings = { ...settings, tidalVolume }
-    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(tidalVolume, settings.inspiratoryTime, settings.plateauPercent ?? 0)
+    if (isVolumeMandatoryMode(settings.mode)) next.inspiratoryFlow = flowFor(tidalVolume, settings.inspiratoryTime, settings.plateauPercent ?? 0)
     onChange(next)
   }
 
@@ -95,6 +101,8 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
     })
   }
 
+  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV']
+
   return (
     <section className="control-section ventilator-settings-section">
       <div className="control-section-title">
@@ -102,29 +110,43 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
         <button className="reset-settings-button" type="button" onClick={onReset}>Reset vent</button>
       </div>
       <div className="mode-buttons">
-        {(['VC-AC', 'PC-AC', 'PSV'] as VentilatorMode[]).map((mode) => (
+        {modes.map((mode) => (
           <button key={mode} className={settings.mode === mode ? 'selected' : ''} onClick={() => setMode(mode)}>{mode}</button>
         ))}
       </div>
+
       <Slider label="FiO₂" value={Math.round(settings.fio2 * 100)} unit="%" min={21} max={100} onChange={(v) => patch({ fio2: v / 100 })} />
-      <Slider label="PEEP" value={settings.peep} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ peep: v })} />
-      {settings.mode !== 'PSV' && <Slider label="Rate" value={settings.rate} unit="/min" min={5} max={35} onChange={setRate} />}
-      {settings.mode === 'VC-AC' && <Slider label="Tidal volume" value={settings.tidalVolume} unit=" mL" min={250} max={800} step={10} onChange={setTidalVolume} />}
-      {settings.mode !== 'PSV' && (
-        <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
-      )}
-      {settings.mode === 'VC-AC' && (
+
+      {settings.mode === 'APRV' ? (
         <>
-          <Slider label="Inspiratory flow" value={Number(settings.inspiratoryFlow.toFixed(0))} unit=" L/min" min={10} max={140} step={1} onChange={setInspiratoryFlow} />
-          <Slider label="Plateau time" value={settings.plateauPercent ?? 0} unit="% Ti" min={0} max={20} step={1} onChange={setPlateauPercent} />
+          <Slider label="Phigh" value={settings.pHigh} unit=" cmH₂O" min={10} max={40} onChange={(v) => patch({ pHigh: Math.max(v, settings.pLow + 1) })} />
+          <Slider label="Plow" value={settings.pLow} unit=" cmH₂O" min={0} max={15} onChange={(v) => patch({ pLow: Math.min(v, settings.pHigh - 1) })} />
+          <Slider label="Thigh" value={settings.tHigh} unit=" s" min={0.5} max={10} step={0.1} onChange={(v) => patch({ tHigh: v })} />
+          <Slider label="Tlow" value={settings.tLow} unit=" s" min={0.2} max={2} step={0.05} onChange={(v) => patch({ tLow: v })} />
+        </>
+      ) : (
+        <>
+          <Slider label="PEEP" value={settings.peep} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ peep: v })} />
+          {settings.mode !== 'PSV' && <Slider label={isSimvMode(settings.mode) ? 'SIMV rate' : 'Rate'} value={settings.rate} unit="/min" min={5} max={35} onChange={setRate} />}
+          {usesTidalVolume(settings.mode) && <Slider label={settings.mode === 'VG-PC' ? 'Target tidal volume' : 'Tidal volume'} value={settings.tidalVolume} unit=" mL" min={250} max={800} step={10} onChange={setTidalVolume} />}
+          {hasConventionalMandatoryTiming(settings.mode) && (
+            <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
+          )}
+          {isVolumeMandatoryMode(settings.mode) && (
+            <>
+              <Slider label="Inspiratory flow" value={Number(settings.inspiratoryFlow.toFixed(0))} unit=" L/min" min={10} max={140} step={1} onChange={setInspiratoryFlow} />
+              <Slider label="Plateau time" value={settings.plateauPercent ?? 0} unit="% Ti" min={0} max={20} step={1} onChange={setPlateauPercent} />
+            </>
+          )}
+          {isPressureMandatoryMode(settings.mode) && <Slider label="Pressure control" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />}
+          {settings.mode === 'VG-PC' && <Slider label="Starting pressure" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />}
+          {(settings.mode === 'PSV' || isSimvMode(settings.mode)) && <Slider label="Pressure support" value={settings.pressureSupport} unit=" cmH₂O" min={3} max={25} onChange={(v) => patch({ pressureSupport: v })} />}
+          {(settings.mode === 'PSV' || isSimvMode(settings.mode)) && (
+            <Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} onChange={(v) => patch({ terminationSensitivity: v })} />
+          )}
+          <Slider label="Trigger" value={settings.triggerSensitivity} unit=" cmH₂O" min={1} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />
         </>
       )}
-      {settings.mode === 'PC-AC' && <Slider label="Pressure control" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />}
-      {settings.mode === 'PSV' && <Slider label="Pressure support" value={settings.pressureSupport} unit=" cmH₂O" min={3} max={25} onChange={(v) => patch({ pressureSupport: v })} />}
-      {settings.mode === 'PSV' && (
-        <Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} onChange={(v) => patch({ terminationSensitivity: v })} />
-      )}
-      <Slider label="Trigger" value={settings.triggerSensitivity} unit=" cmH₂O" min={1} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />
     </section>
   )
 }
