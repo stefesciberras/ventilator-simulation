@@ -1,0 +1,94 @@
+name: v040 patch
+on:
+  push:
+    branches: [chatgpt/v0.40-rolling-minute-measurements]
+    paths: [.github/workflows/v040.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.40-rolling-minute-measurements
+      - name: Apply v0.40 changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('src/simulation/engine.ts')
+          text = p.read_text()
+          old = '''  const minuteStart = Math.max(minuteSamples[0]?.time ?? latestTime, latestTime - 60)
+  const minuteDuration = Math.max(0.01, latestTime - minuteStart)
+  const expiredVolumeLitres = completedBreaths
+    .filter((breath) => breath.endTime >= minuteStart)
+    .reduce((sum, breath) => sum + breath.tidalVolume / 1000, 0)
+  const minuteVentilation = expiredVolumeLitres * (60 / minuteDuration)
+
+  const peakPressure = Math.max(...pressureSamples.map((sample) => sample.pressure))
+  const meanPressure = pressureSamples.reduce((sum, sample) => sum + sample.pressure, 0) / Math.max(1, pressureSamples.length)
+'''
+          new = '''  const minuteStart = Math.max(minuteSamples[0]?.time ?? latestTime, latestTime - 60)
+  const minuteDuration = Math.max(0.01, latestTime - minuteStart)
+
+  // Rolling 60-second expired minute ventilation. Integrating expiratory flow
+  // rather than summing completed breaths makes the displayed value update
+  // smoothly throughout expiration while retaining true expired-volume
+  // semantics. Before a full minute of history exists, report the observed
+  // expired ventilation normalized to L/min.
+  let expiredVolumeLitres = 0
+  let pressureTimeIntegral = 0
+  for (let index = 1; index < minuteSamples.length; index += 1) {
+    const previous = minuteSamples[index - 1]
+    const current = minuteSamples[index]
+    const sampleDt = Math.max(0, current.time - previous.time)
+    const previousExpiredFlow = Math.max(0, -previous.flow) / 60
+    const currentExpiredFlow = Math.max(0, -current.flow) / 60
+    expiredVolumeLitres += ((previousExpiredFlow + currentExpiredFlow) / 2) * sampleDt
+    pressureTimeIntegral += ((previous.pressure + current.pressure) / 2) * sampleDt
+  }
+  const minuteVentilation = expiredVolumeLitres * (60 / minuteDuration)
+
+  const peakPressure = Math.max(...pressureSamples.map((sample) => sample.pressure))
+  // Pmean is a rolling, time-weighted mean Paw over the preceding minute.
+  // The long moving window also provides the requested display smoothing.
+  const meanPressure = minuteSamples.length > 1
+    ? pressureTimeIntegral / minuteDuration
+    : (minuteSamples[0]?.pressure ?? 0)
+'''
+          if old not in text:
+              raise SystemExit('measurement block marker not found')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+
+          p = Path('src/App.tsx')
+          text = p.read_text()
+          old_metrics = '''              <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
+              <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
+'''
+          new_metrics = '''              <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
+              <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
+              <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
+'''
+          if old_metrics not in text:
+              raise SystemExit('metrics marker not found')
+          text = text.replace(old_metrics, new_metrics, 1)
+          if "appVersion: '0.39'" not in text:
+              raise SystemExit('diagnostic version marker not found')
+          text = text.replace("appVersion: '0.39'", "appVersion: '0.40'", 1)
+          if '<span className="version">v0.39</span>' not in text:
+              raise SystemExit('display version marker not found')
+          text = text.replace('<span className="version">v0.39</span>', '<span className="version">v0.40</span>', 1)
+          p.write_text(text)
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/simulation/engine.ts
+          git commit -m "v0.40: add rolling minute ventilation and one-minute Pmean"
+          git push origin HEAD:chatgpt/v0.40-rolling-minute-measurements
