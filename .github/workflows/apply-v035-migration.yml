@@ -1,0 +1,36 @@
+name: Apply v0.35 patient profile migration
+on:
+  push:
+    branches: [chatgpt/v0.35-normal-pmus]
+    paths: [.github/workflows/apply-v035-migration.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.35-normal-pmus
+      - name: Migrate previous default effort profile
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/App.tsx')
+          text = p.read_text()
+          old = "  const [patient, setPatient] = useState<PatientSettings>(() => loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient))"
+          new = '''  const [patient, setPatient] = useState<PatientSettings>(() => {\n    const stored = loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient)\n    // v0.34 shipped 30% rise / 35% release as the default. Migrate that exact\n    // profile once to the corrected sinusoidal normal default so existing local\n    // settings do not preserve the transient flat-topped model after upgrade.\n    if (stored.effortRisePercent === 30 && stored.effortRelaxationPercent === 35) {\n      return { ...stored, effortRisePercent: 50, effortRelaxationPercent: 50 }\n    }\n    return stored\n  })'''
+          if old not in text:
+              raise SystemExit('patient state initializer marker not found')
+          p.write_text(text.replace(old, new, 1))
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx
+          git commit -m "Migrate v0.34 default effort profile to sinusoidal normal"
+          git push origin HEAD:chatgpt/v0.35-normal-pmus
