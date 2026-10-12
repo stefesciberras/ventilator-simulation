@@ -77,3 +77,16 @@
   .alarm-dialog { width: min(96vw, 760px); }
   .alarm-slider-grid { grid-template-columns: repeat(5,110px); }
 }
+
+/* Mobile alarm controls: prevent the page from stealing vertical drags from range handles. */
+.vertical-dual-slider-wrap,
+.vertical-dual-range,
+.vertical-dual-input,
+.vertical-slider-wrap,
+.vertical-alarm-slider {
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.vertical-dual-input { -webkit-tap-highlight-color: transparent; }

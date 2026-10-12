@@ -110,8 +110,8 @@ function VerticalDualAlarmSlider({ label, unit, min, max, step, low, high, onLow
         <div className="vertical-dual-range">
           <div className="vertical-dual-track" />
           <div className="vertical-dual-active" style={{ bottom: `${lowPct}%`, height: `${Math.max(0, highPct - lowPct)}%` }} />
-          <input className="vertical-dual-input low" type="range" min={min} max={max} step={step} value={low} onChange={(event) => onLowChange(Number(event.target.value))} aria-label={`${label} minimum alarm limit`} />
-          <input className="vertical-dual-input high" type="range" min={min} max={max} step={step} value={high} onChange={(event) => onHighChange(Number(event.target.value))} aria-label={`${label} maximum alarm limit`} />
+          <input className="vertical-dual-input low" type="range" min={min} max={max} step={step} value={low} onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)} onChange={(event) => onLowChange(Number(event.target.value))} aria-label={`${label} minimum alarm limit`} />
+          <input className="vertical-dual-input high" type="range" min={min} max={max} step={step} value={high} onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)} onChange={(event) => onHighChange(Number(event.target.value))} aria-label={`${label} maximum alarm limit`} />
         </div>
         <em>{min}</em>
       </div>
@@ -422,6 +422,7 @@ export default function App() {
   const patientTransitionRef = useRef<{ from: PatientSettings; to: PatientSettings; start: number; duration: number } | null>(null)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
+  const alarmHistoryRef = useRef<Record<string, { everTriggered: boolean; triggerCount: number; firstTriggeredAt: number | null; lastTriggeredAt: number | null }>>({})
   const [timeline, setTimeline] = useState<Sample[]>(() => {
     const initialSamples = advanceSimulation(
       simulationStateRef.current,
@@ -546,9 +547,10 @@ export default function App() {
   const minuteVentilationAvailable = measures.minuteVentilation > 0 || currentSimulationTime >= 5
   const minuteVentilationLowAlarmActive = minuteVentilationAvailable && measures.minuteVentilation < alarmLimits.minuteVentilationMin
   const minuteVentilationHighAlarmActive = minuteVentilationAvailable && measures.minuteVentilation > alarmLimits.minuteVentilationMax
-  const tidalVolumeAvailable = eventMeasures.tidalVolume > 0
-  const tidalVolumeLowAlarmActive = tidalVolumeAvailable && eventMeasures.tidalVolume < alarmLimits.tidalVolumeMin
-  const tidalVolumeHighAlarmActive = tidalVolumeAvailable && eventMeasures.tidalVolume > alarmLimits.tidalVolumeMax
+  const tidalVolumeAlarmValue = eventMeasures.tidalVolume
+  const tidalVolumeAvailable = tidalVolumeAlarmValue > 0
+  const tidalVolumeLowAlarmActive = tidalVolumeAvailable && tidalVolumeAlarmValue < alarmLimits.tidalVolumeMin
+  const tidalVolumeHighAlarmActive = tidalVolumeAvailable && tidalVolumeAlarmValue > alarmLimits.tidalVolumeMax
   const respiratoryRateAvailable = eventMeasures.respiratoryRate > 0 || currentSimulationTime >= 5
   const respiratoryRateLowAlarmActive = respiratoryRateAvailable && eventMeasures.respiratoryRate < alarmLimits.respiratoryRateMin
   const respiratoryRateHighAlarmActive = respiratoryRateAvailable && eventMeasures.respiratoryRate > alarmLimits.respiratoryRateMax
@@ -572,7 +574,17 @@ export default function App() {
       let changed = false
       const next = { ...current }
       for (const [key, active] of Object.entries(alarmConditions)) {
-        if (active && next[key] == null) { next[key] = currentSimulationTime; changed = true }
+        if (active && next[key] == null) {
+          next[key] = currentSimulationTime
+          changed = true
+          const previousHistory = alarmHistoryRef.current[key]
+          alarmHistoryRef.current[key] = {
+            everTriggered: true,
+            triggerCount: (previousHistory?.triggerCount ?? 0) + 1,
+            firstTriggeredAt: previousHistory?.firstTriggeredAt ?? currentSimulationTime,
+            lastTriggeredAt: currentSimulationTime,
+          }
+        }
         if (!active && next[key] != null) { next[key] = null; changed = true }
       }
       return changed ? next : current
@@ -715,8 +727,19 @@ export default function App() {
   }
 
   const copyDiagnostics = async () => {
+    const historyFor = (key: string) => alarmHistoryRef.current[key] ?? { everTriggered: false, triggerCount: 0, firstTriggeredAt: null, lastTriggeredAt: null }
+    const finiteVolumes = samples.map((sample) => sample.volume).filter(Number.isFinite)
+    const waveformVolumeMin = finiteVolumes.length ? Math.min(...finiteVolumes) : null
+    const waveformVolumeMax = finiteVolumes.length ? Math.max(...finiteVolumes) : null
+    const alarmEvaluations = [
+      { key: 'pressure', label: 'Peak pressure', priority: 'critical', value: eventMeasures.peakPressure, unit: 'cmH2O', limits: { high: alarmLimits.peakPressure }, active: pressureAlarmActive, history: historyFor('pressure') },
+      { key: 'minuteVentilation', label: 'Minute ventilation', priority: 'non-critical', value: measures.minuteVentilation, unit: 'L/min', limits: { low: alarmLimits.minuteVentilationMin, high: alarmLimits.minuteVentilationMax }, active: minuteVentilationLowAlarmActive || minuteVentilationHighAlarmActive, lowActive: minuteVentilationLowAlarmActive, highActive: minuteVentilationHighAlarmActive, history: { low: historyFor('minuteVentilationLow'), high: historyFor('minuteVentilationHigh') } },
+      { key: 'tidalVolume', label: 'Expired tidal volume', priority: 'non-critical', value: tidalVolumeAlarmValue, unit: 'mL', limits: { low: alarmLimits.tidalVolumeMin, high: alarmLimits.tidalVolumeMax }, active: tidalVolumeLowAlarmActive || tidalVolumeHighAlarmActive, lowActive: tidalVolumeLowAlarmActive, highActive: tidalVolumeHighAlarmActive, history: { low: historyFor('tidalVolumeLow'), high: historyFor('tidalVolumeHigh') } },
+      { key: 'respiratoryRate', label: 'Respiratory rate', priority: 'non-critical', value: eventMeasures.respiratoryRate, unit: '/min', limits: { low: alarmLimits.respiratoryRateMin, high: alarmLimits.respiratoryRateMax }, active: respiratoryRateLowAlarmActive || respiratoryRateHighAlarmActive, lowActive: respiratoryRateLowAlarmActive, highActive: respiratoryRateHighAlarmActive, history: { low: historyFor('respiratoryRateLow'), high: historyFor('respiratoryRateHigh') } },
+      { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
+    ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.42',
+      appVersion: '0.43',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -741,6 +764,7 @@ export default function App() {
         level: alarmLevel,
         labels: alarmLabels,
         onsets: alarmOnsets,
+        evaluations: alarmEvaluations,
       },
       measurements: {
         peakPressureCmH2O: eventMeasures.peakPressure,
@@ -753,6 +777,12 @@ export default function App() {
         measuredIERatio,
         totalPeepCmH2O: measures.totalPeep,
         autoPeepCmH2O: measures.autoPeep,
+      },
+      waveformSummary: {
+        visibleVolumeMinMl: waveformVolumeMin,
+        visibleVolumeMaxMl: waveformVolumeMax,
+        tidalVolumeAlarmSourceMl: tidalVolumeAlarmValue,
+        tidalVolumeAlarmLimitsMl: { low: alarmLimits.tidalVolumeMin, high: alarmLimits.tidalVolumeMax },
       },
       cursor: { index: traceCursor, selectedSample: selectedSample ?? null },
     }, samples, frozen && frozenSamples ? 'frozen' : 'live', DT)
@@ -788,7 +818,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.42</span>
+          <span className="version">v0.43</span>
         </div>
       </header>
 
