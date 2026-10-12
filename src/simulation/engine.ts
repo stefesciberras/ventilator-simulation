@@ -673,7 +673,15 @@ export function stepSimulation(
     flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
     state.peakInspiratoryFlow = Math.max(state.peakInspiratoryFlow, flowLs)
     const terminationFraction = clamp(ventilator.terminationSensitivity, 5, 80) / 100
-    const cycleOff = elapsed > 0.2 && state.peakInspiratoryFlow > 0.01 && flowLs <= state.peakInspiratoryFlow * terminationFraction
+    // At PS = 0 there is no elevated pressure-support level to cycle off.
+    // Treat the breath as CPAP after triggering and keep the demand valve at
+    // PEEP until inspiratory flow has effectively ended. Applying ETS to the
+    // patient's own decelerating flow caused a false early cycle and a second
+    // Paw notch while neural inspiration was still active.
+    const zeroSupport = ventilator.pressureSupport <= 0.001
+    const cycleOff = zeroSupport
+      ? elapsed > 0.2 && state.peakInspiratoryFlow > 0.01 && flowLs <= 0.01
+      : elapsed > 0.2 && state.peakInspiratoryFlow > 0.01 && flowLs <= state.peakInspiratoryFlow * terminationFraction
     const timeLimit = elapsed >= Math.max(patient.neuralInspiratoryTime * 1.5, 1.5)
     if (cycleOff || timeLimit) {
       finishBreath(state, t, postCycleReleaseGuard)
