@@ -862,13 +862,31 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
 
   const minuteStart = Math.max(minuteSamples[0]?.time ?? latestTime, latestTime - 60)
   const minuteDuration = Math.max(0.01, latestTime - minuteStart)
-  const expiredVolumeLitres = completedBreaths
-    .filter((breath) => breath.endTime >= minuteStart)
-    .reduce((sum, breath) => sum + breath.tidalVolume / 1000, 0)
+
+  // Rolling 60-second expired minute ventilation. Integrating expiratory flow
+  // rather than summing completed breaths makes the displayed value update
+  // smoothly throughout expiration while retaining true expired-volume
+  // semantics. Before a full minute of history exists, report the observed
+  // expired ventilation normalized to L/min.
+  let expiredVolumeLitres = 0
+  let pressureTimeIntegral = 0
+  for (let index = 1; index < minuteSamples.length; index += 1) {
+    const previous = minuteSamples[index - 1]
+    const current = minuteSamples[index]
+    const sampleDt = Math.max(0, current.time - previous.time)
+    const previousExpiredFlow = Math.max(0, -previous.flow) / 60
+    const currentExpiredFlow = Math.max(0, -current.flow) / 60
+    expiredVolumeLitres += ((previousExpiredFlow + currentExpiredFlow) / 2) * sampleDt
+    pressureTimeIntegral += ((previous.pressure + current.pressure) / 2) * sampleDt
+  }
   const minuteVentilation = expiredVolumeLitres * (60 / minuteDuration)
 
   const peakPressure = Math.max(...pressureSamples.map((sample) => sample.pressure))
-  const meanPressure = pressureSamples.reduce((sum, sample) => sum + sample.pressure, 0) / Math.max(1, pressureSamples.length)
+  // Pmean is a rolling, time-weighted mean Paw over the preceding minute.
+  // The long moving window also provides the requested display smoothing.
+  const meanPressure = minuteSamples.length > 1
+    ? pressureTimeIntegral / minuteDuration
+    : (minuteSamples[0]?.pressure ?? 0)
 
   const expiratoryHoldSamples = (latestMode === 'APRV' || latestMode === 'BIPAP') ? [] : minuteSamples.filter((sample) => sample.expiratoryHold)
   const lastExpiratoryHoldSample = expiratoryHoldSamples[expiratoryHoldSamples.length - 1]
