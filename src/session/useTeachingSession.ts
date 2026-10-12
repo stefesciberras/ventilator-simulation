@@ -34,6 +34,21 @@ interface PolicyPatch {
   candidateCanEditVentilator?: boolean
 }
 
+function getPauseButton(): HTMLButtonElement | null {
+  return document.querySelector<HTMLButtonElement>('.top-simulation-pause')
+}
+
+function isSimulationPausedInDom(): boolean {
+  return Boolean(getPauseButton()?.classList.contains('paused'))
+}
+
+function setSimulationPausedInDom(paused: boolean) {
+  const button = getPauseButton()
+  if (!button) return
+  const current = button.classList.contains('paused')
+  if (current !== paused) button.click()
+}
+
 export function useTeachingSession({
   patient,
   ventilator,
@@ -55,11 +70,18 @@ export function useTeachingSession({
   const ventilatorRef = useRef(ventilator)
   const patientRevisionRef = useRef(0)
   const ventilatorRevisionRef = useRef(0)
+  const pauseRevisionRef = useRef(0)
   const suppressPatientBroadcastRef = useRef(false)
   const suppressVentilatorBroadcastRef = useRef(false)
   const patientBroadcastTimerRef = useRef<number | null>(null)
   const ventilatorBroadcastTimerRef = useRef<number | null>(null)
+  const pauseBroadcastTimerRef = useRef<number | null>(null)
   const telemetryTimerRef = useRef<number | null>(null)
+
+  const storeSession = (next: TeachingSessionRow | null) => {
+    sessionRef.current = next
+    setSession(next)
+  }
 
   useEffect(() => { roleRef.current = role }, [role])
   useEffect(() => { sessionRef.current = session }, [session])
@@ -69,8 +91,10 @@ export function useTeachingSession({
   const applyCandidateSession = (next: TeachingSessionRow, force = false) => {
     const nextPatientRevision = Number(next.patient_revision ?? 0)
     const nextVentilatorRevision = Number(next.ventilator_revision ?? 0)
+    const nextPauseRevision = Number(next.pause_revision ?? 0)
     const patientChanged = force || nextPatientRevision > patientRevisionRef.current
     const ventilatorChanged = force || nextVentilatorRevision > ventilatorRevisionRef.current
+    const pauseChanged = force || nextPauseRevision > pauseRevisionRef.current
 
     if (next.sync_patient && next.patient_settings && patientChanged) {
       suppressPatientBroadcastRef.current = true
@@ -85,8 +109,11 @@ export function useTeachingSession({
       window.setTimeout(() => { suppressVentilatorBroadcastRef.current = false }, 0)
     }
 
+    if (pauseChanged) setSimulationPausedInDom(Boolean(next.simulation_paused))
+
     patientRevisionRef.current = Math.max(patientRevisionRef.current, nextPatientRevision)
     ventilatorRevisionRef.current = Math.max(ventilatorRevisionRef.current, nextVentilatorRevision)
+    pauseRevisionRef.current = Math.max(pauseRevisionRef.current, nextPauseRevision)
   }
 
   const refreshMembers = async (sessionId: string) => {
@@ -111,7 +138,7 @@ export function useTeachingSession({
     channelRef.current = subscribeToTeachingSession(
       sessionId,
       (next) => {
-        setSession(next)
+        storeSession(next)
         if (roleRef.current === 'candidate') {
           if (next.status === 'ended') {
             setConnection('idle')
@@ -129,7 +156,7 @@ export function useTeachingSession({
           setConnection('connected')
           try {
             const fresh = await fetchTeachingSession(sessionId)
-            setSession(fresh)
+            storeSession(fresh)
             if (roleRef.current === 'candidate') applyCandidateSession(fresh)
           } catch {
             // The realtime stream remains active; the next database update will resynchronise state.
@@ -150,10 +177,21 @@ export function useTeachingSession({
       const created = await createTeachingSession(patient, ventilator)
       roleRef.current = 'instructor'
       setRole('instructor')
-      const row = await fetchTeachingSession(created.sessionId)
+      let row = await fetchTeachingSession(created.sessionId)
       patientRevisionRef.current = Number(row.patient_revision ?? 0)
       ventilatorRevisionRef.current = Number(row.ventilator_revision ?? 0)
-      setSession(row)
+      pauseRevisionRef.current = Number(row.pause_revision ?? 0)
+
+      const localPaused = isSimulationPausedInDom()
+      if (localPaused !== Boolean(row.simulation_paused)) {
+        pauseRevisionRef.current += 1
+        row = await updateTeachingSession(created.sessionId, {
+          simulation_paused: localPaused,
+          pause_revision: pauseRevisionRef.current,
+        })
+      }
+
+      storeSession(row)
       await attachSubscription(created.sessionId)
       await attachMemberSubscription(created.sessionId)
     } catch (cause) {
@@ -174,7 +212,8 @@ export function useTeachingSession({
       const row = await fetchTeachingSession(joined.sessionId)
       patientRevisionRef.current = 0
       ventilatorRevisionRef.current = 0
-      setSession(row)
+      pauseRevisionRef.current = 0
+      storeSession(row)
       applyCandidateSession(row, true)
       await touchSessionMember(joined.sessionId, patientRef.current, ventilatorRef.current)
       await attachSubscription(joined.sessionId)
@@ -189,6 +228,7 @@ export function useTeachingSession({
   const leaveSession = async () => {
     if (patientBroadcastTimerRef.current != null) window.clearTimeout(patientBroadcastTimerRef.current)
     if (ventilatorBroadcastTimerRef.current != null) window.clearTimeout(ventilatorBroadcastTimerRef.current)
+    if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
     if (telemetryTimerRef.current != null) window.clearTimeout(telemetryTimerRef.current)
     await closeTeachingSessionChannel(channelRef.current)
     await closeTeachingSessionChannel(membersChannelRef.current)
@@ -196,7 +236,7 @@ export function useTeachingSession({
     membersChannelRef.current = null
     roleRef.current = 'standalone'
     setRole('standalone')
-    setSession(null)
+    storeSession(null)
     setMembers([])
     setConnection('idle')
     setError(null)
@@ -238,7 +278,7 @@ export function useTeachingSession({
 
     try {
       const next = await updateTeachingSession(current.id, databasePatch)
-      setSession(next)
+      storeSession(next)
       setError(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to update session permissions.')
@@ -263,7 +303,7 @@ export function useTeachingSession({
     if (!Object.keys(patch).length) return
     try {
       const next = await updateTeachingSession(current.id, patch)
-      setSession(next)
+      storeSession(next)
       setError(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to broadcast settings.')
@@ -284,7 +324,7 @@ export function useTeachingSession({
           patient_revision: patientRevisionRef.current,
           transition_ms: patientTransitionSeconds * 1000,
         })
-        setSession(next)
+        storeSession(next)
         setError(null)
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Unable to broadcast patient settings.')
@@ -308,7 +348,7 @@ export function useTeachingSession({
           ventilator_settings: ventilator,
           ventilator_revision: ventilatorRevisionRef.current,
         })
-        setSession(next)
+        storeSession(next)
         setError(null)
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Unable to broadcast ventilator settings.')
@@ -318,6 +358,54 @@ export function useTeachingSession({
       if (ventilatorBroadcastTimerRef.current != null) window.clearTimeout(ventilatorBroadcastTimerRef.current)
     }
   }, [ventilator, role])
+
+  useEffect(() => {
+    if (role !== 'instructor' || !session?.id) return
+    const button = getPauseButton()
+    if (!button) return
+
+    const publishPauseState = () => {
+      if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
+      pauseBroadcastTimerRef.current = window.setTimeout(async () => {
+        const latest = sessionRef.current
+        if (!latest || roleRef.current !== 'instructor') return
+        const paused = isSimulationPausedInDom()
+        if (paused === Boolean(latest.simulation_paused)) return
+        pauseRevisionRef.current = Math.max(pauseRevisionRef.current, Number(latest.pause_revision ?? 0)) + 1
+        try {
+          const next = await updateTeachingSession(latest.id, {
+            simulation_paused: paused,
+            pause_revision: pauseRevisionRef.current,
+          })
+          storeSession(next)
+          setError(null)
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : 'Unable to broadcast simulation pause state.')
+        }
+      }, 40)
+    }
+
+    const observer = new MutationObserver(publishPauseState)
+    observer.observe(button, { attributes: true, attributeFilter: ['class'] })
+    return () => {
+      observer.disconnect()
+      if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
+    }
+  }, [role, session?.id])
+
+  useEffect(() => {
+    if (role !== 'candidate') return
+    const button = getPauseButton()
+    if (!button) return
+    const protectInstructorPause = (event: MouseEvent) => {
+      if (sessionRef.current?.simulation_paused && button.classList.contains('paused')) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
+    }
+    button.addEventListener('click', protectInstructorPause, true)
+    return () => button.removeEventListener('click', protectInstructorPause, true)
+  }, [role])
 
   useEffect(() => {
     if (role !== 'candidate' || !session?.id) return

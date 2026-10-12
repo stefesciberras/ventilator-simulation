@@ -31,6 +31,8 @@ export interface TeachingSessionRow {
   patient_revision: number
   ventilator_revision: number
   transition_ms: number
+  simulation_paused: boolean
+  pause_revision: number
 }
 
 export interface SessionMemberRow {
@@ -149,11 +151,6 @@ export function subscribeToSessionMembers(
   sessionId: string,
   onChange: () => void,
 ): RealtimeChannel {
-  // React development/StrictMode can tear down and recreate this effect before
-  // Supabase has finished removing the previous channel. Reusing the same topic
-  // can therefore return a channel that has already been subscribed, at which
-  // point Supabase rejects adding another postgres_changes callback. Give each
-  // mount its own topic; the database filter still scopes updates to the session.
   const instanceId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`
