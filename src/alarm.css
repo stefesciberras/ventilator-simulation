@@ -1,17 +1,33 @@
 .screen-body { position: relative; }
 .alarm-banner { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 15px; font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #17130a; border-bottom: 1px solid rgba(255,255,255,.16); }
 .alarm-banner.yellow { background: linear-gradient(90deg,#f2c94c,#dfae2b); }
-.alarm-banner.red { color: #fff; background: linear-gradient(90deg,#c93636,#9f1f1f); }
+.alarm-banner.red { color: #fff; background: linear-gradient(90deg,#7f1515,#4d0909); animation: alarm-red-flash .8s ease-in-out infinite alternate; }
 .alarm-banner span { margin-left: auto; font-size: 9px; opacity: .82; }
+@keyframes alarm-red-flash {
+  from { background: linear-gradient(90deg,#5e0c0c,#390707); box-shadow: inset 0 -1px 0 rgba(255,255,255,.08); }
+  to { background: linear-gradient(90deg,#f23b3b,#c41616); box-shadow: inset 0 -1px 0 rgba(255,255,255,.28), 0 0 16px rgba(242,59,59,.45); }
+}
 .alarm-dialog-backdrop { position: absolute; inset: 0; z-index: 12; display: grid; place-items: center; padding: 24px; background: rgba(2,5,7,.68); backdrop-filter: blur(2px); }
-.alarm-dialog { width: min(360px, 92%); padding: 16px; border: 1px solid #455761; border-radius: 12px; background: #11191e; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
+.alarm-dialog { width: min(410px, 94%); padding: 16px; border: 1px solid #455761; border-radius: 12px; background: #11191e; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
 .alarm-dialog-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; color: #f2f7f9; }
 .alarm-dialog-title strong { text-transform: uppercase; letter-spacing: .09em; font-size: 13px; }
 .alarm-dialog-title button { width: 34px; height: 34px; padding: 0; font-size: 22px; line-height: 1; }
-.alarm-dialog label { display: block; padding: 11px 0; border-top: 1px solid #27343c; }
-.alarm-dialog label > span { display: block; margin-bottom: 6px; color: #a9b8bf; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
-.alarm-dialog label > div { display: flex; align-items: center; gap: 8px; }
-.alarm-dialog input[type="number"] { width: 100px; padding: 8px 9px; border: 1px solid #41525c; border-radius: 6px; color: #eef6f8; background: #091015; }
-.alarm-dialog small { color: #82949d; font-size: 10px; }
-.alarm-dialog-done { width: 100%; margin-top: 10px; font-weight: 700; }
-@media (max-width: 680px) { .alarm-dialog-backdrop { position: fixed; } }
+.alarm-slider-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding: 6px 0 10px; }
+.alarm-slider-card { min-width: 0; padding: 12px 10px; border: 1px solid #2c3b44; border-radius: 9px; background: #0b1217; text-align: center; }
+.alarm-slider-card > span { display: block; min-height: 30px; color: #a9b8bf; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.alarm-slider-card > strong { display: block; margin: 4px 0 8px; color: #eef6f8; font-size: 21px; }
+.alarm-slider-card > strong small { color: #82949d; font-size: 9px; font-weight: 500; }
+.vertical-slider-wrap { height: 220px; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 5px; }
+.vertical-slider-wrap em { color: #667982; font-size: 9px; font-style: normal; }
+.vertical-alarm-slider { width: 30px !important; height: 190px; margin: 0; writing-mode: vertical-lr; direction: rtl; accent-color: #e6b83c; }
+.alarm-dialog-done { width: 100%; margin-top: 8px; font-weight: 700; }
+.metrics-actions { display: grid; grid-template-columns: 1fr 42px; gap: 6px; padding: 7px 8px; border-bottom: 1px solid #26343c; background: #10181d; }
+.metrics-actions button { min-height: 38px; padding: 6px 7px; border-radius: 6px; font-size: 9px; font-weight: 700; }
+.metrics-alarm-limits { color: #e6edf0; background: #182229; border-color: #40525d; }
+.metrics-alarm-silence { display: grid; place-items: center; padding: 5px !important; color: #17130a; background: linear-gradient(#f2cf55,#d8a92b); border-color: #f3d86b; }
+.metrics-alarm-silence svg { width: 22px; height: 22px; }
+.metrics-alarm-silence.active { color: #201908; background: linear-gradient(#cda12c,#ae801c); border-color: #e1ba45; }
+@media (max-width: 680px) {
+  .alarm-dialog-backdrop { position: fixed; }
+  .metrics-actions { grid-column: 1 / -1; grid-template-columns: 1fr 48px; }
+}
