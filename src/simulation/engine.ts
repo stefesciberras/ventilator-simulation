@@ -100,6 +100,14 @@ function capnogramValue(expiratory: boolean, elapsedExpiration: number, expirato
   return clamp(etco2 + plateauElapsed * plateauSlope, 0, 50)
 }
 
+function oesophagealPressureValue(t: number, pmus: number, patient: PatientSettings): number {
+  const heartRate = 80
+  const cardiacPhase = 2 * Math.PI * (heartRate / 60) * t
+  const cardiacOscillation = 0.45 * Math.sin(cardiacPhase) + 0.18 * Math.sin(2 * cardiacPhase + 0.7)
+  const baseline = patient.endExpiratoryOesophagealPressure ?? -5
+  return baseline - pmus + cardiacOscillation
+}
+
 function isRequestHeld(t: number, requestTime?: number | null, releaseTime?: number | null): boolean {
   if (requestTime == null || t < requestTime) return false
   return releaseTime == null || t < releaseTime
@@ -268,7 +276,7 @@ function twoLevelSample(
     volume: state.volume * 1000,
     musclePressure: pmus,
     co2: capnogramValue(!high, t - state.expirationStartTime, patient.expiratoryResistance),
-    oesophagealPressure: -5 - pmus,
+    oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
     phase: high ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,
@@ -593,7 +601,7 @@ export function stepSimulation(
     volume: state.volume * 1000,
     musclePressure: pmus,
     co2: capnogramValue(!inspiration, t - state.expirationStartTime, patient.expiratoryResistance),
-    oesophagealPressure: -5 - pmus,
+    oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
     phase: inspiration ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,

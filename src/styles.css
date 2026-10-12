@@ -144,3 +144,9 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
   .cursor-hint { grid-column: 1 / -1; margin-top: 0; }
   .screen-settings { gap: 9px; flex-direction: column; }
 }
+
+.pes-ptp-readout { display: grid !important; gap: 3px; min-width: 118px; }
+.pes-ptp-readout > div { display: grid !important; grid-template-columns: 28px 1fr auto; align-items: baseline; gap: 5px; }
+.pes-ptp-readout > div > span { font-size: 9px; color: #a9b8be; text-align: left; }
+.pes-ptp-readout > div > strong { font-size: 16px; color: #f4f8fa; text-align: right; }
+.pes-ptp-readout > div > small { font-size: 8px; color: #7f9098; }
