@@ -16,9 +16,11 @@ export interface VentilatorSettings {
   rate: number
   tidalVolume: number
   inspiratoryTime: number
+  inspiratoryFlow: number
   pressureControl: number
   pressureSupport: number
   triggerSensitivity: number
+  terminationSensitivity: number
 }
 
 export interface Sample {

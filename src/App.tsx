@@ -6,7 +6,7 @@ import type { PatientSettings, Sample, VentilatorSettings } from './simulation/t
 
 const initialVentilator: VentilatorSettings = {
   mode: 'VC-AC', fio2: 0.35, peep: 5, rate: 14, tidalVolume: 500, inspiratoryTime: 1,
-  pressureControl: 15, pressureSupport: 10, triggerSensitivity: 2,
+  inspiratoryFlow: 30, pressureControl: 15, pressureSupport: 10, triggerSensitivity: 2, terminationSensitivity: 25,
 }
 
 const initialPatient: PatientSettings = {
@@ -94,6 +94,7 @@ export default function App() {
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
   const currentSimulationTime = movingSamples[movingSamples.length - 1]?.time ?? 0
   const holdIndicatorActive = inspiratoryHoldRequestTime != null && currentSimulationTime - inspiratoryHoldRequestTime < 8
+  const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
 
   useEffect(() => {
     if (!frozen) return
@@ -124,14 +125,20 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.7</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.8</span></div>
       </header>
 
       <div className="workspace">
         <section className="ventilator-console">
           <div className="screen-header">
             <div className="mode-title"><span>Mode</span><strong>{ventilator.mode}</strong></div>
-            <div className="screen-settings"><span>FiO₂ <b>{Math.round(effectiveVentilator.fio2 * 100)}%</b></span><span>PEEP <b>{ventilator.peep}</b></span></div>
+            <div className="screen-settings">
+              <span>FiO₂ <b>{Math.round(effectiveVentilator.fio2 * 100)}%</b></span>
+              <span>PEEP <b>{ventilator.peep}</b></span>
+              {ventilator.mode !== 'PSV' && <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>}
+              {ventilator.mode === 'VC-AC' && <span>Flow <b>{ventilator.inspiratoryFlow.toFixed(0)} L/min</b></span>}
+              {ventilator.mode === 'PSV' && <span>ETS <b>{ventilator.terminationSensitivity}%</b></span>}
+            </div>
           </div>
 
           <div className="screen-body">
