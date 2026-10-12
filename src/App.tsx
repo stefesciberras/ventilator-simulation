@@ -53,6 +53,7 @@ const VENTILATOR_STORAGE_KEY = 'eduvent.ventilator-settings'
 const PATIENT_STORAGE_KEY = 'eduvent.patient-settings'
 const ALARM_STORAGE_KEY = 'eduvent.alarm-limits'
 const WAVEFORM_STORAGE_KEY = 'eduvent.waveform-display'
+const PATIENT_TRANSITION_STORAGE_KEY = 'eduvent.patient-transition-seconds'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
@@ -74,6 +75,22 @@ function loadStoredSettings<T extends object>(key: string, defaults: T): T {
 
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>
+}
+
+function interpolatePatientSettings(from: PatientSettings, to: PatientSettings, fraction: number): PatientSettings {
+  const f = Math.max(0, Math.min(1, fraction))
+  const lerp = (a: number, b: number) => a + (b - a) * f
+  return {
+    compliance: lerp(from.compliance, to.compliance),
+    resistance: lerp(from.resistance, to.resistance),
+    expiratoryResistance: lerp(from.expiratoryResistance, to.expiratoryResistance),
+    spontaneousRate: lerp(from.spontaneousRate, to.spontaneousRate),
+    effort: lerp(from.effort, to.effort),
+    neuralInspiratoryTime: lerp(from.neuralInspiratoryTime, to.neuralInspiratoryTime),
+    endExpiratoryOesophagealPressure: lerp(from.endExpiratoryOesophagealPressure, to.endExpiratoryOesophagealPressure),
+    co2Production: lerp(from.co2Production, to.co2Production),
+    deadSpaceVolume: lerp(from.deadSpaceVolume, to.deadSpaceVolume),
+  }
 }
 
 function PauseIcon({ paused }: { paused: boolean }) {
@@ -269,6 +286,11 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 export default function App() {
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient))
+  const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0
+    const stored = Number(window.localStorage.getItem(PATIENT_TRANSITION_STORAGE_KEY) ?? 0)
+    return [0, 5, 10, 30, 60].includes(stored) ? stored : 0
+  })
   const [alarmLimits, setAlarmLimits] = useState<AlarmLimits>(() => {
     const stored = loadStoredSettings(ALARM_STORAGE_KEY, initialAlarmLimits)
     return {
@@ -300,6 +322,8 @@ export default function App() {
 
   const simulationStateRef = useRef(createSimulationState())
   const simulationTimeRef = useRef(0)
+  const effectivePatientRef = useRef<PatientSettings>({ ...patient })
+  const patientTransitionRef = useRef<{ from: PatientSettings; to: PatientSettings; start: number; duration: number } | null>(null)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const [timeline, setTimeline] = useState<Sample[]>(() => {
@@ -324,6 +348,24 @@ export default function App() {
   }, [patient])
 
   useEffect(() => {
+    window.localStorage.setItem(PATIENT_TRANSITION_STORAGE_KEY, String(patientTransitionSeconds))
+  }, [patientTransitionSeconds])
+
+  useEffect(() => {
+    if (patientTransitionSeconds <= 0) {
+      effectivePatientRef.current = { ...patient }
+      patientTransitionRef.current = null
+      return
+    }
+    patientTransitionRef.current = {
+      from: { ...effectivePatientRef.current },
+      to: { ...patient },
+      start: simulationTimeRef.current,
+      duration: patientTransitionSeconds,
+    }
+  }, [patient, patientTransitionSeconds])
+
+  useEffect(() => {
     window.localStorage.setItem(ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
   }, [alarmLimits])
 
@@ -343,10 +385,24 @@ export default function App() {
     if (frozen) return
     const timer = window.setInterval(() => {
       const startTime = simulationTimeRef.current
+      const transition = patientTransitionRef.current
+      let simulationPatient = patient
+      if (transition) {
+        const progress = (startTime - transition.start) / Math.max(transition.duration, 0.001)
+        simulationPatient = interpolatePatientSettings(transition.from, transition.to, progress)
+        effectivePatientRef.current = simulationPatient
+        if (progress >= 1) {
+          simulationPatient = { ...transition.to }
+          effectivePatientRef.current = simulationPatient
+          patientTransitionRef.current = null
+        }
+      } else {
+        effectivePatientRef.current = { ...patient }
+      }
       const nextSamples = advanceSimulation(
         simulationStateRef.current,
         effectiveVentilator,
-        patient,
+        simulationPatient,
         startTime,
         TICK_STEPS,
         DT,
@@ -536,7 +592,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.31</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.32</span></div>
       </header>
 
       <div className="workspace">
@@ -709,7 +765,7 @@ export default function App() {
 
         <aside className="control-panel">
           <VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} />
-          <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} />
+          <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} />
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
         </aside>
       </div>

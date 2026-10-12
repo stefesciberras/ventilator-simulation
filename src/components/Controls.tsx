@@ -216,7 +216,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
   )
 }
 
-export function PatientControls({ settings, onChange, onReset }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void }) {
+export function PatientControls({ settings, onChange, onReset, transitionSeconds, onTransitionSecondsChange }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
   if (settings.spontaneousRate > 0) previousSpontaneousRate.current = settings.spontaneousRate
@@ -242,6 +242,19 @@ export function PatientControls({ settings, onChange, onReset }: { settings: Pat
       <div className="control-section-title">
         <h2>Patient settings</h2>
         <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset patient</button>
+      </div>
+      <div className="patient-transition-control">
+        <label htmlFor="patient-transition-select">
+          <span>Patient transition</span>
+          <select id="patient-transition-select" value={transitionSeconds} onChange={(event) => onTransitionSecondsChange(Number(event.target.value))}>
+            <option value={0}>Now</option>
+            <option value={5}>5 s</option>
+            <option value={10}>10 s</option>
+            <option value={30}>30 s</option>
+            <option value={60}>60 s</option>
+          </select>
+        </label>
+        <small>{transitionSeconds === 0 ? 'Changes apply immediately' : `Patient physiology transitions smoothly over ${transitionSeconds} s`}</small>
       </div>
       <div className="preset-row">{Object.keys(presets).map((name) => <button key={name} onClick={() => patch(presets[name])}>{name}</button>)}</div>
       <div className="patient-rr-control">
