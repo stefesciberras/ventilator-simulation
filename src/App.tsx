@@ -7,6 +7,7 @@ import type { PatientSettings, Sample, VentilatorSettings } from './simulation/t
 const initialVentilator: VentilatorSettings = {
   mode: 'VC-AC', fio2: 0.35, peep: 5, rate: 14, tidalVolume: 500, inspiratoryTime: 1,
   inspiratoryFlow: 30, plateauPercent: 0, pressureControl: 15, pressureSupport: 10, triggerSensitivity: 2, terminationSensitivity: 25,
+  simvSyncWindowPercent: 25, showSimvSyncWindow: false,
   pHigh: 24, pLow: 5, tHigh: 4, tLow: 0.5,
 }
 
@@ -137,14 +138,16 @@ export default function App() {
   const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
-  const currentSimulationTime = movingSamples[movingSamples.length - 1]?.time ?? simulationTimeRef.current
+  const latestSample = movingSamples[movingSamples.length - 1]
+  const activeMode = latestSample?.mode ?? ventilator.mode
+  const currentSimulationTime = latestSample?.time ?? simulationTimeRef.current
   const inspiratoryHoldPressed = inspiratoryHoldRequestTime != null && inspiratoryHoldReleaseTime == null
   const expiratoryHoldPressed = expiratoryHoldRequestTime != null && expiratoryHoldReleaseTime == null
   const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
-  const conventionalTimedMode = ventilator.mode !== 'PSV' && ventilator.mode !== 'APRV'
-  const volumeMandatoryMode = ventilator.mode === 'VC-AC' || ventilator.mode === 'SIMV-VC'
-  const simvMode = ventilator.mode === 'SIMV-VC' || ventilator.mode === 'SIMV-PC'
-  const manualHoldAvailable = ventilator.mode !== 'PSV' && ventilator.mode !== 'APRV'
+  const conventionalTimedMode = activeMode !== 'PSV' && activeMode !== 'APRV'
+  const volumeMandatoryMode = activeMode === 'VC-AC' || activeMode === 'SIMV-VC'
+  const simvMode = activeMode === 'SIMV-VC' || activeMode === 'SIMV-PC'
+  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV'
 
   useEffect(() => {
     if (!frozen) return
@@ -192,7 +195,7 @@ export default function App() {
   }
 
   const beginExpiratoryHold = () => {
-    if (frozen || ventilator.mode === 'APRV' || expiratoryHoldPressed) return
+    if (frozen || activeMode === 'APRV' || expiratoryHoldPressed) return
     setInspiratoryHoldRequestTime(null)
     setInspiratoryHoldReleaseTime(null)
     setExpiratoryHoldRequestTime(currentSimulationTime)
@@ -225,16 +228,16 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.17</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.18</span></div>
       </header>
 
       <div className="workspace">
         <section className="ventilator-console">
           <div className="screen-header">
-            <div className="mode-title"><span>Mode</span><strong>{ventilator.mode}</strong></div>
+            <div className="mode-title"><span>Mode</span><strong>{activeMode}</strong></div>
             <div className="screen-settings">
               <span>FiO₂ <b>{Math.round(effectiveVentilator.fio2 * 100)}%</b></span>
-              {ventilator.mode === 'APRV' ? (
+              {activeMode === 'APRV' ? (
                 <>
                   <span>Phigh <b>{ventilator.pHigh}</b></span>
                   <span>Plow <b>{ventilator.pLow}</b></span>
@@ -247,9 +250,10 @@ export default function App() {
                   {conventionalTimedMode && <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>}
                   {volumeMandatoryMode && <span>Flow <b>{ventilator.inspiratoryFlow.toFixed(0)} L/min</b></span>}
                   {volumeMandatoryMode && <span>Plateau <b>{ventilator.plateauPercent ?? 0}%</b></span>}
-                  {ventilator.mode === 'VG-PC' && <span>VT target <b>{ventilator.tidalVolume} mL</b></span>}
-                  {(ventilator.mode === 'PSV' || simvMode) && <span>PS <b>{ventilator.pressureSupport}</b></span>}
-                  {(ventilator.mode === 'PSV' || simvMode) && <span>ETS <b>{ventilator.terminationSensitivity}%</b></span>}
+                  {activeMode === 'VG-PC' && <span>VT target <b>{ventilator.tidalVolume} mL</b></span>}
+                  {(activeMode === 'PSV' || simvMode) && <span>PS <b>{ventilator.pressureSupport}</b></span>}
+                  {(activeMode === 'PSV' || simvMode) && <span>ETS <b>{ventilator.terminationSensitivity}%</b></span>}
+                  {simvMode && <span>Sync <b>{ventilator.simvSyncWindowPercent ?? 25}%</b></span>}
                 </>
               )}
             </div>
@@ -257,7 +261,7 @@ export default function App() {
 
           <div className="screen-body">
             <div className="waveforms">
-              <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime />
+              <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime showSimvSyncWindow={ventilator.showSimvSyncWindow} />
               <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
               <Waveform samples={samples} signal="volume" label="Volume" unit="mL" min={0} max={900} accent="#83e28f" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
             </div>
@@ -269,7 +273,7 @@ export default function App() {
               <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
               <Metric label="Ppeak" value={measures.peakPressure.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
-              <Metric label={ventilator.mode === 'APRV' ? 'Plow' : 'PEEP'} value={measures.peep.toFixed(0)} unit="cmH₂O" />
+              <Metric label={activeMode === 'APRV' ? 'Plow' : 'PEEP'} value={measures.peep.toFixed(0)} unit="cmH₂O" />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
           </div>
@@ -290,8 +294,8 @@ export default function App() {
             >Inspiratory hold</button>
             <button
               className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
-              disabled={frozen || ventilator.mode === 'APRV'}
-              title={ventilator.mode === 'APRV' ? 'Expiratory hold is unavailable in APRV' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
+              disabled={frozen || activeMode === 'APRV'}
+              title={activeMode === 'APRV' ? 'Expiratory hold is unavailable in APRV' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
               onPointerUp={releaseExpiratoryHold}
               onPointerCancel={releaseExpiratoryHold}
