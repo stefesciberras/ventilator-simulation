@@ -508,7 +508,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.28</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.29</span></div>
       </header>
 
       <div className="workspace">
