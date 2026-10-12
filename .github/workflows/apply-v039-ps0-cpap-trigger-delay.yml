@@ -1,0 +1,181 @@
+name: Apply v0.39 PS0 CPAP and trigger delay
+on:
+  push:
+    branches: [chatgpt/v0.39-ps0-cpap-trigger-delay]
+    paths: [.github/workflows/apply-v039-ps0-cpap-trigger-delay.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.39-ps0-cpap-trigger-delay
+      - name: Apply source changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('src/simulation/engine.ts')
+          text = p.read_text()
+          text = text.replace('flowTriggerDetectedAt', 'triggerDetectedAt')
+          text = text.replace('flowTriggerResponseDelay', 'triggerResponseDelay')
+
+          old_trigger = """  const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
+  const rawTriggerSignalMet = ventilator.triggerType === 'flow'
+    ? predictedPatientFlowLmin >= flowTriggerSensitivity
+    : predictedAirwayPressure <= pressureTriggerLevel
+  const triggerDetectionEligible = !state.breathActive && !state.inspiratoryHoldActive && !state.expiratoryHoldActive
+  let triggerSignalMet = rawTriggerSignalMet
+
+  if (ventilator.triggerType === 'flow') {
+    if (!triggerDetectionEligible) {
+      state.triggerDetectedAt = null
+      triggerSignalMet = false
+    } else {
+      if (rawTriggerSignalMet && state.triggerDetectedAt == null) state.triggerDetectedAt = t
+      triggerSignalMet = state.triggerDetectedAt != null && t - state.triggerDetectedAt >= triggerResponseDelay
+    }
+  } else {
+    state.triggerDetectedAt = null
+  }
+"""
+          new_trigger = """  const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
+  const supportTriggeringDisabled =
+    (mode === 'PSV' || isSimv(mode)) && ventilator.pressureSupport <= 0.001
+  const rawTriggerSignalMet = !supportTriggeringDisabled && (ventilator.triggerType === 'flow'
+    ? predictedPatientFlowLmin >= flowTriggerSensitivity
+    : predictedAirwayPressure <= pressureTriggerLevel)
+  const triggerDetectionEligible = !state.breathActive && !state.inspiratoryHoldActive && !state.expiratoryHoldActive
+  let triggerSignalMet = rawTriggerSignalMet
+
+  if (!triggerDetectionEligible || supportTriggeringDisabled) {
+    state.triggerDetectedAt = null
+    triggerSignalMet = false
+  } else {
+    if (rawTriggerSignalMet && state.triggerDetectedAt == null) state.triggerDetectedAt = t
+    triggerSignalMet = state.triggerDetectedAt != null && t - state.triggerDetectedAt >= triggerResponseDelay
+  }
+"""
+          if old_trigger not in text:
+              raise SystemExit('trigger block marker not found')
+          text = text.replace(old_trigger, new_trigger, 1)
+
+          old_bottom = """  const dv = flowLs * dt
+  state.volume = clamp(state.volume + dv, 0, 2.5)
+  if (inspiration && !state.inspiratoryHoldActive) state.inspiredThisBreath += Math.max(dv, 0)
+
+  const sample: Sample = {
+    time: Number(t.toFixed(4)),
+    pressure: clamp(pressure, -5, 80),
+    flow: flowLs * 60,
+    volume: state.volume * 1000,
+    musclePressure: pmus,
+    co2: capnogramValue(!inspiration, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
+    oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
+    phase: inspiration ? 'inspiration' : 'expiration',
+    mode,
+    breathTrigger,
+    expiratoryHold: state.expiratoryHoldActive,
+    simvSyncWindow: simvSyncWindowActive,
+  }
+
+  state.previousPmus = pmus
+  return sample
+"""
+          new_bottom = """  const dv = flowLs * dt
+  state.volume = clamp(state.volume + dv, 0, 2.5)
+  if (inspiration && !state.inspiratoryHoldActive) state.inspiredThisBreath += Math.max(dv, 0)
+
+  // With PS = 0, PSV becomes CPAP (and SIMV has unassisted spontaneous
+  // breaths between mandatory breaths): the patient's neural inspiration is
+  // still a real respiratory phase, but it must not create a ventilator
+  // trigger event or a pressure-supported breath.
+  const unassistedSpontaneousInspiration =
+    supportTriggeringDisabled &&
+    !inspiration &&
+    !state.expiratoryHoldActive &&
+    pmus > 0.1
+  const sampleInspiration = inspiration || unassistedSpontaneousInspiration
+  if (supportTriggeringDisabled && pmus <= 0.1 && state.previousPmus > 0.1) {
+    state.expirationStartTime = t
+  }
+
+  const sample: Sample = {
+    time: Number(t.toFixed(4)),
+    pressure: clamp(pressure, -5, 80),
+    flow: flowLs * 60,
+    volume: state.volume * 1000,
+    musclePressure: pmus,
+    co2: capnogramValue(!sampleInspiration, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
+    oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
+    phase: sampleInspiration ? 'inspiration' : 'expiration',
+    mode,
+    breathTrigger,
+    expiratoryHold: state.expiratoryHoldActive,
+    simvSyncWindow: simvSyncWindowActive,
+  }
+
+  state.previousPmus = pmus
+  return sample
+"""
+          if old_bottom not in text:
+              raise SystemExit('sample block marker not found')
+          text = text.replace(old_bottom, new_bottom, 1)
+          p.write_text(text)
+
+          p = Path('src/components/Controls.tsx')
+          text = p.read_text()
+          old_buttons = """        <button type=\"button\" className={settings.triggerType !== 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'pressure' })}>Pressure</button>
+        <button type=\"button\" className={settings.triggerType === 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'flow' })}>Flow</button>
+"""
+          new_buttons = """        <button type=\"button\" disabled={zeroPressureSupport} className={settings.triggerType !== 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'pressure' })}>Pressure</button>
+        <button type=\"button\" disabled={zeroPressureSupport} className={settings.triggerType === 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'flow' })}>Flow</button>
+"""
+          if old_buttons not in text:
+              raise SystemExit('trigger buttons marker not found')
+          text = text.replace(old_buttons, new_buttons, 1)
+          p.write_text(text)
+
+          p = Path('src/App.tsx')
+          text = p.read_text()
+          old_latest = """function getLatestBreathStart(samples: Sample[]): number | null {
+  for (let index = samples.length - 1; index >= 0; index -= 1) {
+    if (samples[index].breathTrigger) return samples[index].time
+  }
+  return null
+}
+"""
+          new_latest = """function getLatestBreathStart(samples: Sample[]): number | null {
+  for (let index = samples.length - 1; index >= 0; index -= 1) {
+    if (samples[index].breathTrigger) return samples[index].time
+    if (index > 0 && samples[index - 1].phase === 'expiration' && samples[index].phase === 'inspiration') {
+      return samples[index].time
+    }
+  }
+  return null
+}
+"""
+          if old_latest not in text:
+              raise SystemExit('breath start helper marker not found')
+          text = text.replace(old_latest, new_latest, 1)
+          if "appVersion: '0.38'" not in text:
+              raise SystemExit('diagnostic version marker not found')
+          text = text.replace("appVersion: '0.38'", "appVersion: '0.39'", 1)
+          if '<span className="version">v0.38</span>' not in text:
+              raise SystemExit('display version marker not found')
+          text = text.replace('<span className="version">v0.38</span>', '<span className="version">v0.39</span>', 1)
+          p.write_text(text)
+
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit v0.39
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/Controls.tsx src/simulation/engine.ts
+          git commit -m "v0.39: make zero support untriggered CPAP and delay all triggers"
+          git push origin HEAD:chatgpt/v0.39-ps0-cpap-trigger-delay
