@@ -294,20 +294,40 @@ export function stepSimulation(
 
   const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
 
+  // During expiration, trapped volume leaves alveolar pressure above set PEEP.
+  // The patient must first overcome this intrinsic-PEEP load before the usual
+  // pressure-trigger sensitivity can be reached. This allows weak efforts to
+  // deform the expiratory waveform without necessarily triggering assistance.
+  const intrinsicPeepBarrier =
+    !state.breathActive &&
+    !state.inspiratoryHoldActive &&
+    !state.expiratoryHoldActive
+      ? Math.max(0, state.volume / complianceL)
+      : 0
+  const effectiveTriggerThreshold = triggerThreshold + intrinsicPeepBarrier
+
   if ((state.breathActive || state.inspiratoryHoldActive) && pmus >= triggerThreshold && state.breathsDuringEffort === 0) {
     state.breathsDuringEffort = 1
   }
 
-  const thresholdCrossing = pmus >= triggerThreshold && state.previousPmus < triggerThreshold
+  const thresholdCrossing =
+    pmus >= effectiveTriggerThreshold &&
+    state.previousPmus < effectiveTriggerThreshold
   const persistentEffortRetrigger =
-    pmus >= triggerThreshold &&
+    pmus >= effectiveTriggerThreshold &&
     state.breathsDuringEffort > 0 &&
     state.breathsDuringEffort < 2 &&
     t - state.lastBreathEnd >= triggerRefractoryPeriod
 
   const mandatoryMode = mode !== 'PSV'
-  const patientTriggerAllowed = !mandatoryMode || state.expiratoryTriggerReady
-  const ongoingEffortAfterGate = mandatoryMode && state.expiratoryTriggerReady && pmus >= triggerThreshold
+  const patientTriggerAllowed =
+    !mandatoryMode ||
+    state.expiratoryTriggerReady ||
+    t - state.lastBreathEnd >= triggerRefractoryPeriod
+  const ongoingEffortAfterGate =
+    mandatoryMode &&
+    patientTriggerAllowed &&
+    pmus >= effectiveTriggerThreshold
   const patientTrigger =
     !state.breathActive &&
     !state.inspiratoryHoldActive &&
@@ -508,13 +528,23 @@ export function stepSimulation(
 
     const exposePatientEffort =
       pmus > 0 &&
-      t >= state.suppressEffortUntil &&
-      (!mandatoryMode || state.expiratoryTriggerReady)
+      t >= state.suppressEffortUntil
 
     if (exposePatientEffort) {
-      const effortFlow = pmus / Math.max(patient.resistance, 0.5)
-      flowLs = passiveExpiratoryFlow + effortFlow
-      pressure = ventilator.peep - Math.min(pmus, triggerThreshold)
+      const elasticPressure = state.volume / complianceL
+      const netPatientDrivingPressure = pmus - elasticPressure
+      const effortResistance = netPatientDrivingPressure >= 0
+        ? Math.max(patient.resistance, 0.5)
+        : Math.max(patient.expiratoryResistance, 0.5)
+
+      // Before intrinsic PEEP is overcome, inspiratory effort merely slows
+      // expiration. Once pmus exceeds the trapped elastic pressure, flow can
+      // reverse and Paw can dip. If the remaining deflection is still smaller
+      // than trigger sensitivity, the effort is ineffective and no assisted
+      // breath is delivered.
+      flowLs = netPatientDrivingPressure / effortResistance
+      const triggerDeflection = Math.max(0, pmus - elasticPressure)
+      pressure = ventilator.peep - Math.min(triggerDeflection, triggerThreshold)
     } else {
       flowLs = passiveExpiratoryFlow
       pressure = ventilator.peep
