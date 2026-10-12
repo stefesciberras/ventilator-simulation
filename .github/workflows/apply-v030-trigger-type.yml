@@ -1,0 +1,85 @@
+name: Apply v0.30 trigger type
+on:
+  push:
+    branches: [chatgpt/v0.30-trigger-type]
+    paths: [.github/workflows/apply-v030-trigger-type.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.30-trigger-type
+      - name: Apply source changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              found = text.count(old)
+              if found < count:
+                  raise SystemExit(f'{path}: expected at least {count} occurrence(s), found {found}: {old[:80]!r}')
+              p.write_text(text.replace(old, new, count))
+
+          replace('src/simulation/types.ts',
+              '  pressureSupport: number\n  triggerSensitivity: number\n  terminationSensitivity: number',
+              "  pressureSupport: number\n  triggerType: 'pressure' | 'flow'\n  triggerSensitivity: number\n  flowTriggerSensitivity: number\n  terminationSensitivity: number")
+
+          replace('src/App.tsx',
+              'pressureControl: 15, pressureSupport: 10, triggerSensitivity: 2, terminationSensitivity: 25,',
+              "pressureControl: 15, pressureSupport: 10, triggerType: 'pressure', triggerSensitivity: 2, flowTriggerSensitivity: 2, terminationSensitivity: 25,")
+          replace('src/App.tsx', '<span className="version">v0.29</span>', '<span className="version">v0.30</span>')
+
+          controls = Path('src/components/Controls.tsx')
+          text = controls.read_text()
+          marker = "  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV', 'BIPAP']\n\n"
+          insert = marker + "  const triggerControls = (\n    <div className=\"trigger-controls\">\n      <div className=\"trigger-type-selector\" role=\"group\" aria-label=\"Trigger type\">\n        <button type=\"button\" className={settings.triggerType !== 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'pressure' })}>Pressure</button>\n        <button type=\"button\" className={settings.triggerType === 'flow' ? 'selected' : ''} onClick={() => patch({ triggerType: 'flow' })}>Flow</button>\n      </div>\n      {settings.triggerType === 'flow' ? (\n        <Slider label=\"Flow trigger\" value={settings.flowTriggerSensitivity ?? 2} unit=\" L/min\" min={0.5} max={10} step={0.5} onChange={(v) => patch({ flowTriggerSensitivity: v })} />\n      ) : (\n        <Slider label=\"Pressure trigger\" value={settings.triggerSensitivity} unit=\" cmH₂O below PEEP\" min={0.5} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />\n      )}\n    </div>\n  )\n\n"
+          if marker not in text:
+              raise SystemExit('Controls mode marker not found')
+          text = text.replace(marker, insert, 1)
+          text = text.replace('<Slider label="Trigger" value={settings.triggerSensitivity} unit=" cmH₂O" min={1} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />', '{triggerControls}', 2)
+          controls.write_text(text)
+
+          engine = Path('src/simulation/engine.ts')
+          text = engine.read_text()
+          old = '''  const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)\n\n  // During expiration, trapped volume leaves alveolar pressure above set PEEP.\n  // The patient must first overcome this intrinsic-PEEP load before the usual\n  // pressure-trigger sensitivity can be reached. This allows weak efforts to\n  // deform the expiratory waveform without necessarily triggering assistance.\n  const intrinsicPeepBarrier =\n    !state.breathActive &&\n    !state.inspiratoryHoldActive &&\n    !state.expiratoryHoldActive\n      ? Math.max(0, state.volume / complianceL)\n      : 0\n  const effectiveTriggerThreshold = triggerThreshold + intrinsicPeepBarrier\n\n  if ((state.breathActive || state.inspiratoryHoldActive) && pmus >= triggerThreshold && state.breathsDuringEffort === 0) {\n    state.breathsDuringEffort = 1\n  }\n\n  const thresholdCrossing =\n    pmus >= effectiveTriggerThreshold &&\n    state.previousPmus < effectiveTriggerThreshold\n  const persistentEffortRetrigger =\n    pmus >= effectiveTriggerThreshold &&\n    state.breathsDuringEffort > 0 &&\n    state.breathsDuringEffort < 2 &&\n    t - state.lastBreathEnd >= triggerRefractoryPeriod\n'''
+          new = '''  const pressureTriggerSensitivity = Math.max(0.1, ventilator.triggerSensitivity)\n  const flowTriggerSensitivity = Math.max(0.1, ventilator.flowTriggerSensitivity ?? 2)\n\n  // Predict the patient-generated signal during expiration. Trapped elastic\n  // pressure (auto-PEEP) must be overcome before Paw can fall below set PEEP\n  // or inspiratory flow can become positive. Pressure sensitivity is therefore\n  // explicitly a gradient from set PEEP, not an absolute airway pressure.\n  const triggerElasticPressure = state.volume / complianceL\n  const triggerNetDrivingPressure = pmus - triggerElasticPressure\n  const triggerEffortResistance = triggerNetDrivingPressure >= 0\n    ? Math.max(patient.resistance, 0.5)\n    : Math.max(patient.expiratoryResistance, 0.5)\n  const predictedPatientFlowLs = triggerNetDrivingPressure / triggerEffortResistance\n  const predictedPatientFlowLmin = predictedPatientFlowLs * 60\n  const predictedAirwayPressure = ventilator.peep - Math.max(0, triggerNetDrivingPressure)\n  const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity\n  const triggerSignalMet = ventilator.triggerType === 'flow'\n    ? predictedPatientFlowLmin >= flowTriggerSensitivity\n    : predictedAirwayPressure <= pressureTriggerLevel\n\n  if ((state.breathActive || state.inspiratoryHoldActive) && pmus > 0.1 && state.breathsDuringEffort === 0) {\n    state.breathsDuringEffort = 1\n  }\n\n  const firstEffortTrigger = triggerSignalMet && state.breathsDuringEffort === 0\n  const persistentEffortRetrigger =\n    triggerSignalMet &&\n    state.breathsDuringEffort > 0 &&\n    state.breathsDuringEffort < 2 &&\n    t - state.lastBreathEnd >= triggerRefractoryPeriod\n'''
+          if old not in text:
+              raise SystemExit('Generic trigger block not found')
+          text = text.replace(old, new, 1)
+          old2 = '''  const ongoingEffortAfterGate =\n    mandatoryMode &&\n    patientTriggerAllowed &&\n    pmus >= effectiveTriggerThreshold\n  const patientTrigger =\n    !state.breathActive &&\n    !state.inspiratoryHoldActive &&\n    !state.expiratoryHoldActive &&\n    patientTriggerAllowed &&\n    (thresholdCrossing || persistentEffortRetrigger || ongoingEffortAfterGate)\n'''
+          new2 = '''  const ongoingEffortAfterGate =\n    mandatoryMode &&\n    patientTriggerAllowed &&\n    triggerSignalMet\n  const patientTrigger =\n    !state.breathActive &&\n    !state.inspiratoryHoldActive &&\n    !state.expiratoryHoldActive &&\n    patientTriggerAllowed &&\n    (firstEffortTrigger || persistentEffortRetrigger || ongoingEffortAfterGate)\n'''
+          if old2 not in text:
+              raise SystemExit('patientTrigger block not found')
+          text = text.replace(old2, new2, 1)
+
+          old3 = '''      const elasticPressure = state.volume / complianceL\n      const netPatientDrivingPressure = pmus - elasticPressure\n      const effortResistance = netPatientDrivingPressure >= 0\n        ? Math.max(patient.resistance, 0.5)\n        : Math.max(patient.expiratoryResistance, 0.5)\n\n      // Before intrinsic PEEP is overcome, inspiratory effort merely slows\n      // expiration. Once pmus exceeds the trapped elastic pressure, flow can\n      // reverse and Paw can dip. If the remaining deflection is still smaller\n      // than trigger sensitivity, the effort is ineffective and no assisted\n      // breath is delivered.\n      flowLs = netPatientDrivingPressure / effortResistance\n      const triggerDeflection = Math.max(0, pmus - elasticPressure)\n      pressure = ventilator.peep - Math.min(triggerDeflection, triggerThreshold)\n'''
+          new3 = '''      const elasticPressure = state.volume / complianceL\n      const netPatientDrivingPressure = pmus - elasticPressure\n      const effortResistance = netPatientDrivingPressure >= 0\n        ? Math.max(patient.resistance, 0.5)\n        : Math.max(patient.expiratoryResistance, 0.5)\n\n      // Before intrinsic PEEP is overcome, inspiratory effort merely slows\n      // expiration. Once it is overcome, flow reverses and Paw falls below\n      // set PEEP. Those actual simulated signals are what the selected trigger\n      // detector sees.\n      flowLs = netPatientDrivingPressure / effortResistance\n      pressure = ventilator.peep - Math.max(0, netPatientDrivingPressure)\n'''
+          if old3 not in text:
+              raise SystemExit('expiratory effort block not found')
+          text = text.replace(old3, new3, 1)
+
+          old4 = '''    const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)\n    const effortStarting = pmus >= triggerThreshold && state.previousPmus < triggerThreshold\n    const effortEnding = pmus < triggerThreshold && state.previousPmus >= triggerThreshold\n'''
+          new4 = '''    const elasticPressure = state.volume / complianceL\n    const netPatientDrivingPressure = pmus - elasticPressure\n    const effortResistance = netPatientDrivingPressure >= 0\n      ? Math.max(patient.resistance, 0.5)\n      : Math.max(patient.expiratoryResistance, 0.5)\n    const patientFlowLmin = (netPatientDrivingPressure / effortResistance) * 60\n    const patientAirwayPressure = ventilator.peep - Math.max(0, netPatientDrivingPressure)\n    const pressureTriggerLevel = ventilator.peep - Math.max(0.1, ventilator.triggerSensitivity)\n    const triggerSignalMet = ventilator.triggerType === 'flow'\n      ? patientFlowLmin >= Math.max(0.1, ventilator.flowTriggerSensitivity ?? 2)\n      : patientAirwayPressure <= pressureTriggerLevel\n    const effortActive = pmus > 0.1\n    const effortEnding = !effortActive && state.previousPmus > 0.1\n'''
+          if old4 not in text:
+              raise SystemExit('BIPAP trigger block not found')
+          text = text.replace(old4, new4, 1)
+          text = text.replace('const synchronizedCycleOn = phaseElapsed >= syncStart && effortStarting', 'const synchronizedCycleOn = phaseElapsed >= syncStart && triggerSignalMet', 1)
+          text = text.replace('const nominalCycleOff = phaseElapsed >= nominalTi && pmus < triggerThreshold', 'const nominalCycleOff = phaseElapsed >= nominalTi && !effortActive', 1)
+          engine.write_text(text)
+
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit v0.30
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/Controls.tsx src/simulation/engine.ts src/simulation/types.ts
+          git commit -m "v0.30: add pressure and flow triggering"
+          git push origin HEAD:chatgpt/v0.30-trigger-type
