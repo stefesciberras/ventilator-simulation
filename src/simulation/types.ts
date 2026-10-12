@@ -8,6 +8,8 @@ export interface PatientSettings {
   effort: number
   neuralInspiratoryTime: number
   endExpiratoryOesophagealPressure: number
+  co2Production: number
+  deadSpaceVolume: number
 }
 
 export interface VentilatorSettings {

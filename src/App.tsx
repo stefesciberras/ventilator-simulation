@@ -13,7 +13,7 @@ const initialVentilator: VentilatorSettings = {
 }
 
 const initialPatient: PatientSettings = {
-  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, endExpiratoryOesophagealPressure: -5,
+  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
 }
 
 interface AlarmLimits {
@@ -136,6 +136,33 @@ function getLatestBreathStart(samples: Sample[]): number | null {
     if (samples[index].breathTrigger) return samples[index].time
   }
   return null
+}
+
+function calculateEndTidalCO2(samples: Sample[]): number | null {
+  if (samples.length < 2) return null
+  let expiratoryPeak = 0
+  let inExpiration = samples[0].phase === 'expiration'
+  let lastCompleted: number | null = null
+
+  if (inExpiration) expiratoryPeak = samples[0].co2
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    if (current.phase === 'expiration') {
+      if (!inExpiration) {
+        inExpiration = true
+        expiratoryPeak = current.co2
+      } else {
+        expiratoryPeak = Math.max(expiratoryPeak, current.co2)
+      }
+    }
+    if (previous.phase === 'expiration' && current.phase === 'inspiration' && inExpiration) {
+      lastCompleted = expiratoryPeak
+      inExpiration = false
+      expiratoryPeak = 0
+    }
+  }
+  return lastCompleted
 }
 
 function calculateEventMeasurements(samples: Sample[], apneaTime: number, latestTime: number): EventMeasurements {
@@ -339,6 +366,7 @@ export default function App() {
   const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
   const measuredIERatio = useMemo(() => calculateMeasuredIERatio(measurementSamples), [measurementSamples])
+  const endTidalCO2 = useMemo(() => calculateEndTidalCO2(measurementSamples), [measurementSamples])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
   const latestSample = movingSamples[movingSamples.length - 1]
   const activeMode = latestSample?.mode ?? ventilator.mode
@@ -508,7 +536,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.30</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.31</span></div>
       </header>
 
       <div className="workspace">
@@ -645,6 +673,7 @@ export default function App() {
               <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
+              <Metric label="EtCO₂" value={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)} unit="mmHg" />
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>

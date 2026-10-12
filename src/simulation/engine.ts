@@ -36,6 +36,13 @@ export interface SimulationState {
   bipapHigh: boolean
   bipapPhaseStart: number
   expirationStartTime: number
+  previousPhase: 'inspiration' | 'expiration' | null
+  lastInspirationStart: number
+  expiredVolumeThisCycle: number
+  lastExpiredTidalVolume: number
+  lastExpiratoryDuration: number
+  estimatedRespiratoryRate: number
+  alveolarCo2: number
 }
 
 export function createSimulationState(): SimulationState {
@@ -64,6 +71,13 @@ export function createSimulationState(): SimulationState {
     bipapHigh: true,
     bipapPhaseStart: 0,
     expirationStartTime: -100,
+    previousPhase: null,
+    lastInspirationStart: -100,
+    expiredVolumeThisCycle: 0,
+    lastExpiredTidalVolume: 0,
+    lastExpiratoryDuration: 2.5,
+    estimatedRespiratoryRate: 12,
+    alveolarCo2: 40,
   }
 }
 
@@ -77,27 +91,102 @@ function patientMusclePressure(t: number, patient: PatientSettings): number {
   return patient.effort * Math.sin(Math.PI * x) ** 2
 }
 
-function capnogramValue(expiratory: boolean, elapsedExpiration: number, expiratoryResistance: number): number {
+function effectiveRespiratoryRate(state: SimulationState, ventilator: VentilatorSettings, patient: PatientSettings, t: number): number {
+  const fallback = patient.spontaneousRate > 0 ? patient.spontaneousRate : Math.max(ventilator.rate, 1)
+  if (state.lastInspirationStart < -50) return fallback
+  const elapsedSinceInspiration = Math.max(0.01, t - state.lastInspirationStart)
+  const rateLimitedByApnoea = 60 / elapsedSinceInspiration
+  return clamp(Math.min(Math.max(state.estimatedRespiratoryRate, 0.1), rateLimitedByApnoea), 0.1, 80)
+}
+
+function co2Target(
+  state: SimulationState,
+  ventilator: VentilatorSettings,
+  patient: PatientSettings,
+  t: number,
+  complianceL: number,
+): number {
+  const fallbackVt = Math.max(ventilator.tidalVolume / 1000, 0.3)
+  const tidalVolumeL = state.lastExpiredTidalVolume > 0.02 ? state.lastExpiredTidalVolume : fallbackVt
+  const deadSpaceL = Math.max(patient.deadSpaceVolume ?? 150, 0) / 1000
+  const alveolarVolumeL = Math.max(0, tidalVolumeL - deadSpaceL)
+  const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
+
+  // Rexp (cmH2O/L/s) x C (L/cmH2O) gives the expiratory time constant in seconds.
+  // If expiration is short relative to tau, only part of the nominal alveolar
+  // ventilation is effectively cleared before the next inspiration.
+  const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
+  const expiratoryTime = Math.max(state.lastExpiratoryDuration, 0.05)
+  const emptyingFraction = clamp(1 - Math.exp(-expiratoryTime / tau), 0.03, 1)
+  const alveolarVentilation = alveolarVolumeL * respiratoryRate * emptyingFraction
+  const vco2 = Math.max(patient.co2Production ?? 250, 0)
+
+  if (alveolarVentilation <= 0.05) return 100
+  // Standard ventilation equation approximation: PCO2 ~= 0.863 x VCO2 / VA.
+  return clamp(0.863 * vco2 / alveolarVentilation, 10, 100)
+}
+
+function updateAlveolarCo2(
+  state: SimulationState,
+  ventilator: VentilatorSettings,
+  patient: PatientSettings,
+  t: number,
+  dt: number,
+  complianceL: number,
+) {
+  const target = co2Target(state, ventilator, patient, t, complianceL)
+  const responseTime = 8
+  const fraction = 1 - Math.exp(-dt / responseTime)
+  state.alveolarCo2 = clamp(state.alveolarCo2 + (target - state.alveolarCo2) * fraction, 0, 100)
+}
+
+function capnogramValue(
+  expiratory: boolean,
+  elapsedExpiration: number,
+  patient: PatientSettings,
+  complianceL: number,
+  etco2: number,
+): number {
   if (!expiratory || elapsedExpiration < 0) return 0
 
-  const obstruction = clamp((expiratoryResistance - 8) / 32, 0, 1)
-  const deadSpaceDelay = 0.03 + 0.08 * obstruction
+  const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
+  const obstruction = clamp((tau - 0.45) / 1.8, 0, 1)
+  const deadSpaceDelay = 0.03 + Math.max(patient.deadSpaceVolume ?? 150, 0) / 5000 + 0.05 * obstruction
   if (elapsedExpiration <= deadSpaceDelay) return 0
 
-  // Increased expiratory resistance slows phase II and progressively converts
-  // the normal square capnogram into the sloping "shark-fin" of obstruction.
-  const riseTime = 0.18 + 0.9 * obstruction
+  // The same expiratory time constant that limits CO2 clearance also shapes
+  // phase II. A long tau produces the progressively sloping shark-fin pattern.
+  const riseTime = clamp(0.14 + 0.42 * tau, 0.16, 1.6)
   const riseProgress = clamp((elapsedExpiration - deadSpaceDelay) / riseTime, 0, 1)
   const normalRise = 1 - Math.pow(1 - riseProgress, 4)
-  const obstructedRise = Math.pow(riseProgress, 1.25)
+  const obstructedRise = Math.pow(riseProgress, 1.35)
   const riseShape = normalRise * (1 - obstruction) + obstructedRise * obstruction
-  const etco2 = 36 + 4 * obstruction
+  const phaseIIEndFraction = 0.88 - 0.12 * obstruction
 
-  if (riseProgress < 1) return etco2 * riseShape
+  if (riseProgress < 1) return clamp(etco2 * phaseIIEndFraction * riseShape, 0, 100)
 
   const plateauElapsed = elapsedExpiration - deadSpaceDelay - riseTime
-  const plateauSlope = 0.8 + 3.5 * obstruction
-  return clamp(etco2 + plateauElapsed * plateauSlope, 0, 50)
+  const plateauRise = plateauElapsed * (0.05 + 0.08 * obstruction)
+  return clamp(etco2 * Math.min(1, phaseIIEndFraction + plateauRise), 0, 100)
+}
+
+function updateVentilationTracking(state: SimulationState, sample: Sample, t: number, dt: number) {
+  const enteringInspiration = sample.phase === 'inspiration' && state.previousPhase !== 'inspiration'
+  if (enteringInspiration) {
+    if (state.lastInspirationStart > -50) {
+      const cycleLength = t - state.lastInspirationStart
+      if (cycleLength > 0.2) state.estimatedRespiratoryRate = clamp(60 / cycleLength, 0, 80)
+      if (state.expiredVolumeThisCycle > 0.005) state.lastExpiredTidalVolume = state.expiredVolumeThisCycle
+      if (state.expirationStartTime > -50) state.lastExpiratoryDuration = Math.max(0.05, t - state.expirationStartTime)
+    }
+    state.lastInspirationStart = t
+    state.expiredVolumeThisCycle = 0
+  }
+
+  if (sample.phase === 'expiration') {
+    state.expiredVolumeThisCycle += Math.max(0, -sample.flow / 60) * dt
+  }
+  state.previousPhase = sample.phase
 }
 
 function oesophagealPressureValue(t: number, pmus: number, patient: PatientSettings): number {
@@ -287,7 +376,7 @@ function twoLevelSample(
     flow: flowLs * 60,
     volume: state.volume * 1000,
     musclePressure: pmus,
-    co2: capnogramValue(!high, t - state.expirationStartTime, patient.expiratoryResistance),
+    co2: capnogramValue(!high, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
     oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
     phase: high ? 'inspiration' : 'expiration',
     mode,
@@ -297,6 +386,7 @@ function twoLevelSample(
   }
 
   state.previousPmus = pmus
+  updateVentilationTracking(state, sample, t, dt)
   return sample
 }
 
@@ -328,9 +418,12 @@ export function stepSimulation(
   }
 
   const pmus = patientMusclePressure(t, patient)
+  updateAlveolarCo2(state, ventilator, patient, t, dt, complianceL)
 
   if (mode === 'APRV' || mode === 'BIPAP') {
-    return twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode)
+    const sample = twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode)
+    updateVentilationTracking(state, sample, t, dt)
+    return sample
   }
 
   const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
@@ -614,7 +707,7 @@ export function stepSimulation(
     flow: flowLs * 60,
     volume: state.volume * 1000,
     musclePressure: pmus,
-    co2: capnogramValue(!inspiration, t - state.expirationStartTime, patient.expiratoryResistance),
+    co2: capnogramValue(!inspiration, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
     oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
     phase: inspiration ? 'inspiration' : 'expiration',
     mode,
