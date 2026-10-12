@@ -62,20 +62,6 @@ export function generateWaveforms(
 
     const mandatoryCycle = 60 / Math.max(ventilator.rate, 1)
     const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
-    const expiratoryHoldRequested =
-      options.expiratoryHoldRequestTime != null &&
-      !expiratoryHoldUsed &&
-      t >= options.expiratoryHoldRequestTime
-
-    // An expiratory hold starts only when the ventilator is in expiration. The
-    // expiratory valve is occluded, flow becomes zero, and airway pressure
-    // equilibrates with alveolar pressure. Any residual volume above baseline
-    // therefore appears as intrinsic PEEP (V/C) above the set PEEP.
-    if (!breathActive && !inspiratoryHoldActive && !expiratoryHoldActive && expiratoryHoldRequested) {
-      expiratoryHoldActive = true
-      expiratoryHoldUsed = true
-      expiratoryHoldUntil = t + expiratoryHoldDuration
-    }
 
     if ((breathActive || inspiratoryHoldActive) && pmus >= triggerThreshold && breathsDuringEffort === 0) {
       breathsDuringEffort = 1
@@ -89,9 +75,28 @@ export function generateWaveforms(
       t - lastBreathEnd >= triggerRefractoryPeriod
     const patientTrigger = thresholdCrossing || persistentEffortRetrigger
     const mandatoryDue = ventilator.mode !== 'PSV' && t - lastAssistedBreath >= mandatoryCycle - dt / 2
+    const breathDue = mandatoryDue || patientTrigger
+    const expiratoryHoldRequested =
+      options.expiratoryHoldRequestTime != null &&
+      !expiratoryHoldUsed &&
+      t >= options.expiratoryHoldRequestTime
     let breathTrigger: Sample['breathTrigger']
 
-    if (!breathActive && !inspiratoryHoldActive && !expiratoryHoldActive && (mandatoryDue || patientTrigger)) {
+    // The expiratory-hold button ARMS the manoeuvre. Occlusion is applied at the
+    // end of expiration, at the instant the next breath would otherwise begin.
+    // This samples the true end-expiratory trapped volume rather than pressure at
+    // an arbitrary point on the expiratory decay.
+    if (
+      !breathActive &&
+      !inspiratoryHoldActive &&
+      !expiratoryHoldActive &&
+      expiratoryHoldRequested &&
+      breathDue
+    ) {
+      expiratoryHoldActive = true
+      expiratoryHoldUsed = true
+      expiratoryHoldUntil = t + expiratoryHoldDuration
+    } else if (!breathActive && !inspiratoryHoldActive && !expiratoryHoldActive && breathDue) {
       breathActive = true
       breathStart = t
       inspiredThisBreath = 0
@@ -121,6 +126,9 @@ export function generateWaveforms(
       inspiration = false
       if (t < expiratoryHoldUntil) {
         flowLs = 0
+        // With no flow across the airway resistance, Paw equilibrates with the
+        // modelled alveolar pressure. Residual volume / compliance is intrinsic
+        // PEEP, so Paw = set PEEP + auto-PEEP.
         pressure = ventilator.peep + volume / complianceL
       } else {
         expiratoryHoldActive = false
