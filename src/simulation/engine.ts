@@ -263,14 +263,16 @@ function twoLevelSample(
   }
 
   const targetPressure = high ? pHigh : pLow
+  const elasticPressure = state.volume / complianceL
   const spontaneousPressureDeflection = mode === 'BIPAP'
-    ? clamp(pmus * 0.35, 0, 6)
+    ? high
+      ? clamp(pmus * 0.35, 0, 6)
+      : Math.max(0, pmus - elasticPressure)
     : high
       ? clamp(pmus * 0.35, 0, 6)
       : 0
 
   const distendingPressure = high ? pHigh - pLow : 0
-  const elasticPressure = state.volume / complianceL
   const drivingPressure = distendingPressure - elasticPressure + pmus
   const resistance = drivingPressure >= 0
     ? Math.max(patient.resistance, 0.5)
