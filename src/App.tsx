@@ -13,10 +13,25 @@ const initialPatient: PatientSettings = {
   compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1,
 }
 
+const VENTILATOR_STORAGE_KEY = 'eduvent.ventilator-settings'
+const PATIENT_STORAGE_KEY = 'eduvent.patient-settings'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
 const SIMULATION_START = 0
 const SIMULATION_DURATION = 150
+
+function loadStoredSettings<T extends object>(key: string, defaults: T): T {
+  if (typeof window === 'undefined') return { ...defaults }
+  try {
+    const stored = window.localStorage.getItem(key)
+    if (!stored) return { ...defaults }
+    const parsed = JSON.parse(stored)
+    if (!parsed || typeof parsed !== 'object') return { ...defaults }
+    return { ...defaults, ...(parsed as Partial<T>) }
+  } catch {
+    return { ...defaults }
+  }
+}
 
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>
@@ -49,8 +64,8 @@ function AlarmSilenceIcon() {
 }
 
 export default function App() {
-  const [ventilator, setVentilator] = useState(initialVentilator)
-  const [patient, setPatient] = useState(initialPatient)
+  const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
+  const [patient, setPatient] = useState<PatientSettings>(() => loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient))
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [nebuliser, setNebuliser] = useState(false)
   const [alarmSilenced, setAlarmSilenced] = useState(false)
@@ -62,6 +77,14 @@ export default function App() {
   const [inspiratoryHoldReleaseTime, setInspiratoryHoldReleaseTime] = useState<number | null>(null)
   const [expiratoryHoldRequestTime, setExpiratoryHoldRequestTime] = useState<number | null>(null)
   const [expiratoryHoldReleaseTime, setExpiratoryHoldReleaseTime] = useState<number | null>(null)
+
+  useEffect(() => {
+    window.localStorage.setItem(VENTILATOR_STORAGE_KEY, JSON.stringify(ventilator))
+  }, [ventilator])
+
+  useEffect(() => {
+    window.localStorage.setItem(PATIENT_STORAGE_KEY, JSON.stringify(patient))
+  }, [patient])
 
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
   const generated = useMemo(
@@ -117,8 +140,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [frozen, samples.length])
 
-  // A hold-release freezes only after the generator has re-rendered with the final
-  // release time. This guarantees the frozen trace contains the complete manoeuvre.
   useEffect(() => {
     if (!frozen || frozenSamples) return
     setFrozenSamples(movingSamples)
@@ -166,13 +187,15 @@ export default function App() {
     setFrozen(true)
   }
 
+  const resetVentilator = () => setVentilator({ ...initialVentilator })
+  const resetPatient = () => setPatient({ ...initialPatient })
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.10</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.11</span></div>
       </header>
 
       <div className="workspace">
@@ -203,8 +226,6 @@ export default function App() {
               <Metric label="Ppeak" value={measures.peakPressure.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
-              <Metric label="PEEPtot" value={measures.totalPeep == null ? '—' : measures.totalPeep.toFixed(1)} unit="cmH₂O" />
-              <Metric label="Auto-PEEP" value={measures.autoPeep == null ? '—' : measures.autoPeep.toFixed(1)} unit="cmH₂O" />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
           </div>
@@ -226,7 +247,7 @@ export default function App() {
             <button
               className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
               disabled={frozen}
-              title="Press and hold for an end-expiratory occlusion; release to freeze and measure total/intrinsic PEEP"
+              title="Press and hold for an end-expiratory occlusion; release to freeze the trace"
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
               onPointerUp={releaseExpiratoryHold}
               onPointerCancel={releaseExpiratoryHold}
@@ -238,8 +259,8 @@ export default function App() {
         </section>
 
         <aside className="control-panel">
-          <VentilatorControls settings={ventilator} onChange={setVentilator} />
-          <PatientControls settings={patient} onChange={setPatient} />
+          <VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} />
+          <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} />
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
         </aside>
       </div>
