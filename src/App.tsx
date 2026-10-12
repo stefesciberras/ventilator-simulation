@@ -122,6 +122,17 @@ function AlarmSilenceIcon() {
   )
 }
 
+function DiagnosticIcon({ copied }: { copied: boolean }) {
+  return copied ? (
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4 4L19 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  ) : (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4.5" y="4.5" width="15" height="15" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M7.5 13h2l1.4-4 2.2 7 1.5-4H17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function calculateMeasuredIERatio(samples: Sample[]): number | null {
   if (samples.length < 3) return null
   const cycles: Array<{ ti: number; te: number }> = []
@@ -589,7 +600,7 @@ export default function App() {
 
   const copyDiagnostics = async () => {
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.37',
+      appVersion: '0.38',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -638,7 +649,18 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.37</span></div>
+        <div className="status-cluster">
+          <span className={`status-dot ${frozen ? 'paused' : ''}`} />
+          <span>{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>
+          <button
+            className={`top-diagnostic-button ${diagnosticCopied ? 'active copied' : ''}`}
+            type="button"
+            onClick={copyDiagnostics}
+            title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
+            aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
+          ><DiagnosticIcon copied={diagnosticCopied} /></button>
+          <span className="version">v0.38</span>
+        </div>
       </header>
 
       <div className="workspace">
@@ -775,8 +797,9 @@ export default function App() {
               <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
-              <Metric label="EtCO₂" value={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)} unit="mmHg" />
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
+              <div className="metrics-spacer" aria-hidden="true" />
+              <Metric label="EtCO₂" value={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)} unit="mmHg" />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
           </div>
@@ -805,7 +828,6 @@ export default function App() {
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
             >Exp Hold</button>
-            <button className={`hardware-button diagnostic-button ${diagnosticCopied ? 'active blue' : ''}`} onClick={copyDiagnostics} title="Copy current settings and visible raw waveform as diagnostic JSON" aria-label="Copy diagnostic JSON">{diagnosticCopied ? 'Copied' : 'Diagnostic'}</button>
             <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
         </section>

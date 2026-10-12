@@ -25,6 +25,7 @@ export interface SimulationState {
   peakInspiratoryFlow: number
   peakExpiratoryFlowMagnitude: number
   expiratoryTriggerReady: boolean
+  flowTriggerDetectedAt: number | null
   inspiratoryHoldActive: boolean
   expiratoryHoldActive: boolean
   previousPmus: number
@@ -60,6 +61,7 @@ export function createSimulationState(): SimulationState {
     peakInspiratoryFlow: 0,
     peakExpiratoryFlowMagnitude: 0,
     expiratoryTriggerReady: true,
+    flowTriggerDetectedAt: null,
     inspiratoryHoldActive: false,
     expiratoryHoldActive: false,
     previousPmus: 0,
@@ -262,6 +264,7 @@ function adoptMode(
   state.lastMode = mode
   state.modeStartTime = t
   state.expiratoryTriggerReady = true
+  state.flowTriggerDetectedAt = null
   state.peakExpiratoryFlowMagnitude = 0
   if (mode === 'BIPAP') {
     state.bipapHigh = true
@@ -451,6 +454,7 @@ export function stepSimulation(
 
   const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
   const triggerRefractoryPeriod = 0.12
+  const flowTriggerResponseDelay = 0.15
   const expiratoryTriggerFraction = 0.25
   const spontaneousCycleIndex = Number.isFinite(spontaneousCycle) ? Math.floor((t + dt * 0.1) / spontaneousCycle) : -1
 
@@ -475,9 +479,23 @@ export function stepSimulation(
   const predictedPatientFlowLmin = predictedPatientFlowLs * 60
   const predictedAirwayPressure = ventilator.peep - Math.max(0, triggerNetDrivingPressure)
   const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
-  const triggerSignalMet = ventilator.triggerType === 'flow'
+  const rawTriggerSignalMet = ventilator.triggerType === 'flow'
     ? predictedPatientFlowLmin >= flowTriggerSensitivity
     : predictedAirwayPressure <= pressureTriggerLevel
+  const triggerDetectionEligible = !state.breathActive && !state.inspiratoryHoldActive && !state.expiratoryHoldActive
+  let triggerSignalMet = rawTriggerSignalMet
+
+  if (ventilator.triggerType === 'flow') {
+    if (!triggerDetectionEligible) {
+      state.flowTriggerDetectedAt = null
+      triggerSignalMet = false
+    } else {
+      if (rawTriggerSignalMet && state.flowTriggerDetectedAt == null) state.flowTriggerDetectedAt = t
+      triggerSignalMet = state.flowTriggerDetectedAt != null && t - state.flowTriggerDetectedAt >= flowTriggerResponseDelay
+    }
+  } else {
+    state.flowTriggerDetectedAt = null
+  }
 
   if ((state.breathActive || state.inspiratoryHoldActive) && pmus > 0.1 && state.breathsDuringEffort === 0) {
     state.breathsDuringEffort = 1
@@ -546,6 +564,7 @@ export function stepSimulation(
     state.peakInspiratoryFlow = 0
     state.peakExpiratoryFlowMagnitude = 0
     state.expiratoryTriggerReady = false
+    state.flowTriggerDetectedAt = null
 
     if (mode === 'VC-AC') state.activeBreathType = 'vc'
     else if (mode === 'PC-AC') state.activeBreathType = 'pc'
