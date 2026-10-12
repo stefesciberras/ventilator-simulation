@@ -43,7 +43,6 @@ export function generateWaveforms(
   let lastBreathEnd = -100
   let breathActive = false
   let inspiredThisBreath = 0
-  let endExpiratoryVolumeAtBreathStart = 0
   let peakInspiratoryFlow = 0
   let peakExpiratoryFlowMagnitude = 0
   let expiratoryTriggerReady = true
@@ -109,11 +108,6 @@ export function generateWaveforms(
       breathActive = true
       breathStart = t
       inspiredThisBreath = 0
-      // Capture the lung volume that remains above relaxed FRC immediately before
-      // inspiration starts. This is the dynamically trapped end-expiratory volume.
-      // It is kept separate from the tidal excursion so intrinsic PEEP contributes
-      // explicitly to the mechanics of the following breath.
-      endExpiratoryVolumeAtBreathStart = volume
       peakInspiratoryFlow = 0
       peakExpiratoryFlowMagnitude = 0
       expiratoryTriggerReady = false
@@ -175,15 +169,13 @@ export function generateWaveforms(
       } else {
         flowLs = targetFlow
 
-        // Volume control equation of motion, with dynamic hyperinflation explicit:
-        // Paw = PEEPset + (VEE/C) + (Vtidal/C) + R*flow - Pmus
-        // VEE is the trapped end-expiratory volume above relaxed FRC at breath onset.
-        // As VEE accumulates, intrinsic PEEP and the entire inspiratory pressure ramp
-        // rise even though displayed expiratory Paw still returns to set PEEP.
-        const intrinsicPeepPressure = endExpiratoryVolumeAtBreathStart / complianceL
-        const tidalElasticPressure = inspiredThisBreath / complianceL
+        // The running lung volume is the single source of truth for elastic recoil.
+        // It already contains both any trapped end-expiratory volume and the current
+        // tidal excursion. Therefore dynamic hyperinflation automatically raises the
+        // elastic component of Paw on every subsequent VC breath.
+        const elasticPressure = volume / complianceL
         const resistivePressure = patient.resistance * flowLs
-        pressure = ventilator.peep + intrinsicPeepPressure + tidalElasticPressure + resistivePressure - pmus
+        pressure = ventilator.peep + elasticPressure + resistivePressure - pmus
       }
     } else if (breathActive && ventilator.mode === 'PC-AC') {
       if (elapsed >= ventilator.inspiratoryTime) {
@@ -201,16 +193,14 @@ export function generateWaveforms(
         }
       } else {
         pressure = ventilator.peep + ventilator.pressureControl
-        const intrinsicPeepPressure = endExpiratoryVolumeAtBreathStart / complianceL
-        const tidalElasticPressure = inspiredThisBreath / complianceL
-        const availableDrivingPressure = ventilator.pressureControl - intrinsicPeepPressure - tidalElasticPressure + pmus
+        const elasticPressure = volume / complianceL
+        const availableDrivingPressure = ventilator.pressureControl - elasticPressure + pmus
         flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
       }
     } else if (breathActive && ventilator.mode === 'PSV') {
       pressure = ventilator.peep + ventilator.pressureSupport
-      const intrinsicPeepPressure = endExpiratoryVolumeAtBreathStart / complianceL
-      const tidalElasticPressure = inspiredThisBreath / complianceL
-      const availableDrivingPressure = ventilator.pressureSupport - intrinsicPeepPressure - tidalElasticPressure + pmus
+      const elasticPressure = volume / complianceL
+      const availableDrivingPressure = ventilator.pressureSupport - elasticPressure + pmus
       flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
       peakInspiratoryFlow = Math.max(peakInspiratoryFlow, flowLs)
       const terminationFraction = clamp(ventilator.terminationSensitivity, 5, 80) / 100
