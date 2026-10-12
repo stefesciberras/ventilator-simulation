@@ -20,6 +20,7 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import base64
 
           def rep(path, old, new, count=-1):
               p = Path(path)
@@ -45,109 +46,12 @@ jobs:
               "  state.expiratoryTriggerReady = true\n  state.peakExpiratoryFlowMagnitude = 0",
               "  state.expiratoryTriggerReady = true\n  state.peakExpiratoryFlowMagnitude = 0\n  if (mode === 'BIPAP') {\n    state.bipapHigh = true\n    state.bipapPhaseStart = t\n    state.breathStart = t\n  }")
 
+          encoded = 'ZnVuY3Rpb24gdHdvTGV2ZWxTYW1wbGUoCiAgc3RhdGU6IFNpbXVsYXRpb25TdGF0ZSwKICB2ZW50aWxhdG9yOiBWZW50aWxhdG9yU2V0dGluZ3MsCiAgcGF0aWVudDogUGF0aWVudFNldHRpbmdzLAogIHQ6IG51bWJlciwKICBkdDogbnVtYmVyLAogIHBtdXM6IG51bWJlciwKICBjb21wbGlhbmNlTDogbnVtYmVyLAogIG1vZGU6ICdBUFJWJyB8ICdCSVBBUCcsCik6IFNhbXBsZSB7CiAgbGV0IGhpZ2g6IGJvb2xlYW4KICBsZXQgcHJldmlvdXNIaWdoOiBib29sZWFuCiAgbGV0IHBIaWdoOiBudW1iZXIKICBsZXQgcExvdzogbnVtYmVyCiAgbGV0IGJyZWF0aFRyaWdnZXI6IFNhbXBsZVsnYnJlYXRoVHJpZ2dlciddCgogIGlmIChtb2RlID09PSAnQklQQVAnKSB7CiAgICBwcmV2aW91c0hpZ2ggPSBzdGF0ZS5iaXBhcEhpZ2gKICAgIGNvbnN0IG5vbWluYWxDeWNsZSA9IDYwIC8gTWF0aC5tYXgodmVudGlsYXRvci5yYXRlLCAxKQogICAgY29uc3Qgbm9taW5hbFRpID0gY2xhbXAodmVudGlsYXRvci5pbnNwaXJhdG9yeVRpbWUsIDAuMiwgTWF0aC5tYXgoMC4yNSwgbm9taW5hbEN5Y2xlIC0gMC4yKSkKICAgIGNvbnN0IG5vbWluYWxUZSA9IE1hdGgubWF4KDAuMiwgbm9taW5hbEN5Y2xlIC0gbm9taW5hbFRpKQogICAgY29uc3QgcGhhc2VFbGFwc2VkID0gTWF0aC5tYXgoMCwgdCAtIHN0YXRlLmJpcGFwUGhhc2VTdGFydCkKICAgIGNvbnN0IHRyaWdnZXJUaHJlc2hvbGQgPSBNYXRoLm1heCgwLjEsIHZlbnRpbGF0b3IudHJpZ2dlclNlbnNpdGl2aXR5KQogICAgY29uc3QgZWZmb3J0U3RhcnRpbmcgPSBwbXVzID49IHRyaWdnZXJUaHJlc2hvbGQgJiYgc3RhdGUucHJldmlvdXNQbXVzIDwgdHJpZ2dlclRocmVzaG9sZAogICAgY29uc3QgZWZmb3J0RW5kaW5nID0gcG11cyA8IHRyaWdnZXJUaHJlc2hvbGQgJiYgc3RhdGUucHJldmlvdXNQbXVzID49IHRyaWdnZXJUaHJlc2hvbGQKCiAgICBpZiAoc3RhdGUuYmlwYXBIaWdoKSB7CiAgICAgIGNvbnN0IHN5bmNXaW5kb3cgPSBjbGFtcChub21pbmFsVGkgKiAwLjI1LCAwLjEyLCAwLjYpCiAgICAgIGNvbnN0IHN5bmNTdGFydCA9IE1hdGgubWF4KDAuMiwgbm9taW5hbFRpIC0gc3luY1dpbmRvdykKICAgICAgY29uc3QgbWF4aW11bVRpID0gbm9taW5hbFRpICsgc3luY1dpbmRvdwogICAgICBjb25zdCBzeW5jaHJvbml6ZWRDeWNsZU9mZiA9IHBoYXNlRWxhcHNlZCA+PSBzeW5jU3RhcnQgJiYgZWZmb3J0RW5kaW5nCiAgICAgIGNvbnN0IG5vbWluYWxDeWNsZU9mZiA9IHBoYXNlRWxhcHNlZCA+PSBub21pbmFsVGkgJiYgcG11cyA8IHRyaWdnZXJUaHJlc2hvbGQKICAgICAgY29uc3QgZm9yY2VkQ3ljbGVPZmYgPSBwaGFzZUVsYXBzZWQgPj0gbWF4aW11bVRpCiAgICAgIGlmIChzeW5jaHJvbml6ZWRDeWNsZU9mZiB8fCBub21pbmFsQ3ljbGVPZmYgfHwgZm9yY2VkQ3ljbGVPZmYpIHsKICAgICAgICBzdGF0ZS5iaXBhcEhpZ2ggPSBmYWxzZQogICAgICAgIHN0YXRlLmJpcGFwUGhhc2VTdGFydCA9IHQKICAgICAgfQogICAgfSBlbHNlIHsKICAgICAgY29uc3Qgc3luY1dpbmRvdyA9IGNsYW1wKG5vbWluYWxUZSAqIDAuMjUsIDAuMTIsIDAuOCkKICAgICAgY29uc3Qgc3luY1N0YXJ0ID0gTWF0aC5tYXgoMC4yLCBub21pbmFsVGUgLSBzeW5jV2luZG93KQogICAgICBjb25zdCBzeW5jaHJvbml6ZWRDeWNsZU9uID0gcGhhc2VFbGFwc2VkID49IHN5bmNTdGFydCAmJiBlZmZvcnRTdGFydGluZwogICAgICBjb25zdCBtYW5kYXRvcnlDeWNsZU9uID0gcGhhc2VFbGFwc2VkID49IG5vbWluYWxUZQogICAgICBpZiAoc3luY2hyb25pemVkQ3ljbGVPbiB8fCBtYW5kYXRvcnlDeWNsZU9uKSB7CiAgICAgICAgc3RhdGUuYmlwYXBIaWdoID0gdHJ1ZQogICAgICAgIHN0YXRlLmJpcGFwUGhhc2VTdGFydCA9IHQKICAgICAgICBzdGF0ZS5icmVhdGhTdGFydCA9IHQKICAgICAgICBicmVhdGhUcmlnZ2VyID0gc3luY2hyb25pemVkQ3ljbGVPbiA/ICdwYXRpZW50JyA6ICdtYW5kYXRvcnknCiAgICAgIH0KICAgIH0KCiAgICBoaWdoID0gc3RhdGUuYmlwYXBIaWdoCiAgICBwTG93ID0gdmVudGlsYXRvci5wZWVwCiAgICBwSGlnaCA9IHZlbnRpbGF0b3IucGVlcCArIE1hdGgubWF4KHZlbnRpbGF0b3IucHJlc3N1cmVDb250cm9sLCAxKQogIH0gZWxzZSB7CiAgICBjb25zdCB0SGlnaCA9IE1hdGgubWF4KHZlbnRpbGF0b3IudEhpZ2gsIDAuMSkKICAgIGNvbnN0IHRMb3cgPSBNYXRoLm1heCh2ZW50aWxhdG9yLnRMb3csIDAuMDUpCiAgICBjb25zdCBjeWNsZSA9IHRIaWdoICsgdExvdwogICAgY29uc3QgZWxhcHNlZCA9IHQgLSBzdGF0ZS5tb2RlU3RhcnRUaW1lCiAgICBjb25zdCBwaGFzZSA9ICgoZWxhcHNlZCAlIGN5Y2xlKSArIGN5Y2xlKSAlIGN5Y2xlCiAgICBjb25zdCBwcmV2aW91c1BoYXNlID0gKCgoKGVsYXBzZWQgLSBkdCkgJSBjeWNsZSkgKyBjeWNsZSkgJSBjeWNsZSkKICAgIGhpZ2ggPSBwaGFzZSA8IHRIaWdoCiAgICBwcmV2aW91c0hpZ2ggPSBwcmV2aW91c1BoYXNlIDwgdEhpZ2gKICAgIHBIaWdoID0gTWF0aC5tYXgodmVudGlsYXRvci5wSGlnaCwgdmVudGlsYXRvci5wTG93ICsgMSkKICAgIHBMb3cgPSBNYXRoLm1pbih2ZW50aWxhdG9yLnBMb3csIHBIaWdoIC0gMSkKICAgIGlmIChoaWdoICYmICFwcmV2aW91c0hpZ2gpIHsKICAgICAgc3RhdGUuYnJlYXRoU3RhcnQgPSB0CiAgICAgIGJyZWF0aFRyaWdnZXIgPSAnbWFuZGF0b3J5JwogICAgfQogIH0KCiAgY29uc3QgdGFyZ2V0UHJlc3N1cmUgPSBoaWdoID8gcEhpZ2ggOiBwTG93CiAgY29uc3Qgc3BvbnRhbmVvdXNQcmVzc3VyZURlZmxlY3Rpb24gPSBtb2RlID09PSAnQklQQVAnCiAgICA/IGNsYW1wKHBtdXMgKiAwLjM1LCAwLCA2KQogICAgOiBoaWdoID8gY2xhbXAocG11cyAqIDAuMzUsIDAsIDYpIDogMAogIGNvbnN0IGRpc3RlbmRpbmdQcmVzc3VyZSA9IGhpZ2ggPyBwSGlnaCAtIHBMb3cgOiAwCiAgY29uc3QgZWxhc3RpY1ByZXNzdXJlID0gc3RhdGUudm9sdW1lIC8gY29tcGxpYW5jZUwKICBjb25zdCBkcml2aW5nUHJlc3N1cmUgPSBkaXN0ZW5kaW5nUHJlc3N1cmUgLSBlbGFzdGljUHJlc3N1cmUgKyBwbXVzCiAgY29uc3QgcmVzaXN0YW5jZSA9IGRyaXZpbmdQcmVzc3N1cmUgPj0gMCA/IE1hdGgubWF4KHBhdGllbnQucmVzaXN0YW5jZSwgMC41KSA6IE1hdGgubWF4KHBhdGllbnQuZXhwaXJhdG9yeVJlc2lzdGFuY2UsIDAuNSkKICBjb25zdCBmbG93THMgPSBkcml2aW5nUHJlc3N1cmUgLyByZXNpc3RhbmNlCgogIHN0YXRlLnZvbHVtZSA9IGNsYW1wKHN0YXRlLnZvbHVtZSArIGZsb3dMcyAqIGR0LCAwLCAyLjUpCgogIGNvbnN0IHNhbXBsZTogU2FtcGxlID0gewogICAgdGltZTogTnVtYmVyKHQudG9GaXhlZCg0KSksCiAgICBwcmVzc3VyZTogY2xhbXAodGFyZ2V0UHJlc3N1cmUgLSBzcG9udGFuZW91c1ByZXNzdXJlRGVmbGVjdGlvbiwgLTUsIDgwKSwKICAgIGZsb3c6IGZsb3dMcyAqIDYwLAogICAgdm9sdW1lOiBzdGF0ZS52b2x1bWUgKiAxMDAwLAogICAgbXVzY2xlUHJlc3N1cmU6IHBtdXMsCiAgICBwaGFzZTogaGlnaCA/ICdpbnNwaXJhdGlvbicgOiAnZXhwaXJhdGlvbicsCiAgICBtb2RlLAogICAgYnJlYXRoVHJpZ2dlciwKICAgIGV4cGlyYXRvcnlIb2xkOiBmYWxzZSwKICAgIHNpbXZTeW5jV2luZG93OiBmYWxzZSwKICB9CgogIHN0YXRlLnByZXZpb3VzUG11cyA9IHBtdXMKICByZXR1cm4gc2FtcGxlCn0K'
+          new_fn = base64.b64decode(encoded).decode()
           p = Path('src/simulation/engine.ts')
           s = p.read_text()
           start = s.index('function twoLevelSample(\n')
           end = s.index('\nexport function stepSimulation(\n', start)
-          new_fn = r'''function twoLevelSample(
-  state: SimulationState,
-  ventilator: VentilatorSettings,
-  patient: PatientSettings,
-  t: number,
-  dt: number,
-  pmus: number,
-  complianceL: number,
-  mode: 'APRV' | 'BIPAP',
-): Sample {
-  let high: boolean
-  let previousHigh: boolean
-  let pHigh: number
-  let pLow: number
-  let breathTrigger: Sample['breathTrigger']
-
-  if (mode === 'BIPAP') {
-    previousHigh = state.bipapHigh
-    const nominalCycle = 60 / Math.max(ventilator.rate, 1)
-    const nominalTi = clamp(ventilator.inspiratoryTime, 0.2, Math.max(0.25, nominalCycle - 0.2))
-    const nominalTe = Math.max(0.2, nominalCycle - nominalTi)
-    const phaseElapsed = Math.max(0, t - state.bipapPhaseStart)
-    const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
-    const effortStarting = pmus >= triggerThreshold && state.previousPmus < triggerThreshold
-    const effortEnding = pmus < triggerThreshold && state.previousPmus >= triggerThreshold
-
-    if (state.bipapHigh) {
-      const syncWindow = clamp(nominalTi * 0.25, 0.12, 0.6)
-      const syncStart = Math.max(0.2, nominalTi - syncWindow)
-      const maximumTi = nominalTi + syncWindow
-      const synchronizedCycleOff = phaseElapsed >= syncStart && effortEnding
-      const nominalCycleOff = phaseElapsed >= nominalTi && pmus < triggerThreshold
-      const forcedCycleOff = phaseElapsed >= maximumTi
-      if (synchronizedCycleOff || nominalCycleOff || forcedCycleOff) {
-        state.bipapHigh = false
-        state.bipapPhaseStart = t
-      }
-    } else {
-      const syncWindow = clamp(nominalTe * 0.25, 0.12, 0.8)
-      const syncStart = Math.max(0.2, nominalTe - syncWindow)
-      const synchronizedCycleOn = phaseElapsed >= syncStart && effortStarting
-      const mandatoryCycleOn = phaseElapsed >= nominalTe
-      if (synchronizedCycleOn || mandatoryCycleOn) {
-        state.bipapHigh = true
-        state.bipapPhaseStart = t
-        state.breathStart = t
-        breathTrigger = synchronizedCycleOn ? 'patient' : 'mandatory'
-      }
-    }
-
-    high = state.bipapHigh
-    pLow = ventilator.peep
-    pHigh = ventilator.peep + Math.max(ventilator.pressureControl, 1)
-  } else {
-    const tHigh = Math.max(ventilator.tHigh, 0.1)
-    const tLow = Math.max(ventilator.tLow, 0.05)
-    const cycle = tHigh + tLow
-    const elapsed = t - state.modeStartTime
-    const phase = ((elapsed % cycle) + cycle) % cycle
-    const previousPhase = ((((elapsed - dt) % cycle) + cycle) % cycle)
-    high = phase < tHigh
-    previousHigh = previousPhase < tHigh
-    pHigh = Math.max(ventilator.pHigh, ventilator.pLow + 1)
-    pLow = Math.min(ventilator.pLow, pHigh - 1)
-    if (high && !previousHigh) {
-      state.breathStart = t
-      breathTrigger = 'mandatory'
-    }
-  }
-
-  const targetPressure = high ? pHigh : pLow
-  const spontaneousPressureDeflection = mode === 'BIPAP'
-    ? clamp(pmus * 0.35, 0, 6)
-    : high ? clamp(pmus * 0.35, 0, 6) : 0
-  const distendingPressure = high ? pHigh - pLow : 0
-  const elasticPressure = state.volume / complianceL
-  const drivingPressure = distendingPressure - elasticPressure + pmus
-  const resistance = drivingPressure >= 0 ? Math.max(patient.resistance, 0.5) : Math.max(patient.expiratoryResistance, 0.5)
-  const flowLs = drivingPressure / resistance
-
-  state.volume = clamp(state.volume + flowLs * dt, 0, 2.5)
-
-  const sample: Sample = {
-    time: Number(t.toFixed(4)),
-    pressure: clamp(targetPressure - spontaneousPressureDeflection, -5, 80),
-    flow: flowLs * 60,
-    volume: state.volume * 1000,
-    musclePressure: pmus,
-    phase: high ? 'inspiration' : 'expiration',
-    mode,
-    breathTrigger,
-    expiratoryHold: false,
-    simvSyncWindow: false,
-  }
-
-  state.previousPmus = pmus
-  return sample
-}
-'''
           p.write_text(s[:start] + new_fn + s[end:])
 
           rep('src/App.tsx', '<span className="version">v0.24</span>', '<span className="version">v0.25</span>')
