@@ -36,6 +36,7 @@ export function generateWaveforms(
   const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
   const triggerRefractoryPeriod = 0.12
   const postCycleReleaseGuard = 0.06
+  const expiratoryTriggerFraction = 0.25
   let volume = 0
   let breathStart = -100
   let lastAssistedBreath = -100
@@ -43,6 +44,8 @@ export function generateWaveforms(
   let breathActive = false
   let inspiredThisBreath = 0
   let peakInspiratoryFlow = 0
+  let peakExpiratoryFlowMagnitude = 0
+  let expiratoryTriggerReady = true
   let inspiratoryHoldActive = false
   let inspiratoryHoldUsed = false
   let expiratoryHoldActive = false
@@ -64,6 +67,9 @@ export function generateWaveforms(
     const mandatoryCycle = 60 / Math.max(ventilator.rate, 1)
     const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
 
+    // Patient effort is allowed to occur during a ventilator inspiration. It does
+    // not start another breath until the current breath has cycled, but recording
+    // the effort here permits later double-triggering if neural inspiration persists.
     if ((breathActive || inspiratoryHoldActive) && pmus >= triggerThreshold && breathsDuringEffort === 0) {
       breathsDuringEffort = 1
     }
@@ -74,16 +80,24 @@ export function generateWaveforms(
       breathsDuringEffort > 0 &&
       breathsDuringEffort < 2 &&
       t - lastBreathEnd >= triggerRefractoryPeriod
-    const patientTrigger = thresholdCrossing || persistentEffortRetrigger
-    const mandatoryDue = ventilator.mode !== 'PSV' && t - lastAssistedBreath >= mandatoryCycle - dt / 2
+
+    const mandatoryMode = ventilator.mode !== 'PSV'
+    const patientTriggerAllowed = !mandatoryMode || expiratoryTriggerReady
+    const ongoingEffortAfterGate = mandatoryMode && expiratoryTriggerReady && pmus >= triggerThreshold
+    const patientTrigger =
+      !breathActive &&
+      !inspiratoryHoldActive &&
+      !expiratoryHoldActive &&
+      patientTriggerAllowed &&
+      (thresholdCrossing || persistentEffortRetrigger || ongoingEffortAfterGate)
+
+    const mandatoryDue = mandatoryMode && t - lastAssistedBreath >= mandatoryCycle - dt / 2
     const breathDue = mandatoryDue || patientTrigger
     const expiratoryHoldRequested =
       !expiratoryHoldUsed &&
       isRequestHeld(t, options.expiratoryHoldRequestTime, options.expiratoryHoldReleaseTime)
     let breathTrigger: Sample['breathTrigger']
 
-    // Expiratory hold is armed while the button is physically held. It starts at
-    // the end of expiration, exactly when the next breath would otherwise begin.
     if (
       !breathActive &&
       !inspiratoryHoldActive &&
@@ -98,6 +112,8 @@ export function generateWaveforms(
       breathStart = t
       inspiredThisBreath = 0
       peakInspiratoryFlow = 0
+      peakExpiratoryFlowMagnitude = 0
+      expiratoryTriggerReady = false
 
       if (patientTrigger) {
         breathTrigger = 'patient'
@@ -107,7 +123,7 @@ export function generateWaveforms(
         if (pmus > 0) breathsDuringEffort = Math.max(breathsDuringEffort, 1)
       }
 
-      if (ventilator.mode !== 'PSV') lastAssistedBreath = t
+      if (mandatoryMode) lastAssistedBreath = t
     }
 
     const elapsed = t - breathStart
@@ -122,9 +138,6 @@ export function generateWaveforms(
       inspiration = false
       if (isRequestHeld(t, options.expiratoryHoldRequestTime, options.expiratoryHoldReleaseTime)) {
         flowLs = 0
-        // With zero flow, resistive pressure disappears and Paw equilibrates with
-        // alveolar pressure. Residual lung volume above FRC therefore reveals
-        // total PEEP = set PEEP + intrinsic PEEP.
         pressure = ventilator.peep + volume / complianceL
       } else {
         expiratoryHoldActive = false
@@ -158,10 +171,6 @@ export function generateWaveforms(
         }
       } else {
         flowLs = targetFlow
-        // VC must generate whatever airway pressure is required to overcome both
-        // the existing elastic recoil (including trapped volume / auto-PEEP) and
-        // the resistive pressure at the set flow. As hyperinflation accumulates,
-        // peak and mean airway pressure therefore rise.
         const elasticPressure = volume / complianceL
         pressure = ventilator.peep + elasticPressure + patient.resistance * flowLs - pmus
       }
@@ -181,10 +190,6 @@ export function generateWaveforms(
         }
       } else {
         pressure = ventilator.peep + ventilator.pressureControl
-        // In pressure control the available driving pressure is reduced by the
-        // elastic recoil already present at the start of the breath. Increasing
-        // trapped volume / intrinsic PEEP therefore decreases inspiratory flow and
-        // the delivered tidal-volume excursion over successive breaths.
         const elasticPressure = volume / complianceL
         flowLs = (ventilator.pressureControl - elasticPressure + pmus) / Math.max(patient.resistance, 0.5)
         flowLs = Math.max(0, flowLs)
@@ -208,11 +213,30 @@ export function generateWaveforms(
 
     if (!inspiration && !expiratoryHoldActive) {
       const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
-      // Passive single-compartment expiration. Volume is deliberately NOT reset:
-      // inadequate expiratory time leaves trapped volume, so alveolar pressure at
-      // end expiration is set PEEP + Vtrapped/C. This is the source of auto-PEEP.
       const passiveExpiratoryFlow = volume > 0 ? -volume / tau : 0
-      const exposePatientEffort = pmus > 0 && t >= suppressEffortUntil
+      const passiveExpiratoryMagnitude = Math.max(0, -passiveExpiratoryFlow)
+
+      // In mandatory ventilation, patient triggering is inhibited during the high-
+      // flow early expiratory period. Once passive expiratory flow has decayed to
+      // <=25% of that expiration's peak magnitude, the trigger window opens and
+      // remains open until the next breath. This prevents implausible immediate
+      // re-triggering just after a mandatory inspiration while retaining late-
+      // expiratory assisted breaths and prolonged-effort double triggering.
+      if (mandatoryMode) {
+        peakExpiratoryFlowMagnitude = Math.max(peakExpiratoryFlowMagnitude, passiveExpiratoryMagnitude)
+        if (
+          peakExpiratoryFlowMagnitude > 0.005 &&
+          passiveExpiratoryMagnitude <= peakExpiratoryFlowMagnitude * expiratoryTriggerFraction
+        ) {
+          expiratoryTriggerReady = true
+        }
+        if (volume <= 0.0001) expiratoryTriggerReady = true
+      }
+
+      const exposePatientEffort =
+        pmus > 0 &&
+        t >= suppressEffortUntil &&
+        (!mandatoryMode || expiratoryTriggerReady)
 
       if (exposePatientEffort) {
         const effortFlow = pmus / Math.max(patient.resistance, 0.5)
@@ -279,9 +303,6 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
     }
     if (inBreath) maxVolume = Math.max(maxVolume, sample.volume)
     if (sample.phase === 'expiration' && inBreath) {
-      // Tidal volume is the inspiratory excursion above that breath's own
-      // end-expiratory lung volume, not the absolute lung volume. This is crucial
-      // when dynamic hyperinflation is present.
       completedBreaths.push({
         endTime: sample.time,
         tidalVolume: Math.max(0, maxVolume - breathStartVolume),
