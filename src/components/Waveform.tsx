@@ -166,7 +166,14 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
       {frozen && selectedSample && (
         <div className="trace-readout">
           {showTime && <div className="trace-time">t {(selectedSample.time - screenStartTime).toFixed(2)} s</div>}
-          <div><strong>{selectedSample[signal].toFixed(valuePrecision)}</strong><span>{unit}</span></div>
+          {signal === 'oesophagealPressure' ? (
+            <div className="pes-ptp-readout">
+              <div><span>Pes</span><strong>{selectedSample.oesophagealPressure.toFixed(1)}</strong><small>cmH₂O</small></div>
+              <div><span>Ptp</span><strong>{(selectedSample.pressure - selectedSample.oesophagealPressure).toFixed(1)}</strong><small>cmH₂O</small></div>
+            </div>
+          ) : (
+            <div><strong>{selectedSample[signal].toFixed(valuePrecision)}</strong><span>{unit}</span></div>
+          )}
         </div>
       )}
       <canvas ref={canvasRef} className="waveform-canvas" />

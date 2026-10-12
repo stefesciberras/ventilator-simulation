@@ -7,6 +7,7 @@ export interface PatientSettings {
   spontaneousRate: number
   effort: number
   neuralInspiratoryTime: number
+  endExpiratoryOesophagealPressure: number
 }
 
 export interface VentilatorSettings {
