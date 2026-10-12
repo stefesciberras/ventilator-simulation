@@ -20,6 +20,12 @@ interface AlarmLimits {
   peakPressure: number
 }
 
+interface EventMeasurements {
+  peakPressure: number
+  tidalVolume: number
+  respiratoryRate: number
+}
+
 const initialAlarmLimits: AlarmLimits = { apneaTime: 30, peakPressure: 40 }
 const VENTILATOR_STORAGE_KEY = 'eduvent.ventilator-settings'
 const PATIENT_STORAGE_KEY = 'eduvent.patient-settings'
@@ -109,6 +115,86 @@ function getLatestBreathStart(samples: Sample[]): number | null {
   return null
 }
 
+function calculateEventMeasurements(samples: Sample[], apneaTime: number, latestTime: number): EventMeasurements {
+  if (samples.length < 2) return { peakPressure: 0, tidalVolume: 0, respiratoryRate: 0 }
+
+  const inspirationEnds: number[] = []
+  const completedPeaks: Array<{ time: number; peak: number }> = []
+  const completedExpirations: Array<{ time: number; volume: number }> = []
+  let inspirationPeak = samples[0].pressure
+  let expirationActive = false
+  let expirationVolumeLitres = 0
+  let expirationStartTime = 0
+  let sawExpiratoryFlow = false
+
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    const dt = Math.max(0, current.time - previous.time)
+
+    if (current.phase === 'inspiration') {
+      inspirationPeak = previous.phase === 'expiration'
+        ? current.pressure
+        : Math.max(inspirationPeak, current.pressure)
+    }
+
+    if (previous.phase === 'inspiration' && current.phase === 'expiration') {
+      inspirationEnds.push(current.time)
+      completedPeaks.push({ time: current.time, peak: Math.max(inspirationPeak, previous.pressure) })
+      inspirationPeak = current.pressure
+      expirationActive = true
+      expirationVolumeLitres = 0
+      expirationStartTime = current.time
+      sawExpiratoryFlow = false
+    }
+
+    if (expirationActive && current.phase === 'expiration') {
+      const expiredFlow = Math.max(0, -current.flow) / 60
+      if (expiredFlow > 0.0005) sawExpiratoryFlow = true
+      expirationVolumeLitres += expiredFlow * dt
+
+      const elapsedExpiration = current.time - expirationStartTime
+      const flowSettled = sawExpiratoryFlow && elapsedExpiration > 0.15 && Math.abs(current.flow) <= 0.5
+      if (flowSettled) {
+        completedExpirations.push({ time: current.time, volume: expirationVolumeLitres * 1000 })
+        expirationActive = false
+      }
+    }
+
+    if (expirationActive && previous.phase === 'expiration' && current.phase === 'inspiration') {
+      completedExpirations.push({ time: current.time, volume: expirationVolumeLitres * 1000 })
+      expirationActive = false
+    }
+  }
+
+  const firstTime = samples[0].time
+  const rateWindowStart = Math.max(firstTime, latestTime - 60)
+  const completedInspirationsInWindow = inspirationEnds.filter((time) => time >= rateWindowStart && time <= latestTime).length
+  const observedRateDuration = Math.max(1, latestTime - rateWindowStart)
+  const respiratoryRate = completedInspirationsInWindow * (60 / observedRateDuration)
+
+  const latestExpiredVolume = completedExpirations[completedExpirations.length - 1]?.volume ?? 0
+  const latestCompletedPeak = completedPeaks[completedPeaks.length - 1]?.peak ?? 0
+  const latestBreathStart = getLatestBreathStart(samples)
+  const apneaActive = latestBreathStart == null
+    ? latestTime - firstTime >= apneaTime
+    : latestTime - latestBreathStart >= apneaTime
+
+  let peakPressure = latestCompletedPeak
+  if (apneaActive) {
+    const pressureWindow = samples.filter((sample) => sample.time >= latestTime - apneaTime)
+    peakPressure = pressureWindow.length
+      ? Math.max(...pressureWindow.map((sample) => sample.pressure))
+      : samples[samples.length - 1].pressure
+  }
+
+  return {
+    peakPressure,
+    tidalVolume: latestExpiredVolume,
+    respiratoryRate,
+  }
+}
+
 function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
   const starts: number[] = []
   for (let index = 0; index < samples.length; index += 1) {
@@ -133,7 +219,13 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 export default function App() {
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient))
-  const [alarmLimits, setAlarmLimits] = useState<AlarmLimits>(() => loadStoredSettings(ALARM_STORAGE_KEY, initialAlarmLimits))
+  const [alarmLimits, setAlarmLimits] = useState<AlarmLimits>(() => {
+    const stored = loadStoredSettings(ALARM_STORAGE_KEY, initialAlarmLimits)
+    return {
+      apneaTime: Math.max(15, Math.min(120, stored.apneaTime)),
+      peakPressure: Math.max(0, Math.min(60, stored.peakPressure)),
+    }
+  })
   const [alarmDialogOpen, setAlarmDialogOpen] = useState(false)
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [nebuliser, setNebuliser] = useState(false)
@@ -215,6 +307,10 @@ export default function App() {
   const latestSample = movingSamples[movingSamples.length - 1]
   const activeMode = latestSample?.mode ?? ventilator.mode
   const currentSimulationTime = latestSample?.time ?? simulationTimeRef.current
+  const eventMeasures = useMemo(
+    () => calculateEventMeasurements(measurementSamples, alarmLimits.apneaTime, currentSimulationTime),
+    [measurementSamples, alarmLimits.apneaTime, currentSimulationTime],
+  )
   const inspiratoryHoldPressed = inspiratoryHoldRequestTime != null && inspiratoryHoldReleaseTime == null
   const expiratoryHoldPressed = expiratoryHoldRequestTime != null && expiratoryHoldReleaseTime == null
   const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
@@ -376,7 +472,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.21</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.22</span></div>
       </header>
 
       <div className="workspace">
@@ -419,14 +515,42 @@ export default function App() {
               <div className="alarm-dialog-backdrop" onClick={() => setAlarmDialogOpen(false)}>
                 <section className="alarm-dialog" role="dialog" aria-modal="true" aria-label="Alarm limits" onClick={(event) => event.stopPropagation()}>
                   <div className="alarm-dialog-title"><strong>Alarm limits</strong><button type="button" onClick={() => setAlarmDialogOpen(false)}>×</button></div>
-                  <label>
-                    <span>Apnoea time</span>
-                    <div><input type="number" min="5" max="120" step="1" value={alarmLimits.apneaTime} onChange={(event) => setAlarmLimits((current) => ({ ...current, apneaTime: Math.max(5, Math.min(120, Number(event.target.value) || 5)) }))} /><small>s</small></div>
-                  </label>
-                  <label>
-                    <span>Peak pressure</span>
-                    <div><input type="number" min="10" max="80" step="1" value={alarmLimits.peakPressure} onChange={(event) => setAlarmLimits((current) => ({ ...current, peakPressure: Math.max(10, Math.min(80, Number(event.target.value) || 10)) }))} /><small>cmH₂O</small></div>
-                  </label>
+                  <div className="alarm-slider-grid">
+                    <label className="alarm-slider-card">
+                      <span>Peak pressure</span>
+                      <strong>{alarmLimits.peakPressure} <small>cmH₂O</small></strong>
+                      <div className="vertical-slider-wrap">
+                        <em>60</em>
+                        <input
+                          className="vertical-alarm-slider"
+                          type="range"
+                          min="0"
+                          max="60"
+                          step="1"
+                          value={alarmLimits.peakPressure}
+                          onChange={(event) => setAlarmLimits((current) => ({ ...current, peakPressure: Number(event.target.value) }))}
+                        />
+                        <em>0</em>
+                      </div>
+                    </label>
+                    <label className="alarm-slider-card">
+                      <span>Apnoea time</span>
+                      <strong>{alarmLimits.apneaTime} <small>s</small></strong>
+                      <div className="vertical-slider-wrap">
+                        <em>120</em>
+                        <input
+                          className="vertical-alarm-slider"
+                          type="range"
+                          min="15"
+                          max="120"
+                          step="5"
+                          value={alarmLimits.apneaTime}
+                          onChange={(event) => setAlarmLimits((current) => ({ ...current, apneaTime: Number(event.target.value) }))}
+                        />
+                        <em>15</em>
+                      </div>
+                    </label>
+                  </div>
                   <button className="alarm-dialog-done" type="button" onClick={() => setAlarmDialogOpen(false)}>Done</button>
                 </section>
               </div>
@@ -440,9 +564,13 @@ export default function App() {
 
             <aside className="metrics-panel" aria-label="Measured values">
               <div className="metrics-title">Measured</div>
-              <Metric label="Ppeak" value={measures.peakPressure.toFixed(0)} unit="cmH₂O" />
-              <Metric label="VTe" value={measures.tidalVolume.toFixed(0)} unit="mL" />
-              <Metric label="RR" value={measures.respiratoryRate.toFixed(0)} unit="/min" />
+              <div className="metrics-actions">
+                <button className="metrics-alarm-limits" type="button" onClick={() => setAlarmDialogOpen(true)} title="Set alarm limits">Alarm limits</button>
+                <button className={`metrics-alarm-silence ${alarmSilenced ? 'active' : ''}`} type="button" onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
+              </div>
+              <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
+              <Metric label="VTe" value={eventMeasures.tidalVolume.toFixed(0)} unit="mL" />
+              <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
@@ -474,8 +602,6 @@ export default function App() {
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
             >Expiratory hold</button>
-            <button className="hardware-button" onClick={() => setAlarmDialogOpen(true)} title="Set alarm limits">Alarm limits</button>
-            <button className={`hardware-button icon-button alarm-button ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
         </section>
 
