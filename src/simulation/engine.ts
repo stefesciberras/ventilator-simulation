@@ -149,7 +149,9 @@ export function stepSimulation(
     inspiration = false
     if (expiratoryHoldRequested) {
       flowLs = 0
-      pressure = ventilator.peep + state.volume / complianceL
+      // During a true expiratory occlusion an active inspiratory effort is still
+      // transmitted to airway pressure, just as it is during an inspiratory hold.
+      pressure = ventilator.peep + state.volume / complianceL - pmus
     } else {
       state.expiratoryHoldActive = false
     }
@@ -166,8 +168,14 @@ export function stepSimulation(
       state.suppressEffortUntil = t + postCycleReleaseGuard
     }
   } else if (state.breathActive && ventilator.mode === 'VC-AC') {
+    const plateauFraction = clamp(ventilator.plateauPercent ?? 0, 0, 20) / 100
+    const flowTime = Math.max(ventilator.inspiratoryTime * (1 - plateauFraction), 0.05)
     const targetFlow = Math.max(ventilator.inspiratoryFlow, 1) / 60
-    if (elapsed >= ventilator.inspiratoryTime || state.inspiredThisBreath >= ventilator.tidalVolume / 1000) {
+    const targetVolume = ventilator.tidalVolume / 1000
+    const flowPhaseComplete = elapsed >= flowTime || state.inspiredThisBreath >= targetVolume
+    const totalInspirationComplete = elapsed >= ventilator.inspiratoryTime
+
+    if (totalInspirationComplete) {
       if (inspiratoryHoldRequested) {
         state.inspiratoryHoldActive = true
         inspiration = true
@@ -179,6 +187,11 @@ export function stepSimulation(
         state.lastBreathEnd = t
         state.suppressEffortUntil = t + postCycleReleaseGuard
       }
+    } else if (flowPhaseComplete) {
+      // Automatic end-inspiratory plateau. Total Ti (and therefore I:E) is unchanged;
+      // only the flow-delivery portion of inspiration is shortened.
+      flowLs = 0
+      pressure = ventilator.peep + state.volume / complianceL - pmus
     } else {
       flowLs = targetFlow
       const elasticPressure = state.volume / complianceL
