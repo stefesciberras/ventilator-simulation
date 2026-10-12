@@ -15,8 +15,15 @@ const initialPatient: PatientSettings = {
   compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1,
 }
 
+interface AlarmLimits {
+  apneaTime: number
+  peakPressure: number
+}
+
+const initialAlarmLimits: AlarmLimits = { apneaTime: 30, peakPressure: 40 }
 const VENTILATOR_STORAGE_KEY = 'eduvent.ventilator-settings'
 const PATIENT_STORAGE_KEY = 'eduvent.patient-settings'
+const ALARM_STORAGE_KEY = 'eduvent.alarm-limits'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
@@ -66,9 +73,68 @@ function AlarmSilenceIcon() {
   )
 }
 
+function calculateMeasuredIERatio(samples: Sample[]): number | null {
+  if (samples.length < 3) return null
+  const cycles: Array<{ ti: number; te: number }> = []
+  let inspirationStart: number | null = null
+  let inspirationEnd: number | null = null
+
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    if (previous.phase === 'expiration' && current.phase === 'inspiration') {
+      if (inspirationStart != null && inspirationEnd != null) {
+        const ti = inspirationEnd - inspirationStart
+        const te = current.time - inspirationEnd
+        if (ti > 0.05 && te >= 0) cycles.push({ ti, te })
+      }
+      inspirationStart = current.time
+      inspirationEnd = null
+    } else if (previous.phase === 'inspiration' && current.phase === 'expiration' && inspirationStart != null) {
+      inspirationEnd = current.time
+    }
+  }
+
+  const recent = cycles.slice(-4)
+  if (!recent.length) return null
+  const totalTi = recent.reduce((sum, cycle) => sum + cycle.ti, 0)
+  const totalTe = recent.reduce((sum, cycle) => sum + cycle.te, 0)
+  return totalTi > 0 ? totalTe / totalTi : null
+}
+
+function getLatestBreathStart(samples: Sample[]): number | null {
+  for (let index = samples.length - 1; index >= 0; index -= 1) {
+    if (samples[index].breathTrigger) return samples[index].time
+  }
+  return null
+}
+
+function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
+  const starts: number[] = []
+  for (let index = 0; index < samples.length; index += 1) {
+    if (samples[index].breathTrigger) starts.push(index)
+  }
+  if (!starts.length) return false
+
+  const latestStart = starts[starts.length - 1]
+  const previousStart = starts.length > 1 ? starts[starts.length - 2] : -1
+  const latestPeak = Math.max(...samples.slice(latestStart).map((sample) => sample.pressure))
+  const latestCompleted = samples.slice(latestStart + 1).some((sample) => sample.phase === 'expiration')
+
+  if (latestCompleted) return latestPeak > limit
+  if (latestPeak > limit) return true
+  if (previousStart >= 0) {
+    const previousPeak = Math.max(...samples.slice(previousStart, latestStart).map((sample) => sample.pressure))
+    return previousPeak > limit
+  }
+  return false
+}
+
 export default function App() {
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient))
+  const [alarmLimits, setAlarmLimits] = useState<AlarmLimits>(() => loadStoredSettings(ALARM_STORAGE_KEY, initialAlarmLimits))
+  const [alarmDialogOpen, setAlarmDialogOpen] = useState(false)
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [nebuliser, setNebuliser] = useState(false)
   const [alarmSilenced, setAlarmSilenced] = useState(false)
@@ -79,9 +145,12 @@ export default function App() {
   const [inspiratoryHoldReleaseTime, setInspiratoryHoldReleaseTime] = useState<number | null>(null)
   const [expiratoryHoldRequestTime, setExpiratoryHoldRequestTime] = useState<number | null>(null)
   const [expiratoryHoldReleaseTime, setExpiratoryHoldReleaseTime] = useState<number | null>(null)
+  const [alarmOnsets, setAlarmOnsets] = useState<{ apnea: number | null; pressure: number | null }>({ apnea: null, pressure: null })
 
   const simulationStateRef = useRef(createSimulationState())
   const simulationTimeRef = useRef(0)
+  const alarmSilenceTimeoutRef = useRef<number | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
   const [timeline, setTimeline] = useState<Sample[]>(() => {
     const initialSamples = advanceSimulation(
       simulationStateRef.current,
@@ -102,6 +171,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(PATIENT_STORAGE_KEY, JSON.stringify(patient))
   }, [patient])
+
+  useEffect(() => {
+    window.localStorage.setItem(ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
+  }, [alarmLimits])
 
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
   const holdOptions = useMemo(() => ({
@@ -137,6 +210,7 @@ export default function App() {
   const samples = frozen && frozenSamples ? frozenSamples : movingSamples
   const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
+  const measuredIERatio = useMemo(() => calculateMeasuredIERatio(measurementSamples), [measurementSamples])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
   const latestSample = movingSamples[movingSamples.length - 1]
   const activeMode = latestSample?.mode ?? ventilator.mode
@@ -148,6 +222,71 @@ export default function App() {
   const volumeMandatoryMode = activeMode === 'VC-AC' || activeMode === 'SIMV-VC'
   const simvMode = activeMode === 'SIMV-VC' || activeMode === 'SIMV-PC'
   const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV'
+
+  const latestBreathStart = useMemo(() => getLatestBreathStart(timeline), [timeline])
+  const apneaAlarmActive = latestBreathStart == null
+    ? currentSimulationTime >= alarmLimits.apneaTime
+    : currentSimulationTime - latestBreathStart >= alarmLimits.apneaTime
+  const pressureAlarmActive = useMemo(
+    () => isHighPressureAlarmActive(timeline, alarmLimits.peakPressure),
+    [timeline, alarmLimits.peakPressure],
+  )
+
+  useEffect(() => {
+    setAlarmOnsets((current) => {
+      let changed = false
+      const next = { ...current }
+      if (apneaAlarmActive && next.apnea == null) { next.apnea = currentSimulationTime; changed = true }
+      if (!apneaAlarmActive && next.apnea != null) { next.apnea = null; changed = true }
+      if (pressureAlarmActive && next.pressure == null) { next.pressure = currentSimulationTime; changed = true }
+      if (!pressureAlarmActive && next.pressure != null) { next.pressure = null; changed = true }
+      return changed ? next : current
+    })
+  }, [apneaAlarmActive, pressureAlarmActive, currentSimulationTime])
+
+  const activeAlarmOnsets = [alarmOnsets.apnea, alarmOnsets.pressure].filter((value): value is number => value != null)
+  const earliestAlarmOnset = activeAlarmOnsets.length ? Math.min(...activeAlarmOnsets) : null
+  const alarmLevel = (apneaAlarmActive || pressureAlarmActive)
+    ? earliestAlarmOnset != null && currentSimulationTime - earliestAlarmOnset >= 15 ? 'red' : 'yellow'
+    : null
+  const alarmLabels = [
+    pressureAlarmActive ? 'HIGH PRESSURE' : null,
+    apneaAlarmActive ? 'APNOEA' : null,
+  ].filter((value): value is string => value != null)
+
+  useEffect(() => {
+    if (!alarmLevel || alarmSilenced) return
+    const beep = () => {
+      try {
+        const AudioContextConstructor = window.AudioContext
+        if (!AudioContextConstructor) return
+        const context = audioContextRef.current ?? new AudioContextConstructor()
+        audioContextRef.current = context
+        if (context.state === 'suspended') void context.resume()
+        const oscillator = context.createOscillator()
+        const gain = context.createGain()
+        oscillator.type = 'square'
+        oscillator.frequency.value = alarmLevel === 'red' ? 1040 : 820
+        gain.gain.setValueAtTime(0.0001, context.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.055, context.currentTime + 0.01)
+        gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12)
+        oscillator.connect(gain)
+        gain.connect(context.destination)
+        oscillator.start()
+        oscillator.stop(context.currentTime + 0.13)
+      } catch {
+        // Browser audio may remain blocked until the page has received a user gesture.
+      }
+    }
+    beep()
+    const interval = window.setInterval(beep, alarmLevel === 'red' ? 700 : 1300)
+    return () => window.clearInterval(interval)
+  }, [alarmLevel, alarmSilenced])
+
+  useEffect(() => () => {
+    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
+    void audioContextRef.current?.close()
+  }, [])
 
   useEffect(() => {
     if (!frozen) return
@@ -210,6 +349,15 @@ export default function App() {
     setFrozen(true)
   }
 
+  const silenceAlarm = () => {
+    setAlarmSilenced(true)
+    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
+    alarmSilenceTimeoutRef.current = window.setTimeout(() => {
+      setAlarmSilenced(false)
+      alarmSilenceTimeoutRef.current = null
+    }, 120000)
+  }
+
   const resetVentilator = () => setVentilator({ ...initialVentilator })
   const resetPatient = () => setPatient({ ...initialPatient })
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
@@ -228,7 +376,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.20</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.21</span></div>
       </header>
 
       <div className="workspace">
@@ -259,7 +407,31 @@ export default function App() {
             </div>
           </div>
 
+          {alarmLevel && (
+            <div className={`alarm-banner ${alarmLevel}`} role="alert">
+              <strong>{alarmLabels.join(' • ')}</strong>
+              {alarmSilenced && <span>ALARM SILENCED</span>}
+            </div>
+          )}
+
           <div className="screen-body">
+            {alarmDialogOpen && (
+              <div className="alarm-dialog-backdrop" onClick={() => setAlarmDialogOpen(false)}>
+                <section className="alarm-dialog" role="dialog" aria-modal="true" aria-label="Alarm limits" onClick={(event) => event.stopPropagation()}>
+                  <div className="alarm-dialog-title"><strong>Alarm limits</strong><button type="button" onClick={() => setAlarmDialogOpen(false)}>×</button></div>
+                  <label>
+                    <span>Apnoea time</span>
+                    <div><input type="number" min="5" max="120" step="1" value={alarmLimits.apneaTime} onChange={(event) => setAlarmLimits((current) => ({ ...current, apneaTime: Math.max(5, Math.min(120, Number(event.target.value) || 5)) }))} /><small>s</small></div>
+                  </label>
+                  <label>
+                    <span>Peak pressure</span>
+                    <div><input type="number" min="10" max="80" step="1" value={alarmLimits.peakPressure} onChange={(event) => setAlarmLimits((current) => ({ ...current, peakPressure: Math.max(10, Math.min(80, Number(event.target.value) || 10)) }))} /><small>cmH₂O</small></div>
+                  </label>
+                  <button className="alarm-dialog-done" type="button" onClick={() => setAlarmDialogOpen(false)}>Done</button>
+                </section>
+              </div>
+            )}
+
             <div className="waveforms">
               <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime showSimvSyncWindow={ventilator.showSimvSyncWindow} />
               <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
@@ -268,12 +440,12 @@ export default function App() {
 
             <aside className="metrics-panel" aria-label="Measured values">
               <div className="metrics-title">Measured</div>
-              <Metric label="RR" value={measures.respiratoryRate.toFixed(0)} unit="/min" />
-              <Metric label="VTe" value={measures.tidalVolume.toFixed(0)} unit="mL" />
-              <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
               <Metric label="Ppeak" value={measures.peakPressure.toFixed(0)} unit="cmH₂O" />
+              <Metric label="VTe" value={measures.tidalVolume.toFixed(0)} unit="mL" />
+              <Metric label="RR" value={measures.respiratoryRate.toFixed(0)} unit="/min" />
+              <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
-              <Metric label={activeMode === 'APRV' ? 'Plow' : 'PEEP'} value={measures.peep.toFixed(0)} unit="cmH₂O" />
+              <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
           </div>
@@ -302,7 +474,8 @@ export default function App() {
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
             >Expiratory hold</button>
-            <button className={`hardware-button icon-button alarm-button ${alarmSilenced ? 'active' : ''}`} onClick={() => setAlarmSilenced((v) => !v)} title="Alarm silence" aria-label="Alarm silence"><AlarmSilenceIcon /></button>
+            <button className="hardware-button" onClick={() => setAlarmDialogOpen(true)} title="Set alarm limits">Alarm limits</button>
+            <button className={`hardware-button icon-button alarm-button ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
         </section>
 
