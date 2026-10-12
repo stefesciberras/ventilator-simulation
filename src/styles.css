@@ -114,6 +114,11 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .patient-section .preset-row button:hover:not(:disabled) { border-color: #6ba87a; background: #1c3021; }
 .patient-reset-button { border-color: #45634c; color: #9bcaa4; background: #142118; }
 .patient-reset-button:hover:not(:disabled) { color: #d8efdd; border-color: #6ca77a; background: #1a2c1e; }
+.patient-transition-control { margin: 8px 0 12px; padding: 9px 10px; border: 1px solid #294337; border-radius: 8px; background: rgba(50,104,73,.08); }
+.patient-transition-control label { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #9fc7aa; font-size: 11px; }
+.patient-transition-control select { min-width: 92px; padding: 6px 8px; border: 1px solid #456151; border-radius: 6px; color: #e5f2e8; background: #111b17; }
+.patient-transition-control small { display: block; margin-top: 5px; color: #708c79; font-size: 9px; }
+
 .patient-rr-control { display: flex; align-items: flex-end; gap: 8px; margin: 2px 0 4px; }
 .patient-rr-slider { flex: 1; min-width: 0; }
 .patient-rr-slider .control-row { margin-bottom: 0; }
