@@ -1,0 +1,172 @@
+name: Apply v0.36 diagnostic export
+on:
+  push:
+    branches: [chatgpt/v0.36-diagnostics]
+    paths: [.github/workflows/apply-v036-diagnostics.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.36-diagnostics
+      - name: Apply source changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('src/App.tsx')
+          text = p.read_text()
+
+          old = "  const [alarmOnsets, setAlarmOnsets] = useState<{ apnea: number | null; pressure: number | null }>({ apnea: null, pressure: null })\n"
+          new = old + "  const [diagnosticCopied, setDiagnosticCopied] = useState(false)\n"
+          if old not in text:
+              raise SystemExit('alarmOnsets marker not found')
+          text = text.replace(old, new, 1)
+
+          marker = "\n  const resetVentilator = () => setVentilator({ ...initialVentilator })\n"
+          handler = r'''
+  const copyDiagnostics = async () => {
+    const diagnosticPayload = {
+      schema: 'eduvent-diagnostic-v1',
+      appVersion: '0.36',
+      capturedAt: new Date().toISOString(),
+      simulation: {
+        time: currentSimulationTime,
+        paused: frozen,
+        activeMode,
+        oxygenBoost,
+        nebuliser,
+        alarmSilenced,
+      },
+      settings: {
+        ventilator,
+        effectiveVentilator,
+        patientTarget: patient,
+        patientEffective: effectivePatientRef.current,
+        patientTransitionSeconds,
+        patientTransition: patientTransitionRef.current,
+        alarmLimits,
+        waveformDisplay,
+      },
+      alarms: {
+        apneaActive: apneaAlarmActive,
+        highPressureActive: pressureAlarmActive,
+        level: alarmLevel,
+        labels: alarmLabels,
+        onsets: alarmOnsets,
+      },
+      measurements: {
+        peakPressureCmH2O: eventMeasures.peakPressure,
+        expiredTidalVolumeMl: eventMeasures.tidalVolume,
+        respiratoryRatePerMin: eventMeasures.respiratoryRate,
+        peepCmH2O: measures.peep,
+        meanPressureCmH2O: measures.meanPressure,
+        minuteVentilationLMin: measures.minuteVentilation,
+        endTidalCo2MmHg: endTidalCO2,
+        measuredIERatio: measuredIERatio,
+        totalPeepCmH2O: measures.totalPeep,
+        autoPeepCmH2O: measures.autoPeep,
+      },
+      cursor: {
+        index: traceCursor,
+        selectedSample: selectedSample ?? null,
+      },
+      waveform: {
+        source: frozen && frozenSamples ? 'frozen' : 'live',
+        sampleIntervalSeconds: DT,
+        sampleCount: samples.length,
+        durationSeconds: samples.length > 1 ? samples[samples.length - 1].time - samples[0].time : 0,
+        units: {
+          time: 's',
+          pressure: 'cmH2O',
+          flow: 'L/min',
+          volume: 'mL',
+          musclePressure: 'cmH2O',
+          co2: 'mmHg',
+          oesophagealPressure: 'cmH2O',
+        },
+        columns: [
+          'time',
+          'pressure',
+          'flow',
+          'volume',
+          'musclePressure',
+          'co2',
+          'oesophagealPressure',
+          'phase',
+          'mode',
+          'breathTrigger',
+          'expiratoryHold',
+          'simvSyncWindow',
+        ],
+        samples: samples.map((sample) => [
+          sample.time,
+          sample.pressure,
+          sample.flow,
+          sample.volume,
+          sample.musclePressure,
+          sample.co2,
+          sample.oesophagealPressure,
+          sample.phase,
+          sample.mode,
+          sample.breathTrigger ?? null,
+          Boolean(sample.expiratoryHold),
+          Boolean(sample.simvSyncWindow),
+        ]),
+      },
+    }
+
+    const text = JSON.stringify(diagnosticPayload)
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        const copied = document.execCommand('copy')
+        textarea.remove()
+        if (!copied) throw new Error('Clipboard copy failed')
+      }
+      setDiagnosticCopied(true)
+      window.setTimeout(() => setDiagnosticCopied(false), 1800)
+    } catch {
+      setDiagnosticCopied(false)
+      window.prompt('Copy diagnostic JSON', text)
+    }
+  }
+'''
+          if marker not in text:
+              raise SystemExit('resetVentilator marker not found')
+          text = text.replace(marker, '\n' + handler + marker, 1)
+
+          old_button = '            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? \'active\' : \'\'}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>\n'
+          new_button = '            <button className={`hardware-button diagnostic-button ${diagnosticCopied ? \'active blue\' : \'\'}`} onClick={copyDiagnostics} title="Copy current settings and visible raw waveform as diagnostic JSON" aria-label="Copy diagnostic JSON">{diagnosticCopied ? \'Copied\' : \'Diagnostic\'}</button>\n' + old_button
+          if old_button not in text:
+              raise SystemExit('alarm silence button marker not found')
+          text = text.replace(old_button, new_button, 1)
+
+          if '<span className="version">v0.35</span>' not in text:
+              raise SystemExit('version marker not found')
+          text = text.replace('<span className="version">v0.35</span>', '<span className="version">v0.36</span>', 1)
+
+          p.write_text(text)
+
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit v0.36
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx
+          git commit -m "v0.36: add diagnostic JSON waveform export"
+          git push origin HEAD:chatgpt/v0.36-diagnostics
