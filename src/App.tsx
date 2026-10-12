@@ -59,14 +59,17 @@ export default function App() {
   const [cursor, setCursor] = useState(HISTORY_START)
   const [traceCursor, setTraceCursor] = useState(Math.floor(WINDOW_SAMPLES * 0.7))
   const [inspiratoryHoldRequestTime, setInspiratoryHoldRequestTime] = useState<number | null>(null)
+  const [expiratoryHoldRequestTime, setExpiratoryHoldRequestTime] = useState<number | null>(null)
 
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
   const generated = useMemo(
     () => generateWaveforms(effectiveVentilator, patient, SIMULATION_DURATION, 0.01, {
       inspiratoryHoldRequestTime,
       inspiratoryHoldDuration: 2,
+      expiratoryHoldRequestTime,
+      expiratoryHoldDuration: 2,
     }),
-    [effectiveVentilator, patient, inspiratoryHoldRequestTime],
+    [effectiveVentilator, patient, inspiratoryHoldRequestTime, expiratoryHoldRequestTime],
   )
   const maxCursor = Math.max(HISTORY_START + 1, generated.length - WINDOW_SAMPLES)
 
@@ -81,6 +84,7 @@ export default function App() {
     setFrozen(false)
     setFrozenSamples(null)
     setInspiratoryHoldRequestTime(null)
+    setExpiratoryHoldRequestTime(null)
   }, [ventilator, patient, oxygenBoost])
 
   const movingSamples = useMemo(() => generated.slice(cursor, cursor + WINDOW_SAMPLES), [generated, cursor])
@@ -93,7 +97,8 @@ export default function App() {
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
   const currentSimulationTime = movingSamples[movingSamples.length - 1]?.time ?? 0
-  const holdIndicatorActive = inspiratoryHoldRequestTime != null && currentSimulationTime - inspiratoryHoldRequestTime < 8
+  const inspiratoryHoldIndicatorActive = inspiratoryHoldRequestTime != null && currentSimulationTime - inspiratoryHoldRequestTime < 8
+  const expiratoryHoldIndicatorActive = expiratoryHoldRequestTime != null && currentSimulationTime - expiratoryHoldRequestTime < 8
   const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
 
   useEffect(() => {
@@ -118,14 +123,21 @@ export default function App() {
 
   const startInspiratoryHold = () => {
     if (frozen || ventilator.mode === 'PSV') return
+    setExpiratoryHoldRequestTime(null)
     setInspiratoryHoldRequestTime(currentSimulationTime)
+  }
+
+  const startExpiratoryHold = () => {
+    if (frozen) return
+    setInspiratoryHoldRequestTime(null)
+    setExpiratoryHoldRequestTime(currentSimulationTime)
   }
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.8</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.9</span></div>
       </header>
 
       <div className="workspace">
@@ -156,6 +168,8 @@ export default function App() {
               <Metric label="Ppeak" value={measures.peakPressure.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
+              <Metric label="PEEPtot" value={measures.totalPeep == null ? '—' : measures.totalPeep.toFixed(1)} unit="cmH₂O" />
+              <Metric label="Auto-PEEP" value={measures.autoPeep == null ? '—' : measures.autoPeep.toFixed(1)} unit="cmH₂O" />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
           </div>
@@ -164,7 +178,8 @@ export default function App() {
             <button className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`} onClick={() => setOxygenBoost((v) => !v)} title="O₂ enrichment" aria-label="O₂ enrichment">O₂</button>
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
             <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume simulation' : 'Pause and freeze waveforms'} aria-label={frozen ? 'Resume simulation' : 'Pause simulation'}><PauseIcon paused={frozen} /></button>
-            <button className={`hardware-button ${holdIndicatorActive ? 'active' : ''}`} onClick={startInspiratoryHold} disabled={frozen || ventilator.mode === 'PSV'} title={ventilator.mode === 'PSV' ? 'Inspiratory hold is available during mandatory ventilation' : 'Perform a 2 second end-inspiratory hold'}>Inspiratory hold</button>
+            <button className={`hardware-button ${inspiratoryHoldIndicatorActive ? 'active' : ''}`} onClick={startInspiratoryHold} disabled={frozen || ventilator.mode === 'PSV'} title={ventilator.mode === 'PSV' ? 'Inspiratory hold is available during mandatory ventilation' : 'Perform a 2 second end-inspiratory hold'}>Inspiratory hold</button>
+            <button className={`hardware-button ${expiratoryHoldIndicatorActive ? 'active' : ''}`} onClick={startExpiratoryHold} disabled={frozen} title="Perform a 2 second expiratory occlusion to measure total PEEP and intrinsic PEEP">Expiratory hold</button>
             <button className={`hardware-button icon-button alarm-button ${alarmSilenced ? 'active' : ''}`} onClick={() => setAlarmSilenced((v) => !v)} title="Alarm silence" aria-label="Alarm silence"><AlarmSilenceIcon /></button>
           </div>
         </section>

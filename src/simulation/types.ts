@@ -31,6 +31,7 @@ export interface Sample {
   musclePressure: number
   phase: 'inspiration' | 'expiration'
   breathTrigger?: 'mandatory' | 'patient'
+  expiratoryHold?: boolean
 }
 
 export interface Measurements {
@@ -40,4 +41,6 @@ export interface Measurements {
   peakPressure: number
   meanPressure: number
   peep: number
+  totalPeep: number | null
+  autoPeep: number | null
 }
