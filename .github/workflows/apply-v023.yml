@@ -1,0 +1,47 @@
+name: Apply v0.23 UI patch
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.23-alarm-silence-position
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.23-alarm-silence-position
+      - name: Apply UI patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('src/App.tsx')
+          text = app.read_text()
+          text = text.replace('<span className="version">v0.22</span>', '<span className="version">v0.23</span>')
+          text = text.replace('                <button className={`metrics-alarm-silence ${alarmSilenced ? \'active\' : \'\'}`} type="button" onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>\n', '')
+          anchor = '            >Expiratory hold</button>\n'
+          replacement = anchor + '            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? \'active\' : \'\'}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>\n'
+          if anchor not in text:
+              raise SystemExit('Expiratory hold anchor not found')
+          text = text.replace(anchor, replacement, 1)
+          app.write_text(text)
+
+          css = Path('src/alarm.css')
+          styles = css.read_text()
+          styles = styles.replace('grid-template-columns: 1fr 42px;', 'grid-template-columns: 1fr;')
+          styles += '\n.action-bar .alarm-silence-bottom { margin-left: auto; }\n'
+          css.write_text(styles)
+          PY
+      - name: Commit patch
+        run: |
+          rm .github/workflows/apply-v023.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/alarm.css .github/workflows/apply-v023.yml
+          git commit -m "v0.23 move alarm silence to action bar"
+          git push origin HEAD:chatgpt/v0.23-alarm-silence-position
