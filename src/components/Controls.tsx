@@ -18,7 +18,11 @@ const MAX_IE = 8
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const cycleTime = (rate: number) => 60 / Math.max(rate, 1)
 const ieRatioFrom = (settings: VentilatorSettings) => clamp(cycleTime(settings.rate) / Math.max(settings.inspiratoryTime, 0.2) - 1, MIN_IE, MAX_IE)
-const flowFor = (tidalVolumeMl: number, inspiratoryTime: number) => (tidalVolumeMl / 1000) / Math.max(inspiratoryTime, 0.2) * 60
+const plateauFraction = (settings: VentilatorSettings) => clamp(settings.plateauPercent ?? 0, 0, 20) / 100
+const flowFor = (tidalVolumeMl: number, inspiratoryTime: number, plateauPercent: number) => {
+  const flowTime = Math.max(inspiratoryTime * (1 - clamp(plateauPercent, 0, 20) / 100), 0.05)
+  return (tidalVolumeMl / 1000) / flowTime * 60
+}
 
 function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange }: SliderProps) {
   return (
@@ -31,9 +35,11 @@ function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange
 
 function BreathingToggleIcon({ off }: { off: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M3 13h4l2-5 3 9 2-6 2 2h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      {off && <path d="M4 4l16 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M15 4v8M17 4v8M16 10l-4 4M16 10l4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 12c-2.8.5-5.2 2.8-6.1 6.2-.9 3.6-.3 7.1 1.7 8.2 1.8 1 4.7-.3 6.4-3.1 1.2-2 1.4-4.4 1.4-7.2V13.5c-.9-.9-2-1.5-3.4-1.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M20 12c2.8.5 5.2 2.8 6.1 6.2.9 3.6.3 7.1-1.7 8.2-1.8 1-4.7-.3-6.4-3.1-1.2-2-1.4-4.4-1.4-7.2V13.5c.9-.9 2-1.5 3.4-1.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      {!off && <path d="M6.5 27c3.2-3 6.2-4.2 9.5-4.2S22.3 24 25.5 27" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
     </svg>
   )
 }
@@ -44,14 +50,14 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
 
   const setMode = (mode: VentilatorMode) => {
     const next = { ...settings, mode }
-    if (mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, next.inspiratoryTime)
+    if (mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, next.inspiratoryTime, next.plateauPercent ?? 0)
     onChange(next)
   }
 
   const setRate = (rate: number) => {
     const inspiratoryTime = cycleTime(rate) / (1 + currentIeRatio)
     const next: VentilatorSettings = { ...settings, rate, inspiratoryTime }
-    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime)
+    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
     onChange(next)
   }
 
@@ -59,23 +65,34 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
     const boundedRatio = clamp(ratio, MIN_IE, MAX_IE)
     const inspiratoryTime = cycleTime(settings.rate) / (1 + boundedRatio)
     const next: VentilatorSettings = { ...settings, inspiratoryTime }
-    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime)
+    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
     onChange(next)
   }
 
   const setTidalVolume = (tidalVolume: number) => {
     const next: VentilatorSettings = { ...settings, tidalVolume }
-    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(tidalVolume, settings.inspiratoryTime)
+    if (settings.mode === 'VC-AC') next.inspiratoryFlow = flowFor(tidalVolume, settings.inspiratoryTime, settings.plateauPercent ?? 0)
     onChange(next)
   }
 
   const setInspiratoryFlow = (requestedFlow: number) => {
-    const requestedTi = (settings.tidalVolume / 1000) / Math.max(requestedFlow / 60, 0.01)
+    const fraction = plateauFraction(settings)
+    const requestedFlowTime = (settings.tidalVolume / 1000) / Math.max(requestedFlow / 60, 0.01)
+    const requestedTi = requestedFlowTime / Math.max(1 - fraction, 0.8)
     const requestedRatio = cycleTime(settings.rate) / requestedTi - 1
     const boundedRatio = clamp(requestedRatio, MIN_IE, MAX_IE)
     const inspiratoryTime = cycleTime(settings.rate) / (1 + boundedRatio)
-    const inspiratoryFlow = flowFor(settings.tidalVolume, inspiratoryTime)
+    const inspiratoryFlow = flowFor(settings.tidalVolume, inspiratoryTime, settings.plateauPercent ?? 0)
     onChange({ ...settings, inspiratoryTime, inspiratoryFlow })
+  }
+
+  const setPlateauPercent = (plateauPercent: number) => {
+    const bounded = clamp(plateauPercent, 0, 20)
+    onChange({
+      ...settings,
+      plateauPercent: bounded,
+      inspiratoryFlow: flowFor(settings.tidalVolume, settings.inspiratoryTime, bounded),
+    })
   }
 
   return (
@@ -97,7 +114,10 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
         <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
       )}
       {settings.mode === 'VC-AC' && (
-        <Slider label="Inspiratory flow" value={Number(settings.inspiratoryFlow.toFixed(0))} unit=" L/min" min={10} max={120} step={1} onChange={setInspiratoryFlow} />
+        <>
+          <Slider label="Inspiratory flow" value={Number(settings.inspiratoryFlow.toFixed(0))} unit=" L/min" min={10} max={140} step={1} onChange={setInspiratoryFlow} />
+          <Slider label="Plateau time" value={settings.plateauPercent ?? 0} unit="% Ti" min={0} max={20} step={1} onChange={setPlateauPercent} />
+        </>
       )}
       {settings.mode === 'PC-AC' && <Slider label="Pressure control" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />}
       {settings.mode === 'PSV' && <Slider label="Pressure support" value={settings.pressureSupport} unit=" cmH₂O" min={3} max={25} onChange={(v) => patch({ pressureSupport: v })} />}
