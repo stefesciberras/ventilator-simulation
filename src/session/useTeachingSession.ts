@@ -4,9 +4,13 @@ import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import {
   closeTeachingSessionChannel,
   createTeachingSession,
+  fetchSessionMembers,
   fetchTeachingSession,
   joinTeachingSession,
+  subscribeToSessionMembers,
   subscribeToTeachingSession,
+  touchSessionMember,
+  type SessionMemberRow,
   type TeachingSessionRow,
   updateTeachingSession,
 } from './supabase'
@@ -41,36 +45,65 @@ export function useTeachingSession({
   const [role, setRole] = useState<SessionRole>('standalone')
   const [connection, setConnection] = useState<SessionConnection>('idle')
   const [session, setSession] = useState<TeachingSessionRow | null>(null)
+  const [members, setMembers] = useState<SessionMemberRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const membersChannelRef = useRef<RealtimeChannel | null>(null)
   const roleRef = useRef<SessionRole>('standalone')
   const sessionRef = useRef<TeachingSessionRow | null>(null)
+  const patientRef = useRef(patient)
+  const ventilatorRef = useRef(ventilator)
   const patientRevisionRef = useRef(0)
   const ventilatorRevisionRef = useRef(0)
   const suppressPatientBroadcastRef = useRef(false)
   const suppressVentilatorBroadcastRef = useRef(false)
   const patientBroadcastTimerRef = useRef<number | null>(null)
   const ventilatorBroadcastTimerRef = useRef<number | null>(null)
+  const telemetryTimerRef = useRef<number | null>(null)
 
   useEffect(() => { roleRef.current = role }, [role])
   useEffect(() => { sessionRef.current = session }, [session])
+  useEffect(() => { patientRef.current = patient }, [patient])
+  useEffect(() => { ventilatorRef.current = ventilator }, [ventilator])
 
-  const applyCandidateSession = (next: TeachingSessionRow) => {
-    patientRevisionRef.current = Math.max(patientRevisionRef.current, Number(next.patient_revision ?? 0))
-    ventilatorRevisionRef.current = Math.max(ventilatorRevisionRef.current, Number(next.ventilator_revision ?? 0))
+  const applyCandidateSession = (next: TeachingSessionRow, force = false) => {
+    const nextPatientRevision = Number(next.patient_revision ?? 0)
+    const nextVentilatorRevision = Number(next.ventilator_revision ?? 0)
+    const patientChanged = force || nextPatientRevision > patientRevisionRef.current
+    const ventilatorChanged = force || nextVentilatorRevision > ventilatorRevisionRef.current
 
-    if (next.sync_patient && next.patient_settings) {
+    if (next.sync_patient && next.patient_settings && patientChanged) {
       suppressPatientBroadcastRef.current = true
       setPatient(next.patient_settings)
       setPatientTransitionSeconds(Math.max(0, Math.round((next.transition_ms ?? 0) / 1000)))
       window.setTimeout(() => { suppressPatientBroadcastRef.current = false }, 0)
     }
 
-    if (next.sync_ventilator && next.ventilator_settings) {
+    if (next.sync_ventilator && next.ventilator_settings && ventilatorChanged) {
       suppressVentilatorBroadcastRef.current = true
       setVentilator(next.ventilator_settings)
       window.setTimeout(() => { suppressVentilatorBroadcastRef.current = false }, 0)
     }
+
+    patientRevisionRef.current = Math.max(patientRevisionRef.current, nextPatientRevision)
+    ventilatorRevisionRef.current = Math.max(ventilatorRevisionRef.current, nextVentilatorRevision)
+  }
+
+  const refreshMembers = async (sessionId: string) => {
+    try {
+      const nextMembers = await fetchSessionMembers(sessionId)
+      if (sessionRef.current?.id === sessionId || roleRef.current === 'instructor') setMembers(nextMembers)
+    } catch {
+      // Session updates remain usable even if the dashboard member refresh fails transiently.
+    }
+  }
+
+  const attachMemberSubscription = async (sessionId: string) => {
+    await closeTeachingSessionChannel(membersChannelRef.current)
+    await refreshMembers(sessionId)
+    membersChannelRef.current = subscribeToSessionMembers(sessionId, () => {
+      void refreshMembers(sessionId)
+    })
   }
 
   const attachSubscription = async (sessionId: string) => {
@@ -79,7 +112,17 @@ export function useTeachingSession({
       sessionId,
       (next) => {
         setSession(next)
-        if (roleRef.current === 'candidate') applyCandidateSession(next)
+        if (roleRef.current === 'candidate') {
+          if (next.status === 'ended') {
+            setConnection('idle')
+            setError('The instructor ended this teaching session.')
+            void closeTeachingSessionChannel(channelRef.current)
+            roleRef.current = 'standalone'
+            setRole('standalone')
+            return
+          }
+          applyCandidateSession(next)
+        }
       },
       async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -112,6 +155,7 @@ export function useTeachingSession({
       ventilatorRevisionRef.current = Number(row.ventilator_revision ?? 0)
       setSession(row)
       await attachSubscription(created.sessionId)
+      await attachMemberSubscription(created.sessionId)
     } catch (cause) {
       setConnection('error')
       setError(cause instanceof Error ? cause.message : 'Unable to create instructor session.')
@@ -128,10 +172,11 @@ export function useTeachingSession({
       roleRef.current = 'candidate'
       setRole('candidate')
       const row = await fetchTeachingSession(joined.sessionId)
-      patientRevisionRef.current = Number(row.patient_revision ?? 0)
-      ventilatorRevisionRef.current = Number(row.ventilator_revision ?? 0)
+      patientRevisionRef.current = 0
+      ventilatorRevisionRef.current = 0
       setSession(row)
-      applyCandidateSession(row)
+      applyCandidateSession(row, true)
+      await touchSessionMember(joined.sessionId, patientRef.current, ventilatorRef.current)
       await attachSubscription(joined.sessionId)
     } catch (cause) {
       setConnection('error')
@@ -144,11 +189,15 @@ export function useTeachingSession({
   const leaveSession = async () => {
     if (patientBroadcastTimerRef.current != null) window.clearTimeout(patientBroadcastTimerRef.current)
     if (ventilatorBroadcastTimerRef.current != null) window.clearTimeout(ventilatorBroadcastTimerRef.current)
+    if (telemetryTimerRef.current != null) window.clearTimeout(telemetryTimerRef.current)
     await closeTeachingSessionChannel(channelRef.current)
+    await closeTeachingSessionChannel(membersChannelRef.current)
     channelRef.current = null
+    membersChannelRef.current = null
     roleRef.current = 'standalone'
     setRole('standalone')
     setSession(null)
+    setMembers([])
     setConnection('idle')
     setError(null)
   }
@@ -270,8 +319,32 @@ export function useTeachingSession({
     }
   }, [ventilator, role])
 
+  useEffect(() => {
+    if (role !== 'candidate' || !session?.id) return
+    const sendHeartbeat = () => {
+      void touchSessionMember(session.id, patientRef.current, ventilatorRef.current).catch(() => {
+        // Realtime/session connectivity owns the visible connection state; telemetry may recover independently.
+      })
+    }
+    sendHeartbeat()
+    const timer = window.setInterval(sendHeartbeat, 10000)
+    return () => window.clearInterval(timer)
+  }, [role, session?.id])
+
+  useEffect(() => {
+    if (role !== 'candidate' || !session?.id) return
+    if (telemetryTimerRef.current != null) window.clearTimeout(telemetryTimerRef.current)
+    telemetryTimerRef.current = window.setTimeout(() => {
+      void touchSessionMember(session.id, patient, ventilator).catch(() => undefined)
+    }, 500)
+    return () => {
+      if (telemetryTimerRef.current != null) window.clearTimeout(telemetryTimerRef.current)
+    }
+  }, [patient, ventilator, role, session?.id])
+
   useEffect(() => () => {
     void closeTeachingSessionChannel(channelRef.current)
+    void closeTeachingSessionChannel(membersChannelRef.current)
   }, [])
 
   const candidateVentilatorLocked = role === 'candidate' && Boolean(session?.sync_ventilator) && !Boolean(session?.candidate_can_edit_ventilator)
@@ -281,6 +354,7 @@ export function useTeachingSession({
     role,
     connection,
     session,
+    members,
     error,
     candidateVentilatorLocked,
     candidatePatientLocked,

@@ -1,6 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SessionConnection, SessionRole } from '../session/useTeachingSession'
-import type { TeachingSessionRow } from '../session/supabase'
+import {
+  closeTeachingSessionChannel,
+  fetchSessionMembers,
+  subscribeToSessionMembers,
+  type SessionMemberRow,
+  type TeachingSessionRow,
+} from '../session/supabase'
+import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 
 interface SessionPanelProps {
   role: SessionRole
@@ -33,6 +40,44 @@ function ConnectionBadge({ connection }: { connection: SessionConnection }) {
   return <span className={`session-connection ${connection}`}><span className="session-connection-dot" />{label}</span>
 }
 
+function hasVentilatorSettings(value: SessionMemberRow['ventilator_settings']): value is VentilatorSettings {
+  return Boolean(value && typeof value === 'object' && 'mode' in value)
+}
+
+function hasPatientSettings(value: SessionMemberRow['patient_settings']): value is PatientSettings {
+  return Boolean(value && typeof value === 'object' && 'compliance' in value)
+}
+
+function CandidateCard({ member, now }: { member: SessionMemberRow; now: number }) {
+  const lastSeen = new Date(member.last_seen).getTime()
+  const ageSeconds = Number.isFinite(lastSeen) ? Math.max(0, Math.round((now - lastSeen) / 1000)) : Number.POSITIVE_INFINITY
+  const online = ageSeconds <= 30
+  const vent = hasVentilatorSettings(member.ventilator_settings) ? member.ventilator_settings : null
+  const patient = hasPatientSettings(member.patient_settings) ? member.patient_settings : null
+
+  return (
+    <article className={`candidate-card ${online ? 'online' : 'offline'}`}>
+      <div className="candidate-card-heading">
+        <div>
+          <strong>{member.display_name?.trim() || 'Candidate'}</strong>
+          <small>{online ? 'Online' : `Last seen ${Number.isFinite(ageSeconds) ? `${ageSeconds}s ago` : '—'}`}</small>
+        </div>
+        <span className={`candidate-presence ${online ? 'online' : 'offline'}`}><i />{online ? 'LIVE' : 'OFFLINE'}</span>
+      </div>
+      <div className="candidate-state-grid">
+        <div><span>Mode</span><strong>{vent?.mode ?? '—'}</strong></div>
+        <div><span>FiO₂</span><strong>{vent ? `${Math.round(vent.fio2 * 100)}%` : '—'}</strong></div>
+        <div><span>PEEP</span><strong>{vent?.peep ?? '—'}</strong></div>
+        <div><span>RR set</span><strong>{vent?.rate ?? '—'}</strong></div>
+        <div><span>Compliance</span><strong>{patient ? patient.compliance.toFixed(0) : '—'}</strong></div>
+        <div><span>Rinsp</span><strong>{patient ? patient.resistance.toFixed(0) : '—'}</strong></div>
+        <div><span>Spont RR</span><strong>{patient ? patient.spontaneousRate.toFixed(0) : '—'}</strong></div>
+        <div><span>Effort</span><strong>{patient ? patient.effort.toFixed(0) : '—'}</strong></div>
+      </div>
+    </article>
+  )
+}
+
 export function SessionPanel({
   role,
   connection,
@@ -48,6 +93,50 @@ export function SessionPanel({
   const [joinMode, setJoinMode] = useState(false)
   const [sessionKey, setSessionKey] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [simulatorExpanded, setSimulatorExpanded] = useState(false)
+  const [dashboardMembers, setDashboardMembers] = useState<SessionMemberRow[]>([])
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (role !== 'instructor') return
+    const timer = window.setInterval(() => setNow(Date.now()), 5000)
+    return () => window.clearInterval(timer)
+  }, [role])
+
+  useEffect(() => {
+    if (role !== 'instructor' || !session?.id) {
+      setDashboardMembers([])
+      return
+    }
+
+    let active = true
+    const refresh = async () => {
+      try {
+        const rows = await fetchSessionMembers(session.id)
+        if (active) setDashboardMembers(rows)
+      } catch {
+        // Keep the most recent roster visible through brief network interruptions.
+      }
+    }
+
+    void refresh()
+    const channel = subscribeToSessionMembers(session.id, () => void refresh())
+    return () => {
+      active = false
+      void closeTeachingSessionChannel(channel)
+    }
+  }, [role, session?.id])
+
+  useEffect(() => {
+    const version = document.querySelector<HTMLElement>('.version')
+    if (version) version.textContent = 'v0.46'
+  }, [])
+
+  const candidates = useMemo(() => dashboardMembers.filter((member) => member.role === 'candidate'), [dashboardMembers])
+  const onlineCandidates = candidates.filter((member) => {
+    const lastSeen = new Date(member.last_seen).getTime()
+    return Number.isFinite(lastSeen) && now - lastSeen <= 30000
+  }).length
 
   if (role === 'standalone') {
     return (
@@ -99,15 +188,33 @@ export function SessionPanel({
 
   if (role === 'instructor') {
     return (
-      <section className="session-panel instructor-session-panel">
+      <section className={`session-panel instructor-session-panel ${simulatorExpanded ? 'simulator-expanded' : 'simulator-collapsed'}`}>
         <div className="session-panel-heading">
-          <div><span className="session-kicker">Teaching</span><h2>Instructor mode</h2></div>
+          <div><span className="session-kicker">Teaching</span><h2>Instructor dashboard</h2></div>
           <ConnectionBadge connection={connection} />
         </div>
-        <div className="session-key-card">
-          <span>Candidate session key</span>
-          <strong>{session?.session_key ?? '———'}</strong>
-          <small>Share this key with all candidates in this session.</small>
+
+        <div className="instructor-dashboard-summary">
+          <div className="session-key-card">
+            <span>Candidate session key</span>
+            <strong>{session?.session_key ?? '———'}</strong>
+            <small>Share this key with all candidates in this session.</small>
+          </div>
+          <div className="candidate-count-card">
+            <span>Candidates</span>
+            <strong>{onlineCandidates}<small> online</small></strong>
+            <em>{candidates.length} joined</em>
+          </div>
+        </div>
+
+        <div className="instructor-simulator-toggle-row">
+          <div>
+            <strong>Instructor simulator</strong>
+            <span>{simulatorExpanded ? 'Full ventilator visible' : 'Collapsed to keep the candidate dashboard primary'}</span>
+          </div>
+          <button type="button" className="session-secondary-button" onClick={() => setSimulatorExpanded((value) => !value)}>
+            {simulatorExpanded ? 'Collapse simulator' : 'Show simulator'}
+          </button>
         </div>
 
         <div className="session-domain-grid">
@@ -135,6 +242,20 @@ export function SessionPanel({
             </label>
           </div>
         </div>
+
+        <section className="candidate-roster" aria-label="Candidates">
+          <div className="candidate-roster-heading">
+            <div><span className="session-kicker">Live room</span><h3>Candidates</h3></div>
+            <span>{onlineCandidates}/{candidates.length} online</span>
+          </div>
+          {candidates.length ? (
+            <div className="candidate-card-list">
+              {candidates.map((member) => <CandidateCard key={member.id} member={member} now={now} />)}
+            </div>
+          ) : (
+            <div className="candidate-empty-state">No candidates have joined yet. Keep this dashboard open while candidates enter the session key.</div>
+          )}
+        </section>
 
         <div className="session-action-row">
           <button type="button" className="session-secondary-button" onClick={() => void onBroadcastNow()}>Push current settings</button>
