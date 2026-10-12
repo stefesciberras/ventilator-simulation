@@ -135,12 +135,20 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
 
       <Slider label="FiO₂" value={Math.round(settings.fio2 * 100)} unit="%" min={21} max={100} onChange={(v) => patch({ fio2: v / 100 })} />
 
-      {(settings.mode === 'APRV' || settings.mode === 'BIPAP') ? (
+      {settings.mode === 'APRV' ? (
         <>
           <Slider label="Phigh" value={settings.pHigh} unit=" cmH₂O" min={10} max={40} onChange={(v) => patch({ pHigh: Math.max(v, settings.pLow + 1) })} />
           <Slider label="Plow" value={settings.pLow} unit=" cmH₂O" min={0} max={15} onChange={(v) => patch({ pLow: Math.min(v, settings.pHigh - 1) })} />
           <Slider label="Thigh" value={settings.tHigh} unit=" s" min={0.5} max={10} step={0.1} onChange={(v) => patch({ tHigh: v })} />
           <Slider label="Tlow" value={settings.tLow} unit=" s" min={0.2} max={2} step={0.05} onChange={(v) => patch({ tLow: v })} />
+        </>
+      ) : settings.mode === 'BIPAP' ? (
+        <>
+          <Slider label="Pinsp" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />
+          <Slider label="PEEP" value={settings.peep} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ peep: v })} />
+          <Slider label="Rate" value={settings.rate} unit="/min" min={5} max={35} onChange={setRate} />
+          <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
+          <Slider label="Trigger" value={settings.triggerSensitivity} unit=" cmH₂O" min={1} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />
         </>
       ) : (
         <>

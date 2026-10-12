@@ -33,6 +33,8 @@ export interface SimulationState {
   suppressEffortUntil: number
   vgPressureControl: number
   vgSettingPressure: number
+  bipapHigh: boolean
+  bipapPhaseStart: number
 }
 
 export function createSimulationState(): SimulationState {
@@ -58,6 +60,8 @@ export function createSimulationState(): SimulationState {
     suppressEffortUntil: -100,
     vgPressureControl: 15,
     vgSettingPressure: 15,
+    bipapHigh: true,
+    bipapPhaseStart: 0,
   }
 }
 
@@ -92,6 +96,7 @@ function finishBreath(state: SimulationState, t: number, postCycleReleaseGuard: 
 }
 
 function twoLevelPhaseHigh(state: SimulationState, ventilator: VentilatorSettings, t: number): boolean {
+  if (state.lastMode === 'BIPAP') return state.bipapHigh
   const tHigh = Math.max(ventilator.tHigh, 0.1)
   const tLow = Math.max(ventilator.tLow, 0.05)
   const cycle = tHigh + tLow
@@ -112,6 +117,11 @@ function adoptMode(
   state.modeStartTime = t
   state.expiratoryTriggerReady = true
   state.peakExpiratoryFlowMagnitude = 0
+  if (mode === 'BIPAP') {
+    state.bipapHigh = true
+    state.bipapPhaseStart = t
+    state.breathStart = t
+  }
 
   if (initial) {
     state.lastAssistedBreath = t - mandatoryCycle
@@ -138,31 +148,91 @@ function twoLevelSample(
   complianceL: number,
   mode: 'APRV' | 'BIPAP',
 ): Sample {
-  const tHigh = Math.max(ventilator.tHigh, 0.1)
-  const tLow = Math.max(ventilator.tLow, 0.05)
-  const cycle = tHigh + tLow
-  const elapsed = t - state.modeStartTime
-  const phase = ((elapsed % cycle) + cycle) % cycle
-  const previousPhase = ((((elapsed - dt) % cycle) + cycle) % cycle)
-  const high = phase < tHigh
-  const previousHigh = previousPhase < tHigh
-  const pHigh = Math.max(ventilator.pHigh, ventilator.pLow + 1)
-  const pLow = Math.min(ventilator.pLow, pHigh - 1)
-  const targetPressure = high ? pHigh : pLow
-  const spontaneousPressureDeflection = high ? clamp(pmus * 0.35, 0, 6) : 0
+  let high: boolean
+  let previousHigh: boolean
+  let pHigh: number
+  let pLow: number
+  let breathTrigger: Sample['breathTrigger']
 
-  if (high && !previousHigh) state.breathStart = t
+  if (mode === 'BIPAP') {
+    previousHigh = state.bipapHigh
+    const nominalCycle = 60 / Math.max(ventilator.rate, 1)
+    const nominalTi = clamp(
+      ventilator.inspiratoryTime,
+      0.2,
+      Math.max(0.25, nominalCycle - 0.2),
+    )
+    const nominalTe = Math.max(0.2, nominalCycle - nominalTi)
+    const phaseElapsed = Math.max(0, t - state.bipapPhaseStart)
+    const triggerThreshold = Math.max(0.1, ventilator.triggerSensitivity)
+    const effortStarting = pmus >= triggerThreshold && state.previousPmus < triggerThreshold
+    const effortEnding = pmus < triggerThreshold && state.previousPmus >= triggerThreshold
+
+    if (state.bipapHigh) {
+      const syncWindow = clamp(nominalTi * 0.25, 0.12, 0.6)
+      const syncStart = Math.max(0.2, nominalTi - syncWindow)
+      const maximumTi = nominalTi + syncWindow
+      const synchronizedCycleOff = phaseElapsed >= syncStart && effortEnding
+      const nominalCycleOff = phaseElapsed >= nominalTi && pmus < triggerThreshold
+      const forcedCycleOff = phaseElapsed >= maximumTi
+
+      if (synchronizedCycleOff || nominalCycleOff || forcedCycleOff) {
+        state.bipapHigh = false
+        state.bipapPhaseStart = t
+      }
+    } else {
+      const syncWindow = clamp(nominalTe * 0.25, 0.12, 0.8)
+      const syncStart = Math.max(0.2, nominalTe - syncWindow)
+      const synchronizedCycleOn = phaseElapsed >= syncStart && effortStarting
+      const mandatoryCycleOn = phaseElapsed >= nominalTe
+
+      if (synchronizedCycleOn || mandatoryCycleOn) {
+        state.bipapHigh = true
+        state.bipapPhaseStart = t
+        state.breathStart = t
+        breathTrigger = synchronizedCycleOn ? 'patient' : 'mandatory'
+      }
+    }
+
+    high = state.bipapHigh
+    pLow = ventilator.peep
+    pHigh = ventilator.peep + Math.max(ventilator.pressureControl, 1)
+  } else {
+    const tHigh = Math.max(ventilator.tHigh, 0.1)
+    const tLow = Math.max(ventilator.tLow, 0.05)
+    const cycle = tHigh + tLow
+    const elapsed = t - state.modeStartTime
+    const phase = ((elapsed % cycle) + cycle) % cycle
+    const previousPhase = ((((elapsed - dt) % cycle) + cycle) % cycle)
+    high = phase < tHigh
+    previousHigh = previousPhase < tHigh
+    pHigh = Math.max(ventilator.pHigh, ventilator.pLow + 1)
+    pLow = Math.min(ventilator.pLow, pHigh - 1)
+
+    if (high && !previousHigh) {
+      state.breathStart = t
+      breathTrigger = 'mandatory'
+    }
+  }
+
+  const targetPressure = high ? pHigh : pLow
+  const spontaneousPressureDeflection = mode === 'BIPAP'
+    ? clamp(pmus * 0.35, 0, 6)
+    : high
+      ? clamp(pmus * 0.35, 0, 6)
+      : 0
 
   const distendingPressure = high ? pHigh - pLow : 0
   const elasticPressure = state.volume / complianceL
   const drivingPressure = distendingPressure - elasticPressure + pmus
-  const resistance = drivingPressure >= 0 ? Math.max(patient.resistance, 0.5) : Math.max(patient.expiratoryResistance, 0.5)
+  const resistance = drivingPressure >= 0
+    ? Math.max(patient.resistance, 0.5)
+    : Math.max(patient.expiratoryResistance, 0.5)
   const flowLs = drivingPressure / resistance
 
   state.volume = clamp(state.volume + flowLs * dt, 0, 2.5)
-  state.previousPmus = pmus
 
-  return {
+  const sample: Sample = {
     time: Number(t.toFixed(4)),
     pressure: clamp(targetPressure - spontaneousPressureDeflection, -5, 80),
     flow: flowLs * 60,
@@ -170,10 +240,13 @@ function twoLevelSample(
     musclePressure: pmus,
     phase: high ? 'inspiration' : 'expiration',
     mode,
-    breathTrigger: high && !previousHigh ? 'mandatory' : undefined,
+    breathTrigger,
     expiratoryHold: false,
     simvSyncWindow: false,
   }
+
+  state.previousPmus = pmus
+  return sample
 }
 
 export function stepSimulation(
@@ -499,7 +572,7 @@ export function generateWaveforms(
 
 export function calculateMeasurements(samples: Sample[], ventilator: VentilatorSettings): Measurements {
   const latestMode = samples[samples.length - 1]?.mode ?? ventilator.mode
-  const displayedPeep = (latestMode === 'APRV' || latestMode === 'BIPAP') ? ventilator.pLow : ventilator.peep
+  const displayedPeep = latestMode === 'APRV' ? ventilator.pLow : ventilator.peep
 
   if (samples.length === 0) {
     return {

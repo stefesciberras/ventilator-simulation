@@ -472,7 +472,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.24</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.25</span></div>
       </header>
 
       <div className="workspace">
@@ -481,12 +481,19 @@ export default function App() {
             <div className="mode-title"><span>Mode</span><strong>{activeMode}</strong></div>
             <div className="screen-settings">
               <span>FiO₂ <b>{Math.round(effectiveVentilator.fio2 * 100)}%</b></span>
-              {(activeMode === 'APRV' || activeMode === 'BIPAP') ? (
+              {activeMode === 'APRV' ? (
                 <>
                   <span>Phigh <b>{ventilator.pHigh}</b></span>
                   <span>Plow <b>{ventilator.pLow}</b></span>
                   <span>Thigh <b>{ventilator.tHigh.toFixed(1)} s</b></span>
                   <span>Tlow <b>{ventilator.tLow.toFixed(2)} s</b></span>
+                </>
+              ) : activeMode === 'BIPAP' ? (
+                <>
+                  <span>Pinsp <b>{ventilator.pressureControl}</b></span>
+                  <span>PEEP <b>{ventilator.peep}</b></span>
+                  <span>RR <b>{ventilator.rate}</b></span>
+                  <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>
                 </>
               ) : (
                 <>
@@ -590,7 +597,7 @@ export default function App() {
               onPointerCancel={releaseInspiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginInspiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseInspiratoryHold() } }}
-            >Inspiratory hold</button>
+            >Insp Hold</button>
             <button
               className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
               disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}
@@ -600,7 +607,7 @@ export default function App() {
               onPointerCancel={releaseExpiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
-            >Expiratory hold</button>
+            >Exp Hold</button>
             <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
         </section>
