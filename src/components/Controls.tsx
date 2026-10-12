@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { PatientSettings, VentilatorMode, VentilatorSettings } from '../simulation/types'
 
 interface SliderProps {
@@ -27,7 +27,7 @@ const flowFor = (tidalVolumeMl: number, inspiratoryTime: number, plateauPercent:
 const isVolumeMandatoryMode = (mode: VentilatorMode) => mode === 'VC-AC' || mode === 'SIMV-VC'
 const isPressureMandatoryMode = (mode: VentilatorMode) => mode === 'PC-AC' || mode === 'SIMV-PC'
 const isSimvMode = (mode: VentilatorMode) => mode === 'SIMV-VC' || mode === 'SIMV-PC'
-const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV'
+const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV' && mode !== 'BIPAP'
 const usesTidalVolume = (mode: VentilatorMode) => isVolumeMandatoryMode(mode) || mode === 'VG-PC'
 
 function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange }: SliderProps) {
@@ -62,11 +62,13 @@ function SyncWindowIcon() {
 export function VentilatorControls({ settings, onChange, onReset }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void; onReset: () => void }) {
   const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })
   const currentIeRatio = ieRatioFrom(settings)
+  const [modeMenuOpen, setModeMenuOpen] = useState(false)
 
   const setMode = (mode: VentilatorMode) => {
     const next = { ...settings, mode }
     if (isVolumeMandatoryMode(mode)) next.inspiratoryFlow = flowFor(next.tidalVolume, next.inspiratoryTime, next.plateauPercent ?? 0)
     onChange(next)
+    setModeMenuOpen(false)
   }
 
   const setRate = (rate: number) => {
@@ -110,7 +112,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
     })
   }
 
-  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV']
+  const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV', 'BIPAP']
 
   return (
     <section className="control-section ventilator-settings-section">
@@ -118,15 +120,22 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
         <h2>Ventilator settings</h2>
         <button className="reset-settings-button" type="button" onClick={onReset}>Reset vent</button>
       </div>
-      <div className="mode-buttons">
-        {modes.map((mode) => (
-          <button key={mode} className={settings.mode === mode ? 'selected' : ''} onClick={() => setMode(mode)}>{mode}</button>
-        ))}
+      <div className="mode-selector">
+        <button className={`mode-menu-button ${modeMenuOpen ? 'selected' : ''}`} type="button" onClick={() => setModeMenuOpen((open) => !open)} aria-haspopup="menu" aria-expanded={modeMenuOpen}>
+          <span>MODE</span><strong>{settings.mode}</strong><span className="mode-menu-chevron">▾</span>
+        </button>
+        {modeMenuOpen && (
+          <div className="mode-menu" role="menu" aria-label="Ventilation mode">
+            {modes.map((mode) => (
+              <button key={mode} role="menuitem" className={settings.mode === mode ? 'selected' : ''} onClick={() => setMode(mode)}>{mode}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <Slider label="FiO₂" value={Math.round(settings.fio2 * 100)} unit="%" min={21} max={100} onChange={(v) => patch({ fio2: v / 100 })} />
 
-      {settings.mode === 'APRV' ? (
+      {(settings.mode === 'APRV' || settings.mode === 'BIPAP') ? (
         <>
           <Slider label="Phigh" value={settings.pHigh} unit=" cmH₂O" min={10} max={40} onChange={(v) => patch({ pHigh: Math.max(v, settings.pLow + 1) })} />
           <Slider label="Plow" value={settings.pLow} unit=" cmH₂O" min={0} max={15} onChange={(v) => patch({ pLow: Math.min(v, settings.pHigh - 1) })} />

@@ -75,6 +75,14 @@ h1 { margin: 2px 0 0; font-size: clamp(20px, 2vw, 30px); font-weight: 650; lette
 .mode-buttons, .preset-row { display: grid; gap: 6px; margin-bottom: 14px; }
 .mode-buttons { grid-template-columns: repeat(3, 1fr); }
 .mode-buttons button { padding: 8px 4px; font-size: 10px; white-space: nowrap; }
+.mode-selector { position: relative; margin-bottom: 14px; }
+.mode-menu-button { width: 100%; min-height: 48px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 8px 11px; text-align: left; }
+.mode-menu-button > span:first-child { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: #86a0ac; }
+.mode-menu-button strong { justify-self: center; color: #8ae4f7; font-size: 15px; letter-spacing: .03em; }
+.mode-menu-chevron { justify-self: end; color: #8ba0a9; font-size: 14px; }
+.mode-menu { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 6px); display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; padding: 8px; border: 1px solid #41545f; border-radius: 10px; background: #0e171c; box-shadow: 0 14px 36px rgba(0,0,0,.55); }
+.mode-menu button { padding: 9px 6px; font-size: 10px; white-space: nowrap; }
+
 .preset-row { grid-template-columns: repeat(4, 1fr); }
 .preset-row button { padding: 7px 3px; font-size: 11px; }
 .control-row { display: block; margin: 12px 0; }
