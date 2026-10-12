@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Sample } from '../simulation/types'
 
-type Signal = 'pressure' | 'flow' | 'volume'
+export type Signal = 'pressure' | 'flow' | 'volume' | 'co2' | 'oesophagealPressure'
 
 interface WaveformProps {
   samples: Sample[]
@@ -152,7 +152,7 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
 
   const stopDragging = () => { draggingRef.current = false }
 
-  const valuePrecision = signal === 'flow' ? 1 : 0
+  const valuePrecision = signal === 'flow' || signal === 'co2' || signal === 'oesophagealPressure' ? 1 : 0
 
   return (
     <div

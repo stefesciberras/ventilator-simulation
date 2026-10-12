@@ -36,6 +36,8 @@ export interface Sample {
   flow: number
   volume: number
   musclePressure: number
+  co2: number
+  oesophagealPressure: number
   phase: 'inspiration' | 'expiration'
   mode: VentilatorMode
   breathTrigger?: 'mandatory' | 'patient'

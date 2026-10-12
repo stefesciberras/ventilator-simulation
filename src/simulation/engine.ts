@@ -35,6 +35,7 @@ export interface SimulationState {
   vgSettingPressure: number
   bipapHigh: boolean
   bipapPhaseStart: number
+  expirationStartTime: number
 }
 
 export function createSimulationState(): SimulationState {
@@ -62,6 +63,7 @@ export function createSimulationState(): SimulationState {
     vgSettingPressure: 15,
     bipapHigh: true,
     bipapPhaseStart: 0,
+    expirationStartTime: -100,
   }
 }
 
@@ -73,6 +75,29 @@ function patientMusclePressure(t: number, patient: PatientSettings): number {
   if (phase >= neuralTi) return 0
   const x = phase / neuralTi
   return patient.effort * Math.sin(Math.PI * x) ** 2
+}
+
+function capnogramValue(expiratory: boolean, elapsedExpiration: number, expiratoryResistance: number): number {
+  if (!expiratory || elapsedExpiration < 0) return 0
+
+  const obstruction = clamp((expiratoryResistance - 8) / 32, 0, 1)
+  const deadSpaceDelay = 0.03 + 0.08 * obstruction
+  if (elapsedExpiration <= deadSpaceDelay) return 0
+
+  // Increased expiratory resistance slows phase II and progressively converts
+  // the normal square capnogram into the sloping "shark-fin" of obstruction.
+  const riseTime = 0.18 + 0.9 * obstruction
+  const riseProgress = clamp((elapsedExpiration - deadSpaceDelay) / riseTime, 0, 1)
+  const normalRise = 1 - Math.pow(1 - riseProgress, 4)
+  const obstructedRise = Math.pow(riseProgress, 1.25)
+  const riseShape = normalRise * (1 - obstruction) + obstructedRise * obstruction
+  const etco2 = 36 + 4 * obstruction
+
+  if (riseProgress < 1) return etco2 * riseShape
+
+  const plateauElapsed = elapsedExpiration - deadSpaceDelay - riseTime
+  const plateauSlope = 0.8 + 3.5 * obstruction
+  return clamp(etco2 + plateauElapsed * plateauSlope, 0, 50)
 }
 
 function isRequestHeld(t: number, requestTime?: number | null, releaseTime?: number | null): boolean {
@@ -92,6 +117,7 @@ function finishBreath(state: SimulationState, t: number, postCycleReleaseGuard: 
   state.breathActive = false
   state.activeBreathType = null
   state.lastBreathEnd = t
+  state.expirationStartTime = t
   state.suppressEffortUntil = t + postCycleReleaseGuard
 }
 
@@ -179,6 +205,7 @@ function twoLevelSample(
       if (synchronizedCycleOff || nominalCycleOff || forcedCycleOff) {
         state.bipapHigh = false
         state.bipapPhaseStart = t
+        state.expirationStartTime = t
       }
     } else {
       const syncWindow = clamp(nominalTe * 0.25, 0.12, 0.8)
@@ -212,6 +239,8 @@ function twoLevelSample(
     if (high && !previousHigh) {
       state.breathStart = t
       breathTrigger = 'mandatory'
+    } else if (!high && previousHigh) {
+      state.expirationStartTime = t
     }
   }
 
@@ -238,6 +267,8 @@ function twoLevelSample(
     flow: flowLs * 60,
     volume: state.volume * 1000,
     musclePressure: pmus,
+    co2: capnogramValue(!high, t - state.expirationStartTime, patient.expiratoryResistance),
+    oesophagealPressure: -5 - pmus,
     phase: high ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,
@@ -561,6 +592,8 @@ export function stepSimulation(
     flow: flowLs * 60,
     volume: state.volume * 1000,
     musclePressure: pmus,
+    co2: capnogramValue(!inspiration, t - state.expirationStartTime, patient.expiratoryResistance),
+    oesophagealPressure: -5 - pmus,
     phase: inspiration ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,
