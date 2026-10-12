@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import type { PatientSettings, VentilatorMode, VentilatorSettings } from '../simulation/types'
 
 interface SliderProps {
@@ -25,6 +26,15 @@ function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange
       <div className="control-heading"><span>{label}</span><strong>{displayValue ?? `${value}${unit}`}</strong></div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
     </label>
+  )
+}
+
+function BreathingToggleIcon({ off }: { off: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 13h4l2-5 3 9 2-6 2 2h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      {off && <path d="M4 4l16 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+    </svg>
   )
 }
 
@@ -84,40 +94,15 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
       {settings.mode !== 'PSV' && <Slider label="Rate" value={settings.rate} unit="/min" min={5} max={35} onChange={setRate} />}
       {settings.mode === 'VC-AC' && <Slider label="Tidal volume" value={settings.tidalVolume} unit=" mL" min={250} max={800} step={10} onChange={setTidalVolume} />}
       {settings.mode !== 'PSV' && (
-        <Slider
-          label="I:E ratio"
-          value={Number(currentIeRatio.toFixed(1))}
-          unit=""
-          min={MIN_IE}
-          max={MAX_IE}
-          step={0.1}
-          displayValue={`1:${currentIeRatio.toFixed(1)}`}
-          onChange={setIeRatio}
-        />
+        <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
       )}
       {settings.mode === 'VC-AC' && (
-        <Slider
-          label="Inspiratory flow"
-          value={Number(settings.inspiratoryFlow.toFixed(0))}
-          unit=" L/min"
-          min={10}
-          max={120}
-          step={1}
-          onChange={setInspiratoryFlow}
-        />
+        <Slider label="Inspiratory flow" value={Number(settings.inspiratoryFlow.toFixed(0))} unit=" L/min" min={10} max={120} step={1} onChange={setInspiratoryFlow} />
       )}
       {settings.mode === 'PC-AC' && <Slider label="Pressure control" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />}
       {settings.mode === 'PSV' && <Slider label="Pressure support" value={settings.pressureSupport} unit=" cmH₂O" min={3} max={25} onChange={(v) => patch({ pressureSupport: v })} />}
       {settings.mode === 'PSV' && (
-        <Slider
-          label="Expiratory trigger (ETS)"
-          value={settings.terminationSensitivity}
-          unit="% peak flow"
-          min={5}
-          max={80}
-          step={5}
-          onChange={(v) => patch({ terminationSensitivity: v })}
-        />
+        <Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} onChange={(v) => patch({ terminationSensitivity: v })} />
       )}
       <Slider label="Trigger" value={settings.triggerSensitivity} unit=" cmH₂O" min={1} max={8} step={0.5} onChange={(v) => patch({ triggerSensitivity: v })} />
     </section>
@@ -126,12 +111,25 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
 
 export function PatientControls({ settings, onChange, onReset }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
+  const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
+  if (settings.spontaneousRate > 0) previousSpontaneousRate.current = settings.spontaneousRate
+
+  const toggleSpontaneousBreathing = () => {
+    if (settings.spontaneousRate > 0) {
+      previousSpontaneousRate.current = settings.spontaneousRate
+      patch({ spontaneousRate: 0 })
+    } else {
+      patch({ spontaneousRate: Math.max(1, previousSpontaneousRate.current) })
+    }
+  }
+
   const presets: Record<string, Partial<PatientSettings>> = {
     Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1 },
     ARDS: { compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8 },
     COPD: { compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9 },
     Asthma: { compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8 },
   }
+
   return (
     <section className="control-section patient-section">
       <div className="control-section-title">
@@ -139,10 +137,23 @@ export function PatientControls({ settings, onChange, onReset }: { settings: Pat
         <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset patient</button>
       </div>
       <div className="preset-row">{Object.keys(presets).map((name) => <button key={name} onClick={() => patch(presets[name])}>{name}</button>)}</div>
+      <div className="patient-rr-control">
+        <div className="patient-rr-slider">
+          <Slider label="Spontaneous RR" value={settings.spontaneousRate} unit="/min" min={0} max={35} onChange={(v) => patch({ spontaneousRate: v })} />
+        </div>
+        <button
+          className={`patient-breathing-toggle ${settings.spontaneousRate === 0 ? 'off' : 'on'}`}
+          type="button"
+          onClick={toggleSpontaneousBreathing}
+          title={settings.spontaneousRate === 0 ? `Restore spontaneous breathing (${previousSpontaneousRate.current}/min)` : 'Set spontaneous respiratory rate to 0'}
+          aria-label={settings.spontaneousRate === 0 ? 'Restore spontaneous breathing' : 'Disable spontaneous breathing'}
+        >
+          <BreathingToggleIcon off={settings.spontaneousRate === 0} />
+        </button>
+      </div>
       <Slider label="Compliance" value={settings.compliance} unit=" mL/cmH₂O" min={15} max={100} onChange={(v) => patch({ compliance: v })} />
       <Slider label="Airway resistance" value={settings.resistance} unit=" cmH₂O/L/s" min={3} max={40} onChange={(v) => patch({ resistance: v })} />
       <Slider label="Expiratory resistance" value={settings.expiratoryResistance} unit=" cmH₂O/L/s" min={3} max={50} onChange={(v) => patch({ expiratoryResistance: v })} />
-      <Slider label="Spontaneous RR" value={settings.spontaneousRate} unit="/min" min={0} max={35} onChange={(v) => patch({ spontaneousRate: v })} />
       <Slider label="Inspiratory effort" value={settings.effort} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ effort: v })} />
       <Slider label="Neural inspiratory time" value={settings.neuralInspiratoryTime} unit=" s" min={0.3} max={3} step={0.1} onChange={(v) => patch({ neuralInspiratoryTime: v })} />
     </section>
