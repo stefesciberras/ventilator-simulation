@@ -3,6 +3,7 @@ import { PatientControls, VentilatorControls } from './components/Controls'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
+import { copyDiagnosticSnapshot } from './diagnostics'
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
 
 const initialVentilator: VentilatorSettings = {
@@ -330,6 +331,7 @@ export default function App() {
   const [expiratoryHoldRequestTime, setExpiratoryHoldRequestTime] = useState<number | null>(null)
   const [expiratoryHoldReleaseTime, setExpiratoryHoldReleaseTime] = useState<number | null>(null)
   const [alarmOnsets, setAlarmOnsets] = useState<{ apnea: number | null; pressure: number | null }>({ apnea: null, pressure: null })
+  const [diagnosticCopied, setDiagnosticCopied] = useState(false)
 
   const simulationStateRef = useRef(createSimulationState())
   const simulationTimeRef = useRef(0)
@@ -585,6 +587,39 @@ export default function App() {
     }, 120000)
   }
 
+  const copyDiagnostics = async () => {
+    const copied = await copyDiagnosticSnapshot({
+      appVersion: '0.36',
+      simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
+      settings: {
+        ventilator,
+        effectiveVentilator,
+        patientTarget: patient,
+        patientEffective: effectivePatientRef.current,
+        patientTransitionSeconds,
+        patientTransition: patientTransitionRef.current,
+        alarmLimits,
+        waveformDisplay,
+      },
+      alarms: { apneaActive: apneaAlarmActive, highPressureActive: pressureAlarmActive, level: alarmLevel, labels: alarmLabels, onsets: alarmOnsets },
+      measurements: {
+        peakPressureCmH2O: eventMeasures.peakPressure,
+        expiredTidalVolumeMl: eventMeasures.tidalVolume,
+        respiratoryRatePerMin: eventMeasures.respiratoryRate,
+        peepCmH2O: measures.peep,
+        meanPressureCmH2O: measures.meanPressure,
+        minuteVentilationLMin: measures.minuteVentilation,
+        endTidalCo2MmHg: endTidalCO2,
+        measuredIERatio,
+        totalPeepCmH2O: measures.totalPeep,
+        autoPeepCmH2O: measures.autoPeep,
+      },
+      cursor: { index: traceCursor, selectedSample: selectedSample ?? null },
+    }, samples, frozen && frozenSamples ? 'frozen' : 'live', DT)
+    setDiagnosticCopied(copied)
+    if (copied) window.setTimeout(() => setDiagnosticCopied(false), 1800)
+  }
+
   const resetVentilator = () => setVentilator({ ...initialVentilator })
   const resetPatient = () => setPatient({ ...initialPatient })
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
@@ -603,7 +638,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.35</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.36</span></div>
       </header>
 
       <div className="workspace">
@@ -770,6 +805,7 @@ export default function App() {
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
             >Exp Hold</button>
+            <button className={`hardware-button diagnostic-button ${diagnosticCopied ? 'active blue' : ''}`} onClick={copyDiagnostics} title="Copy current settings and visible raw waveform as diagnostic JSON" aria-label="Copy diagnostic JSON">{diagnosticCopied ? 'Copied' : 'Diagnostic'}</button>
             <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
         </section>
