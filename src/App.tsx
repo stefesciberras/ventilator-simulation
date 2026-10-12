@@ -314,10 +314,10 @@ export default function App() {
   const inspiratoryHoldPressed = inspiratoryHoldRequestTime != null && inspiratoryHoldReleaseTime == null
   const expiratoryHoldPressed = expiratoryHoldRequestTime != null && expiratoryHoldReleaseTime == null
   const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
-  const conventionalTimedMode = activeMode !== 'PSV' && activeMode !== 'APRV'
+  const conventionalTimedMode = activeMode !== 'PSV' && activeMode !== 'APRV' && activeMode !== 'BIPAP'
   const volumeMandatoryMode = activeMode === 'VC-AC' || activeMode === 'SIMV-VC'
   const simvMode = activeMode === 'SIMV-VC' || activeMode === 'SIMV-PC'
-  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV'
+  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV' && activeMode !== 'BIPAP'
 
   const latestBreathStart = useMemo(() => getLatestBreathStart(timeline), [timeline])
   const apneaAlarmActive = latestBreathStart == null
@@ -472,7 +472,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.22</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.24</span></div>
       </header>
 
       <div className="workspace">
@@ -481,7 +481,7 @@ export default function App() {
             <div className="mode-title"><span>Mode</span><strong>{activeMode}</strong></div>
             <div className="screen-settings">
               <span>FiO₂ <b>{Math.round(effectiveVentilator.fio2 * 100)}%</b></span>
-              {activeMode === 'APRV' ? (
+              {(activeMode === 'APRV' || activeMode === 'BIPAP') ? (
                 <>
                   <span>Phigh <b>{ventilator.pHigh}</b></span>
                   <span>Plow <b>{ventilator.pLow}</b></span>
@@ -566,7 +566,6 @@ export default function App() {
               <div className="metrics-title">Measured</div>
               <div className="metrics-actions">
                 <button className="metrics-alarm-limits" type="button" onClick={() => setAlarmDialogOpen(true)} title="Set alarm limits">Alarm limits</button>
-                <button className={`metrics-alarm-silence ${alarmSilenced ? 'active' : ''}`} type="button" onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
               </div>
               <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
               <Metric label="VTe" value={eventMeasures.tidalVolume.toFixed(0)} unit="mL" />
@@ -594,14 +593,15 @@ export default function App() {
             >Inspiratory hold</button>
             <button
               className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
-              disabled={frozen || activeMode === 'APRV'}
-              title={activeMode === 'APRV' ? 'Expiratory hold is unavailable in APRV' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
+              disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}
+              title={(activeMode === 'APRV' || activeMode === 'BIPAP') ? 'Expiratory hold is unavailable in two-level pressure modes' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
               onPointerUp={releaseExpiratoryHold}
               onPointerCancel={releaseExpiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
             >Expiratory hold</button>
+            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
         </section>
 

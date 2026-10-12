@@ -91,7 +91,7 @@ function finishBreath(state: SimulationState, t: number, postCycleReleaseGuard: 
   state.suppressEffortUntil = t + postCycleReleaseGuard
 }
 
-function aprvPhaseHigh(state: SimulationState, ventilator: VentilatorSettings, t: number): boolean {
+function twoLevelPhaseHigh(state: SimulationState, ventilator: VentilatorSettings, t: number): boolean {
   const tHigh = Math.max(ventilator.tHigh, 0.1)
   const tLow = Math.max(ventilator.tLow, 0.05)
   const cycle = tHigh + tLow
@@ -128,7 +128,7 @@ function adoptMode(
   }
 }
 
-function aprvSample(
+function twoLevelSample(
   state: SimulationState,
   ventilator: VentilatorSettings,
   patient: PatientSettings,
@@ -136,6 +136,7 @@ function aprvSample(
   dt: number,
   pmus: number,
   complianceL: number,
+  mode: 'APRV' | 'BIPAP',
 ): Sample {
   const tHigh = Math.max(ventilator.tHigh, 0.1)
   const tLow = Math.max(ventilator.tLow, 0.05)
@@ -148,6 +149,7 @@ function aprvSample(
   const pHigh = Math.max(ventilator.pHigh, ventilator.pLow + 1)
   const pLow = Math.min(ventilator.pLow, pHigh - 1)
   const targetPressure = high ? pHigh : pLow
+  const spontaneousPressureDeflection = high ? clamp(pmus * 0.35, 0, 6) : 0
 
   if (high && !previousHigh) state.breathStart = t
 
@@ -162,12 +164,12 @@ function aprvSample(
 
   return {
     time: Number(t.toFixed(4)),
-    pressure: clamp(targetPressure, -5, 80),
+    pressure: clamp(targetPressure - spontaneousPressureDeflection, -5, 80),
     flow: flowLs * 60,
     volume: state.volume * 1000,
     musclePressure: pmus,
     phase: high ? 'inspiration' : 'expiration',
-    mode: 'APRV',
+    mode,
     breathTrigger: high && !previousHigh ? 'mandatory' : undefined,
     expiratoryHold: false,
     simvSyncWindow: false,
@@ -190,7 +192,7 @@ export function stepSimulation(
     adoptMode(state, ventilator.mode, ventilator, t, mandatoryCycle, true)
   } else if (state.lastMode !== ventilator.mode) {
     let canAdoptMode = !state.breathActive && !state.inspiratoryHoldActive && !state.expiratoryHoldActive
-    if (state.lastMode === 'APRV') canAdoptMode = canAdoptMode && !aprvPhaseHigh(state, ventilator, t)
+    if (state.lastMode === 'APRV' || state.lastMode === 'BIPAP') canAdoptMode = canAdoptMode && !twoLevelPhaseHigh(state, ventilator, t)
     if (canAdoptMode) adoptMode(state, ventilator.mode, ventilator, t, mandatoryCycle)
   }
 
@@ -203,8 +205,8 @@ export function stepSimulation(
 
   const pmus = patientMusclePressure(t, patient)
 
-  if (mode === 'APRV') {
-    return aprvSample(state, ventilator, patient, t, dt, pmus, complianceL)
+  if (mode === 'APRV' || mode === 'BIPAP') {
+    return twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode)
   }
 
   const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
@@ -497,7 +499,7 @@ export function generateWaveforms(
 
 export function calculateMeasurements(samples: Sample[], ventilator: VentilatorSettings): Measurements {
   const latestMode = samples[samples.length - 1]?.mode ?? ventilator.mode
-  const displayedPeep = latestMode === 'APRV' ? ventilator.pLow : ventilator.peep
+  const displayedPeep = (latestMode === 'APRV' || latestMode === 'BIPAP') ? ventilator.pLow : ventilator.peep
 
   if (samples.length === 0) {
     return {
@@ -557,7 +559,7 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
   const peakPressure = Math.max(...pressureSamples.map((sample) => sample.pressure))
   const meanPressure = pressureSamples.reduce((sum, sample) => sum + sample.pressure, 0) / Math.max(1, pressureSamples.length)
 
-  const expiratoryHoldSamples = latestMode === 'APRV' ? [] : minuteSamples.filter((sample) => sample.expiratoryHold)
+  const expiratoryHoldSamples = (latestMode === 'APRV' || latestMode === 'BIPAP') ? [] : minuteSamples.filter((sample) => sample.expiratoryHold)
   const lastExpiratoryHoldSample = expiratoryHoldSamples[expiratoryHoldSamples.length - 1]
   const totalPeep = lastExpiratoryHoldSample ? lastExpiratoryHoldSample.pressure : null
   const autoPeep = totalPeep == null ? null : Math.max(0, totalPeep - displayedPeep)
