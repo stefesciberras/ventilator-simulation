@@ -13,7 +13,7 @@ const initialVentilator: VentilatorSettings = {
 }
 
 const initialPatient: PatientSettings = {
-  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 30, effortRelaxationPercent: 35, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
+  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
 }
 
 interface AlarmLimits {
@@ -594,7 +594,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.34</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.35</span></div>
       </header>
 
       <div className="workspace">

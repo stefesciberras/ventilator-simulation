@@ -88,9 +88,9 @@ function patientMusclePressure(t: number, patient: PatientSettings): number {
   const neuralTi = Math.max(patient.neuralInspiratoryTime, 0.1)
   if (phase >= neuralTi) return 0
 
-  // Active-breathing model: smooth contraction, optional plateau, then smooth relaxation.
-  // Rise and relaxation are percentages of total neural inspiratory time, so the
-  // drive profile scales with neural Ti while preserving its relative shape.
+  // Active-breathing model: sinusoidal-family Pmus envelope with smooth
+  // rise, optional hold, and smooth release. Equal 50% rise / 50% release with
+  // zero hold is exactly sin^2(pi*t/Ti). Phase percentages scale with neural Ti.
   let riseTime = neuralTi * clamp(patient.effortRisePercent ?? 30, 1, 95) / 100
   let relaxationTime = neuralTi * clamp(patient.effortRelaxationPercent ?? 35, 1, 95) / 100
   const edgeTime = riseTime + relaxationTime
@@ -697,9 +697,7 @@ export function stepSimulation(
       if (state.volume <= 0.0001) state.expiratoryTriggerReady = true
     }
 
-    const exposePatientEffort =
-      pmus > 0 &&
-      t >= state.suppressEffortUntil
+    const exposePatientEffort = pmus > 0
 
     if (exposePatientEffort) {
       const elasticPressure = state.volume / complianceL
