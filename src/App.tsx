@@ -603,7 +603,7 @@ export default function App() {
 
   const copyDiagnostics = async () => {
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.39',
+      appVersion: '0.40',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -662,7 +662,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.39</span>
+          <span className="version">v0.40</span>
         </div>
       </header>
 
@@ -798,6 +798,7 @@ export default function App() {
               <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
               <Metric label="VTe" value={eventMeasures.tidalVolume.toFixed(0)} unit="mL" />
               <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
+              <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
