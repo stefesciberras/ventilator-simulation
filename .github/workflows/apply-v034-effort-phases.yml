@@ -1,0 +1,79 @@
+name: Apply v0.34 effort phases
+on:
+  push:
+    branches: [chatgpt/v0.34-ps-zero-effort-phase]
+    paths: [.github/workflows/apply-v034-effort-phases.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.34-ps-zero-effort-phase
+      - name: Apply source changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) < count:
+                  raise SystemExit(f'{path}: marker not found: {old[:140]!r}')
+              p.write_text(text.replace(old, new, count))
+
+          # Store effort shape as percentages of total neural inspiratory time.
+          replace('src/simulation/types.ts',
+              '  effortRiseTime: number\n  effortRelaxationTime: number\n',
+              '  effortRisePercent: number\n  effortRelaxationPercent: number\n')
+
+          replace('src/App.tsx',
+              'compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRiseTime: 0.3, effortRelaxationTime: 0.35, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,',
+              'compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 30, effortRelaxationPercent: 35, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,')
+          replace('src/App.tsx',
+              '    effortRiseTime: lerp(from.effortRiseTime, to.effortRiseTime),\n    effortRelaxationTime: lerp(from.effortRelaxationTime, to.effortRelaxationTime),\n',
+              '    effortRisePercent: lerp(from.effortRisePercent, to.effortRisePercent),\n    effortRelaxationPercent: lerp(from.effortRelaxationPercent, to.effortRelaxationPercent),\n')
+          replace('src/App.tsx', '<span className="version">v0.33</span>', '<span className="version">v0.34</span>')
+
+          # Allow pressure support down to zero in every mode where PS is adjustable.
+          replace('src/components/Controls.tsx',
+              '<Slider label="Pressure support" value={settings.pressureSupport} unit=" cmH₂O" min={3} max={25} onChange={(v) => patch({ pressureSupport: v })} />',
+              '<Slider label="Pressure support" value={settings.pressureSupport} unit=" cmH₂O" min={0} max={25} onChange={(v) => patch({ pressureSupport: v })} />')
+
+          # Add a two-handle phase editor: end of rise and start of relaxation.
+          slider_marker = '''function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange }: SliderProps) {\n  return (\n    <label className="control-row">\n      <div className="control-heading"><span>{label}</span><strong>{displayValue ?? `${value}${unit}`}</strong></div>\n      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />\n    </label>\n  )\n}\n'''
+          phase_control = slider_marker + '''\nfunction EffortPhaseControl({\n  risePercent,\n  relaxationPercent,\n  onChange,\n}: {\n  risePercent: number\n  relaxationPercent: number\n  onChange: (risePercent: number, relaxationPercent: number) => void\n}) {\n  const riseEnd = clamp(Math.round(risePercent / 5) * 5, 5, 90)\n  const relaxationStart = clamp(100 - Math.round(relaxationPercent / 5) * 5, 10, 95)\n  const normalizedRiseEnd = Math.min(riseEnd, relaxationStart - 5)\n  const normalizedRelaxationStart = Math.max(relaxationStart, normalizedRiseEnd + 5)\n  const plateauPercent = normalizedRelaxationStart - normalizedRiseEnd\n  const normalizedRelaxationPercent = 100 - normalizedRelaxationStart\n\n  const setRiseEnd = (value: number) => {\n    const nextRise = clamp(value, 5, normalizedRelaxationStart - 5)\n    onChange(nextRise, normalizedRelaxationPercent)\n  }\n\n  const setRelaxationStart = (value: number) => {\n    const nextStart = clamp(value, normalizedRiseEnd + 5, 95)\n    onChange(normalizedRiseEnd, 100 - nextStart)\n  }\n\n  return (\n    <div className="effort-phase-control">\n      <div className="control-heading"><span>Effort phases</span><strong>% neural Ti</strong></div>\n      <div className="effort-phase-track">\n        <span className="effort-phase-segment rise" style={{ left: 0, width: `${normalizedRiseEnd}%` }} />\n        <span className="effort-phase-segment plateau" style={{ left: `${normalizedRiseEnd}%`, width: `${plateauPercent}%` }} />\n        <span className="effort-phase-segment relaxation" style={{ left: `${normalizedRelaxationStart}%`, width: `${normalizedRelaxationPercent}%` }} />\n        <input className="effort-phase-range rise-handle" type="range" min={5} max={90} step={5} value={normalizedRiseEnd} onChange={(event) => setRiseEnd(Number(event.target.value))} aria-label="End of effort rise as percent of neural inspiratory time" />\n        <input className="effort-phase-range relaxation-handle" type="range" min={10} max={95} step={5} value={normalizedRelaxationStart} onChange={(event) => setRelaxationStart(Number(event.target.value))} aria-label="Start of effort relaxation as percent of neural inspiratory time" />\n      </div>\n      <div className="effort-phase-values">\n        <span>Rise <b>{normalizedRiseEnd}%</b></span>\n        <span>Plateau <b>{plateauPercent}%</b></span>\n        <span>Relax <b>{normalizedRelaxationPercent}%</b></span>\n      </div>\n    </div>\n  )\n}\n'''
+          replace('src/components/Controls.tsx', slider_marker, phase_control)
+
+          replace('src/components/Controls.tsx',
+              '    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRiseTime: 0.3, effortRelaxationTime: 0.35 },\n    ARDS: { compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8, effortRiseTime: 0.15, effortRelaxationTime: 0.2 },\n    COPD: { compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRiseTime: 0.25, effortRelaxationTime: 0.35 },\n    Asthma: { compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRiseTime: 0.15, effortRelaxationTime: 0.25 },',
+              '    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 30, effortRelaxationPercent: 35 },\n    ARDS: { compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25 },\n    COPD: { compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40 },\n    Asthma: { compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30 },')
+
+          replace('src/components/Controls.tsx',
+              '      <Slider label="Neural inspiratory time" value={settings.neuralInspiratoryTime} unit=" s" min={0.3} max={3} step={0.1} onChange={(v) => patch({ neuralInspiratoryTime: v })} />\n      <Slider label="Effort rise time" value={settings.effortRiseTime ?? 0.3} unit=" s" min={0.05} max={1.5} step={0.05} onChange={(v) => patch({ effortRiseTime: v })} />\n      <Slider label="Effort relaxation time" value={settings.effortRelaxationTime ?? 0.35} unit=" s" min={0.05} max={1.5} step={0.05} onChange={(v) => patch({ effortRelaxationTime: v })} />',
+              '      <Slider label="Neural inspiratory time" value={settings.neuralInspiratoryTime} unit=" s" min={0.3} max={3} step={0.1} onChange={(v) => patch({ neuralInspiratoryTime: v })} />\n      <EffortPhaseControl\n        risePercent={settings.effortRisePercent ?? 30}\n        relaxationPercent={settings.effortRelaxationPercent ?? 35}\n        onChange={(effortRisePercent, effortRelaxationPercent) => patch({ effortRisePercent, effortRelaxationPercent })}\n      />')
+
+          # The engine converts the percentages into seconds on every sample, so changing neural Ti scales the whole Pmus profile.
+          old_engine = '''  // Active-breathing model: smooth contraction, optional plateau, then smooth relaxation.\n  // Rise and relaxation are specified independently because trigger delay depends strongly\n  // on dPmus/dt, not just on peak effort. If their requested durations exceed neural Ti,\n  // they are proportionally compressed and the plateau disappears.\n  let riseTime = clamp(patient.effortRiseTime ?? 0.3, 0.02, neuralTi)\n  let relaxationTime = clamp(patient.effortRelaxationTime ?? 0.35, 0.02, neuralTi)\n  const edgeTime = riseTime + relaxationTime\n'''
+          new_engine = '''  // Active-breathing model: smooth contraction, optional plateau, then smooth relaxation.\n  // Rise and relaxation are percentages of total neural inspiratory time, so the\n  // drive profile scales with neural Ti while preserving its relative shape.\n  let riseTime = neuralTi * clamp(patient.effortRisePercent ?? 30, 1, 95) / 100\n  let relaxationTime = neuralTi * clamp(patient.effortRelaxationPercent ?? 35, 1, 95) / 100\n  const edgeTime = riseTime + relaxationTime\n'''
+          replace('src/simulation/engine.ts', old_engine, new_engine)
+
+          # Styling for a single bar with two independently draggable phase markers.
+          styles = Path('src/styles.css')
+          css = styles.read_text()
+          css += '''\n.effort-phase-control { margin: 12px 0 16px; }\n.effort-phase-track { position: relative; height: 24px; margin: 2px 2px 4px; }\n.effort-phase-segment { position: absolute; top: 9px; height: 6px; pointer-events: none; }\n.effort-phase-segment.rise { background: rgba(112,197,132,.45); border-radius: 4px 0 0 4px; }\n.effort-phase-segment.plateau { background: rgba(112,197,132,.9); }\n.effort-phase-segment.relaxation { background: rgba(112,197,132,.45); border-radius: 0 4px 4px 0; }\n.effort-phase-range { position: absolute; inset: 0; width: 100%; height: 24px; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; pointer-events: none; }\n.effort-phase-range::-webkit-slider-runnable-track { height: 6px; background: transparent; }\n.effort-phase-range::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: -5px; border: 2px solid #d8f1dd; border-radius: 50%; background: #70c584; appearance: none; -webkit-appearance: none; pointer-events: auto; cursor: ew-resize; box-shadow: 0 1px 4px rgba(0,0,0,.45); }\n.effort-phase-range::-moz-range-track { height: 6px; background: transparent; }\n.effort-phase-range::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid #d8f1dd; border-radius: 50%; background: #70c584; pointer-events: auto; cursor: ew-resize; box-shadow: 0 1px 4px rgba(0,0,0,.45); }\n.effort-phase-range.rise-handle { z-index: 2; }\n.effort-phase-range.relaxation-handle { z-index: 3; }\n.effort-phase-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; color: #7f9e87; font-size: 9px; text-align: center; }\n.effort-phase-values b { color: #c9e5cf; font-weight: 650; }\n'''
+          styles.write_text(css)
+
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit v0.34
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/Controls.tsx src/simulation/types.ts src/simulation/engine.ts src/styles.css
+          git commit -m "v0.34: allow zero PS and add neural effort phase control"
+          git push origin HEAD:chatgpt/v0.34-ps-zero-effort-phase
