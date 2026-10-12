@@ -6,7 +6,7 @@ import type { PatientSettings, Sample, VentilatorSettings } from './simulation/t
 
 const initialVentilator: VentilatorSettings = {
   mode: 'VC-AC', fio2: 0.35, peep: 5, rate: 14, tidalVolume: 500, inspiratoryTime: 1,
-  inspiratoryFlow: 30, pressureControl: 15, pressureSupport: 10, triggerSensitivity: 2, terminationSensitivity: 25,
+  inspiratoryFlow: 30, plateauPercent: 0, pressureControl: 15, pressureSupport: 10, triggerSensitivity: 2, terminationSensitivity: 25,
 }
 
 const initialPatient: PatientSettings = {
@@ -209,8 +209,18 @@ export default function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.15</span></div>
+        <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
+        <button
+          className={`top-simulation-pause ${frozen ? 'paused' : ''}`}
+          type="button"
+          onClick={toggleFreeze}
+          aria-label={frozen ? 'Resume whole simulation' : 'Pause whole simulation'}
+          title={frozen ? 'Resume whole simulation' : 'Pause whole simulation'}
+        >
+          <PauseIcon paused={frozen} />
+          <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
+        </button>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.16</span></div>
       </header>
 
       <div className="workspace">
@@ -222,6 +232,7 @@ export default function App() {
               <span>PEEP <b>{ventilator.peep}</b></span>
               {ventilator.mode !== 'PSV' && <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>}
               {ventilator.mode === 'VC-AC' && <span>Flow <b>{ventilator.inspiratoryFlow.toFixed(0)} L/min</b></span>}
+              {ventilator.mode === 'VC-AC' && <span>Plateau <b>{ventilator.plateauPercent ?? 0}%</b></span>}
               {ventilator.mode === 'PSV' && <span>ETS <b>{ventilator.terminationSensitivity}%</b></span>}
             </div>
           </div>
