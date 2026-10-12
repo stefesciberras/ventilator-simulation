@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { Waveform } from './components/Waveform'
+import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
 
@@ -26,10 +27,32 @@ interface EventMeasurements {
   respiratoryRate: number
 }
 
+type OptionalWaveform = Extract<Signal, 'volume' | 'co2' | 'oesophagealPressure'>
+
+interface WaveformDisplaySettings {
+  third: OptionalWaveform
+  fourth: OptionalWaveform | null
+}
+
+const waveformOptions: Array<{ value: OptionalWaveform; label: string }> = [
+  { value: 'volume', label: 'Volume' },
+  { value: 'co2', label: 'CO₂' },
+  { value: 'oesophagealPressure', label: 'Oesophageal pressure' },
+]
+
+const waveformConfig: Record<OptionalWaveform, { label: string; unit: string; min: number; max: number; accent: string }> = {
+  volume: { label: 'Volume', unit: 'mL', min: 0, max: 900, accent: '#83e28f' },
+  co2: { label: 'CO₂', unit: 'mmHg', min: 0, max: 50, accent: '#d9c85e' },
+  oesophagealPressure: { label: 'Pes', unit: 'cmH₂O', min: -20, max: 5, accent: '#d790e8' },
+}
+
+const initialWaveformDisplay: WaveformDisplaySettings = { third: 'volume', fourth: null }
+
 const initialAlarmLimits: AlarmLimits = { apneaTime: 30, peakPressure: 40 }
 const VENTILATOR_STORAGE_KEY = 'eduvent.ventilator-settings'
 const PATIENT_STORAGE_KEY = 'eduvent.patient-settings'
 const ALARM_STORAGE_KEY = 'eduvent.alarm-limits'
+const WAVEFORM_STORAGE_KEY = 'eduvent.waveform-display'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
@@ -226,6 +249,15 @@ export default function App() {
       peakPressure: Math.max(0, Math.min(60, stored.peakPressure)),
     }
   })
+  const [waveformDisplay, setWaveformDisplay] = useState<WaveformDisplaySettings>(() => {
+    const stored = loadStoredSettings(WAVEFORM_STORAGE_KEY, initialWaveformDisplay)
+    const valid = (value: unknown): value is OptionalWaveform =>
+      value === 'volume' || value === 'co2' || value === 'oesophagealPressure'
+    return {
+      third: valid(stored.third) ? stored.third : 'volume',
+      fourth: valid(stored.fourth) ? stored.fourth : null,
+    }
+  })
   const [alarmDialogOpen, setAlarmDialogOpen] = useState(false)
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [nebuliser, setNebuliser] = useState(false)
@@ -267,6 +299,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
   }, [alarmLimits])
+
+  useEffect(() => {
+    window.localStorage.setItem(WAVEFORM_STORAGE_KEY, JSON.stringify(waveformDisplay))
+  }, [waveformDisplay])
 
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
   const holdOptions = useMemo(() => ({
@@ -472,7 +508,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.26</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.27</span></div>
       </header>
 
       <div className="workspace">
@@ -563,10 +599,40 @@ export default function App() {
               </div>
             )}
 
-            <div className="waveforms">
+            <div className={`waveforms ${waveformDisplay.fourth ? 'four-traces' : ''}`}>
               <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime showSimvSyncWindow={ventilator.showSimvSyncWindow} />
               <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
-              <Waveform samples={samples} signal="volume" label="Volume" unit="mL" min={0} max={900} accent="#83e28f" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
+
+              <div className="waveform-options-bar">
+                <label>
+                  <span>Trace 3</span>
+                  <select value={waveformDisplay.third} onChange={(event) => setWaveformDisplay((current) => ({ ...current, third: event.target.value as OptionalWaveform }))}>
+                    {waveformOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                {waveformDisplay.fourth ? (
+                  <>
+                    <label>
+                      <span>Trace 4</span>
+                      <select value={waveformDisplay.fourth} onChange={(event) => setWaveformDisplay((current) => ({ ...current, fourth: event.target.value as OptionalWaveform }))}>
+                        {waveformOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    <button type="button" onClick={() => setWaveformDisplay((current) => ({ ...current, fourth: null }))}>− 4th trace</button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => setWaveformDisplay((current) => ({ ...current, fourth: current.third === 'volume' ? 'co2' : 'volume' }))}>+ 4th trace</button>
+                )}
+              </div>
+
+              {(() => {
+                const config = waveformConfig[waveformDisplay.third]
+                return <Waveform samples={samples} signal={waveformDisplay.third} label={config.label} unit={config.unit} min={config.min} max={config.max} accent={config.accent} frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
+              })()}
+              {waveformDisplay.fourth && (() => {
+                const config = waveformConfig[waveformDisplay.fourth]
+                return <Waveform samples={samples} signal={waveformDisplay.fourth} label={config.label} unit={config.unit} min={config.min} max={config.max} accent={config.accent} frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
+              })()}
             </div>
 
             <aside className="metrics-panel" aria-label="Measured values">
