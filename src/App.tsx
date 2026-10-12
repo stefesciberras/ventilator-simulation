@@ -101,17 +101,65 @@ function VerticalDualAlarmSlider({ label, unit, min, max, step, low, high, onLow
   const span = Math.max(0.0001, max - min)
   const lowPct = ((low - min) / span) * 100
   const highPct = ((high - min) / span) * 100
+  const dragging = useRef<'low' | 'high' | null>(null)
+  const sliderHeight = 190
+  const handleSize = 20
+  const travel = sliderHeight - handleSize
+  const lowTop = (1 - lowPct / 100) * travel
+  const highTop = (1 - highPct / 100) * travel
+  const precision = step < 1 ? Math.max(0, Math.ceil(-Math.log10(step))) : 0
+
+  const quantise = (value: number) => {
+    const stepped = min + Math.round((value - min) / step) * step
+    return Number(Math.min(max, Math.max(min, stepped)).toFixed(precision))
+  }
+  const setHandleValue = (handle: 'low' | 'high', value: number) => {
+    const next = quantise(value)
+    if (handle === 'low') onLowChange(Math.min(next, high))
+    else onHighChange(Math.max(next, low))
+  }
+  const valueFromPointer = (clientY: number, track: HTMLDivElement) => {
+    const rect = track.getBoundingClientRect()
+    const usableTop = rect.top + handleSize / 2
+    const usableHeight = Math.max(1, rect.height - handleSize)
+    const fraction = Math.min(1, Math.max(0, (usableTop + usableHeight - clientY) / usableHeight))
+    return quantise(min + fraction * span)
+  }
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const value = valueFromPointer(event.clientY, event.currentTarget)
+    const handle: 'low' | 'high' = Math.abs(value - low) <= Math.abs(value - high) ? 'low' : 'high'
+    dragging.current = handle
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setHandleValue(handle, value)
+  }
+  const continueDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) return
+    event.preventDefault()
+    setHandleValue(dragging.current, valueFromPointer(event.clientY, event.currentTarget))
+  }
+  const stopDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    dragging.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+  const onHandleKey = (handle: 'low' | 'high', value: number, event: React.KeyboardEvent<HTMLDivElement>) => {
+    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : event.key === 'ArrowDown' || event.key === 'ArrowLeft' ? -1 : 0
+    if (!direction) return
+    event.preventDefault()
+    setHandleValue(handle, value + direction * step)
+  }
+
   return (
     <div className="alarm-slider-card vertical-dual-card">
       <span>{label}</span>
       <strong>{low}–{high} <small>{unit}</small></strong>
       <div className="vertical-dual-slider-wrap">
         <em>{max}</em>
-        <div className="vertical-dual-range">
+        <div className="vertical-dual-range" onPointerDown={startDrag} onPointerMove={continueDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
           <div className="vertical-dual-track" />
-          <div className="vertical-dual-active" style={{ bottom: `${lowPct}%`, height: `${Math.max(0, highPct - lowPct)}%` }} />
-          <input className="vertical-dual-input low" type="range" min={min} max={max} step={step} value={low} onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)} onChange={(event) => onLowChange(Number(event.target.value))} aria-label={`${label} minimum alarm limit`} />
-          <input className="vertical-dual-input high" type="range" min={min} max={max} step={step} value={high} onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)} onChange={(event) => onHighChange(Number(event.target.value))} aria-label={`${label} maximum alarm limit`} />
+          <div className="vertical-dual-active" style={{ bottom: `${10 + lowPct * 1.7}px`, height: `${Math.max(0, highPct - lowPct) * 1.7}px` }} />
+          <div className="vertical-dual-handle low" style={{ top: `${lowTop}px` }} role="slider" tabIndex={0} aria-label={`${label} minimum alarm limit`} aria-valuemin={min} aria-valuemax={high} aria-valuenow={low} onKeyDown={(event) => onHandleKey('low', low, event)} />
+          <div className="vertical-dual-handle high" style={{ top: `${highTop}px` }} role="slider" tabIndex={0} aria-label={`${label} maximum alarm limit`} aria-valuemin={low} aria-valuemax={max} aria-valuenow={high} onKeyDown={(event) => onHandleKey('high', high, event)} />
         </div>
         <em>{min}</em>
       </div>
@@ -739,7 +787,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.43',
+      appVersion: '0.44',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -818,7 +866,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.43</span>
+          <span className="version">v0.44</span>
         </div>
       </header>
 
@@ -936,10 +984,10 @@ export default function App() {
             </div>
 
             <aside className="metrics-panel" aria-label="Measured values">
-              <div className="metrics-title">Measured</div>
               <div className="metrics-actions">
                 <button className="metrics-alarm-limits" type="button" onClick={() => setAlarmDialogOpen(true)} title="Set alarm limits">Alarm limits</button>
               </div>
+              <div className="metrics-title">Measured</div>
               <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
               <Metric label="VTe" value={eventMeasures.tidalVolume.toFixed(0)} unit="mL" />
               <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />

@@ -62,17 +62,13 @@
 .vertical-dual-card > strong { margin-top: 4px; }
 .vertical-dual-slider-wrap { height: 220px; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 5px; }
 .vertical-dual-slider-wrap em { color: #667982; font-size: 9px; font-style: normal; }
-.vertical-dual-range { position: relative; width: 34px; height: 190px; }
-.vertical-dual-track, .vertical-dual-active { position: absolute; left: 14px; width: 6px; border-radius: 999px; pointer-events: none; }
-.vertical-dual-track { top: 0; bottom: 0; background: #3f4b52; }
+.vertical-dual-range { position: relative; width: 46px; height: 190px; touch-action: none; cursor: ns-resize; }
+.vertical-dual-track, .vertical-dual-active { position: absolute; left: 20px; width: 6px; border-radius: 999px; pointer-events: none; }
+.vertical-dual-track { top: 10px; bottom: 10px; background: #3f4b52; }
 .vertical-dual-active { background: #e6b83c; }
-.vertical-dual-input { position: absolute; inset: 0; width: 34px !important; height: 190px; margin: 0; writing-mode: vertical-lr; direction: rtl; appearance: none; -webkit-appearance: none; background: transparent; pointer-events: none; }
-.vertical-dual-input::-webkit-slider-runnable-track { width: 6px; background: transparent; }
-.vertical-dual-input::-webkit-slider-thumb { width: 16px; height: 16px; margin-left: -5px; border: 2px solid #f7dda0; border-radius: 50%; background: #d8a92b; pointer-events: auto; -webkit-appearance: none; cursor: ns-resize; box-shadow: 0 1px 4px rgba(0,0,0,.55); }
-.vertical-dual-input::-moz-range-track { width: 6px; background: transparent; }
-.vertical-dual-input::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid #f7dda0; border-radius: 50%; background: #d8a92b; pointer-events: auto; cursor: ns-resize; box-shadow: 0 1px 4px rgba(0,0,0,.55); }
-.vertical-dual-input.low { z-index: 3; }
-.vertical-dual-input.high { z-index: 4; }
+.vertical-dual-handle { position: absolute; left: 13px; z-index: 3; width: 20px; height: 20px; border: 2px solid #f7dda0; border-radius: 50%; background: #d8a92b; box-shadow: 0 1px 4px rgba(0,0,0,.55); pointer-events: none; }
+.vertical-dual-handle:focus-visible { outline: 2px solid #8edcff; outline-offset: 2px; }
+.vertical-dual-handle.high { z-index: 4; }
 @media (max-width: 760px) {
   .alarm-dialog { width: min(96vw, 760px); }
   .alarm-slider-grid { grid-template-columns: repeat(5,110px); }
@@ -89,4 +85,4 @@
   -webkit-user-select: none;
   user-select: none;
 }
-.vertical-dual-input { -webkit-tap-highlight-color: transparent; }
+.vertical-dual-range { -webkit-tap-highlight-color: transparent; }
