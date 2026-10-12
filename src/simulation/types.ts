@@ -1,4 +1,4 @@
-export type VentilatorMode = 'VC-AC' | 'PC-AC' | 'PSV'
+export type VentilatorMode = 'VC-AC' | 'PC-AC' | 'PSV' | 'SIMV-VC' | 'SIMV-PC' | 'VG-PC' | 'APRV'
 
 export interface PatientSettings {
   compliance: number
@@ -22,6 +22,10 @@ export interface VentilatorSettings {
   pressureSupport: number
   triggerSensitivity: number
   terminationSensitivity: number
+  pHigh: number
+  pLow: number
+  tHigh: number
+  tLow: number
 }
 
 export interface Sample {
