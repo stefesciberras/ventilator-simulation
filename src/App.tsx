@@ -13,7 +13,7 @@ const initialVentilator: VentilatorSettings = {
 }
 
 const initialPatient: PatientSettings = {
-  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRiseTime: 0.3, effortRelaxationTime: 0.35, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
+  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 30, effortRelaxationPercent: 35, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
 }
 
 interface AlarmLimits {
@@ -87,8 +87,8 @@ function interpolatePatientSettings(from: PatientSettings, to: PatientSettings, 
     spontaneousRate: lerp(from.spontaneousRate, to.spontaneousRate),
     effort: lerp(from.effort, to.effort),
     neuralInspiratoryTime: lerp(from.neuralInspiratoryTime, to.neuralInspiratoryTime),
-    effortRiseTime: lerp(from.effortRiseTime, to.effortRiseTime),
-    effortRelaxationTime: lerp(from.effortRelaxationTime, to.effortRelaxationTime),
+    effortRisePercent: lerp(from.effortRisePercent, to.effortRisePercent),
+    effortRelaxationPercent: lerp(from.effortRelaxationPercent, to.effortRelaxationPercent),
     endExpiratoryOesophagealPressure: lerp(from.endExpiratoryOesophagealPressure, to.endExpiratoryOesophagealPressure),
     co2Production: lerp(from.co2Production, to.co2Production),
     deadSpaceVolume: lerp(from.deadSpaceVolume, to.deadSpaceVolume),
@@ -594,7 +594,7 @@ export default function App() {
           <PauseIcon paused={frozen} />
           <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
         </button>
-        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.33</span></div>
+        <div className="status-cluster"><span className={`status-dot ${frozen ? 'paused' : ''}`} />{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'} <span className="version">v0.34</span></div>
       </header>
 
       <div className="workspace">

@@ -7,8 +7,8 @@ export interface PatientSettings {
   spontaneousRate: number
   effort: number
   neuralInspiratoryTime: number
-  effortRiseTime: number
-  effortRelaxationTime: number
+  effortRisePercent: number
+  effortRelaxationPercent: number
   endExpiratoryOesophagealPressure: number
   co2Production: number
   deadSpaceVolume: number

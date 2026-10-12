@@ -89,11 +89,10 @@ function patientMusclePressure(t: number, patient: PatientSettings): number {
   if (phase >= neuralTi) return 0
 
   // Active-breathing model: smooth contraction, optional plateau, then smooth relaxation.
-  // Rise and relaxation are specified independently because trigger delay depends strongly
-  // on dPmus/dt, not just on peak effort. If their requested durations exceed neural Ti,
-  // they are proportionally compressed and the plateau disappears.
-  let riseTime = clamp(patient.effortRiseTime ?? 0.3, 0.02, neuralTi)
-  let relaxationTime = clamp(patient.effortRelaxationTime ?? 0.35, 0.02, neuralTi)
+  // Rise and relaxation are percentages of total neural inspiratory time, so the
+  // drive profile scales with neural Ti while preserving its relative shape.
+  let riseTime = neuralTi * clamp(patient.effortRisePercent ?? 30, 1, 95) / 100
+  let relaxationTime = neuralTi * clamp(patient.effortRelaxationPercent ?? 35, 1, 95) / 100
   const edgeTime = riseTime + relaxationTime
   if (edgeTime > neuralTi) {
     const scale = neuralTi / edgeTime
