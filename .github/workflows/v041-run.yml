@@ -1,0 +1,31 @@
+name: v041 run
+"on":
+  push:
+    branches:
+      - chatgpt/v0.41-expanded-alarms
+    paths:
+      - .github/workflows/v041-run.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.41-expanded-alarms
+      - name: Apply v0.41 patch
+        run: |
+          echo 'REPLACE_B64' | base64 -d > /tmp/patch_v041.py
+          python /tmp/patch_v041.py
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/alarm.css
+          git commit -m "v0.41: expand ventilator alarm limits"
+          git push origin HEAD:chatgpt/v0.41-expanded-alarms
