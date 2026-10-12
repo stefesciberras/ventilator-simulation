@@ -1,0 +1,61 @@
+name: Apply v0.35 normal Pmus model
+on:
+  push:
+    branches: [chatgpt/v0.35-normal-pmus]
+    paths: [.github/workflows/apply-v035-pmus-normal.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.35-normal-pmus
+      - name: Apply source changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) < count:
+                  raise SystemExit(f'{path}: marker not found: {old[:160]!r}')
+              p.write_text(text.replace(old, new, count))
+
+          replace('src/App.tsx',
+              'effortRisePercent: 30, effortRelaxationPercent: 35,',
+              'effortRisePercent: 50, effortRelaxationPercent: 50,')
+          replace('src/App.tsx', '<span className="version">v0.34</span>', '<span className="version">v0.35</span>')
+
+          replace('src/components/Controls.tsx',
+              '    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 30, effortRelaxationPercent: 35 },',
+              '    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50 },')
+          replace('src/components/Controls.tsx',
+              '  const riseEnd = clamp(Math.round(risePercent / 5) * 5, 5, 90)\n  const relaxationStart = clamp(100 - Math.round(relaxationPercent / 5) * 5, 10, 95)\n  const normalizedRiseEnd = Math.min(riseEnd, relaxationStart - 5)\n  const normalizedRelaxationStart = Math.max(relaxationStart, normalizedRiseEnd + 5)',
+              '  const riseEnd = clamp(Math.round(risePercent / 5) * 5, 5, 95)\n  const relaxationStart = clamp(100 - Math.round(relaxationPercent / 5) * 5, 5, 95)\n  const normalizedRiseEnd = Math.min(riseEnd, relaxationStart)\n  const normalizedRelaxationStart = Math.max(relaxationStart, normalizedRiseEnd)')
+          replace('src/components/Controls.tsx', '    const nextRise = clamp(value, 5, normalizedRelaxationStart - 5)', '    const nextRise = clamp(value, 5, normalizedRelaxationStart)')
+          replace('src/components/Controls.tsx', '    const nextStart = clamp(value, normalizedRiseEnd + 5, 95)', '    const nextStart = clamp(value, normalizedRiseEnd, 95)')
+          replace('src/components/Controls.tsx', 'type="range" min={5} max={90} step={5} value={normalizedRiseEnd}', 'type="range" min={5} max={95} step={5} value={normalizedRiseEnd}')
+          replace('src/components/Controls.tsx', 'type="range" min={10} max={95} step={5} value={normalizedRelaxationStart}', 'type="range" min={5} max={95} step={5} value={normalizedRelaxationStart}')
+          replace('src/components/Controls.tsx', '<span>Plateau <b>{plateauPercent}%</b></span>', '<span>Hold <b>{plateauPercent}%</b></span>')
+
+          replace('src/simulation/engine.ts',
+              '''    const exposePatientEffort =\n      pmus > 0 &&\n      t >= state.suppressEffortUntil\n''',
+              '''    const exposePatientEffort = pmus > 0\n''')
+          replace('src/simulation/engine.ts',
+              '''  // Active-breathing model: smooth contraction, optional plateau, then smooth relaxation.\n  // Rise and relaxation are percentages of total neural inspiratory time, so the\n  // drive profile scales with neural Ti while preserving its relative shape.\n''',
+              '''  // Active-breathing model: sinusoidal-family Pmus envelope with smooth\n  // rise, optional hold, and smooth release. Equal 50% rise / 50% release with\n  // zero hold is exactly sin^2(pi*t/Ti). Phase percentages scale with neural Ti.\n''')
+
+      - name: Install
+        run: npm install --no-package-lock
+      - name: Build
+        run: npm run build
+      - name: Commit v0.35
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/Controls.tsx src/simulation/engine.ts
+          git commit -m "v0.35: restore sinusoidal normal Pmus and continuous PSV effort"
+          git push origin HEAD:chatgpt/v0.35-normal-pmus
