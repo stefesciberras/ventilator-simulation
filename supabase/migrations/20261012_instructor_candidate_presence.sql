@@ -1,0 +1,1 @@
+-- EDUVENT v0.46 instructor dashboard candidate presence/state telemetry.
