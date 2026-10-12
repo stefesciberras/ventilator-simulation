@@ -1,5 +1,6 @@
 import type { Sample } from './simulation/types'
 
+export const APP_VERSION = '0.46'
 export type DiagnosticWaveformSource = 'live' | 'frozen'
 
 export async function copyDiagnosticSnapshot(
@@ -12,6 +13,7 @@ export async function copyDiagnosticSnapshot(
     schema: 'eduvent-diagnostic-v1',
     capturedAt: new Date().toISOString(),
     ...diagnostic,
+    appVersion: APP_VERSION,
     waveform: {
       source,
       sampleIntervalSeconds,
