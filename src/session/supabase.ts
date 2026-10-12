@@ -33,6 +33,19 @@ export interface TeachingSessionRow {
   transition_ms: number
 }
 
+export interface SessionMemberRow {
+  id: string
+  session_id: string
+  user_id: string
+  role: 'candidate' | 'instructor'
+  display_name: string | null
+  joined_at: string
+  last_seen: string
+  patient_settings: PatientSettings | Record<string, never>
+  ventilator_settings: VentilatorSettings | Record<string, never>
+  state_updated_at: string | null
+}
+
 export async function ensureAnonymousSession() {
   const { data: existing, error: existingError } = await supabase.auth.getSession()
   if (existingError) throw existingError
@@ -89,6 +102,29 @@ export async function updateTeachingSession(sessionId: string, patch: Partial<Te
   return data as TeachingSessionRow
 }
 
+export async function fetchSessionMembers(sessionId: string): Promise<SessionMemberRow[]> {
+  const { data, error } = await supabase
+    .from('session_members')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('joined_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as SessionMemberRow[]
+}
+
+export async function touchSessionMember(
+  sessionId: string,
+  patient: PatientSettings,
+  ventilator: VentilatorSettings,
+) {
+  const { error } = await supabase.rpc('touch_session_member', {
+    p_session_id: sessionId,
+    p_patient_settings: patient,
+    p_ventilator_settings: ventilator,
+  })
+  if (error) throw error
+}
+
 export function subscribeToTeachingSession(
   sessionId: string,
   onUpdate: (session: TeachingSessionRow) => void,
@@ -107,6 +143,25 @@ export function subscribeToTeachingSession(
       (payload) => onUpdate(payload.new as TeachingSessionRow),
     )
     .subscribe((status) => onStatus(status))
+}
+
+export function subscribeToSessionMembers(
+  sessionId: string,
+  onChange: () => void,
+): RealtimeChannel {
+  return supabase
+    .channel(`eduvent-session-members-${sessionId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'session_members',
+        filter: `session_id=eq.${sessionId}`,
+      },
+      () => onChange(),
+    )
+    .subscribe()
 }
 
 export async function closeTeachingSessionChannel(channel: RealtimeChannel | null) {
