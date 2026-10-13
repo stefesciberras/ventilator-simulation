@@ -4,6 +4,7 @@ import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
 import { InstructorAccountControls } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
+import { InteractiveVentilatorStrip } from './components/InteractiveVentilatorStrip'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
@@ -1063,7 +1064,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.72',
+      appVersion: '0.74',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1161,47 +1162,43 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.72</span>
+          <span className="version">v0.74</span>
         </div>
       </header>
 
       <div className="workspace">
         <section className="ventilator-console">
-          <div className="screen-header">
+          <div className="console-mode-bar">
             <div className="mode-title"><span>Mode</span><strong>{activeMode}</strong></div>
-            <div className="screen-settings">
-              <span>FiO₂ <b>{Math.round(effectiveVentilator.fio2 * 100)}%</b></span>
-              {activeMode === 'APRV' ? (
-                <>
-                  <span>Phigh <b>{ventilator.pHigh}</b></span>
-                  <span>Plow <b>{ventilator.pLow}</b></span>
-                  <span>Thigh <b>{ventilator.tHigh.toFixed(1)} s</b></span>
-                  <span>Tlow <b>{ventilator.tLow.toFixed(2)} s</b></span>
-                </>
-              ) : activeMode === 'BIPAP' ? (
-                <>
-                  <span>Pinsp <b>{ventilator.pressureControl}</b></span>
-                  <span>PEEP <b>{ventilator.peep}</b></span>
-                  <span>RR <b>{ventilator.rate}</b></span>
-                  <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>
-                </>
-              ) : (
-                <>
-                  <span>PEEP <b>{ventilator.peep}</b></span>
-                  {conventionalTimedMode && <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>}
-                  {volumeMandatoryMode && <span>Flow <b>{ventilator.inspiratoryFlow.toFixed(0)} L/min</b></span>}
-                  {volumeMandatoryMode && <span>Plateau <b>{ventilator.plateauPercent ?? 0}%</b></span>}
-                  {activeMode === 'VG-PC' && (<>
-                    <span>VT target <b>{ventilator.tidalVolume} mL</b></span>
-                    <span>Pinsp <b>{(ventilator.peep + simulationStateRef.current.vgPressureControl).toFixed(0)} cmH₂O</b></span>
-                    <span>Pmax <b>{ventilator.volumeGuaranteePressureLimit ?? 40} cmH₂O</b></span>
-                  </>)}
-                  {(activeMode === 'PSV' || simvMode) && <span>PS <b>{ventilator.pressureSupport}</b></span>}
-                  {(activeMode === 'PSV' || simvMode) && <span>ETS <b>{ventilator.terminationSensitivity}%</b></span>}
-                  {simvMode && <span>Sync <b>{ventilator.simvSyncWindowPercent ?? 25}%</b></span>}
-                </>
-              )}
-            </div>
+            <span className="console-control-hint">Ventilator settings are adjusted from the lower control strip</span>
+          </div>
+
+          <div className="action-bar console-top-actions">
+            <button className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`} onClick={() => setOxygenBoost((v) => !v)} title="O₂ enrichment" aria-label="O₂ enrichment">O₂</button>
+            <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
+            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume simulation' : 'Pause and freeze waveforms'} aria-label={frozen ? 'Resume simulation' : 'Pause simulation'}><PauseIcon paused={frozen} /></button>
+            <button
+              className={`hardware-button ${inspiratoryHoldPressed ? 'active' : ''}`}
+              disabled={frozen || !manualHoldAvailable}
+              title={!manualHoldAvailable ? 'Inspiratory hold is unavailable in this mode' : 'Press and hold for an inspiratory occlusion; release to freeze the trace'}
+              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginInspiratoryHold() }}
+              onPointerUp={releaseInspiratoryHold}
+              onPointerCancel={releaseInspiratoryHold}
+              onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginInspiratoryHold() } }}
+              onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseInspiratoryHold() } }}
+            >Insp Hold</button>
+            <button
+              className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
+              disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}
+              title={(activeMode === 'APRV' || activeMode === 'BIPAP') ? 'Expiratory hold is unavailable in two-level pressure modes' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
+              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
+              onPointerUp={releaseExpiratoryHold}
+              onPointerCancel={releaseExpiratoryHold}
+              onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
+              onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
+            >Exp Hold</button>
+            <button className="hardware-button icon-button measurements-button" type="button" onClick={() => setMeasurementsOpen(true)} title="Physiological measurements" aria-label="Open physiological measurements"><MeasurementsInfoIcon /></button>
+            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
 
           <div className="alarm-slot" aria-live="polite">
@@ -1305,33 +1302,11 @@ export default function App() {
             </aside>
           </div>
 
-          <div className="action-bar">
-            <button className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`} onClick={() => setOxygenBoost((v) => !v)} title="O₂ enrichment" aria-label="O₂ enrichment">O₂</button>
-            <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
-            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume simulation' : 'Pause and freeze waveforms'} aria-label={frozen ? 'Resume simulation' : 'Pause simulation'}><PauseIcon paused={frozen} /></button>
-            <button
-              className={`hardware-button ${inspiratoryHoldPressed ? 'active' : ''}`}
-              disabled={frozen || !manualHoldAvailable}
-              title={!manualHoldAvailable ? 'Inspiratory hold is unavailable in this mode' : 'Press and hold for an inspiratory occlusion; release to freeze the trace'}
-              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginInspiratoryHold() }}
-              onPointerUp={releaseInspiratoryHold}
-              onPointerCancel={releaseInspiratoryHold}
-              onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginInspiratoryHold() } }}
-              onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseInspiratoryHold() } }}
-            >Insp Hold</button>
-            <button
-              className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
-              disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}
-              title={(activeMode === 'APRV' || activeMode === 'BIPAP') ? 'Expiratory hold is unavailable in two-level pressure modes' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
-              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
-              onPointerUp={releaseExpiratoryHold}
-              onPointerCancel={releaseExpiratoryHold}
-              onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
-              onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
-            >Exp Hold</button>
-            <button className="hardware-button icon-button measurements-button" type="button" onClick={() => setMeasurementsOpen(true)} title="Physiological measurements" aria-label="Open physiological measurements"><MeasurementsInfoIcon /></button>
-            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
-          </div>
+          <InteractiveVentilatorStrip
+            settings={ventilator}
+            onChange={setVentilator}
+            disabled={teachingSession.candidateVentilatorLocked}
+          />
         </section>
 
         <aside className="control-panel">
