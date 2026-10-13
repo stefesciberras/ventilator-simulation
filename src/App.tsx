@@ -1240,7 +1240,7 @@ export default function App() {
               </div>
               <div className="metrics-title">Measured</div>
               <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
-              <Metric label="VTe" value={tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '—'} unit={tidalVolumeDisplayAvailable ? 'mL' : ''} />
+              <Metric label="VTe" value={tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '-'} unit={tidalVolumeDisplayAvailable ? 'mL' : ''} />
               <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
               <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
