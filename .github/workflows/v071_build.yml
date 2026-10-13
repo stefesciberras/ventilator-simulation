@@ -1,0 +1,56 @@
+name: Build v0.71 apnea alarm and VTe
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.71-apnea-alarm-vte
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.71-apnea-alarm-vte
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Apply patch
+        run: python scripts/v071_patch.py
+      - name: Build
+        run: npm run build
+      - name: Semantic checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          app = Path('src/App.tsx').read_text()
+          diag = Path('src/diagnostics.ts').read_text()
+          assert 'const tidalVolumeDisplayAvailable = volumeZeroDuration <= 10' in app
+          assert "value={tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '—'}" in app
+          assert 'const suppressSecondaryAlarmsForApnea = apneaAlarmActive' in app
+          assert "key === 'apnea' || key === 'oxygenFailure'" in app
+          assert "appVersion: '0.71'" in app
+          assert "APP_VERSION = '0.71'" in diag
+          print('semantic checks passed')
+          PY
+      - name: Remove temporary files
+        run: rm -f .github/workflows/v071_build.yml scripts/v071_patch.py
+      - name: Restore generated TypeScript build cache
+        run: git checkout -- tsconfig.app.tsbuildinfo 2>/dev/null || true
+      - name: Commit implementation
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No implementation changes to commit"
+          else
+            git commit -m "v0.71 Suppress secondary apnoea alarms and expire VTe"
+            git push origin HEAD:chatgpt/v0.71-apnea-alarm-vte
+          fi
