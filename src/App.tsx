@@ -508,6 +508,7 @@ export default function App() {
   const [measurementsOpen, setMeasurementsOpen] = useState(false)
   const [showPatientEffort, setShowPatientEffort] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem(SHOW_PATIENT_EFFORT_STORAGE_KEY) === 'true')
   const [oxygenBoost, setOxygenBoost] = useState(false)
+  const [oxygenBoostSecondsRemaining, setOxygenBoostSecondsRemaining] = useState(0)
   const [nebuliser, setNebuliser] = useState(false)
   const [alarmSilenced, setAlarmSilenced] = useState(false)
   const [alarmClock, setAlarmClock] = useState(() => Date.now())
@@ -605,6 +606,7 @@ export default function App() {
   const effectivePatientRef = useRef<PatientSettings>({ ...patient })
   const patientTransitionRef = useRef<{ from: PatientSettings; to: PatientSettings; start: number; duration: number } | null>(null)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
+  const oxygenBoostDeadlineRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const alarmHistoryRef = useRef<Record<string, { everTriggered: boolean; triggerCount: number; firstTriggeredAt: number | null; lastTriggeredAt: number | null }>>({})
   const [timeline, setTimeline] = useState<Sample[]>(() => {
@@ -665,6 +667,25 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(SHOW_PATIENT_EFFORT_STORAGE_KEY, String(showPatientEffort))
   }, [showPatientEffort])
+
+  useEffect(() => {
+    if (!oxygenBoost) return
+
+    const updateCountdown = () => {
+      const deadline = oxygenBoostDeadlineRef.current
+      if (deadline == null) return
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+      setOxygenBoostSecondsRemaining(remaining)
+      if (remaining <= 0) {
+        oxygenBoostDeadlineRef.current = null
+        setOxygenBoost(false)
+      }
+    }
+
+    updateCountdown()
+    const interval = window.setInterval(updateCountdown, 250)
+    return () => window.clearInterval(interval)
+  }, [oxygenBoost])
 
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
   const holdOptions = useMemo(() => ({
@@ -1064,7 +1085,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.77',
+      appVersion: '0.77.1',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1116,6 +1137,20 @@ export default function App() {
     if (copied) window.setTimeout(() => setDiagnosticCopied(false), 1800)
   }
 
+  const toggleOxygenBoost = () => {
+    if (oxygenBoost) {
+      oxygenBoostDeadlineRef.current = null
+      setOxygenBoost(false)
+      setOxygenBoostSecondsRemaining(0)
+      return
+    }
+
+    oxygenBoostDeadlineRef.current = Date.now() + 60_000
+    setOxygenBoostSecondsRemaining(60)
+    setOxygenBoost(true)
+  }
+
+  const oxygenBoostTimer = `0:${String(oxygenBoostSecondsRemaining).padStart(2, '0')}`
   const resetVentilator = () => setVentilator({ ...initialVentilator })
   const resetPatient = () => setPatient({ ...initialPatient })
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
@@ -1162,7 +1197,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.77</span>
+          <span className="version">v0.77.1</span>
         </div>
       </header>
 
@@ -1175,7 +1210,15 @@ export default function App() {
               disabled={teachingSession.candidateVentilatorLocked}
             />
             <div className="action-bar console-top-actions">
-            <button className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`} onClick={() => setOxygenBoost((v) => !v)} title="O₂ enrichment" aria-label="O₂ enrichment">O₂</button>
+            <div className={`oxygen-enrichment-control ${oxygenBoost ? 'active' : ''}`}>
+              <button
+                className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`}
+                onClick={toggleOxygenBoost}
+                title={oxygenBoost ? 'O₂ enrichment active at 100% — press to cancel' : 'O₂ enrichment: 100% oxygen for 1 minute'}
+                aria-label={oxygenBoost ? `O₂ enrichment active, ${oxygenBoostSecondsRemaining} seconds remaining. Press to cancel.` : 'Start O₂ enrichment at 100 percent for 1 minute'}
+              >O₂</button>
+              {oxygenBoost && <span className="oxygen-enrichment-timer" aria-live="polite">{oxygenBoostTimer}</span>}
+            </div>
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
             <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume simulation' : 'Pause and freeze waveforms'} aria-label={frozen ? 'Resume simulation' : 'Pause simulation'}><PauseIcon paused={frozen} /></button>
             <button

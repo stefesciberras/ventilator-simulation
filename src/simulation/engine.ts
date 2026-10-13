@@ -897,8 +897,19 @@ export function stepSimulation(
       : elapsed > 0.2 && state.peakInspiratoryFlow > 0.01 && flowLs <= state.peakInspiratoryFlow * terminationFraction
     const timeLimit = elapsed >= Math.max(patient.neuralInspiratoryTime * 1.5, 1.5)
     if (cycleOff || timeLimit) {
-      finishBreath(state, t, postCycleReleaseGuard)
-      inspiration = false
+      // In SIMV, a patient-triggered breath may be pressure supported rather
+      // than mandatory. An inspiratory-hold request should still occlude that
+      // assisted breath at cycle-off, just as it does for VC/PC mandatory and
+      // assist-control breaths. Pure PSV remains excluded by the UI.
+      if (inspiratoryHoldRequested && isSimv(mode)) {
+        state.inspiratoryHoldActive = true
+        inspiration = true
+        flowLs = 0
+        pressure = ventilator.peep + state.volume / complianceL - pmus
+      } else {
+        finishBreath(state, t, postCycleReleaseGuard)
+        inspiration = false
+      }
     }
   }
 
