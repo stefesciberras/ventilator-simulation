@@ -14,6 +14,23 @@ export interface PhysiologicalMeasurements {
   expiratoryTimeConstant: number | null
   inspiratoryTime: number | null
   expiratoryTime: number | null
+  peakPressure: number | null
+  plateauPressure: number | null
+  drivingPressure: number | null
+  meanPressure: number | null
+  measuredPeep: number | null
+  autoPeep: number | null
+  inspiratoryFlow: number | null
+  expiratoryFlow: number | null
+  inspiredTidalVolume: number | null
+  expiredTidalVolume: number | null
+  endTidalCO2: number | null
+  oxygenPercent: number
+  pesMax: number | null
+  pesPlateau: number | null
+  pesMin: number | null
+  transpulmonaryInspiratory: number | null
+  transpulmonaryExpiratory: number | null
 }
 
 const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
@@ -98,9 +115,7 @@ function measuredInspiratoryMechanics(samples: Sample[]) {
   for (let index = 1; index < samples.length; index += 1) {
     const previous = samples[index - 1]
     const current = samples[index]
-    if (previous.phase === 'expiration' && current.phase === 'inspiration') {
-      inspirationBaselineVolume = previous.volume
-    }
+    if (previous.phase === 'expiration' && current.phase === 'inspiration') inspirationBaselineVolume = previous.volume
     if (current.phase !== 'inspiration' || inspirationBaselineVolume == null) continue
     const flow = current.flow / 60
     if (flow <= 0.03) continue
@@ -130,9 +145,7 @@ function measuredInspiratoryMechanics(samples: Sample[]) {
 
   const elastance = (vy * ff - fy * vf) / determinant
   const resistance = (fy * vv - vy * vf) / determinant
-  if (!Number.isFinite(elastance) || !Number.isFinite(resistance) || elastance <= 0 || resistance <= 0) {
-    return { resistance: null, compliance: null }
-  }
+  if (!Number.isFinite(elastance) || !Number.isFinite(resistance) || elastance <= 0 || resistance <= 0) return { resistance: null, compliance: null }
 
   const compliance = 1000 / elastance
   return {
@@ -165,6 +178,75 @@ function expiratoryComplianceFromHold(samples: Sample[], baselinePressure: numbe
   return median(estimates)
 }
 
+function latestCompletedInspiratoryVolume(samples: Sample[]) {
+  let startVolume: number | null = null
+  let latest: number | null = null
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    if (previous.phase === 'expiration' && current.phase === 'inspiration') startVolume = previous.volume
+    if (previous.phase === 'inspiration' && current.phase === 'expiration' && startVolume != null) {
+      latest = Math.max(0, previous.volume - startVolume)
+      startVolume = null
+    }
+  }
+  return latest
+}
+
+function latestCompletedExpiredVolume(samples: Sample[]) {
+  let startVolume: number | null = null
+  let latest: number | null = null
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    if (previous.phase === 'inspiration' && current.phase === 'expiration') startVolume = previous.volume
+    if (previous.phase === 'expiration' && current.phase === 'inspiration' && startVolume != null) {
+      latest = Math.max(0, startVolume - previous.volume)
+      startVolume = null
+    }
+  }
+  return latest
+}
+
+function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings) {
+  const recent = recentWindow(samples, 20)
+  const passiveEndExpiration = recent
+    .filter((sample) => sample.phase === 'expiration' && Math.abs(sample.flow) < 2 && sample.musclePressure < 0.5)
+  const measuredPeep = median(passiveEndExpiration.map((sample) => sample.pressure))
+  const plateauPressure = median(recent
+    .filter((sample) => sample.phase === 'inspiration' && Math.abs(sample.flow) < 1 && sample.musclePressure < 0.5)
+    .slice(-80)
+    .map((sample) => sample.pressure))
+  const pesPlateau = median(recent
+    .filter((sample) => sample.phase === 'inspiration' && Math.abs(sample.flow) < 1)
+    .slice(-80)
+    .map((sample) => sample.oesophagealPressure))
+  const endExpPes = median(passiveEndExpiration.map((sample) => sample.oesophagealPressure))
+  const co2Expiration = recent.filter((sample) => sample.phase === 'expiration').map((sample) => sample.co2)
+  const pesValues = recent.map((sample) => sample.oesophagealPressure)
+  const positiveFlows = recent.map((sample) => sample.flow).filter((flow) => flow > 0)
+  const negativeFlows = recent.map((sample) => Math.abs(Math.min(0, sample.flow))).filter((flow) => flow > 0)
+
+  return {
+    peakPressure: recent.length ? Math.max(...recent.map((sample) => sample.pressure)) : null,
+    plateauPressure,
+    drivingPressure: plateauPressure != null && measuredPeep != null ? plateauPressure - measuredPeep : null,
+    meanPressure: mean(recent.map((sample) => sample.pressure)),
+    measuredPeep,
+    autoPeep: measuredPeep == null ? null : Math.max(0, measuredPeep - ventilator.peep),
+    inspiratoryFlow: positiveFlows.length ? Math.max(...positiveFlows) : null,
+    expiratoryFlow: negativeFlows.length ? Math.max(...negativeFlows) : null,
+    inspiredTidalVolume: latestCompletedInspiratoryVolume(recent),
+    expiredTidalVolume: latestCompletedExpiredVolume(recent),
+    endTidalCO2: co2Expiration.length ? Math.max(...co2Expiration) : null,
+    pesMax: pesValues.length ? Math.max(...pesValues) : null,
+    pesPlateau,
+    pesMin: pesValues.length ? Math.min(...pesValues) : null,
+    transpulmonaryInspiratory: plateauPressure != null && pesPlateau != null ? plateauPressure - pesPlateau : null,
+    transpulmonaryExpiratory: measuredPeep != null && endExpPes != null ? measuredPeep - endExpPes : null,
+  }
+}
+
 export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator: VentilatorSettings): PhysiologicalMeasurements {
   const window = recentWindow(samples, 60)
   const rates = measuredRatesAndVentilation(window)
@@ -174,12 +256,9 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
   const baselinePressure = median(window
     .filter((sample) => sample.phase === 'expiration' && sample.musclePressure < 0.1 && Math.abs(sample.flow) < 5)
     .map((sample) => sample.pressure))
+  const monitor = waveformMonitorValues(window, ventilator)
 
   const holdCompliance = expiratoryComplianceFromHold(window, baselinePressure)
-  // The current EDUVENT lung is a single-compartment model with one elastic
-  // compliance for inspiration and expiration. When no expiratory hold is
-  // available, use the independently waveform-derived inspiratory compliance
-  // as the elastic term needed to separate Rexp from the measured expiratory RC.
   const expiratoryCompliance = holdCompliance ?? inspiratoryMechanics.compliance
   const expiratoryResistance = expiratoryTimeConstant != null && expiratoryCompliance != null
     ? expiratoryTimeConstant / (expiratoryCompliance / 1000)
@@ -190,9 +269,7 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
 
   const setRate = ventilator.mode === 'PSV' || ventilator.mode === 'APRV' ? null : ventilator.rate
   const volumeTargeted = ventilator.mode === 'VC-AC' || ventilator.mode === 'SIMV-VC' || ventilator.mode === 'VG-PC'
-  const setMinuteVentilation = volumeTargeted && setRate != null
-    ? ventilator.tidalVolume * setRate / 1000
-    : null
+  const setMinuteVentilation = volumeTargeted && setRate != null ? ventilator.tidalVolume * setRate / 1000 : null
 
   return {
     setMinuteVentilation,
@@ -208,5 +285,22 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
     expiratoryTimeConstant,
     inspiratoryTime: timing.inspiratoryTime,
     expiratoryTime: timing.expiratoryTime,
+    peakPressure: monitor.peakPressure,
+    plateauPressure: monitor.plateauPressure,
+    drivingPressure: monitor.drivingPressure,
+    meanPressure: monitor.meanPressure,
+    measuredPeep: monitor.measuredPeep,
+    autoPeep: monitor.autoPeep,
+    inspiratoryFlow: monitor.inspiratoryFlow,
+    expiratoryFlow: monitor.expiratoryFlow,
+    inspiredTidalVolume: monitor.inspiredTidalVolume,
+    expiredTidalVolume: monitor.expiredTidalVolume,
+    endTidalCO2: monitor.endTidalCO2,
+    oxygenPercent: ventilator.fio2 * 100,
+    pesMax: monitor.pesMax,
+    pesPlateau: monitor.pesPlateau,
+    pesMin: monitor.pesMin,
+    transpulmonaryInspiratory: monitor.transpulmonaryInspiratory,
+    transpulmonaryExpiratory: monitor.transpulmonaryExpiratory,
   }
 }

@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react'
 import type { PhysiologicalMeasurements } from '../physiologyMeasurements'
+
+type MonitorTab = 'general' | 'co2' | 'oesophageal'
 
 interface Props {
   open: boolean
@@ -6,65 +9,117 @@ interface Props {
   onClose: () => void
 }
 
-const value = (number: number | null, digits = 1) => number == null || !Number.isFinite(number) ? '—' : number.toFixed(digits)
+const display = (number: number | null | undefined, digits = 1) => number == null || !Number.isFinite(number) ? '—' : number.toFixed(digits)
 
-function Measurement({ label, valueText, unit }: { label: string; valueText: string; unit: string }) {
+function MonitorMetric({ value, label, unit, digits = 1 }: { value: number | null | undefined; label: string; unit: string; digits?: number }) {
   return (
-    <div className="physiology-measurement-card">
-      <span>{label}</span>
-      <strong>{valueText}</strong>
-      <small>{unit}</small>
+    <div className="monitor-metric">
+      <strong>{display(value, digits)}</strong>
+      <div><span>{label}</span><small>{unit}</small></div>
     </div>
   )
 }
 
-function MeasurementRow({ label, children, columns = 2 }: { label: string; children: React.ReactNode; columns?: 2 | 3 }) {
-  return (
-    <section className="physiology-row-group">
-      <h3>{label}</h3>
-      <div className={`physiology-row columns-${columns}`}>{children}</div>
-    </section>
-  )
+function oesophagealTraceIsInUse() {
+  if (typeof document === 'undefined') return false
+  return Array.from(document.querySelectorAll<HTMLSelectElement>('.waveform-options-bar select'))
+    .some((select) => select.value === 'oesophagealPressure')
 }
 
 export function PhysiologyMeasurementsDialog({ open, measurements, onClose }: Props) {
+  const [tab, setTab] = useState<MonitorTab>('general')
+  const oesophagealEnabled = open ? oesophagealTraceIsInUse() : false
+  const spontaneousMinuteVentilation = measurements.totalRespiratoryRate > 0
+    ? measurements.actualMinuteVentilation * Math.min(1, measurements.triggeredRespiratoryRate / measurements.totalRespiratoryRate)
+    : 0
+  const measuredIERatio = measurements.inspiratoryTime != null && measurements.expiratoryTime != null && measurements.inspiratoryTime > 0
+    ? measurements.expiratoryTime / measurements.inspiratoryTime
+    : null
+
+  useEffect(() => {
+    if (!oesophagealEnabled && tab === 'oesophageal') setTab('general')
+  }, [oesophagealEnabled, tab])
+
   if (!open) return null
 
   return (
     <div className="physiology-dialog-backdrop" onMouseDown={onClose}>
-      <section className="physiology-dialog physiology-dialog-compact" role="dialog" aria-modal="true" aria-label="Physiological measurements" onMouseDown={(event) => event.stopPropagation()}>
-        <button className="physiology-dialog-close" type="button" onClick={onClose} aria-label="Close measurements">×</button>
+      <section className="physiology-dialog monitor-dialog" role="dialog" aria-modal="true" aria-label="Physiological measurements" onMouseDown={(event) => event.stopPropagation()}>
+        <nav className="monitor-tabs" aria-label="Monitoring categories">
+          <button className="monitor-close" type="button" onClick={onClose} aria-label="Close measurements">×</button>
+          <button className={tab === 'general' ? 'active' : ''} type="button" onClick={() => setTab('general')}>General</button>
+          <button className={tab === 'co2' ? 'active' : ''} type="button" onClick={() => setTab('co2')}>CO₂</button>
+          <button className={tab === 'oesophageal' ? 'active' : ''} type="button" disabled={!oesophagealEnabled} title={!oesophagealEnabled ? 'Enable an oesophageal-pressure trace to use this tab' : undefined} onClick={() => setTab('oesophageal')}>Oesophageal</button>
+        </nav>
 
-        <MeasurementRow label="Minute ventilation">
-          <Measurement label="Set MinVol" valueText={value(measurements.setMinuteVentilation)} unit="L/min" />
-          <Measurement label="Actual MV" valueText={value(measurements.actualMinuteVentilation)} unit="L/min" />
-        </MeasurementRow>
+        <div className="monitor-panel">
+          {tab === 'general' && (
+            <div className="monitor-grid general-monitor-grid">
+              <div className="monitor-column">
+                <MonitorMetric value={measurements.peakPressure} label="Ppeak" unit="cmH₂O" digits={0} />
+                <MonitorMetric value={measurements.plateauPressure} label="Pplateau" unit="cmH₂O" digits={0} />
+                <MonitorMetric value={measurements.drivingPressure} label="ΔP" unit="cmH₂O" digits={0} />
+                <MonitorMetric value={measurements.meanPressure} label="Pmean" unit="cmH₂O" digits={1} />
+                <MonitorMetric value={measurements.measuredPeep} label="PEEP/CPAP" unit="cmH₂O" digits={1} />
+                <MonitorMetric value={measurements.autoPeep} label="AutoPEEP" unit="cmH₂O" digits={1} />
+              </div>
 
-        <MeasurementRow label="Respiratory rate" columns={3}>
-          <Measurement label="Total RR" valueText={value(measurements.totalRespiratoryRate, 0)} unit="/min" />
-          <Measurement label="Set RR" valueText={value(measurements.setRespiratoryRate, 0)} unit="/min" />
-          <Measurement label="Triggered RR" valueText={value(measurements.triggeredRespiratoryRate, 0)} unit="/min" />
-        </MeasurementRow>
+              <div className="monitor-column">
+                <MonitorMetric value={measurements.inspiratoryFlow} label="Insp Flow" unit="L/min" digits={1} />
+                <MonitorMetric value={measurements.expiratoryFlow} label="Exp Flow" unit="L/min" digits={1} />
+                <MonitorMetric value={measurements.inspiredTidalVolume} label="VTI" unit="mL" digits={0} />
+                <MonitorMetric value={measurements.expiredTidalVolume} label="VTE" unit="mL" digits={0} />
+                <MonitorMetric value={measurements.actualMinuteVentilation} label="ExpMinVol" unit="L/min" digits={1} />
+                <MonitorMetric value={spontaneousMinuteVentilation} label="MVSpont" unit="L/min" digits={2} />
+              </div>
 
-        <MeasurementRow label="Compliance">
-          <Measurement label="Inspiratory" valueText={value(measurements.inspiratoryCompliance, 0)} unit="mL/cmH₂O" />
-          <Measurement label="Expiratory" valueText={value(measurements.expiratoryCompliance, 0)} unit="mL/cmH₂O" />
-        </MeasurementRow>
+              <div className="monitor-column">
+                <MonitorMetric value={measurements.totalRespiratoryRate} label="fTotal" unit="b/min" digits={0} />
+                <MonitorMetric value={measurements.triggeredRespiratoryRate} label="fSpont" unit="b/min" digits={0} />
+                <MonitorMetric value={measurements.inspiratoryTime} label="TI" unit="s" digits={2} />
+                <MonitorMetric value={measurements.expiratoryTime} label="TE" unit="s" digits={2} />
+                <div className="monitor-metric">
+                  <strong>{measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(2)}`}</strong>
+                  <div><span>I:E</span><small></small></div>
+                </div>
+                <MonitorMetric value={measurements.setMinuteVentilation} label="Set MinVol" unit="L/min" digits={1} />
+              </div>
 
-        <MeasurementRow label="Resistance">
-          <Measurement label="Inspiratory" valueText={value(measurements.inspiratoryResistance)} unit="cmH₂O/L/s" />
-          <Measurement label="Expiratory" valueText={value(measurements.expiratoryResistance)} unit="cmH₂O/L/s" />
-        </MeasurementRow>
+              <div className="monitor-column">
+                <MonitorMetric value={measurements.inspiratoryResistance} label="Rinsp" unit="cmH₂O/L/s" digits={1} />
+                <MonitorMetric value={measurements.expiratoryResistance} label="Rexp" unit="cmH₂O/L/s" digits={1} />
+                <MonitorMetric value={measurements.inspiratoryCompliance} label="Cstat" unit="mL/cmH₂O" digits={1} />
+                <MonitorMetric value={measurements.inspiratoryTimeConstant} label="RCinsp" unit="s" digits={2} />
+                <MonitorMetric value={measurements.expiratoryTimeConstant} label="RCexp" unit="s" digits={2} />
+                <MonitorMetric value={measurements.oxygenPercent} label="Oxygen" unit="%" digits={0} />
+              </div>
+            </div>
+          )}
 
-        <MeasurementRow label="Time constants">
-          <Measurement label="RCi" valueText={value(measurements.inspiratoryTimeConstant, 2)} unit="s" />
-          <Measurement label="RCe" valueText={value(measurements.expiratoryTimeConstant, 2)} unit="s" />
-        </MeasurementRow>
+          {tab === 'co2' && (
+            <div className="monitor-grid monitor-grid-sparse">
+              <div className="monitor-column">
+                <MonitorMetric value={measurements.endTidalCO2} label="EtCO₂" unit="mmHg" digits={0} />
+              </div>
+            </div>
+          )}
 
-        <MeasurementRow label="Timing">
-          <Measurement label="Inspiratory time" valueText={value(measurements.inspiratoryTime, 2)} unit="s" />
-          <Measurement label="Expiratory time" valueText={value(measurements.expiratoryTime, 2)} unit="s" />
-        </MeasurementRow>
+          {tab === 'oesophageal' && oesophagealEnabled && (
+            <div className="monitor-grid monitor-grid-sparse oesophageal-monitor-grid">
+              <div className="monitor-column">
+                <MonitorMetric value={measurements.pesMax} label="Pes max" unit="cmH₂O" digits={1} />
+                <MonitorMetric value={measurements.pesPlateau} label="Pes plateau" unit="cmH₂O" digits={1} />
+                <MonitorMetric value={measurements.pesMin} label="Pes min" unit="cmH₂O" digits={1} />
+                <MonitorMetric value={null} label="Pes P0.1" unit="cmH₂O" />
+                <MonitorMetric value={null} label="Pes PTP" unit="cmH₂O·s" />
+              </div>
+              <div className="monitor-column">
+                <MonitorMetric value={measurements.transpulmonaryInspiratory} label="Ptrans I" unit="cmH₂O" digits={1} />
+                <MonitorMetric value={measurements.transpulmonaryExpiratory} label="Ptrans E" unit="cmH₂O" digits={1} />
+              </div>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   )
