@@ -179,9 +179,10 @@ function updateAlveolarCo2(
 
   // Effective whole-body CO2 capacitance. Dissolved CO2 plus bicarbonate/protein
   // buffering make the physiologic store much larger than the lung gas volume.
-  // At VCO2 250 mL/min, 1.1 L/kg PBW gives an apnoeic rise of about 3 mmHg/min
-  // in a typical adult. VCO2 scales the rise directly.
-  const co2BufferCapacityL = Math.max(30, pbw * 1.1)
+  // For teaching, use a deliberately smaller effective buffered store than a
+  // full physiologic model: at VCO2 250 mL/min, 0.55 L/kg PBW gives an apnoeic
+  // rise of about 6 mmHg/min in a typical adult. VCO2 scales the rise directly.
+  const co2BufferCapacityL = Math.max(15, pbw * 0.55)
 
   // Rearranged alveolar-ventilation equation: at equilibrium,
   // PCO2 = 0.863 * VCO2 / VA. Away from equilibrium, current PCO2 and VA
@@ -295,10 +296,12 @@ function updateAirwayCo2(
   const activeExpiratoryFlow = expiratory && flowLmin < -0.5
   if (activeExpiratoryFlow) state.lastExpiratoryFlowTime = t
 
-  // A sidestream/mainstream capnogram samples gas moving past the airway sensor.
-  // Once expiratory flow has effectively stopped, the airway/sampling volume is
-  // no longer replenished from alveoli and its displayed CO2 slowly washes out,
-  // even though the patient's internal CO2 store continues to rise.
+  // During an ordinary expiration, do not wash the sampled airway CO2 away just
+  // because expiratory flow has fallen below the terminal-flow threshold. Hold
+  // the last sampled value for the first 8 seconds of expiration. Only a truly
+  // prolonged expiration/apnoeic interval starts the slow no-flow washout.
+  if (!activeExpiratoryFlow && expiratory && elapsedExpiration < 8) return state.airwayCo2
+
   const target = activeExpiratoryFlow
     ? capnogramSourceValue(true, elapsedExpiration, patient, complianceL, state.alveolarCo2)
     : 0
