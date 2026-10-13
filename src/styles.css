@@ -64,6 +64,14 @@ h1 { margin: 2px 0 0; font-size: clamp(20px, 2vw, 30px); font-weight: 650; lette
 .metric span { display: block; font-size: 9px; color: #83939b; text-transform: none; letter-spacing: .08em; }
 .metric strong { display: inline-block; margin-top: 1px; font-size: 24px; line-height: 1.05; font-weight: 650; color: #e9f5f8; }
 .metric small { margin-left: 4px; font-size: 8px; color: #768891; }
+.gas-metric { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); padding: 0; text-align: center; }
+.gas-metric-item { min-width: 0; padding: 11px 5px; }
+.gas-metric-item + .gas-metric-item { border-left: 1px solid #26343c; }
+.gas-metric-item > div { display: flex; justify-content: center; align-items: baseline; gap: 3px; white-space: nowrap; }
+.gas-metric-item span { letter-spacing: .06em; }
+.gas-metric-item small { margin-left: 0; }
+.gas-metric-item.co2 span, .gas-metric-item.co2 strong, .gas-metric-item.co2 small { color: #f6df63; }
+.gas-metric-item.spo2 span, .gas-metric-item.spo2 strong, .gas-metric-item.spo2 small { color: #69d8f1; }
 .metrics-spacer { flex: 0 0 12px; min-height: 12px; border-bottom: 1px solid #26343c; background: #091014; }
 .cursor-hint { margin-top: auto; padding: 10px; font-size: 9px; line-height: 1.35; color: #b56e6e; text-align: center; }
 .action-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; background: #11191e; border-top: 1px solid #253139; }

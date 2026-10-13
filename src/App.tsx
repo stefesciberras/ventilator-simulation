@@ -97,6 +97,21 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>
 }
 
+function GasMetric({ etco2, spo2 }: { etco2: string; spo2: string }) {
+  return (
+    <div className="metric gas-metric" aria-label={`EtCO₂ ${etco2} millimetres of mercury, SpO₂ ${spo2} percent`}>
+      <div className="gas-metric-item co2">
+        <span>EtCO₂</span>
+        <div><strong>{etco2}</strong><small>mmHg</small></div>
+      </div>
+      <div className="gas-metric-item spo2">
+        <span>SpO₂</span>
+        <div><strong>{spo2}</strong><small>%</small></div>
+      </div>
+    </div>
+  )
+}
+
 function VerticalDualAlarmSlider({ label, unit, min, max, step, low, high, onLowChange, onHighChange }: { label: string; unit: string; min: number; max: number; step: number; low: number; high: number; onLowChange: (value: number) => void; onHighChange: (value: number) => void }) {
   const span = Math.max(0.0001, max - min)
   const lowPct = ((low - min) / span) * 100
@@ -950,7 +965,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.64',
+      appVersion: '0.65',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1042,7 +1057,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.64</span>
+          <span className="version">v0.65</span>
         </div>
       </header>
 
@@ -1178,8 +1193,10 @@ export default function App() {
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
               <div className="metrics-spacer" aria-hidden="true" />
-              <Metric label="SpO₂" value={latestSample?.spo2 == null ? '—' : latestSample.spo2.toFixed(0)} unit="%" />
-              <Metric label="EtCO₂" value={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)} unit="mmHg" />
+              <GasMetric
+                etco2={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)}
+                spo2={latestSample?.spo2 == null ? '—' : latestSample.spo2.toFixed(0)}
+              />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
           </div>
