@@ -23,6 +23,7 @@ const initialVentilator: VentilatorSettings = {
 }
 
 const initialPatient: PatientSettings = {
+  sex: 'male', heightCm: 170, oxygenConsumption: 250, frc: 2500,
   compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
 }
 
@@ -168,6 +169,10 @@ function interpolatePatientSettings(from: PatientSettings, to: PatientSettings, 
   const f = Math.max(0, Math.min(1, fraction))
   const lerp = (a: number, b: number) => a + (b - a) * f
   return {
+    sex: f < 0.5 ? (from.sex ?? 'male') : (to.sex ?? 'male'),
+    heightCm: lerp(from.heightCm ?? 170, to.heightCm ?? 170),
+    oxygenConsumption: lerp(from.oxygenConsumption ?? 250, to.oxygenConsumption ?? 250),
+    frc: lerp(from.frc ?? 2500, to.frc ?? 2500),
     compliance: lerp(from.compliance, to.compliance),
     resistance: lerp(from.resistance, to.resistance),
     expiratoryResistance: lerp(from.expiratoryResistance, to.expiratoryResistance),
@@ -913,7 +918,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.56',
+      appVersion: '0.57',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -998,7 +1003,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.56</span>
+          <span className="version">v0.57</span>
         </div>
       </header>
 
