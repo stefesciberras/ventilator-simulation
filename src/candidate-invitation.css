@@ -1,0 +1,129 @@
+.candidate-invitation {
+  margin-top: 0.75rem;
+}
+
+.candidate-invite-trigger {
+  width: 100%;
+}
+
+.candidate-invite-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(3 12 18 / 72%);
+  backdrop-filter: blur(4px);
+}
+
+.candidate-invite-dialog {
+  width: min(620px, 100%);
+  max-height: min(760px, calc(100vh - 2rem));
+  overflow: auto;
+  border: 1px solid rgb(104 178 202 / 32%);
+  border-radius: 16px;
+  padding: 1rem;
+  background: #0b202b;
+  box-shadow: 0 22px 70px rgb(0 0 0 / 45%);
+}
+
+.candidate-invite-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.candidate-invite-heading span,
+.candidate-invite-link-card span,
+.candidate-invite-email label {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: #9fc8d7;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.candidate-invite-heading h3 {
+  margin: 0;
+}
+
+.candidate-invite-heading > button {
+  border: 0;
+  background: transparent;
+  color: #d9eef5;
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.candidate-invite-link-card {
+  margin-bottom: 0.9rem;
+  border: 1px solid rgb(104 178 202 / 20%);
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: rgb(255 255 255 / 4%);
+}
+
+.candidate-invite-link-card strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #f4fbfd;
+  font-size: 0.92rem;
+}
+
+.candidate-invite-link-card small,
+.candidate-invite-email small {
+  display: block;
+  margin-top: 0.35rem;
+  color: #9fb2bb;
+}
+
+.candidate-invite-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid rgb(104 178 202 / 24%);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #071820;
+  color: #eaf7fb;
+  font: inherit;
+}
+
+.candidate-invite-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0.7rem 0 1rem;
+}
+
+.candidate-invite-email {
+  border-top: 1px solid rgb(104 178 202 / 18%);
+  padding-top: 1rem;
+}
+
+.candidate-invite-email .session-primary-button {
+  margin-top: 0.75rem;
+}
+
+.candidate-invite-delivery-note {
+  line-height: 1.4;
+}
+
+.candidate-invite-status {
+  margin-top: 0.9rem;
+  border-radius: 9px;
+  padding: 0.65rem 0.75rem;
+  background: rgb(68 151 177 / 14%);
+  color: #c9eef8;
+}
+
+@media (max-width: 640px) {
+  .candidate-invite-dialog {
+    padding: 0.85rem;
+  }
+}
