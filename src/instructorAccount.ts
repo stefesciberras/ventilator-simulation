@@ -11,6 +11,7 @@ export interface InstructorScenarioSnapshot {
   schemaVersion?: number
   kind?: InstructorScenarioKind
   description?: string
+  mediaIds?: string[]
   ventilator: VentilatorSettings
   patient: PatientSettings
   alarmLimits: AlarmLimits
@@ -36,9 +37,10 @@ export function asStaticScenario(
 ): InstructorScenarioSnapshot {
   return {
     ...scenario,
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'static',
     description: description.trim(),
+    mediaIds: [...new Set((scenario.mediaIds ?? []).filter((id) => typeof id === 'string' && id.length > 0))],
   }
 }
 
@@ -48,6 +50,7 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
     schemaVersion: scenario.schemaVersion ?? 1,
     kind: scenario.kind ?? 'static',
     description: scenario.description ?? '',
+    mediaIds: [...new Set((scenario.mediaIds ?? []).filter((id) => typeof id === 'string' && id.length > 0))],
   }
 }
 
