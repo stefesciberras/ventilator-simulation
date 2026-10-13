@@ -71,6 +71,7 @@ function summaryItems(scenario: InstructorScenarioSnapshot) {
     `Rexp ${patient.expiratoryResistance}`,
     `Spont ${patient.spontaneousRate}`,
     `Shunt ${Math.round((patient.shuntFraction ?? 0.03) * 100)}%`,
+    `Media ${scenario.mediaIds?.length ?? 0}`,
   ]
 }
 
@@ -482,7 +483,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
             </div>
 
             <div className="settings-summary-grid">
-              <div><span>Version</span><strong>v0.63</strong></div>
+              <div><span>Version</span><strong>v0.64</strong></div>
               <div><span>Teaching room</span><strong>2-hour lifetime</strong></div>
               <div><span>Cloud</span><strong>{account ? 'Connected' : 'Not signed in'}</strong></div>
             </div>

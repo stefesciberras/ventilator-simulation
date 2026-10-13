@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
 import { InstructorAccountControls } from './components/InstructorAccountControls'
+import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
@@ -72,6 +73,7 @@ const ALARM_STORAGE_KEY = 'eduvent.alarm-limits'
 const WAVEFORM_STORAGE_KEY = 'eduvent.waveform-display'
 const PATIENT_TRANSITION_STORAGE_KEY = 'eduvent.patient-transition-seconds'
 const SHOW_PATIENT_EFFORT_STORAGE_KEY = 'eduvent.show-patient-effort'
+const SCENARIO_MEDIA_STORAGE_KEY = 'eduvent.scenario-media-ids'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
@@ -450,6 +452,15 @@ export default function App() {
       fourth: valid(stored.fourth) ? stored.fourth : null,
     }
   })
+  const [scenarioMediaIds, setScenarioMediaIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(SCENARIO_MEDIA_STORAGE_KEY) ?? '[]')
+      return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string' && id.length > 0) : []
+    } catch {
+      return []
+    }
+  })
   const [alarmDialogOpen, setAlarmDialogOpen] = useState(false)
   const [measurementsOpen, setMeasurementsOpen] = useState(false)
   const [showPatientEffort, setShowPatientEffort] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem(SHOW_PATIENT_EFFORT_STORAGE_KEY) === 'true')
@@ -506,6 +517,7 @@ export default function App() {
     alarmLimits,
     patientTransitionSeconds,
     waveformDisplay,
+    mediaIds: scenarioMediaIds,
   }
 
   const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {
@@ -514,6 +526,7 @@ export default function App() {
     setAlarmLimits({ ...scenario.alarmLimits })
     setPatientTransitionSeconds(scenario.patientTransitionSeconds)
     setWaveformDisplay({ ...scenario.waveformDisplay })
+    setScenarioMediaIds([...(scenario.mediaIds ?? [])])
   }
 
   const startInstructorSession = async (scenario?: InstructorScenarioSnapshot) => {
@@ -598,6 +611,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(WAVEFORM_STORAGE_KEY, JSON.stringify(waveformDisplay))
   }, [waveformDisplay])
+
+  useEffect(() => {
+    window.localStorage.setItem(SCENARIO_MEDIA_STORAGE_KEY, JSON.stringify(scenarioMediaIds))
+  }, [scenarioMediaIds])
 
   useEffect(() => {
     window.localStorage.setItem(SHOW_PATIENT_EFFORT_STORAGE_KEY, String(showPatientEffort))
@@ -933,7 +950,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.63',
+      appVersion: '0.64',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1012,6 +1029,12 @@ export default function App() {
             currentScenario={currentInstructorScenario}
             onLoadScenario={loadInstructorScenario}
           />
+          <CaseMediaPanel
+            role={teachingSession.role}
+            sessionId={teachingSession.session?.id ?? null}
+            scenarioMediaIds={scenarioMediaIds}
+            onScenarioMediaIdsChange={setScenarioMediaIds}
+          />
           <button
             className={`top-diagnostic-button ${diagnosticCopied ? 'active copied' : ''}`}
             type="button"
@@ -1019,7 +1042,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.63</span>
+          <span className="version">v0.64</span>
         </div>
       </header>
 

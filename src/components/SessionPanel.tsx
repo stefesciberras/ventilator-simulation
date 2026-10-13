@@ -199,7 +199,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.63'
+    if (version) version.textContent = 'v0.64'
   }, [])
 
   const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
@@ -267,6 +267,7 @@ export function SessionPanel({
     `C ${scenario.patient.compliance.toFixed(0)}`,
     `R ${scenario.patient.resistance.toFixed(0)}`,
     `Shunt ${Math.round((scenario.patient.shuntFraction ?? 0.03) * 100)}%`,
+    `Media ${scenario.mediaIds?.length ?? 0}`,
   ]
 
   if (role === 'standalone') {
