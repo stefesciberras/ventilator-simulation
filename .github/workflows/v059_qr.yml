@@ -1,7 +1,10 @@
-name: Build v0.59 instructor QR
-on:
+name: Build v0.59 instructor QR and lung marker
+
+'on':
   push:
-    branches: [chatgpt/v0.59-instructor-qr]
+    branches:
+      - chatgpt/v0.59-instructor-qr
+
 jobs:
   implement:
     runs-on: ubuntu-latest
@@ -9,95 +12,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Add local QR dependency
+      - name: Add QR dependency
         run: npm install qrcode.react@latest --save
-      - name: Patch instructor QR and candidate deep link
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          panel = Path('src/components/SessionPanel.tsx')
-          text = panel.read_text()
-          if "from 'qrcode.react'" not in text:
-              text = text.replace("import { useEffect, useMemo, useState } from 'react'\n", "import { useEffect, useMemo, useState } from 'react'\nimport { QRCodeSVG } from 'qrcode.react'\n")
-
-          anchor = "  const [now, setNow] = useState(() => Date.now())\n\n"
-          deep_link_effect = """  const [now, setNow] = useState(() => Date.now())\n\n  useEffect(() => {\n    if (role !== 'standalone') return\n    const rawKey = new URLSearchParams(window.location.search).get('session') ?? ''\n    const deepLinkKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)\n    if (deepLinkKey.length !== 6) return\n    setSessionKey(deepLinkKey)\n    setJoinMode(true)\n  }, [role])\n\n"""
-          if "const deepLinkKey" not in text:
-              if anchor not in text:
-                  raise SystemExit('Session state anchor not found')
-              text = text.replace(anchor, deep_link_effect, 1)
-
-          online_anchor = """  const onlineCandidates = candidates.filter((member) => {\n    const lastSeen = new Date(member.last_seen).getTime()\n    return Number.isFinite(lastSeen) && now - lastSeen <= 30000\n  }).length\n\n"""
-          join_url = online_anchor + """  const candidateJoinUrl = useMemo(() => {\n    if (!session?.session_key || typeof window === 'undefined') return ''\n    const url = new URL(window.location.href)\n    url.search = ''\n    url.hash = ''\n    url.searchParams.set('session', session.session_key)\n    return url.toString()\n  }, [session?.session_key])\n\n"""
-          if "const candidateJoinUrl" not in text:
-              if online_anchor not in text:
-                  raise SystemExit('Online candidate anchor not found')
-              # There are two onlineCandidates blocks; use the one inside SessionPanel by replacing the last occurrence.
-              pos = text.rfind(online_anchor)
-              text = text[:pos] + join_url + text[pos+len(online_anchor):]
-
-          old_card = """          <div className=\"session-key-card\">\n            <span>Candidate session key</span>\n            <strong>{session?.session_key ?? '———'}</strong>\n            <small>Share this key with all candidates in this session.</small>\n          </div>"""
-          new_card = """          <div className=\"session-key-card session-share-card\">\n            <div className=\"session-key-details\">\n              <span>Candidate session key</span>\n              <strong>{session?.session_key ?? '———'}</strong>\n              <small>Scan the QR code or enter this key manually.</small>\n            </div>\n            {candidateJoinUrl && (\n              <div className=\"session-qr-code\" title={candidateJoinUrl} aria-label={`QR code to join session ${session?.session_key ?? ''}`}>\n                <QRCodeSVG value={candidateJoinUrl} size={112} level=\"M\" bgColor=\"#ffffff\" fgColor=\"#071a24\" />\n              </div>\n            )}\n          </div>"""
-          if 'session-share-card' not in text:
-              if old_card not in text:
-                  raise SystemExit('Session key card anchor not found')
-              text = text.replace(old_card, new_card, 1)
-
-          text = text.replace("version.textContent = 'v0.58'", "version.textContent = 'v0.59'")
-          panel.write_text(text)
-
-          css = Path('src/instructor.css')
-          css_text = css.read_text()
-          block = """
-
-/* v0.59 instructor QR join */
-.instructor-session-panel .session-share-card {
-  grid-template-columns: minmax(0, 1fr) auto;
-  place-items: stretch;
-  gap: 16px;
-  text-align: left;
-}
-.instructor-session-panel .session-key-details {
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 4px;
-  min-width: 0;
-  text-align: center;
-}
-.instructor-session-panel .session-qr-code {
-  align-self: center;
-  justify-self: end;
-  padding: 7px;
-  border-radius: 9px;
-  background: #fff;
-  line-height: 0;
-  box-shadow: 0 0 0 1px rgba(255,255,255,.18);
-}
-@media (max-width: 620px) {
-  .instructor-session-panel .session-share-card {
-    grid-template-columns: 1fr;
-    justify-items: center;
-  }
-  .instructor-session-panel .session-qr-code { justify-self: center; }
-}
-"""
-          if 'v0.59 instructor QR join' not in css_text:
-              css.write_text(css_text.rstrip() + block + '\n')
-
-          app = Path('src/App.tsx')
-          app_text = app.read_text().replace("v0.58", "v0.59")
-          app.write_text(app_text)
-          PY
+      - name: Apply v0.59 patch
+        run: python scripts/v059_patch.py
       - name: Build
         run: npm run build
-      - name: Commit implementation and remove temporary workflow
+      - name: Commit implementation
         run: |
           git checkout -- tsconfig.tsbuildinfo 2>/dev/null || true
-          rm -f .github/workflows/v059_qr.yml
+          rm -f scripts/v059_patch.py .github/workflows/v059_qr.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json src/components/SessionPanel.tsx src/instructor.css src/App.tsx .github/workflows/v059_qr.yml
-          git commit -m "v0.59 Add instructor QR candidate join"
+          git add -A
+          git commit -m "v0.59 Add instructor QR and supplied lung marker"
           git push
