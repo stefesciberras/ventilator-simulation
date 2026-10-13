@@ -17,26 +17,69 @@ if "from 'qrcode.react'" not in text:
         'QR import',
     )
 
-state_anchor = "  const [now, setNow] = useState(() => Date.now())\n\n"
 if "const deepLinkKey" not in text:
-    state_replacement = """  const [now, setNow] = useState(() => Date.now())\n\n  useEffect(() => {\n    if (role !== 'standalone') return\n    const rawKey = new URLSearchParams(window.location.search).get('session') ?? ''\n    const deepLinkKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)\n    if (deepLinkKey.length !== 6) return\n    setSessionKey(deepLinkKey)\n    setJoinMode(true)\n  }, [role])\n\n"""
-    # SessionPanel contains the second occurrence of this state line; patch that one.
-    first = text.find(state_anchor)
-    second = text.find(state_anchor, first + 1)
-    if second < 0:
-        raise SystemExit('SessionPanel state anchor not found')
-    text = text[:second] + state_replacement + text[second + len(state_anchor):]
+    state_anchor = """  const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
 
-online_anchor = """  const onlineCandidates = candidates.filter((member) => {\n    const lastSeen = new Date(member.last_seen).getTime()\n    return Number.isFinite(lastSeen) && now - lastSeen <= 30000\n  }).length\n\n"""
+  useEffect(() => {
+    if (!recoverableCandidate) return
+"""
+    state_replacement = """  const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (role !== 'standalone') return
+    const rawKey = new URLSearchParams(window.location.search).get('session') ?? ''
+    const deepLinkKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+    if (deepLinkKey.length !== 6) return
+    setSessionKey(deepLinkKey)
+    setJoinMode(true)
+  }, [role])
+
+  useEffect(() => {
+    if (!recoverableCandidate) return
+"""
+    text = require_replace(text, state_anchor, state_replacement, 'SessionPanel deep-link state')
+
+online_anchor = """  const onlineCandidates = candidates.filter((member) => {
+    const lastSeen = new Date(member.last_seen).getTime()
+    return Number.isFinite(lastSeen) && now - lastSeen <= 30000
+  }).length
+
+"""
 if "const candidateJoinUrl" not in text:
     pos = text.rfind(online_anchor)
     if pos < 0:
         raise SystemExit('candidateJoinUrl anchor not found')
-    insertion = online_anchor + """  const candidateJoinUrl = useMemo(() => {\n    if (!session?.session_key || typeof window === 'undefined') return ''\n    const url = new URL(window.location.href)\n    url.search = ''\n    url.hash = ''\n    url.searchParams.set('session', session.session_key)\n    return url.toString()\n  }, [session?.session_key])\n\n"""
+    insertion = online_anchor + """  const candidateJoinUrl = useMemo(() => {
+    if (!session?.session_key || typeof window === 'undefined') return ''
+    const url = new URL(window.location.href)
+    url.search = ''
+    url.hash = ''
+    url.searchParams.set('session', session.session_key)
+    return url.toString()
+  }, [session?.session_key])
+
+"""
     text = text[:pos] + insertion + text[pos + len(online_anchor):]
 
-old_card = """          <div className=\"session-key-card\">\n            <span>Candidate session key</span>\n            <strong>{session?.session_key ?? '———'}</strong>\n            <small>Share this key with all candidates in this session.</small>\n          </div>"""
-new_card = """          <div className=\"session-key-card session-share-card\">\n            <div className=\"session-key-details\">\n              <span>Candidate session key</span>\n              <strong>{session?.session_key ?? '———'}</strong>\n              <small>Scan the QR code or enter this key manually.</small>\n            </div>\n            {candidateJoinUrl && (\n              <div className=\"session-qr-code\" title={candidateJoinUrl} aria-label={`QR code to join session ${session?.session_key ?? ''}`}>\n                <QRCodeSVG value={candidateJoinUrl} size={124} level=\"M\" bgColor=\"#ffffff\" fgColor=\"#071a24\" marginSize={1} />\n              </div>\n            )}\n          </div>"""
+old_card = """          <div className=\"session-key-card\">
+            <span>Candidate session key</span>
+            <strong>{session?.session_key ?? '———'}</strong>
+            <small>Share this key with all candidates in this session.</small>
+          </div>"""
+new_card = """          <div className=\"session-key-card session-share-card\">
+            <div className=\"session-key-details\">
+              <span>Candidate session key</span>
+              <strong>{session?.session_key ?? '———'}</strong>
+              <small>Scan the QR code or enter this key manually.</small>
+            </div>
+            {candidateJoinUrl && (
+              <div className=\"session-qr-code\" title={candidateJoinUrl} aria-label={`QR code to join session ${session?.session_key ?? ''}`}>
+                <QRCodeSVG value={candidateJoinUrl} size={124} level=\"M\" bgColor=\"#ffffff\" fgColor=\"#071a24\" marginSize={1} />
+              </div>
+            )}
+          </div>"""
 if 'session-share-card' not in text:
     text = require_replace(text, old_card, new_card, 'session QR card')
 
@@ -95,8 +138,8 @@ replacement = r'''      if (showPatientEffortMarkers) {
           if (!sample.patientEffortStart) return
           const x = (index / Math.max(1, samples.length - 1)) * width
 
-          // Exact geometry from the supplied lung SVG. The original white/background
-          // is omitted, so the marker remains fully transparent around the lungs.
+          // Exact geometry from the supplied lung SVG. The SVG has no white
+          // background element, so only the coloured paths are drawn.
           // Tight crop: source bounds x=140..620, y=300..700.
           ctx.save()
           const markerWidth = 18
