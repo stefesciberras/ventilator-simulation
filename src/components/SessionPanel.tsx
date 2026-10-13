@@ -28,6 +28,7 @@ interface SessionPanelProps {
     candidateCanEditVentilator?: boolean
     syncAlarms?: boolean
     candidateCanEditAlarms?: boolean
+    alarmsSilent?: boolean
   }) => Promise<void>
   onBroadcastNow: () => Promise<void>
 }
@@ -102,6 +103,7 @@ export function SessionPanel({
   const [sessionKey, setSessionKey] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [simulatorExpanded, setSimulatorExpanded] = useState(false)
+  const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
   const [dashboardMembers, setDashboardMembers] = useState<SessionMemberRow[]>([])
   const [rosterError, setRosterError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -157,7 +159,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.48'
+    if (version) version.textContent = 'v0.49'
   }, [])
 
   const candidates = useMemo(() => dashboardMembers.filter((member) => member.role === 'candidate'), [dashboardMembers])
@@ -250,42 +252,63 @@ export function SessionPanel({
 
         {session?.simulation_paused && <div className="instructor-pause-banner">All candidate simulations are paused by the instructor.</div>}
 
-        <div className="session-domain-grid">
-          <div className={`session-domain-card ${session?.sync_patient ? 'shared' : ''}`}>
-            <div className="session-domain-title"><strong>Patient</strong><span>{session?.sync_patient ? 'Shared' : 'Local'}</span></div>
-            <label className="session-switch-row">
-              <span>Share patient settings</span>
-              <input type="checkbox" checked={Boolean(session?.sync_patient)} onChange={(event) => void onUpdatePolicy({ syncPatient: event.target.checked })} />
-            </label>
-            <label className="session-switch-row">
-              <span>Candidate may change</span>
-              <input type="checkbox" checked={Boolean(session?.candidate_can_edit_patient)} disabled={!session?.sync_patient} onChange={(event) => void onUpdatePolicy({ candidateCanEditPatient: event.target.checked })} />
-            </label>
-          </div>
+        <div className="instructor-session-controls">
+          <button
+            type="button"
+            className="instructor-session-controls-toggle"
+            onClick={() => setSessionControlsExpanded((value) => !value)}
+            aria-expanded={sessionControlsExpanded}
+          >
+            <span>
+              <strong>Sharing & alarm controls</strong>
+              <small>Patient • Ventilator • Alarms</small>
+            </span>
+            <b>{sessionControlsExpanded ? 'Collapse' : 'Configure'}</b>
+          </button>
 
-          <div className={`session-domain-card ${session?.sync_ventilator ? 'shared' : ''}`}>
-            <div className="session-domain-title"><strong>Ventilator</strong><span>{session?.sync_ventilator ? 'Shared' : 'Local'}</span></div>
-            <label className="session-switch-row">
-              <span>Share ventilator settings</span>
-              <input type="checkbox" checked={Boolean(session?.sync_ventilator)} onChange={(event) => void onUpdatePolicy({ syncVentilator: event.target.checked })} />
-            </label>
-            <label className="session-switch-row">
-              <span>Candidate may change</span>
-              <input type="checkbox" checked={Boolean(session?.candidate_can_edit_ventilator)} disabled={!session?.sync_ventilator} onChange={(event) => void onUpdatePolicy({ candidateCanEditVentilator: event.target.checked })} />
-            </label>
-          </div>
+          {sessionControlsExpanded && (
+            <div className="session-domain-grid instructor-domain-grid">
+              <div className={`session-domain-card ${session?.sync_patient ? 'shared' : ''}`}>
+                <div className="session-domain-title"><strong>Patient</strong><span>{session?.sync_patient ? 'Shared' : 'Local'}</span></div>
+                <label className="session-switch-row">
+                  <span>Share patient settings</span>
+                  <input type="checkbox" checked={Boolean(session?.sync_patient)} onChange={(event) => void onUpdatePolicy({ syncPatient: event.target.checked })} />
+                </label>
+                <label className="session-switch-row">
+                  <span>Candidate may change</span>
+                  <input type="checkbox" checked={Boolean(session?.candidate_can_edit_patient)} disabled={!session?.sync_patient} onChange={(event) => void onUpdatePolicy({ candidateCanEditPatient: event.target.checked })} />
+                </label>
+              </div>
 
-          <div className={`session-domain-card ${session?.sync_alarms ? 'shared' : ''}`}>
-            <div className="session-domain-title"><strong>Alarms</strong><span>{session?.sync_alarms ? 'Shared' : 'Local'}</span></div>
-            <label className="session-switch-row">
-              <span>Share alarm settings</span>
-              <input type="checkbox" checked={Boolean(session?.sync_alarms)} onChange={(event) => void onUpdatePolicy({ syncAlarms: event.target.checked })} />
-            </label>
-            <label className="session-switch-row">
-              <span>Candidate may change</span>
-              <input type="checkbox" checked={Boolean(session?.candidate_can_edit_alarms)} disabled={!session?.sync_alarms} onChange={(event) => void onUpdatePolicy({ candidateCanEditAlarms: event.target.checked })} />
-            </label>
-          </div>
+              <div className={`session-domain-card ${session?.sync_ventilator ? 'shared' : ''}`}>
+                <div className="session-domain-title"><strong>Ventilator</strong><span>{session?.sync_ventilator ? 'Shared' : 'Local'}</span></div>
+                <label className="session-switch-row">
+                  <span>Share ventilator settings</span>
+                  <input type="checkbox" checked={Boolean(session?.sync_ventilator)} onChange={(event) => void onUpdatePolicy({ syncVentilator: event.target.checked })} />
+                </label>
+                <label className="session-switch-row">
+                  <span>Candidate may change</span>
+                  <input type="checkbox" checked={Boolean(session?.candidate_can_edit_ventilator)} disabled={!session?.sync_ventilator} onChange={(event) => void onUpdatePolicy({ candidateCanEditVentilator: event.target.checked })} />
+                </label>
+              </div>
+
+              <div className={`session-domain-card ${session?.sync_alarms ? 'shared' : ''}`}>
+                <div className="session-domain-title"><strong>Alarms</strong><span>{session?.sync_alarms ? 'Shared' : 'Local'}</span></div>
+                <label className="session-switch-row">
+                  <span>Share alarm settings</span>
+                  <input type="checkbox" checked={Boolean(session?.sync_alarms)} onChange={(event) => void onUpdatePolicy({ syncAlarms: event.target.checked })} />
+                </label>
+                <label className="session-switch-row">
+                  <span>Candidate may change</span>
+                  <input type="checkbox" checked={Boolean(session?.candidate_can_edit_alarms)} disabled={!session?.sync_alarms} onChange={(event) => void onUpdatePolicy({ candidateCanEditAlarms: event.target.checked })} />
+                </label>
+                <label className="session-switch-row session-switch-row-emphasis">
+                  <span>Keep candidate alarms silent</span>
+                  <input type="checkbox" checked={Boolean(session?.alarms_silent)} disabled={!session?.sync_alarms} onChange={(event) => void onUpdatePolicy({ alarmsSilent: event.target.checked })} />
+                </label>
+              </div>
+            </div>
+          )}
         </div>
 
         <section className="candidate-roster" aria-label="Candidates">
@@ -328,7 +351,7 @@ export function SessionPanel({
             Ventilator: {session?.sync_ventilator ? (session.candidate_can_edit_ventilator ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
           </span>
           <span className={session?.sync_alarms && !session?.candidate_can_edit_alarms ? 'locked' : 'available'}>
-            Alarms: {session?.sync_alarms ? (session.candidate_can_edit_alarms ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
+            Alarms: {session?.sync_alarms ? (session.candidate_can_edit_alarms ? 'shared / editable' : 'instructor controlled') : 'candidate local'}{session?.sync_alarms && session?.alarms_silent ? ' / silent' : ''}
           </span>
         </div>
       </div>
