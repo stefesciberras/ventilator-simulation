@@ -49,6 +49,9 @@ export interface Sample {
   phase: 'inspiration' | 'expiration'
   mode: VentilatorMode
   breathTrigger?: 'mandatory' | 'patient'
+  ventilatorTriggerDetected?: boolean
+  ventilatorTriggerBaseline?: number
+  patientEffortStart?: boolean
   expiratoryHold?: boolean
   simvSyncWindow?: boolean
 }

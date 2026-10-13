@@ -199,15 +199,6 @@ function NebuliserIcon() {
   )
 }
 
-function LungEffortIcon() {
-  return (
-    <svg viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M15.2 5.5v8.8M16.8 5.5v8.8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M14.9 13.2c-2.1-3.7-4.9-6.3-6.8-5.2-2.4 1.4-3.6 7.1-3 12.1.4 3.4 2.4 5.7 5.1 5.8 2.3.1 3.8-1.3 4.7-3.5V13.2Zm2.2 0c2.1-3.7 4.9-6.3 6.8-5.2 2.4 1.4 3.6 7.1 3 12.1-.4 3.4-2.4 5.7-5.1 5.8-2.3.1-3.8-1.3-4.7-3.5V13.2Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function MeasurementsInfoIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -646,7 +637,6 @@ export default function App() {
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
   const latestSample = movingSamples[movingSamples.length - 1]
   const patientEffortVisible = teachingSession.role === 'candidate' ? teachingSession.candidatePatientEffortVisible : showPatientEffort
-  const patientEffortActive = Boolean(patientEffortVisible && latestSample && latestSample.musclePressure > 0.1)
   const activeMode = latestSample?.mode ?? ventilator.mode
   const currentSimulationTime = latestSample?.time ?? simulationTimeRef.current
   const eventMeasures = useMemo(
@@ -923,7 +913,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.55',
+      appVersion: '0.56',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1008,7 +998,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.55</span>
+          <span className="version">v0.56</span>
         </div>
       </header>
 
@@ -1096,13 +1086,7 @@ export default function App() {
             )}
 
             <div className={`waveforms ${waveformDisplay.fourth ? 'four-traces' : ''}`}>
-              {patientEffortVisible && (
-                <div className={`patient-effort-strip ${patientEffortActive ? 'active' : ''}`} title={patientEffortActive ? 'Patient neural inspiratory effort is active' : 'No current patient inspiratory effort'}>
-                  <LungEffortIcon />
-                  <span>{patientEffortActive ? 'Patient effort' : 'Patient effort monitor'}</span>
-                </div>
-              )}
-              <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime showSimvSyncWindow={ventilator.showSimvSyncWindow} />
+              <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime showSimvSyncWindow={ventilator.showSimvSyncWindow} showPatientEffortMarkers={patientEffortVisible} />
               <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
 
               <div className="waveform-options-bar">
