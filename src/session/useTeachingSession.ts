@@ -57,6 +57,13 @@ function candidateRecoveryIsExpired(recovery: RecoverableCandidateSession) {
   return Number.isFinite(expiresAt) && expiresAt <= Date.now()
 }
 
+export interface InstructorSessionInitialState {
+  patient: PatientSettings
+  ventilator: VentilatorSettings
+  alarmLimits: AlarmLimits
+  patientTransitionSeconds: number
+}
+
 interface UseTeachingSessionArgs {
   patient: PatientSettings
   ventilator: VentilatorSettings
@@ -122,6 +129,7 @@ export function useTeachingSession({
   const patientRef = useRef(patient)
   const ventilatorRef = useRef(ventilator)
   const alarmLimitsRef = useRef(alarmLimits)
+  const patientTransitionSecondsRef = useRef(patientTransitionSeconds)
   const alarmLevelRef = useRef<CandidateAlarmLevel>(candidateAlarmLevel)
   const patientRevisionRef = useRef(0)
   const ventilatorRevisionRef = useRef(0)
@@ -146,6 +154,7 @@ export function useTeachingSession({
   useEffect(() => { patientRef.current = patient }, [patient])
   useEffect(() => { ventilatorRef.current = ventilator }, [ventilator])
   useEffect(() => { alarmLimitsRef.current = alarmLimits }, [alarmLimits])
+  useEffect(() => { patientTransitionSecondsRef.current = patientTransitionSeconds }, [patientTransitionSeconds])
   useEffect(() => { alarmLevelRef.current = candidateAlarmLevel }, [candidateAlarmLevel])
 
   const applyCandidateSession = (next: TeachingSessionRow, force = false) => {
@@ -239,14 +248,22 @@ export function useTeachingSession({
     )
   }
 
-  const startInstructor = async () => {
+  const startInstructor = async (initial?: InstructorSessionInitialState) => {
     setConnection('connecting')
     setError(null)
+    const startingPatient = initial?.patient ?? patientRef.current
+    const startingVentilator = initial?.ventilator ?? ventilatorRef.current
+    const startingAlarmLimits = initial?.alarmLimits ?? alarmLimitsRef.current
+    const startingTransitionSeconds = initial?.patientTransitionSeconds ?? patientTransitionSecondsRef.current
     try {
-      const created = await createTeachingSession(patient, ventilator, alarmLimits)
+      const created = await createTeachingSession(startingPatient, startingVentilator, startingAlarmLimits)
       roleRef.current = 'instructor'
       setRole('instructor')
       let row = await fetchTeachingSession(created.sessionId)
+      const transitionMs = Math.max(0, Math.round(startingTransitionSeconds * 1000))
+      if (Number(row.transition_ms ?? 0) !== transitionMs) {
+        row = await updateTeachingSession(created.sessionId, { transition_ms: transitionMs })
+      }
       const clientId = instructorClientIdRef.current ?? crypto.randomUUID()
       instructorClientIdRef.current = clientId
       sessionStorage.setItem('eduvent.instructor-session-id', created.sessionId)
