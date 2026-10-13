@@ -261,6 +261,28 @@
   font-size: 18px;
 }
 
+.oxygen-enrichment-control {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.oxygen-enrichment-timer {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 34px;
+  color: #ffbd6b;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .04em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 @media (max-width: 980px) {
   .console-mode-bar {
     align-items: flex-start;
