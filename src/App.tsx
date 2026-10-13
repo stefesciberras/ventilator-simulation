@@ -725,6 +725,19 @@ export default function App() {
     () => calculateEventMeasurements(measurementSamples, alarmLimits.apneaTime, currentSimulationTime),
     [measurementSamples, alarmLimits.apneaTime, currentSimulationTime],
   )
+  let latestNonZeroVolumeTime: number | null = null
+  for (let index = measurementSamples.length - 1; index >= 0; index -= 1) {
+    const sample = measurementSamples[index]
+    if (sample.time < scenarioClockOriginRef.current) break
+    if (Math.abs(sample.volume) > 1) {
+      latestNonZeroVolumeTime = sample.time
+      break
+    }
+  }
+  const volumeZeroDuration = latestNonZeroVolumeTime == null
+    ? scenarioElapsedTime
+    : Math.max(0, currentSimulationTime - latestNonZeroVolumeTime)
+  const tidalVolumeDisplayAvailable = volumeZeroDuration <= 10
   const inspiratoryHoldPressed = inspiratoryHoldRequestTime != null && inspiratoryHoldReleaseTime == null
   const expiratoryHoldPressed = expiratoryHoldRequestTime != null && expiratoryHoldReleaseTime == null
   const ieRatio = Math.max(0, 60 / Math.max(ventilator.rate, 1) / Math.max(ventilator.inspiratoryTime, 0.2) - 1)
@@ -745,7 +758,7 @@ export default function App() {
   const minuteVentilationLowAlarmActive = minuteVentilationAvailable && measures.minuteVentilation < alarmLimits.minuteVentilationMin
   const minuteVentilationHighAlarmActive = minuteVentilationAvailable && measures.minuteVentilation > alarmLimits.minuteVentilationMax
   const tidalVolumeAlarmValue = eventMeasures.tidalVolume
-  const tidalVolumeAvailable = tidalVolumeAlarmValue > 0
+  const tidalVolumeAvailable = tidalVolumeDisplayAvailable && tidalVolumeAlarmValue > 0
   const tidalVolumeLowAlarmActive = tidalVolumeAvailable && tidalVolumeAlarmValue < alarmLimits.tidalVolumeMin
   const tidalVolumeHighAlarmActive = tidalVolumeAvailable && tidalVolumeAlarmValue > alarmLimits.tidalVolumeMax
   const respiratoryRateAvailable = eventMeasures.respiratoryRate > 0 || currentSimulationTime >= 5
@@ -754,15 +767,19 @@ export default function App() {
   // Reserved for upcoming scenario/instructor controls.
   const oxygenFailureActive = false
 
+  // Once apnoea is established it is the dominant ventilatory alarm. Secondary
+  // pressure/volume/rate/minute-ventilation alarms are suppressed until breaths
+  // resume; oxygen failure remains independent and must still be annunciated.
+  const suppressSecondaryAlarmsForApnea = apneaAlarmActive
   const alarmConditions = {
     apnea: apneaAlarmActive,
-    pressure: pressureAlarmActive,
-    minuteVentilationLow: minuteVentilationLowAlarmActive,
-    minuteVentilationHigh: minuteVentilationHighAlarmActive,
-    tidalVolumeLow: tidalVolumeLowAlarmActive,
-    tidalVolumeHigh: tidalVolumeHighAlarmActive,
-    respiratoryRateLow: respiratoryRateLowAlarmActive,
-    respiratoryRateHigh: respiratoryRateHighAlarmActive,
+    pressure: !suppressSecondaryAlarmsForApnea && pressureAlarmActive,
+    minuteVentilationLow: !suppressSecondaryAlarmsForApnea && minuteVentilationLowAlarmActive,
+    minuteVentilationHigh: !suppressSecondaryAlarmsForApnea && minuteVentilationHighAlarmActive,
+    tidalVolumeLow: !suppressSecondaryAlarmsForApnea && tidalVolumeLowAlarmActive,
+    tidalVolumeHigh: !suppressSecondaryAlarmsForApnea && tidalVolumeHighAlarmActive,
+    respiratoryRateLow: !suppressSecondaryAlarmsForApnea && respiratoryRateLowAlarmActive,
+    respiratoryRateHigh: !suppressSecondaryAlarmsForApnea && respiratoryRateHighAlarmActive,
     oxygenFailure: oxygenFailureActive,
   }
 
@@ -838,12 +855,13 @@ export default function App() {
   }, [alarmClock])
 
   const criticalAlarmKeys = ['pressure', 'apnea', 'oxygenFailure'] as const
+  const alarmVisibleDuringApnea = (key: string) => !apneaAlarmActive || key === 'apnea' || key === 'oxygenFailure'
   const activeAlarmKeys = Object.entries(alarmConditions).filter(([, active]) => active).map(([key]) => key)
   const resolvedYellowKeys = Object.entries(alarmLifecycle)
-    .filter(([, entry]) => entry.resolvedAt != null && alarmClock - entry.resolvedAt < 10000)
+    .filter(([key, entry]) => alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt < 10000)
     .map(([key]) => key)
   const greyAlarmKeys = Object.entries(alarmLifecycle)
-    .filter(([, entry]) => entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 10000 && alarmClock - entry.resolvedAt < 120000 && !entry.acknowledged)
+    .filter(([key, entry]) => alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 10000 && alarmClock - entry.resolvedAt < 120000 && !entry.acknowledged)
     .map(([key]) => key)
   const criticalEscalated = criticalAlarmKeys.some((key) => {
     const entry = alarmLifecycle[key]
@@ -995,7 +1013,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.70',
+      appVersion: '0.71',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1093,7 +1111,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.70</span>
+          <span className="version">v0.71</span>
         </div>
       </header>
 
@@ -1222,7 +1240,7 @@ export default function App() {
               </div>
               <div className="metrics-title">Measured</div>
               <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
-              <Metric label="VTe" value={eventMeasures.tidalVolume.toFixed(0)} unit="mL" />
+              <Metric label="VTe" value={tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '-'} unit={tidalVolumeDisplayAvailable ? 'mL' : ''} />
               <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
               <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
