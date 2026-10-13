@@ -38,9 +38,20 @@ jobs:
           if 'recoverableInstructor={teachingSession.recoverableInstructor}' not in s:
               s = s.replace(
                   '            error={teachingSession.error}\n            onStartInstructor={teachingSession.startInstructor}\n',
-                  '            error={teachingSession.error}\n            recoverableInstructor={teachingSession.recoverableInstructor}\n            onStartInstructor={teachingSession.startInstructor}\n            onResumeInstructor={teachingSession.resumeInstructor}\n',
+                  '            error={teachingSession.error}\n            recoverableInstructor={teachingSession.recoverableInstructor}\n            onStartInstructor={teachingSession.startInstructor}\n',
                   1,
               )
+          if 'onResumeInstructor={teachingSession.resumeInstructor}' not in s:
+              s = s.replace(
+                  '            onStartInstructor={teachingSession.startInstructor}\n',
+                  '            onStartInstructor={teachingSession.startInstructor}\n            onResumeInstructor={teachingSession.resumeInstructor}\n',
+                  1,
+              )
+          while s.count('            onResumeInstructor={teachingSession.resumeInstructor}\n') > 1:
+              first = s.find('            onResumeInstructor={teachingSession.resumeInstructor}\n')
+              second = s.find('            onResumeInstructor={teachingSession.resumeInstructor}\n', first + 1)
+              s = s[:second] + s[second + len('            onResumeInstructor={teachingSession.resumeInstructor}\n'):]
+          s = s.replace('if (alarmConditions[key])', 'if (alarmConditions[key as keyof typeof alarmConditions])')
           p.write_text(s)
           Path('.v048-trigger').unlink(missing_ok=True)
           PY
