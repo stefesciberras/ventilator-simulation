@@ -150,32 +150,33 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
 
     if (signal === 'pressure') {
       if (showPatientEffortMarkers) {
+        const leftLung = new Path2D('M317.298 367.792 C299.364 347.527 275.001 352.427 259.883 367.792 C132.746 497.013 172.64 644.993 172.885 645.487 C177.728 655.243 177.118 678.717 215.088 681.107 C244.197 682.94 328.537 661.448 337.718 633.32 C347.514 603.308 348.369 510.398 348.297 494.118 C347.867 397.513 348.418 402.955 317.298 367.792 Z')
+        const rightLung = new Path2D('M446.838 363.832 C464.773 343.567 489.136 348.466 504.254 363.832 C631.39 493.053 591.497 641.033 591.252 641.526 C586.408 651.283 587.019 674.756 549.048 677.147 C519.939 678.98 435.6 657.488 426.418 629.359 C416.622 599.348 415.767 506.437 415.84 490.158 C416.27 393.553 415.719 398.995 446.838 363.832 Z')
+        const tracheaLeft = new Path2D('M382.873 328.423 C383.477 368.694 384.761 432.717 382.07 472.669 C381.084 487.316 341.977 521.926 335.778 521.926')
+        const tracheaRight = new Path2D('M422.553 511.955 C411.537 511.955 393.695 498.815 384.703 477.126')
+
         samples.forEach((sample, index) => {
           if (!sample.patientEffortStart) return
           const x = (index / Math.max(1, samples.length - 1)) * width
 
-          // Solid, simple lung silhouette: short trachea and two filled lobes.
-          // It is intentionally branch-free so it remains legible at marker size.
+          // Exact geometry from the supplied lung SVG. The SVG has no white
+          // background element, so only the coloured paths are drawn.
+          // Tight crop: source bounds x=140..620, y=300..700.
           ctx.save()
-          ctx.translate(x, 2)
+          const markerWidth = 18
+          const markerHeight = 15
+          ctx.translate(x - markerWidth / 2, 1)
+          ctx.scale(markerWidth / 480, markerHeight / 400)
+          ctx.translate(-140, -300)
           ctx.fillStyle = '#84e4f0'
-          ctx.beginPath()
-          ctx.roundRect(-1.5, 0, 3, 5, 1)
-          ctx.fill()
-          ctx.beginPath()
-          ctx.moveTo(-1, 4)
-          ctx.bezierCurveTo(-3.2, 4.1, -6.2, 5.3, -7.1, 9.2)
-          ctx.bezierCurveTo(-8.0, 13.1, -7.0, 16.0, -4.8, 15.5)
-          ctx.bezierCurveTo(-1.8, 14.8, -1.0, 11.4, -1.0, 7.7)
-          ctx.closePath()
-          ctx.fill()
-          ctx.beginPath()
-          ctx.moveTo(1, 4)
-          ctx.bezierCurveTo(3.2, 4.1, 6.2, 5.3, 7.1, 9.2)
-          ctx.bezierCurveTo(8.0, 13.1, 7.0, 16.0, 4.8, 15.5)
-          ctx.bezierCurveTo(1.8, 14.8, 1.0, 11.4, 1.0, 7.7)
-          ctx.closePath()
-          ctx.fill()
+          ctx.strokeStyle = '#84e4f0'
+          ctx.lineWidth = 40
+          ctx.lineCap = 'round'
+          ctx.lineJoin = 'round'
+          ctx.fill(leftLung)
+          ctx.fill(rightLung)
+          ctx.stroke(tracheaLeft)
+          ctx.stroke(tracheaRight)
           ctx.restore()
         })
       }
