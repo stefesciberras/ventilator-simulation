@@ -5,6 +5,7 @@ export interface PatientSettings {
   heightCm: number
   oxygenConsumption: number
   frc: number
+  shuntFraction: number
   compliance: number
   resistance: number
   expiratoryResistance: number

@@ -175,18 +175,27 @@ function updateAlveolarCo2(
 
 
 function directSpO2FromAlveolarFraction(alveolarFraction: number, ventilator: VentilatorSettings, patient: PatientSettings): number {
-  // v0.60 intentionally does not model PaO2. Instead, a smooth saturation curve
-  // maps the dynamic alveolar oxygen reservoir directly to pulse-oximeter SpO2.
-  // Low compliance and severe expiratory obstruction impose a simplified V/Q /
-  // shunt penalty. PEEP can recruit part of the low-compliance penalty.
-  const compliancePenalty = clamp((60 - patient.compliance) / 45, 0, 1) * 0.055
+  // v0.61 keeps oxygenation independent from airway mechanics: shunt is an
+  // explicit patient property rather than being inferred from low compliance.
+  // Obstruction retains a small V/Q-mismatch penalty, while PEEP can recruit a
+  // fraction of shunt only when the lung is relatively non-compliant.
   const obstructionPenalty = clamp((patient.expiratoryResistance - 8) / 32, 0, 1) * 0.018
-  const recruitment = compliancePenalty * 0.55 * clamp((ventilator.peep - 5) / 10, 0, 1)
-  const effectiveFraction = clamp(alveolarFraction - compliancePenalty - obstructionPenalty + recruitment, 0.01, 0.95)
+  const effectiveFraction = clamp(alveolarFraction - obstructionPenalty, 0.01, 0.95)
   const halfSaturationFraction = 0.063
   const hillExponent = 5
   const ratio = Math.pow(halfSaturationFraction / effectiveFraction, hillExponent)
-  return clamp(100 / (1 + ratio), 50, 100)
+  const ventilatedSaturation = clamp(100 / (1 + ratio), 50, 100)
+
+  const baselineShunt = clamp(patient.shuntFraction ?? 0.03, 0, 0.5)
+  const recruitability = clamp((60 - patient.compliance) / 45, 0, 1)
+  const peepRecruitment = 0.55 * recruitability * clamp((ventilator.peep - 5) / 10, 0, 1)
+  const effectiveShunt = baselineShunt * (1 - peepRecruitment)
+
+  // Mix ventilated blood with a fixed venous-like saturation to represent true
+  // right-to-left shunt. This preserves the limited response of true shunt to
+  // increasing FiO2 without introducing a PaO2 model.
+  const venousLikeSaturation = 75
+  return clamp(ventilatedSaturation * (1 - effectiveShunt) + venousLikeSaturation * effectiveShunt, 50, 100)
 }
 
 function updateOxygenation(

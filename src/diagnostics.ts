@@ -1,6 +1,6 @@
 import type { Sample } from './simulation/types'
 
-export const APP_VERSION = '0.60'
+export const APP_VERSION = '0.61'
 export type DiagnosticWaveformSource = 'live' | 'frozen'
 
 export async function copyDiagnosticSnapshot(

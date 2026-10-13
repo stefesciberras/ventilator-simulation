@@ -287,10 +287,10 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
   }
 
   const presets: Record<string, Partial<PatientSettings>> = {
-    Normal: { compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50 },
-    ARDS: { compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25 },
-    COPD: { compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40 },
-    Asthma: { compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30 },
+    Normal: { shuntFraction: 0.03, compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50 },
+    ARDS: { shuntFraction: 0.25, compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25 },
+    COPD: { shuntFraction: 0.05, compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40 },
+    Asthma: { shuntFraction: 0.04, compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30 },
   }
 
   return (
@@ -358,6 +358,7 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
       <Slider label="Height" value={settings.heightCm ?? 170} unit=" cm" min={130} max={210} step={1} displayValue={`${settings.heightCm ?? 170} cm · PBW ${predictedBodyWeight.toFixed(1)} kg`} onChange={(v) => patch({ heightCm: v })} />
       <Slider label="Oxygen consumption (VO₂)" value={settings.oxygenConsumption ?? 250} unit=" mL/min" min={100} max={600} step={10} onChange={(v) => patch({ oxygenConsumption: v })} />
       <Slider label="FRC" value={settings.frc ?? 2500} unit=" mL" min={800} max={5000} step={50} onChange={(v) => patch({ frc: v })} />
+      <Slider label="Shunt" value={Math.round((settings.shuntFraction ?? 0.03) * 100)} unit="%" min={0} max={50} step={1} onChange={(v) => patch({ shuntFraction: v / 100 })} />
       <Slider label="VCO₂ production" value={settings.co2Production ?? 250} unit=" mL/min" min={100} max={500} step={10} onChange={(v) => patch({ co2Production: v })} />
       <Slider label="Dead space volume" value={settings.deadSpaceVolume ?? 150} unit=" mL" min={50} max={400} step={10} onChange={(v) => patch({ deadSpaceVolume: v })} />
     </section>
