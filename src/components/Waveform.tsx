@@ -45,16 +45,12 @@ function autoscale(samples: Sample[], signal: Signal, fallbackMin: number, fallb
     return { min: fallbackMin, max: fallbackMax }
   }
 
-  // Flow is intentionally symmetrical around zero so inspiratory and expiratory
-  // flow remain visually comparable as the trace rescales.
   if (signal === 'flow') {
     const largestMagnitude = Math.max(Math.abs(observedMin), Math.abs(observedMax))
     const limit = Math.max(10, roundedUpToTen(largestMagnitude))
     return { min: -limit, max: limit }
   }
 
-  // All other traces retain zero in view. This also protects against unusual
-  // negative Paw excursions or positive Pes values without clipping them.
   let scaledMin = observedMin < 0 ? roundedDownToTen(observedMin) : 0
   let scaledMax = observedMax > 0 ? roundedUpToTen(observedMax) : 0
 
@@ -105,8 +101,6 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
     const range = Math.max(1, scaleMax - scaleMin)
     const toY = (value: number) => height - ((value - scaleMin) / range) * height
 
-    // A dedicated zero axis makes incomplete return to baseline immediately visible,
-    // particularly persistent expiratory flow and trapped end-expiratory volume.
     if (scaleMin <= 0 && scaleMax >= 0) {
       const zeroY = Math.max(0.5, Math.min(height - 0.5, toY(0)))
       ctx.strokeStyle = 'rgba(190, 202, 212, 0.24)'
@@ -148,8 +142,6 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
     samples.forEach((sample, index) => {
       const x = (index / Math.max(1, samples.length - 1)) * width
       const value = sample[signal]
-      // Keep half the stroke inside the canvas even when a value sits exactly on
-      // a rounded scale boundary.
       const y = Math.max(1, Math.min(height - 1, toY(value)))
       if (index === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
@@ -162,26 +154,28 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
           if (!sample.patientEffortStart) return
           const x = (index / Math.max(1, samples.length - 1)) * width
 
-          // Small lung symbol aligned to the neural-effort onset. It lives at
-          // the top edge of the Paw display so it remains independent of Paw.
+          // Solid, simple lung silhouette: short trachea and two filled lobes.
+          // It is intentionally branch-free so it remains legible at marker size.
           ctx.save()
           ctx.translate(x, 2)
-          ctx.strokeStyle = '#84e4f0'
-          ctx.lineWidth = 1.35
-          ctx.lineCap = 'round'
-          ctx.lineJoin = 'round'
+          ctx.fillStyle = '#84e4f0'
           ctx.beginPath()
-          ctx.moveTo(0, 0)
-          ctx.lineTo(0, 5)
-          ctx.moveTo(0, 4)
-          ctx.lineTo(-2.2, 6)
-          ctx.moveTo(0, 4)
-          ctx.lineTo(2.2, 6)
-          ctx.stroke()
+          ctx.roundRect(-1.5, 0, 3, 5, 1)
+          ctx.fill()
           ctx.beginPath()
-          ctx.ellipse(-3.4, 8.5, 3, 4.2, -0.15, 0, Math.PI * 2)
-          ctx.ellipse(3.4, 8.5, 3, 4.2, 0.15, 0, Math.PI * 2)
-          ctx.stroke()
+          ctx.moveTo(-1, 4)
+          ctx.bezierCurveTo(-3.2, 4.1, -6.2, 5.3, -7.1, 9.2)
+          ctx.bezierCurveTo(-8.0, 13.1, -7.0, 16.0, -4.8, 15.5)
+          ctx.bezierCurveTo(-1.8, 14.8, -1.0, 11.4, -1.0, 7.7)
+          ctx.closePath()
+          ctx.fill()
+          ctx.beginPath()
+          ctx.moveTo(1, 4)
+          ctx.bezierCurveTo(3.2, 4.1, 6.2, 5.3, 7.1, 9.2)
+          ctx.bezierCurveTo(8.0, 13.1, 7.0, 16.0, 4.8, 15.5)
+          ctx.bezierCurveTo(1.8, 14.8, 1.0, 11.4, 1.0, 7.7)
+          ctx.closePath()
+          ctx.fill()
           ctx.restore()
         })
       }
