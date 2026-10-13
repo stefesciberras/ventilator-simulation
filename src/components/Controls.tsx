@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { PatientSettings, VentilatorMode, VentilatorSettings } from '../simulation/types'
+import { calculatePredictedBodyWeight } from '../patientMetrics'
 
 interface SliderProps {
   label: string
@@ -273,6 +274,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
 export function PatientControls({ settings, onChange, onReset, transitionSeconds, onTransitionSecondsChange, showPatientEffort, onShowPatientEffortChange, patientEffortLocked = false }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void; showPatientEffort: boolean; onShowPatientEffortChange: (value: boolean) => void; patientEffortLocked?: boolean }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
+  const predictedBodyWeight = calculatePredictedBodyWeight(settings.sex ?? 'male', settings.heightCm ?? 170)
   if (settings.spontaneousRate > 0) previousSpontaneousRate.current = settings.spontaneousRate
 
   const toggleSpontaneousBreathing = () => {
@@ -345,6 +347,17 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
         onChange={(effortRisePercent, effortRelaxationPercent) => patch({ effortRisePercent, effortRelaxationPercent })}
       />
       <Slider label="End-expiratory Pes" value={settings.endExpiratoryOesophagealPressure ?? -5} unit=" cmH₂O" min={-15} max={15} step={0.5} onChange={(v) => patch({ endExpiratoryOesophagealPressure: v })} />
+      <div className="patient-subsection-title">Physiological</div>
+      <div className="patient-sex-selector" role="group" aria-label="Patient sex used for predicted body weight">
+        <span>Sex</span>
+        <div>
+          <button type="button" className={(settings.sex ?? 'male') === 'male' ? 'selected' : ''} onClick={() => patch({ sex: 'male' })}>Male</button>
+          <button type="button" className={(settings.sex ?? 'male') === 'female' ? 'selected' : ''} onClick={() => patch({ sex: 'female' })}>Female</button>
+        </div>
+      </div>
+      <Slider label="Height" value={settings.heightCm ?? 170} unit=" cm" min={130} max={210} step={1} displayValue={`${settings.heightCm ?? 170} cm · PBW ${predictedBodyWeight.toFixed(1)} kg`} onChange={(v) => patch({ heightCm: v })} />
+      <Slider label="Oxygen consumption (VO₂)" value={settings.oxygenConsumption ?? 250} unit=" mL/min" min={100} max={600} step={10} onChange={(v) => patch({ oxygenConsumption: v })} />
+      <Slider label="FRC" value={settings.frc ?? 2500} unit=" mL" min={800} max={5000} step={50} onChange={(v) => patch({ frc: v })} />
       <Slider label="VCO₂ production" value={settings.co2Production ?? 250} unit=" mL/min" min={100} max={500} step={10} onChange={(v) => patch({ co2Production: v })} />
       <Slider label="Dead space volume" value={settings.deadSpaceVolume ?? 150} unit=" mL" min={50} max={400} step={10} onChange={(v) => patch({ deadSpaceVolume: v })} />
     </section>

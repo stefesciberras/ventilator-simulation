@@ -1,6 +1,10 @@
 export type VentilatorMode = 'VC-AC' | 'PC-AC' | 'PSV' | 'SIMV-VC' | 'SIMV-PC' | 'VG-PC' | 'APRV' | 'BIPAP'
 
 export interface PatientSettings {
+  sex: 'male' | 'female'
+  heightCm: number
+  oxygenConsumption: number
+  frc: number
   compliance: number
   resistance: number
   expiratoryResistance: number
