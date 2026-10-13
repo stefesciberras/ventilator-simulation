@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import type { SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
@@ -144,6 +145,15 @@ export function SessionPanel({
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
+    if (role !== 'standalone') return
+    const rawKey = new URLSearchParams(window.location.search).get('session') ?? ''
+    const deepLinkKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+    if (deepLinkKey.length !== 6) return
+    setSessionKey(deepLinkKey)
+    setJoinMode(true)
+  }, [role])
+
+  useEffect(() => {
     if (!recoverableCandidate) return
     setSessionKey(recoverableCandidate.sessionKey)
     setDisplayName(recoverableCandidate.displayName)
@@ -173,7 +183,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.58'
+    if (version) version.textContent = 'v0.59'
   }, [])
 
   const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
@@ -181,6 +191,15 @@ export function SessionPanel({
     const lastSeen = new Date(member.last_seen).getTime()
     return Number.isFinite(lastSeen) && now - lastSeen <= 30000
   }).length
+
+  const candidateJoinUrl = useMemo(() => {
+    if (!session?.session_key || typeof window === 'undefined') return ''
+    const url = new URL(window.location.href)
+    url.search = ''
+    url.hash = ''
+    url.searchParams.set('session', session.session_key)
+    return url.toString()
+  }, [session?.session_key])
 
   if (role === 'standalone') {
     return (
@@ -245,10 +264,17 @@ export function SessionPanel({
         </div>
 
         <div className="instructor-dashboard-summary">
-          <div className="session-key-card">
-            <span>Candidate session key</span>
-            <strong>{session?.session_key ?? '———'}</strong>
-            <small>Share this key with all candidates in this session.</small>
+          <div className="session-key-card session-share-card">
+            <div className="session-key-details">
+              <span>Candidate session key</span>
+              <strong>{session?.session_key ?? '———'}</strong>
+              <small>Scan the QR code or enter this key manually.</small>
+            </div>
+            {candidateJoinUrl && (
+              <div className="session-qr-code" title={candidateJoinUrl} aria-label={`QR code to join session ${session?.session_key ?? ''}`}>
+                <QRCodeSVG value={candidateJoinUrl} size={124} level="M" bgColor="#ffffff" fgColor="#071a24" marginSize={1} />
+              </div>
+            )}
           </div>
           <div className="candidate-count-card">
             <span>Candidates</span>

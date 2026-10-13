@@ -142,3 +142,36 @@ body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-pa
   opacity: .45;
   cursor: not-allowed;
 }
+
+/* v0.59 instructor QR join */
+.instructor-session-panel .session-share-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  place-items: stretch;
+  gap: 16px;
+  text-align: left;
+}
+.instructor-session-panel .session-key-details {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  text-align: center;
+}
+.instructor-session-panel .session-qr-code {
+  align-self: center;
+  justify-self: end;
+  padding: 6px;
+  border-radius: 9px;
+  background: #fff;
+  line-height: 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.18);
+}
+@media (max-width: 620px) {
+  .instructor-session-panel .session-share-card {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .instructor-session-panel .session-qr-code { justify-self: center; }
+}
+

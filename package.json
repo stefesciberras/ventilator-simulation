@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "latest",
+    "qrcode.react": "^4.2.0",
     "react": "latest",
     "react-dom": "latest"
   },
