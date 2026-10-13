@@ -36,8 +36,16 @@ interface InteractiveVentilatorStripProps {
   disabled?: boolean
 }
 
+interface VentilatorModeControlProps {
+  settings: VentilatorSettings
+  onChange: (next: VentilatorSettings) => void
+  disabled?: boolean
+}
+
 const MIN_IE = 0.5
 const MAX_IE = 8
+const SLIDER_SETTLE_MS = 5200
+const MODES: VentilatorMode[] = ['VC-AC', 'SIMV-VC', 'PC-AC', 'SIMV-PC', 'BIPAP', 'VG-PC', 'APRV', 'PSV']
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const cycleTime = (rate: number) => 60 / Math.max(rate, 1)
 const isVolumeMandatoryMode = (mode: VentilatorMode) => mode === 'VC-AC' || mode === 'SIMV-VC'
@@ -61,6 +69,55 @@ const reconcileVolumeControlFromFlow = (settings: VentilatorSettings, requestedF
   const inspiratoryTime = clamp(requestedTi, minimumTi, maximumTi)
   const inspiratoryFlow = flowFor(settings.tidalVolume, inspiratoryTime, settings.plateauPercent ?? 0)
   return { inspiratoryTime, inspiratoryFlow }
+}
+
+export function VentilatorModeControl({ settings, onChange, disabled = false }: VentilatorModeControlProps) {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (disabled) setOpen(false)
+  }, [disabled])
+
+  const selectMode = (mode: VentilatorMode) => {
+    if (disabled) return
+    const next: VentilatorSettings = { ...settings, mode }
+    if (isVolumeMandatoryMode(mode)) Object.assign(next, reconcileVolumeControlFromFlow(next, next.inspiratoryFlow))
+    onChange(next)
+    setOpen(false)
+  }
+
+  return (
+    <div className={`console-mode-control ${open ? 'open' : ''}`}>
+      <button
+        type="button"
+        className="console-mode-button"
+        disabled={disabled}
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={disabled ? 'Ventilator mode controlled by instructor' : 'Change ventilation mode'}
+      >
+        <span>Mode</span>
+        <strong>{settings.mode}</strong>
+        <b aria-hidden="true">▾</b>
+      </button>
+      {open && !disabled && (
+        <div className="console-mode-menu" role="menu" aria-label="Ventilation mode">
+          {MODES.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              role="menuitem"
+              className={settings.mode === mode ? 'selected' : ''}
+              onClick={() => selectMode(mode)}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function InteractiveVentilatorStrip({ settings, onChange, disabled = false }: InteractiveVentilatorStripProps) {
@@ -124,7 +181,7 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
     settleTimerRef.current = window.setTimeout(() => {
       setActiveKey(null)
       settleTimerRef.current = null
-    }, 5000)
+    }, SLIDER_SETTLE_MS)
   }
 
   useEffect(() => () => {
@@ -240,7 +297,13 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
             max={activeControl.max}
             step={activeControl.step}
             value={activeControl.value}
-            onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId)
+              armSettleTimer()
+            }}
+            onPointerUp={armSettleTimer}
+            onPointerCancel={armSettleTimer}
+            onKeyDown={armSettleTimer}
             onInput={(event) => applyValue(activeControl.key, Number(event.currentTarget.value))}
             onChange={(event) => applyValue(activeControl.key, Number(event.currentTarget.value))}
           />
