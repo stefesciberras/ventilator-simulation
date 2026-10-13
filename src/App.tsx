@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
 import { InstructorAccountControls } from './components/InstructorAccountControls'
+import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
@@ -10,7 +11,9 @@ import type { PatientSettings, Sample, VentilatorSettings } from './simulation/t
 import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
 import type { InstructorScenarioSnapshot } from './instructorAccount'
+import { calculatePhysiologicalMeasurements } from './physiologyMeasurements'
 import './session.css'
+import './physiology.css'
 
 const initialVentilator: VentilatorSettings = {
   mode: 'VC-AC', fio2: 0.35, peep: 5, rate: 14, tidalVolume: 500, inspiratoryTime: 1,
@@ -67,6 +70,7 @@ const PATIENT_STORAGE_KEY = 'eduvent.patient-settings'
 const ALARM_STORAGE_KEY = 'eduvent.alarm-limits'
 const WAVEFORM_STORAGE_KEY = 'eduvent.waveform-display'
 const PATIENT_TRANSITION_STORAGE_KEY = 'eduvent.patient-transition-seconds'
+const SHOW_PATIENT_EFFORT_STORAGE_KEY = 'eduvent.show-patient-effort'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
@@ -191,6 +195,24 @@ function NebuliserIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M8 4h8v4H8zM7 9h10l1 10H6L7 9z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
       <path d="M12 1.5v2M9 2.4l1 1.5M15 2.4l-1 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function LungEffortIcon() {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M15.2 5.5v8.8M16.8 5.5v8.8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M14.9 13.2c-2.1-3.7-4.9-6.3-6.8-5.2-2.4 1.4-3.6 7.1-3 12.1.4 3.4 2.4 5.7 5.1 5.8 2.3.1 3.8-1.3 4.7-3.5V13.2Zm2.2 0c2.1-3.7 4.9-6.3 6.8-5.2 2.4 1.4 3.6 7.1 3 12.1-.4 3.4-2.4 5.7-5.1 5.8-2.3.1-3.8-1.3-4.7-3.5V13.2Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function MeasurementsInfoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 10.7v6M12 7.2h.01" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
     </svg>
   )
 }
@@ -432,6 +454,8 @@ export default function App() {
     }
   })
   const [alarmDialogOpen, setAlarmDialogOpen] = useState(false)
+  const [measurementsOpen, setMeasurementsOpen] = useState(false)
+  const [showPatientEffort, setShowPatientEffort] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem(SHOW_PATIENT_EFFORT_STORAGE_KEY) === 'true')
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [nebuliser, setNebuliser] = useState(false)
   const [alarmSilenced, setAlarmSilenced] = useState(false)
@@ -564,6 +588,10 @@ export default function App() {
     window.localStorage.setItem(WAVEFORM_STORAGE_KEY, JSON.stringify(waveformDisplay))
   }, [waveformDisplay])
 
+  useEffect(() => {
+    window.localStorage.setItem(SHOW_PATIENT_EFFORT_STORAGE_KEY, String(showPatientEffort))
+  }, [showPatientEffort])
+
   const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
   const holdOptions = useMemo(() => ({
     inspiratoryHoldRequestTime,
@@ -612,10 +640,13 @@ export default function App() {
   const samples = frozen && frozenSamples ? frozenSamples : movingSamples
   const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
+  const physiologyMeasurements = useMemo(() => calculatePhysiologicalMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
   const measuredIERatio = useMemo(() => calculateMeasuredIERatio(measurementSamples), [measurementSamples])
   const endTidalCO2 = useMemo(() => calculateEndTidalCO2(measurementSamples), [measurementSamples])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
   const latestSample = movingSamples[movingSamples.length - 1]
+  const patientEffortVisible = teachingSession.role === 'candidate' ? teachingSession.candidatePatientEffortVisible : showPatientEffort
+  const patientEffortActive = Boolean(patientEffortVisible && latestSample && latestSample.musclePressure > 0.1)
   const activeMode = latestSample?.mode ?? ventilator.mode
   const currentSimulationTime = latestSample?.time ?? simulationTimeRef.current
   const eventMeasures = useMemo(
@@ -949,6 +980,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={physiologyMeasurements} onClose={() => setMeasurementsOpen(false)} />
       <header className="topbar">
         <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
         <button
@@ -968,6 +1000,9 @@ export default function App() {
             role={teachingSession.role}
             currentScenario={currentInstructorScenario}
             onLoadScenario={loadInstructorScenario}
+            showPatientEffort={showPatientEffort}
+            onShowPatientEffortChange={setShowPatientEffort}
+            patientEffortSettingLocked={teachingSession.role === 'candidate'}
           />
           <button
             className={`top-diagnostic-button ${diagnosticCopied ? 'active copied' : ''}`}
@@ -976,7 +1011,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.53</span>
+          <span className="version">v0.54</span>
         </div>
       </header>
 
@@ -1064,6 +1099,12 @@ export default function App() {
             )}
 
             <div className={`waveforms ${waveformDisplay.fourth ? 'four-traces' : ''}`}>
+              {patientEffortVisible && (
+                <div className={`patient-effort-strip ${patientEffortActive ? 'active' : ''}`} title={patientEffortActive ? 'Patient neural inspiratory effort is active' : 'No current patient inspiratory effort'}>
+                  <LungEffortIcon />
+                  <span>{patientEffortActive ? 'Patient effort' : 'Patient effort monitor'}</span>
+                </div>
+              )}
               <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime showSimvSyncWindow={ventilator.showSimvSyncWindow} />
               <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
 
@@ -1141,6 +1182,7 @@ export default function App() {
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
             >Exp Hold</button>
+            <button className="hardware-button icon-button measurements-button" type="button" onClick={() => setMeasurementsOpen(true)} title="Physiological measurements" aria-label="Open physiological measurements"><MeasurementsInfoIcon /></button>
             <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
           </div>
         </section>

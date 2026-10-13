@@ -79,6 +79,7 @@ interface PolicyPatch {
   alarmsSilent?: boolean
   candidateCanEditWaveforms?: boolean
   allowOesophagealPressure?: boolean
+  showPatientEffort?: boolean
 }
 
 function getPauseButton(): HTMLButtonElement | null {
@@ -479,6 +480,7 @@ export function useTeachingSession({
     if (patch.alarmsSilent != null) databasePatch.alarms_silent = patch.alarmsSilent
     if (patch.candidateCanEditWaveforms != null) databasePatch.candidate_can_edit_waveforms = patch.candidateCanEditWaveforms
     if (patch.allowOesophagealPressure != null) databasePatch.allow_oesophageal_pressure = patch.allowOesophagealPressure
+    if (patch.showPatientEffort != null) databasePatch.show_patient_effort = patch.showPatientEffort
 
     if (patch.syncPatient === true && !current.sync_patient) {
       patientRevisionRef.current += 1
@@ -736,6 +738,7 @@ export function useTeachingSession({
   const candidateAlarmsSilent = role === 'candidate' && Boolean(session?.sync_alarms) && Boolean(session?.alarms_silent)
   const candidateWaveformsLocked = role === 'candidate' && !Boolean(session?.candidate_can_edit_waveforms)
   const candidateOesophagealPressureAllowed = role !== 'candidate' || session == null || Boolean(session.allow_oesophageal_pressure)
+  const candidatePatientEffortVisible = role === 'candidate' && Boolean(session?.show_patient_effort)
 
   return {
     role,
@@ -749,6 +752,7 @@ export function useTeachingSession({
     candidateAlarmsSilent,
     candidateWaveformsLocked,
     candidateOesophagealPressureAllowed,
+    candidatePatientEffortVisible,
     recoverableInstructor,
     recoverableCandidate,
     startInstructor,

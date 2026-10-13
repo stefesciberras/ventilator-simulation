@@ -19,6 +19,9 @@ interface InstructorAccountControlsProps {
   role: SessionRole
   currentScenario: InstructorScenarioSnapshot
   onLoadScenario: (scenario: InstructorScenarioSnapshot) => void
+  showPatientEffort: boolean
+  onShowPatientEffortChange: (value: boolean) => void
+  patientEffortSettingLocked: boolean
 }
 
 function CloudIcon({ connected }: { connected: boolean }) {
@@ -46,7 +49,7 @@ function accountLabel(user: User | null) {
   return user?.email ?? 'Instructor cloud account'
 }
 
-export function InstructorAccountControls({ role, currentScenario, onLoadScenario }: InstructorAccountControlsProps) {
+export function InstructorAccountControls({ role, currentScenario, onLoadScenario, showPatientEffort, onShowPatientEffortChange, patientEffortSettingLocked }: InstructorAccountControlsProps) {
   const [account, setAccount] = useState<User | null>(null)
   const [accountOpen, setAccountOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -258,10 +261,21 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
             </div>
 
             <div className="settings-summary-grid">
-              <div><span>Version</span><strong>v0.53</strong></div>
+              <div><span>Version</span><strong>v0.54</strong></div>
               <div><span>Teaching room</span><strong>2-hour lifetime</strong></div>
               <div><span>Cloud</span><strong>{account ? 'Connected' : 'Not signed in'}</strong></div>
             </div>
+
+            <section className="scenario-settings-section">
+              <div className="scenario-settings-heading">
+                <div><span>Display</span><h3>Teaching aids</h3></div>
+              </div>
+              <label className="settings-toggle-row">
+                <span><strong>Show patient effort</strong><small>Displays a lung indicator when the patient model has active neural inspiratory effort.</small></span>
+                <input type="checkbox" checked={showPatientEffort} disabled={patientEffortSettingLocked} onChange={(event) => onShowPatientEffortChange(event.target.checked)} />
+              </label>
+              {patientEffortSettingLocked && <p className="account-hint">In candidate mode this teaching aid is controlled by the instructor.</p>}
+            </section>
 
             <section className="scenario-settings-section">
               <div className="scenario-settings-heading">
