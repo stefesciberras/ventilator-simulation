@@ -616,7 +616,7 @@ export function useTeachingSession({
   const candidateAlarmsLocked = role === 'candidate' && Boolean(session?.sync_alarms) && !Boolean(session?.candidate_can_edit_alarms)
   const candidateAlarmsSilent = role === 'candidate' && Boolean(session?.sync_alarms) && Boolean(session?.alarms_silent)
   const candidateWaveformsLocked = role === 'candidate' && !Boolean(session?.candidate_can_edit_waveforms)
-  const candidateOesophagealPressureAllowed = role !== 'candidate' || Boolean(session?.allow_oesophageal_pressure)
+  const candidateOesophagealPressureAllowed = role !== 'candidate' || session == null || Boolean(session.allow_oesophageal_pressure)
 
   return {
     role,
