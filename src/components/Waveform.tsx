@@ -47,12 +47,19 @@ function autoscale(samples: Sample[], signal: Signal, fallbackMin: number, fallb
 
   if (signal === 'flow') {
     const largestMagnitude = Math.max(Math.abs(observedMin), Math.abs(observedMax))
-    const limit = Math.max(10, roundedUpToTen(largestMagnitude))
+    const limit = Math.max(50, roundedUpToTen(largestMagnitude))
     return { min: -limit, max: limit }
   }
 
   let scaledMin = observedMin < 0 ? roundedDownToTen(observedMin) : 0
   let scaledMax = observedMax > 0 ? roundedUpToTen(observedMax) : 0
+
+  const minimumUpperRange = signal === 'pressure' || signal === 'co2'
+    ? 30
+    : signal === 'volume'
+      ? 200
+      : 10
+  scaledMax = Math.max(minimumUpperRange, scaledMax)
 
   if (scaledMax - scaledMin < 10) {
     if (scaledMax === 0 && scaledMin < 0) scaledMin = Math.min(scaledMin, -10)

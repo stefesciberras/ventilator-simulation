@@ -93,6 +93,16 @@ function loadStoredSettings<T extends object>(key: string, defaults: T): T {
   }
 }
 
+function formatSimulationClock(seconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(seconds))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const secs = totalSeconds % 60
+  return hours > 0
+    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
   return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>
 }
@@ -523,6 +533,7 @@ export default function App() {
   })
   const [diagnosticCopied, setDiagnosticCopied] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
+  const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
 
   const teachingSession = useTeachingSession({
     patient,
@@ -553,6 +564,7 @@ export default function App() {
   }
 
   const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {
+    scenarioClockOriginRef.current = simulationTimeRef.current
     setVentilator({ ...scenario.ventilator })
     setPatient({ ...scenario.patient })
     setAlarmLimits({ ...scenario.alarmLimits })
@@ -708,6 +720,7 @@ export default function App() {
   const patientEffortVisible = teachingSession.role === 'candidate' ? teachingSession.candidatePatientEffortVisible : showPatientEffort
   const activeMode = latestSample?.mode ?? ventilator.mode
   const currentSimulationTime = latestSample?.time ?? simulationTimeRef.current
+  const scenarioElapsedTime = Math.max(0, currentSimulationTime - scenarioClockOriginRef.current)
   const eventMeasures = useMemo(
     () => calculateEventMeasurements(measurementSamples, alarmLimits.apneaTime, currentSimulationTime),
     [measurementSamples, alarmLimits.apneaTime, currentSimulationTime],
@@ -982,7 +995,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.69',
+      appVersion: '0.70',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1043,16 +1056,22 @@ export default function App() {
       <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={physiologyMeasurements} onClose={() => setMeasurementsOpen(false)} />
       <header className="topbar">
         <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <button
-          className={`top-simulation-pause ${frozen ? 'paused' : ''}`}
-          type="button"
-          onClick={toggleFreeze}
-          aria-label={frozen ? 'Resume whole simulation' : 'Pause whole simulation'}
-          title={frozen ? 'Resume whole simulation' : 'Pause whole simulation'}
-        >
-          <PauseIcon paused={frozen} />
-          <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
-        </button>
+        <div className="top-simulation-controls">
+          <button
+            className={`top-simulation-pause ${frozen ? 'paused' : ''}`}
+            type="button"
+            onClick={toggleFreeze}
+            aria-label={frozen ? 'Resume whole simulation' : 'Pause whole simulation'}
+            title={frozen ? 'Resume whole simulation' : 'Pause whole simulation'}
+          >
+            <PauseIcon paused={frozen} />
+            <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
+          </button>
+          <div className={`simulation-clock ${frozen ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(scenarioElapsedTime)}`}>
+            <span>TIME</span>
+            <strong>{formatSimulationClock(scenarioElapsedTime)}</strong>
+          </div>
+        </div>
         <div className="status-cluster">
           <span className={`status-dot ${frozen ? 'paused' : ''}`} />
           <span>{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>
@@ -1074,7 +1093,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.69</span>
+          <span className="version">v0.70</span>
         </div>
       </header>
 
