@@ -20,10 +20,11 @@ if old not in s: raise SystemExit('controls anchor missing')
 s=s.replace(old,new)
 p.write_text(s)
 
-# app defaults + version
+# app defaults + interpolation + version
 p=Path('src/App.tsx')
 s=p.read_text()
 s=s.replace("const initialPatient: PatientSettings = {\n  compliance:", "const initialPatient: PatientSettings = {\n  sex: 'male', heightCm: 170, oxygenConsumption: 250, frc: 2500,\n  compliance:")
+s=s.replace("  return {\n    compliance: lerp(from.compliance, to.compliance),", "  return {\n    sex: f < 0.5 ? (from.sex ?? 'male') : (to.sex ?? 'male'),\n    heightCm: lerp(from.heightCm ?? 170, to.heightCm ?? 170),\n    oxygenConsumption: lerp(from.oxygenConsumption ?? 250, to.oxygenConsumption ?? 250),\n    frc: lerp(from.frc ?? 2500, to.frc ?? 2500),\n    compliance: lerp(from.compliance, to.compliance),")
 s=s.replace("v0.56", "v0.57")
 s=s.replace("'0.56'", "'0.57'")
 p.write_text(s)
