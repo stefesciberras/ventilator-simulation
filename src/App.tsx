@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
-import { SessionPanel } from './components/SessionPanel'
+import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
@@ -470,6 +470,24 @@ export default function App() {
     candidateAlarmLevel: candidateAlarmLevelForSession,
   })
 
+  const candidateWaveformOptions = useMemo(
+    () => teachingSession.candidateOesophagealPressureAllowed
+      ? waveformOptions
+      : waveformOptions.filter((option) => option.value !== 'oesophagealPressure'),
+    [teachingSession.candidateOesophagealPressureAllowed],
+  )
+
+  useEffect(() => {
+    if (teachingSession.candidateOesophagealPressureAllowed) return
+    setWaveformDisplay((current) => {
+      const nextThird: OptionalWaveform = current.third === 'oesophagealPressure' ? 'volume' : current.third
+      let nextFourth = current.fourth === 'oesophagealPressure' ? null : current.fourth
+      if (nextFourth === nextThird) nextFourth = nextThird === 'volume' ? 'co2' : 'volume'
+      if (nextThird === current.third && nextFourth === current.fourth) return current
+      return { third: nextThird, fourth: nextFourth }
+    })
+  }, [teachingSession.candidateOesophagealPressureAllowed])
+
   const simulationStateRef = useRef(createSimulationState())
   const simulationTimeRef = useRef(0)
   const effectivePatientRef = useRef<PatientSettings>({ ...patient })
@@ -856,7 +874,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.49',
+      appVersion: '0.50',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -935,7 +953,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.49</span>
+          <span className="version">v0.50</span>
         </div>
       </header>
 
@@ -1025,22 +1043,22 @@ export default function App() {
               <div className="waveform-options-bar">
                 <label>
                   <span>Trace 3</span>
-                  <select value={waveformDisplay.third} onChange={(event) => setWaveformDisplay((current) => ({ ...current, third: event.target.value as OptionalWaveform }))}>
-                    {waveformOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  <select value={waveformDisplay.third} disabled={teachingSession.candidateWaveformsLocked} onChange={(event) => setWaveformDisplay((current) => ({ ...current, third: event.target.value as OptionalWaveform }))}>
+                    {candidateWaveformOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
                 {waveformDisplay.fourth ? (
                   <>
                     <label>
                       <span>Trace 4</span>
-                      <select value={waveformDisplay.fourth} onChange={(event) => setWaveformDisplay((current) => ({ ...current, fourth: event.target.value as OptionalWaveform }))}>
-                        {waveformOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      <select value={waveformDisplay.fourth} disabled={teachingSession.candidateWaveformsLocked} onChange={(event) => setWaveformDisplay((current) => ({ ...current, fourth: event.target.value as OptionalWaveform }))}>
+                        {candidateWaveformOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                       </select>
                     </label>
-                    <button type="button" onClick={() => setWaveformDisplay((current) => ({ ...current, fourth: null }))}>− 4th trace</button>
+                    <button type="button" disabled={teachingSession.candidateWaveformsLocked} onClick={() => setWaveformDisplay((current) => ({ ...current, fourth: null }))}>− 4th trace</button>
                   </>
                 ) : (
-                  <button type="button" onClick={() => setWaveformDisplay((current) => ({ ...current, fourth: current.third === 'volume' ? 'co2' : 'volume' }))}>+ 4th trace</button>
+                  <button type="button" disabled={teachingSession.candidateWaveformsLocked} onClick={() => setWaveformDisplay((current) => ({ ...current, fourth: current.third === 'volume' ? 'co2' : 'volume' }))}>+ 4th trace</button>
                 )}
               </div>
 
@@ -1105,6 +1123,7 @@ export default function App() {
             role={teachingSession.role}
             connection={teachingSession.connection}
             session={teachingSession.session}
+            members={teachingSession.members}
             error={teachingSession.error}
             recoverableInstructor={teachingSession.recoverableInstructor}
             onStartInstructor={teachingSession.startInstructor}
@@ -1123,6 +1142,7 @@ export default function App() {
             {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
             <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} />
           </fieldset>
+          <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
         </aside>
       </div>

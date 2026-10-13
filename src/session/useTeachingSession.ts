@@ -43,6 +43,8 @@ interface PolicyPatch {
   syncAlarms?: boolean
   candidateCanEditAlarms?: boolean
   alarmsSilent?: boolean
+  candidateCanEditWaveforms?: boolean
+  allowOesophagealPressure?: boolean
 }
 
 function getPauseButton(): HTMLButtonElement | null {
@@ -370,6 +372,8 @@ export function useTeachingSession({
     if (patch.syncAlarms != null) databasePatch.sync_alarms = patch.syncAlarms
     if (patch.candidateCanEditAlarms != null) databasePatch.candidate_can_edit_alarms = patch.candidateCanEditAlarms
     if (patch.alarmsSilent != null) databasePatch.alarms_silent = patch.alarmsSilent
+    if (patch.candidateCanEditWaveforms != null) databasePatch.candidate_can_edit_waveforms = patch.candidateCanEditWaveforms
+    if (patch.allowOesophagealPressure != null) databasePatch.allow_oesophageal_pressure = patch.allowOesophagealPressure
 
     if (patch.syncPatient === true && !current.sync_patient) {
       patientRevisionRef.current += 1
@@ -611,6 +615,8 @@ export function useTeachingSession({
   const candidatePatientLocked = role === 'candidate' && Boolean(session?.sync_patient) && !Boolean(session?.candidate_can_edit_patient)
   const candidateAlarmsLocked = role === 'candidate' && Boolean(session?.sync_alarms) && !Boolean(session?.candidate_can_edit_alarms)
   const candidateAlarmsSilent = role === 'candidate' && Boolean(session?.sync_alarms) && Boolean(session?.alarms_silent)
+  const candidateWaveformsLocked = role === 'candidate' && !Boolean(session?.candidate_can_edit_waveforms)
+  const candidateOesophagealPressureAllowed = role !== 'candidate' || session == null || Boolean(session.allow_oesophageal_pressure)
 
   return {
     role,
@@ -622,6 +628,8 @@ export function useTeachingSession({
     candidatePatientLocked,
     candidateAlarmsLocked,
     candidateAlarmsSilent,
+    candidateWaveformsLocked,
+    candidateOesophagealPressureAllowed,
     recoverableInstructor,
     startInstructor,
     resumeInstructor,

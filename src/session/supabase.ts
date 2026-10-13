@@ -39,6 +39,8 @@ export interface TeachingSessionRow {
   alarm_settings: AlarmLimits
   alarm_revision: number
   alarms_silent: boolean
+  candidate_can_edit_waveforms: boolean
+  allow_oesophageal_pressure: boolean
   instructor_client_id: string | null
   instructor_last_seen: string | null
 }

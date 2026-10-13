@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { SessionConnection, SessionRole } from '../session/useTeachingSession'
-import {
-  closeTeachingSessionChannel,
-  fetchSessionMembers,
-  subscribeToSessionMembers,
-  type SessionMemberRow,
-  type TeachingSessionRow,
-} from '../session/supabase'
+import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import '../instructor.css'
 
@@ -14,6 +8,7 @@ interface SessionPanelProps {
   role: SessionRole
   connection: SessionConnection
   session: TeachingSessionRow | null
+  members: SessionMemberRow[]
   error: string | null
   recoverableInstructor?: { sessionId: string; sessionKey: string } | null
   onStartInstructor: () => Promise<void>
@@ -29,6 +24,8 @@ interface SessionPanelProps {
     syncAlarms?: boolean
     candidateCanEditAlarms?: boolean
     alarmsSilent?: boolean
+    candidateCanEditWaveforms?: boolean
+    allowOesophagealPressure?: boolean
   }) => Promise<void>
   onBroadcastNow: () => Promise<void>
 }
@@ -85,10 +82,45 @@ function CandidateCard({ member, now }: { member: SessionMemberRow; now: number 
   )
 }
 
+
+export function InstructorLiveRoom({ role, members }: { role: SessionRole; members: SessionMemberRow[] }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (role !== 'instructor') return
+    const timer = window.setInterval(() => setNow(Date.now()), 5000)
+    return () => window.clearInterval(timer)
+  }, [role])
+
+  const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
+  const onlineCandidates = candidates.filter((member) => {
+    const lastSeen = new Date(member.last_seen).getTime()
+    return Number.isFinite(lastSeen) && now - lastSeen <= 30000
+  }).length
+
+  if (role !== 'instructor') return null
+
+  return (
+    <section className="candidate-roster instructor-live-room" aria-label="Candidates">
+      <div className="candidate-roster-heading">
+        <div><span className="session-kicker">Live room</span><h3>Candidates</h3></div>
+        <span>{onlineCandidates}/{candidates.length} online</span>
+      </div>
+      {candidates.length ? (
+        <div className="candidate-card-list">
+          {candidates.map((member) => <CandidateCard key={member.id} member={member} now={now} />)}
+        </div>
+      ) : (
+        <div className="candidate-empty-state">No candidates have joined yet. Keep this dashboard open while candidates enter the session key.</div>
+      )}
+    </section>
+  )
+}
+
 export function SessionPanel({
   role,
   connection,
   session,
+  members,
   error,
   recoverableInstructor,
   onStartInstructor,
@@ -104,8 +136,6 @@ export function SessionPanel({
   const [displayName, setDisplayName] = useState('')
   const [simulatorExpanded, setSimulatorExpanded] = useState(false)
   const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
-  const [dashboardMembers, setDashboardMembers] = useState<SessionMemberRow[]>([])
-  const [rosterError, setRosterError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -129,40 +159,13 @@ export function SessionPanel({
     return () => window.clearInterval(timer)
   }, [role])
 
-  useEffect(() => {
-    if (role !== 'instructor' || !session?.id) {
-      setDashboardMembers([])
-      setRosterError(null)
-      return
-    }
-
-    let active = true
-    const refresh = async () => {
-      try {
-        const rows = await fetchSessionMembers(session.id)
-        if (active) {
-          setDashboardMembers(rows)
-          setRosterError(null)
-        }
-      } catch (cause) {
-        if (active) setRosterError(cause instanceof Error ? cause.message : 'Unable to refresh candidate roster.')
-      }
-    }
-
-    void refresh()
-    const channel = subscribeToSessionMembers(session.id, () => void refresh())
-    return () => {
-      active = false
-      void closeTeachingSessionChannel(channel)
-    }
-  }, [role, session?.id])
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.49'
+    if (version) version.textContent = 'v0.50'
   }, [])
 
-  const candidates = useMemo(() => dashboardMembers.filter((member) => member.role === 'candidate'), [dashboardMembers])
+  const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
   const onlineCandidates = candidates.filter((member) => {
     const lastSeen = new Date(member.last_seen).getTime()
     return Number.isFinite(lastSeen) && now - lastSeen <= 30000
@@ -290,6 +293,14 @@ export function SessionPanel({
                   <span>Candidate may change</span>
                   <input type="checkbox" checked={Boolean(session?.candidate_can_edit_ventilator)} disabled={!session?.sync_ventilator} onChange={(event) => void onUpdatePolicy({ candidateCanEditVentilator: event.target.checked })} />
                 </label>
+                <label className="session-switch-row">
+                  <span>Candidate may change waveforms</span>
+                  <input type="checkbox" checked={Boolean(session?.candidate_can_edit_waveforms)} onChange={(event) => void onUpdatePolicy({ candidateCanEditWaveforms: event.target.checked })} />
+                </label>
+                <label className="session-switch-row">
+                  <span>Allow oesophageal pressure</span>
+                  <input type="checkbox" checked={Boolean(session?.allow_oesophageal_pressure)} onChange={(event) => void onUpdatePolicy({ allowOesophagealPressure: event.target.checked })} />
+                </label>
               </div>
 
               <div className={`session-domain-card ${session?.sync_alarms ? 'shared' : ''}`}>
@@ -310,21 +321,6 @@ export function SessionPanel({
             </div>
           )}
         </div>
-
-        <section className="candidate-roster" aria-label="Candidates">
-          <div className="candidate-roster-heading">
-            <div><span className="session-kicker">Live room</span><h3>Candidates</h3></div>
-            <span>{onlineCandidates}/{candidates.length} online</span>
-          </div>
-          {rosterError && <div className="session-warning">Candidate roster: {rosterError}</div>}
-          {candidates.length ? (
-            <div className="candidate-card-list">
-              {candidates.map((member) => <CandidateCard key={member.id} member={member} now={now} />)}
-            </div>
-          ) : (
-            <div className="candidate-empty-state">No candidates have joined yet. Keep this dashboard open while candidates enter the session key.</div>
-          )}
-        </section>
 
         <div className="session-action-row">
           <button type="button" className="session-secondary-button" onClick={() => void onBroadcastNow()}>Push current settings</button>
@@ -349,6 +345,9 @@ export function SessionPanel({
           </span>
           <span className={session?.sync_ventilator && !session?.candidate_can_edit_ventilator ? 'locked' : 'available'}>
             Ventilator: {session?.sync_ventilator ? (session.candidate_can_edit_ventilator ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
+          </span>
+          <span className={!session?.candidate_can_edit_waveforms ? 'locked' : 'available'}>
+            Waveforms: {session?.candidate_can_edit_waveforms ? 'editable' : 'instructor locked'} • Oesophageal pressure: {session?.allow_oesophageal_pressure ? 'available' : 'hidden'}
           </span>
           <span className={session?.sync_alarms && !session?.candidate_can_edit_alarms ? 'locked' : 'available'}>
             Alarms: {session?.sync_alarms ? (session.candidate_can_edit_alarms ? 'shared / editable' : 'instructor controlled') : 'candidate local'}{session?.sync_alarms && session?.alarms_silent ? ' / silent' : ''}
