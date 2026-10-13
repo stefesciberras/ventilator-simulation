@@ -14,6 +14,8 @@
 .top-account-button svg { width: 20px; height: 20px; }
 .top-account-button:hover:not(:disabled) { color: #c9eaf4; border-color: #6a8998; background: #1b2b33; }
 .top-account-button.connected { color: #85e8a1; border-color: #4d9f67; background: #12271a; box-shadow: inset 0 0 0 1px rgba(133,232,161,.08); }
+.scenario-top-button { color: #b9c8ff; border-color: #4a5777; }
+.scenario-top-button:hover:not(:disabled) { color: #e0e6ff; border-color: #7180ad; background: #1a2134; }
 
 .account-dialog-backdrop {
   position: fixed;
@@ -39,6 +41,7 @@
   text-transform: none;
 }
 .settings-dialog { width: min(720px, calc(100vw - 28px)); }
+.scenario-manager-dialog { width: min(920px, calc(100vw - 28px)); }
 .account-dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .account-dialog-heading span { display: block; color: #75cbe7; font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 .account-dialog-heading h2 { margin: 3px 0 0; font-size: 22px; letter-spacing: -.02em; color: #f0f7f9; }
@@ -47,10 +50,17 @@
 .account-auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 16px; }
 .account-auth-tabs button { min-height: 40px; }
 .account-auth-form { display: grid; gap: 13px; }
-.account-auth-form label { display: grid; gap: 6px; }
-.account-auth-form label > span { color: #98aab2; font-size: 11px; }
+.account-auth-form label,
+.scenario-create-fields label,
+.scenario-edit-fields label { display: grid; gap: 6px; }
+.account-auth-form label > span,
+.scenario-create-fields label > span,
+.scenario-edit-fields label > span { color: #98aab2; font-size: 11px; }
 .account-auth-form input,
-.scenario-save-row input {
+.scenario-create-fields input,
+.scenario-create-fields textarea,
+.scenario-edit-fields input,
+.scenario-edit-fields textarea {
   width: 100%;
   min-height: 42px;
   border: 1px solid #3a4d58;
@@ -59,9 +69,14 @@
   color: #edf5f7;
   padding: 9px 11px;
   outline: none;
+  font: inherit;
+  resize: vertical;
 }
 .account-auth-form input:focus,
-.scenario-save-row input:focus { border-color: #69c5e4; box-shadow: 0 0 0 2px rgba(105,197,228,.12); }
+.scenario-create-fields input:focus,
+.scenario-create-fields textarea:focus,
+.scenario-edit-fields input:focus,
+.scenario-edit-fields textarea:focus { border-color: #69c5e4; box-shadow: 0 0 0 2px rgba(105,197,228,.12); }
 .account-primary-button { color: #dff8ff; border-color: #4b99b5; background: #183746; }
 .account-primary-button:hover:not(:disabled) { border-color: #72c7e6; background: #204958; }
 .account-secondary-button { color: #c5d3d8; background: #111b20; }
@@ -87,23 +102,60 @@
 .scenario-settings-heading h3 { margin: 2px 0 0; font-size: 16px; color: #edf5f7; }
 .scenario-settings-heading small { color: #7c929c; overflow-wrap: anywhere; text-align: right; }
 .scenario-settings-section > p { margin: 9px 0 14px; color: #84979f; font-size: 11px; line-height: 1.45; }
-.scenario-save-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; margin-bottom: 12px; }
-.scenario-list { display: grid; gap: 7px; }
-.scenario-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid #293a43; border-radius: 9px; background: #0a1216; }
-.scenario-row > div:first-child { min-width: 0; }
-.scenario-row strong { display: block; color: #e2ecef; font-size: 12px; overflow-wrap: anywhere; }
-.scenario-row small { display: block; margin-top: 3px; color: #6f838c; font-size: 9px; }
-.scenario-row-actions { display: flex; gap: 6px; flex: 0 0 auto; }
-.scenario-row-actions button { padding: 6px 9px; font-size: 10px; }
+
+.scenario-type-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.scenario-type-tabs button { min-height: 42px; font-size: 11px; }
+.scenario-type-tabs button.selected { color: #dbe9ff; border-color: #7083b8; background: #1b2440; }
+.scenario-type-tabs button small { margin-left: 5px; color: #72808b; font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.scenario-intro { margin: 0 0 16px; color: #83959d; font-size: 11px; line-height: 1.5; }
+
+.scenario-create-card { display: grid; gap: 13px; padding: 15px; margin-bottom: 18px; border: 1px solid #334754; border-radius: 12px; background: #0a1318; }
+.scenario-create-fields { display: grid; grid-template-columns: minmax(220px,.8fr) minmax(280px,1.2fr); gap: 10px; align-items: start; }
+.scenario-create-fields textarea,
+.scenario-edit-fields textarea { min-height: 74px; }
+.scenario-save-current { justify-self: start; }
+
+.scenario-library-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin: 0 2px 9px; }
+.scenario-library-heading span { display: block; color: #6f838d; font-size: 8px; letter-spacing: .11em; text-transform: uppercase; }
+.scenario-library-heading strong { display: block; margin-top: 2px; color: #dbe7eb; font-size: 12px; }
+.scenario-library-heading > small { color: #677a83; font-size: 9px; }
+
+.scenario-card-list { display: grid; gap: 9px; }
+.scenario-card { padding: 13px; border: 1px solid #2c3e48; border-radius: 11px; background: #091216; }
+.scenario-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.scenario-card-heading > div { min-width: 0; }
+.scenario-card-heading strong { display: block; margin-top: 5px; color: #edf4f6; font-size: 13px; overflow-wrap: anywhere; }
+.scenario-card-heading small { display: block; margin-top: 3px; color: #6d8089; font-size: 9px; }
+.scenario-kind-badge { display: inline-block; padding: 2px 6px; border: 1px solid #526188; border-radius: 999px; color: #b9c7ef; background: #171d32; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.scenario-description { margin: 10px 0 9px; color: #a8b6bc; font-size: 10px; line-height: 1.45; white-space: pre-wrap; }
+.scenario-description.empty { color: #647780; font-style: italic; }
+.scenario-summary-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 11px; }
+.scenario-summary-chips span { padding: 4px 7px; border: 1px solid #2d414a; border-radius: 999px; color: #9fb1b8; background: #0c181e; font-size: 9px; }
+.scenario-card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.scenario-card-actions button { padding: 6px 9px; font-size: 9px; }
+.scenario-load-button { color: #d8f6e0; border-color: #447957; background: #12251a; }
 .scenario-delete-button { color: #e5aaaa; border-color: #6b4040; background: #231515; }
-.scenario-empty { padding: 16px; text-align: center; color: #71858e; border: 1px dashed #34454e; border-radius: 9px; font-size: 11px; }
+.scenario-edit-fields { display: grid; grid-template-columns: minmax(200px,.8fr) minmax(260px,1.2fr); gap: 9px; margin-top: 12px; }
+.scenario-edit-actions { grid-column: 1 / -1; display: flex; gap: 7px; }
+.scenario-empty { padding: 20px; text-align: center; color: #71858e; border: 1px dashed #34454e; border-radius: 10px; font-size: 11px; line-height: 1.45; }
+.scenario-signin-card { display: grid; gap: 10px; padding: 18px; border: 1px solid #344650; border-radius: 11px; background: #0a1318; }
+.scenario-signin-card strong { color: #e0ebee; }
+.scenario-signin-card p { margin: 0; color: #84979f; font-size: 11px; line-height: 1.45; }
+.scenario-signin-card button { justify-self: start; }
 
 @media (max-width: 760px) {
   .settings-summary-grid { grid-template-columns: 1fr; }
   .scenario-settings-heading { align-items: flex-start; flex-direction: column; }
   .scenario-settings-heading small { text-align: left; }
-  .scenario-save-row { grid-template-columns: 1fr; }
-  .scenario-row { align-items: flex-start; flex-direction: column; }
-  .scenario-row-actions { width: 100%; }
-  .scenario-row-actions button { flex: 1; }
+  .scenario-type-tabs { grid-template-columns: 1fr; }
+  .scenario-create-fields,
+  .scenario-edit-fields { grid-template-columns: 1fr; }
+  .scenario-edit-actions { grid-column: auto; }
+  .scenario-library-heading { align-items: flex-start; flex-direction: column; }
+  .scenario-card-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .scenario-card-actions button { width: 100%; }
+}
+
+@media (max-width: 460px) {
+  .scenario-card-actions { grid-template-columns: 1fr; }
 }
