@@ -516,6 +516,20 @@ export default function App() {
     setWaveformDisplay({ ...scenario.waveformDisplay })
   }
 
+  const startInstructorSession = async (scenario?: InstructorScenarioSnapshot) => {
+    if (scenario) {
+      loadInstructorScenario(scenario)
+      await teachingSession.startInstructor({
+        patient: scenario.patient,
+        ventilator: scenario.ventilator,
+        alarmLimits: scenario.alarmLimits,
+        patientTransitionSeconds: scenario.patientTransitionSeconds,
+      })
+      return
+    }
+    await teachingSession.startInstructor()
+  }
+
   useEffect(() => {
     if (teachingSession.candidateOesophagealPressureAllowed) return
     setWaveformDisplay((current) => {
@@ -919,7 +933,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.62',
+      appVersion: '0.63',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1005,7 +1019,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.62</span>
+          <span className="version">v0.63</span>
         </div>
       </header>
 
@@ -1185,7 +1199,9 @@ export default function App() {
             error={teachingSession.error}
             recoverableInstructor={teachingSession.recoverableInstructor}
             recoverableCandidate={teachingSession.recoverableCandidate}
-            onStartInstructor={teachingSession.startInstructor}
+            currentScenario={currentInstructorScenario}
+            onLoadScenario={loadInstructorScenario}
+            onStartInstructor={startInstructorSession}
             onResumeInstructor={teachingSession.resumeInstructor}
             onJoinCandidate={teachingSession.joinCandidate}
             onResumeCandidate={teachingSession.resumeCandidate}
