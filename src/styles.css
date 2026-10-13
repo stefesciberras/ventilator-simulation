@@ -120,6 +120,9 @@ h1 { margin: 2px 0 0; font-size: clamp(20px, 2vw, 30px); font-weight: 650; lette
 input[type="range"] { width: 100%; accent-color: #61bedd; }
 .control-row.disabled { opacity: .38; }
 .control-row.disabled input[type="range"] { cursor: not-allowed; filter: grayscale(1); }
+.oxygen-boosted-control, .oxygen-boosted-control.disabled { margin: 8px -7px; padding: 8px 7px; border: 1px solid #e8b94e; border-radius: 8px; background: linear-gradient(#40351c,#2a2214); opacity: 1; }
+.oxygen-boosted-control .control-heading span, .oxygen-boosted-control .control-heading strong { color: #ffe291; }
+.oxygen-boosted-control input[type="range"] { accent-color: #e8b94e; filter: none !important; }
 .sync-window-control { display: flex; align-items: flex-end; gap: 8px; margin: 2px 0 4px; }
 .sync-window-slider { flex: 1; min-width: 0; }
 .sync-window-slider .control-row { margin-bottom: 0; }

@@ -57,6 +57,7 @@ const waveformConfig: Record<OptionalWaveform, { label: string; unit: string; mi
 const initialWaveformDisplay: WaveformDisplaySettings = { third: 'volume', fourth: null }
 
 const initialAlarmLimits: AlarmLimits = {
+  pressureLimit: 60,
   apneaTime: 30,
   peakPressure: 40,
   co2Min: 30,
@@ -465,6 +466,8 @@ export default function App() {
   })
   const [alarmLimits, setAlarmLimits] = useState<AlarmLimits>(() => {
     const stored = loadStoredSettings(ALARM_STORAGE_KEY, initialAlarmLimits)
+    const pressureLimit = Math.max(5, Math.min(60, stored.pressureLimit ?? initialAlarmLimits.pressureLimit))
+    const peakPressure = Math.max(0, Math.min(pressureLimit, stored.peakPressure))
     const co2Min = Math.max(0, Math.min(100, stored.co2Min))
     const co2Max = Math.max(co2Min, Math.min(100, stored.co2Max))
     const minuteVentilationMin = Math.max(0, Math.min(20, stored.minuteVentilationMin))
@@ -474,8 +477,9 @@ export default function App() {
     const respiratoryRateMin = Math.max(0, Math.min(40, stored.respiratoryRateMin))
     const respiratoryRateMax = Math.max(respiratoryRateMin, Math.min(40, stored.respiratoryRateMax))
     return {
+      pressureLimit,
       apneaTime: Math.max(15, Math.min(120, stored.apneaTime)),
-      peakPressure: Math.max(0, Math.min(60, stored.peakPressure)),
+      peakPressure,
       co2Min,
       co2Max,
       minuteVentilationMin,
@@ -522,6 +526,7 @@ export default function App() {
   const [expiratoryHoldReleaseTime, setExpiratoryHoldReleaseTime] = useState<number | null>(null)
   const [alarmOnsets, setAlarmOnsets] = useState<Record<string, number | null>>({
     apnea: null,
+    pressureLimit: null,
     pressure: null,
     co2Low: null,
     co2High: null,
@@ -693,7 +698,8 @@ export default function App() {
     inspiratoryHoldReleaseTime,
     expiratoryHoldRequestTime,
     expiratoryHoldReleaseTime,
-  }), [inspiratoryHoldRequestTime, inspiratoryHoldReleaseTime, expiratoryHoldRequestTime, expiratoryHoldReleaseTime])
+    pressureLimit: alarmLimits.pressureLimit,
+  }), [inspiratoryHoldRequestTime, inspiratoryHoldReleaseTime, expiratoryHoldRequestTime, expiratoryHoldReleaseTime, alarmLimits.pressureLimit])
 
   useEffect(() => {
     if (frozen) return
@@ -773,6 +779,10 @@ export default function App() {
   const apneaAlarmActive = latestBreathStart == null
     ? currentSimulationTime >= alarmLimits.apneaTime
     : currentSimulationTime - latestBreathStart >= alarmLimits.apneaTime
+  const pressureLimitAlarmActive = useMemo(
+    () => measurementSamples.some((sample) => sample.pressureLimitHit && currentSimulationTime - sample.time <= 5),
+    [measurementSamples, currentSimulationTime],
+  )
   const pressureAlarmActive = useMemo(
     () => isHighPressureAlarmActive(timeline, alarmLimits.peakPressure),
     [timeline, alarmLimits.peakPressure],
@@ -796,6 +806,7 @@ export default function App() {
   const suppressSecondaryAlarmsForApnea = apneaAlarmActive
   const alarmConditions = {
     apnea: apneaAlarmActive,
+    pressureLimit: pressureLimitAlarmActive,
     pressure: !suppressSecondaryAlarmsForApnea && pressureAlarmActive,
     minuteVentilationLow: !suppressSecondaryAlarmsForApnea && minuteVentilationLowAlarmActive,
     minuteVentilationHigh: !suppressSecondaryAlarmsForApnea && minuteVentilationHighAlarmActive,
@@ -901,6 +912,7 @@ export default function App() {
     })
   }, [
     apneaAlarmActive,
+    pressureLimitAlarmActive,
     pressureAlarmActive,
     minuteVentilationLowAlarmActive,
     minuteVentilationHighAlarmActive,
@@ -926,8 +938,8 @@ export default function App() {
     })
   }, [alarmClock])
 
-  const criticalAlarmKeys = ['pressure', 'apnea', 'oxygenFailure'] as const
-  const alarmVisibleDuringApnea = (key: string) => !apneaAlarmActive || key === 'apnea' || key === 'oxygenFailure'
+  const criticalAlarmKeys = ['pressureLimit', 'pressure', 'apnea', 'oxygenFailure'] as const
+  const alarmVisibleDuringApnea = (key: string) => !apneaAlarmActive || key === 'apnea' || key === 'pressureLimit' || key === 'oxygenFailure'
   const activeAlarmKeys = Object.entries(alarmConditions).filter(([, active]) => active).map(([key]) => key)
   const resolvedYellowKeys = Object.entries(alarmLifecycle)
     .filter(([key, entry]) => !apneaJustResolved && alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt < 10000)
@@ -935,7 +947,7 @@ export default function App() {
   const greyAlarmKeys = Object.entries(alarmLifecycle)
     .filter(([key, entry]) => !apneaJustResolved && alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 10000 && alarmClock - entry.resolvedAt < 120000 && !entry.acknowledged)
     .map(([key]) => key)
-  const criticalEscalated = criticalAlarmKeys.some((key) => {
+  const criticalEscalated = pressureLimitAlarmActive || criticalAlarmKeys.some((key) => {
     const entry = alarmLifecycle[key]
     return Boolean(alarmConditions[key] && entry?.activeSince != null && alarmClock - entry.activeSince >= 15000)
   })
@@ -949,6 +961,7 @@ export default function App() {
   }, [audibleAlarmLevel])
   const visibleAlarmKeys = new Set([...activeAlarmKeys, ...resolvedYellowKeys, ...greyAlarmKeys])
   const alarmLabels = [
+    visibleAlarmKeys.has('pressureLimit') ? 'PRESSURE LIMIT' : null,
     visibleAlarmKeys.has('pressure') ? 'HIGH PRESSURE' : null,
     visibleAlarmKeys.has('apnea') ? 'APNOEA' : null,
     visibleAlarmKeys.has('minuteVentilationLow') ? 'LOW MINUTE VENTILATION' : null,
@@ -1078,6 +1091,7 @@ export default function App() {
     const waveformVolumeMin = finiteVolumes.length ? Math.min(...finiteVolumes) : null
     const waveformVolumeMax = finiteVolumes.length ? Math.max(...finiteVolumes) : null
     const alarmEvaluations = [
+      { key: 'pressureLimit', label: 'Pressure limitation', priority: 'critical', value: eventMeasures.peakPressure, unit: 'cmH2O', limits: { high: alarmLimits.pressureLimit }, active: pressureLimitAlarmActive, history: historyFor('pressureLimit') },
       { key: 'pressure', label: 'Peak pressure', priority: 'critical', value: eventMeasures.peakPressure, unit: 'cmH2O', limits: { high: alarmLimits.peakPressure }, active: pressureAlarmActive, history: historyFor('pressure') },
       { key: 'minuteVentilation', label: 'Minute ventilation', priority: 'non-critical', value: measures.minuteVentilation, unit: 'L/min', limits: { low: alarmLimits.minuteVentilationMin, high: alarmLimits.minuteVentilationMax }, active: minuteVentilationLowAlarmActive || minuteVentilationHighAlarmActive, lowActive: minuteVentilationLowAlarmActive, highActive: minuteVentilationHighAlarmActive, history: { low: historyFor('minuteVentilationLow'), high: historyFor('minuteVentilationHigh') } },
       { key: 'tidalVolume', label: 'Expired tidal volume', priority: 'non-critical', value: tidalVolumeAlarmValue, unit: 'mL', limits: { low: alarmLimits.tidalVolumeMin, high: alarmLimits.tidalVolumeMax }, active: tidalVolumeLowAlarmActive || tidalVolumeHighAlarmActive, lowActive: tidalVolumeLowAlarmActive, highActive: tidalVolumeHighAlarmActive, history: { low: historyFor('tidalVolumeLow'), high: historyFor('tidalVolumeHigh') } },
@@ -1085,7 +1099,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.77.1',
+      appVersion: '0.77.2',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1099,6 +1113,7 @@ export default function App() {
       },
       alarms: {
         apneaActive: apneaAlarmActive,
+        pressureLimitActive: pressureLimitAlarmActive,
         highPressureActive: pressureAlarmActive,
         minuteVentilationLowActive: minuteVentilationLowAlarmActive,
         minuteVentilationHighActive: minuteVentilationHighAlarmActive,
@@ -1197,7 +1212,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.77.1</span>
+          <span className="version">v0.77.2</span>
         </div>
       </header>
 
@@ -1260,14 +1275,27 @@ export default function App() {
               <div className="alarm-dialog-backdrop" onClick={() => setAlarmDialogOpen(false)}>
                 <section className="alarm-dialog" role="dialog" aria-modal="true" aria-label="Alarm limits" onClick={(event) => event.stopPropagation()}>
                   <div className="alarm-dialog-title"><strong>Alarm limits</strong><button type="button" onClick={() => setAlarmDialogOpen(false)}>×</button></div>
-                  <div className="alarm-slider-grid five-alarm-grid">
+                  <div className="alarm-slider-grid six-alarm-grid">
+                    <label className="alarm-slider-card critical-alarm-card pressure-limit-card">
+                      <span>Pressure limitation</span>
+                      <small className="alarm-priority">Critical safety limit</small>
+                      <strong>{alarmLimits.pressureLimit} <small>cmH₂O</small></strong>
+                      <div className="vertical-slider-wrap">
+                        <em>60</em>
+                        <input className="vertical-alarm-slider" type="range" min="5" max="60" step="1" value={alarmLimits.pressureLimit} onChange={(event) => {
+                          const pressureLimit = Number(event.target.value)
+                          setAlarmLimits((current) => ({ ...current, pressureLimit, peakPressure: Math.min(current.peakPressure, pressureLimit) }))
+                        }} />
+                        <em>5</em>
+                      </div>
+                    </label>
                     <label className="alarm-slider-card critical-alarm-card">
                       <span>Peak pressure</span>
                       <small className="alarm-priority">Critical</small>
                       <strong>{alarmLimits.peakPressure} <small>cmH₂O</small></strong>
                       <div className="vertical-slider-wrap">
-                        <em>60</em>
-                        <input className="vertical-alarm-slider" type="range" min="0" max="60" step="1" value={alarmLimits.peakPressure} onChange={(event) => setAlarmLimits((current) => ({ ...current, peakPressure: Number(event.target.value) }))} />
+                        <em>{alarmLimits.pressureLimit}</em>
+                        <input className="vertical-alarm-slider" type="range" min="0" max={alarmLimits.pressureLimit} step="1" value={alarmLimits.peakPressure} onChange={(event) => setAlarmLimits((current) => ({ ...current, peakPressure: Math.min(Number(event.target.value), current.pressureLimit) }))} />
                         <em>0</em>
                       </div>
                     </label>
@@ -1351,6 +1379,8 @@ export default function App() {
             settings={ventilator}
             onChange={setVentilator}
             disabled={teachingSession.candidateVentilatorLocked}
+            fio2Override={effectiveVentilator.fio2}
+            fio2BoostActive={oxygenBoost}
           />
         </section>
 
@@ -1376,7 +1406,7 @@ export default function App() {
           />
           <fieldset className={`session-lock-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
             {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-            <VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} />
+            <VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />
           </fieldset>
           <fieldset className={`session-lock-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
             {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}

@@ -35,6 +35,8 @@ interface InteractiveVentilatorStripProps {
   settings: VentilatorSettings
   onChange: (next: VentilatorSettings) => void
   disabled?: boolean
+  fio2Override?: number
+  fio2BoostActive?: boolean
 }
 
 interface VentilatorModeControlProps {
@@ -121,7 +123,7 @@ export function VentilatorModeControl({ settings, onChange, disabled = false }: 
   )
 }
 
-export function InteractiveVentilatorStrip({ settings, onChange, disabled = false }: InteractiveVentilatorStripProps) {
+export function InteractiveVentilatorStrip({ settings, onChange, disabled = false, fio2Override, fio2BoostActive = false }: InteractiveVentilatorStripProps) {
   const [activeKey, setActiveKey] = useState<SettingKey | null>(null)
   const settleTimerRef = useRef<number | null>(null)
   const stripRef = useRef<HTMLDivElement>(null)
@@ -130,8 +132,9 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
   const currentIeRatio = ieRatioFrom(settings)
 
   const controls = useMemo<ControlSpec[]>(() => {
+    const displayedFio2 = Math.round((fio2Override ?? settings.fio2) * 100)
     const specs: ControlSpec[] = [
-      { key: 'fio2', label: 'FiO₂', value: Math.round(settings.fio2 * 100), display: `${Math.round(settings.fio2 * 100)}%`, min: 21, max: 100, step: 1 },
+      { key: 'fio2', label: 'FiO₂', value: displayedFio2, display: `${displayedFio2}%`, min: 21, max: 100, step: 1 },
     ]
 
     if (settings.mode === 'APRV') {
@@ -175,7 +178,7 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
     if (isSimvMode(settings.mode)) specs.push({ key: 'simvSyncWindowPercent', label: 'Sync', value: settings.simvSyncWindowPercent ?? 25, display: `${settings.simvSyncWindowPercent ?? 25}%`, min: 5, max: 75, step: 5 })
 
     return specs
-  }, [settings, currentIeRatio])
+  }, [settings, currentIeRatio, fio2Override])
 
   const activeControl = controls.find((control) => control.key === activeKey) ?? null
 
@@ -198,15 +201,17 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
 
   useEffect(() => {
     if (activeKey && !controls.some((control) => control.key === activeKey)) setActiveKey(null)
-  }, [activeKey, controls])
+    if (fio2BoostActive && activeKey === 'fio2') setActiveKey(null)
+  }, [activeKey, controls, fio2BoostActive])
 
   const selectControl = (key: SettingKey) => {
-    if (disabled) return
+    if (disabled || (fio2BoostActive && key === 'fio2')) return
     setActiveKey(key)
     armSettleTimer()
   }
 
   const applyValue = (key: SettingKey, rawValue: number) => {
+    if (fio2BoostActive && key === 'fio2') return
     const value = Number(rawValue)
     let next: VentilatorSettings = { ...settings }
 
@@ -284,11 +289,11 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
           <button
             key={control.key}
             type="button"
-            className={`interactive-setting-button ${activeKey === control.key ? 'active' : ''}`}
-            disabled={disabled}
+            className={`interactive-setting-button ${activeKey === control.key ? 'active' : ''} ${fio2BoostActive && control.key === 'fio2' ? 'oxygen-boosted' : ''}`.trim()}
+            disabled={disabled || (fio2BoostActive && control.key === 'fio2')}
             onClick={() => selectControl(control.key)}
             aria-pressed={activeKey === control.key}
-            title={disabled ? 'Ventilator settings controlled by instructor' : `Adjust ${control.label}`}
+            title={disabled ? 'Ventilator settings controlled by instructor' : fio2BoostActive && control.key === 'fio2' ? 'O₂ enrichment temporarily overrides FiO₂ to 100%' : `Adjust ${control.label}`}
           >
             <span>{control.label}</span>
             <strong>{control.display}</strong>

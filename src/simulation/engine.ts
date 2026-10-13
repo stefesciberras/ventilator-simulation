@@ -7,6 +7,7 @@ export interface SimulationOptions {
   inspiratoryHoldReleaseTime?: number | null
   expiratoryHoldRequestTime?: number | null
   expiratoryHoldReleaseTime?: number | null
+  pressureLimit?: number | null
 }
 
 type ActiveBreathType = 'vc' | 'pc' | 'ps' | 'vg-pc' | null
@@ -193,28 +194,64 @@ function updateAlveolarCo2(
   state.alveolarCo2 = clamp(state.alveolarCo2 + (changeMmHgPerMinute / 60) * dt, 0, 150)
 }
 
+function saturationFromOxygenTension(po2MmHg: number): number {
+  const p50 = 26.8
+  const hillExponent = 2.7
+  const po2 = Math.max(po2MmHg, 1)
+  return 100 / (1 + Math.pow(p50 / po2, hillExponent))
+}
+
+function oxygenContentForSaturation(saturationPercent: number): number {
+  const haemoglobin = 15
+  const oxygenCapacity = 1.34 * haemoglobin
+  const p50 = 26.8
+  const hillExponent = 2.7
+  const saturation = clamp(saturationPercent / 100, 0.5, 0.999)
+  const po2 = clamp(p50 * Math.pow(saturation / Math.max(1 - saturation, 0.001), 1 / hillExponent), 20, 650)
+  return oxygenCapacity * saturation + 0.003 * po2
+}
+
 function directSpO2FromAlveolarFraction(alveolarFraction: number, ventilator: VentilatorSettings, patient: PatientSettings): number {
-  // v0.61 keeps oxygenation independent from airway mechanics: shunt is an
-  // explicit patient property rather than being inferred from low compliance.
-  // Obstruction retains a small V/Q-mismatch penalty, while PEEP can recruit a
-  // fraction of shunt only when the lung is relatively non-compliant.
+  // Keep oxygenation independent from airway mechanics: shunt is an explicit
+  // patient property. Obstruction retains a small V/Q-mismatch penalty, while
+  // PEEP can recruit a fraction of shunt only when the lung is relatively
+  // non-compliant.
   const obstructionPenalty = clamp((patient.expiratoryResistance - 8) / 32, 0, 1) * 0.018
   const effectiveFraction = clamp(alveolarFraction - obstructionPenalty, 0.01, 0.95)
-  const halfSaturationFraction = 0.063
-  const hillExponent = 5
-  const ratio = Math.pow(halfSaturationFraction / effectiveFraction, hillExponent)
-  const ventilatedSaturation = clamp(100 / (1 + ratio), 50, 100)
+
+  // Convert the alveolar oxygen reservoir to an approximate end-capillary PO2
+  // and then to haemoglobin saturation. The previous model mixed saturations
+  // directly, which created an artificial hard SpO2 ceiling in large shunts: a
+  // rise from 35% to 100% FiO2 could become invisible once the ventilated blood
+  // was already near 100% saturation. Mixing oxygen content retains the limited
+  // response of true shunt while allowing hyperoxia in ventilated units to make
+  // an appropriate, modest contribution after blood streams mix.
+  const endCapillaryPo2 = clamp(effectiveFraction * 650, 20, 650)
+  const ventilatedSaturation = clamp(saturationFromOxygenTension(endCapillaryPo2), 50, 100)
 
   const baselineShunt = clamp(patient.shuntFraction ?? 0.03, 0, 0.5)
   const recruitability = clamp((60 - patient.compliance) / 45, 0, 1)
   const peepRecruitment = 0.55 * recruitability * clamp((ventilator.peep - 5) / 10, 0, 1)
   const effectiveShunt = baselineShunt * (1 - peepRecruitment)
 
-  // Mix ventilated blood with a fixed venous-like saturation to represent true
-  // right-to-left shunt. This preserves the limited response of true shunt to
-  // increasing FiO2 without introducing a PaO2 model.
+  const haemoglobin = 15
+  const oxygenCapacity = 1.34 * haemoglobin
+  const ventilatedContent = oxygenCapacity * (ventilatedSaturation / 100) + 0.003 * endCapillaryPo2
   const venousLikeSaturation = 75
-  return clamp(ventilatedSaturation * (1 - effectiveShunt) + venousLikeSaturation * effectiveShunt, 50, 100)
+  const venousLikePo2 = 40
+  const venousContent = oxygenCapacity * (venousLikeSaturation / 100) + 0.003 * venousLikePo2
+  const mixedContent = ventilatedContent * (1 - effectiveShunt) + venousContent * effectiveShunt
+
+  // Invert the content relationship numerically to obtain an equivalent mixed
+  // arterial saturation for the pulse-oximeter model.
+  let low = 50
+  let high = 100
+  for (let iteration = 0; iteration < 24; iteration += 1) {
+    const mid = (low + high) / 2
+    if (oxygenContentForSaturation(mid) < mixedContent) low = mid
+    else high = mid
+  }
+  return clamp((low + high) / 2, 50, 100)
 }
 
 function updateOxygenation(
@@ -591,6 +628,20 @@ export function stepSimulation(
 
   if (mode === 'APRV' || mode === 'BIPAP') {
     const sample = twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode)
+    const pressureLimit = options.pressureLimit == null ? null : clamp(options.pressureLimit, 5, 60)
+    if (pressureLimit != null && sample.phase === 'inspiration' && sample.pressure >= pressureLimit) {
+      sample.pressure = pressureLimit
+      sample.flow = 0
+      sample.pressureLimitHit = true
+      state.expirationStartTime = t
+      if (mode === 'BIPAP') {
+        state.bipapHigh = false
+        state.bipapPhaseStart = t
+      } else {
+        // Force APRV into its low-pressure phase on the next simulation step.
+        state.modeStartTime = t - Math.max(ventilator.tHigh, 0.1)
+      }
+    }
     updateVentilationTracking(state, sample, t, dt)
     return sample
   }
@@ -950,6 +1001,17 @@ export function stepSimulation(
     }
   }
 
+  let pressureLimitHit = false
+  const pressureLimit = options.pressureLimit == null ? null : clamp(options.pressureLimit, 5, 60)
+  if (pressureLimit != null && inspiration && pressure >= pressureLimit) {
+    pressureLimitHit = true
+    pressure = pressureLimit
+    flowLs = 0
+    const activeOrHeldBreath = state.breathActive || state.inspiratoryHoldActive
+    state.inspiratoryHoldActive = false
+    if (activeOrHeldBreath) finishBreath(state, t, postCycleReleaseGuard)
+  }
+
   const dv = flowLs * dt
   state.volume = clamp(state.volume + dv, 0, 2.5)
   if (inspiration && !state.inspiratoryHoldActive) state.inspiredThisBreath += Math.max(dv, 0)
@@ -997,6 +1059,7 @@ export function stepSimulation(
     patientEffortStart,
     expiratoryHold: state.expiratoryHoldActive,
     simvSyncWindow: simvSyncWindowActive,
+    pressureLimitHit,
   }
 
   state.previousPmus = pmus

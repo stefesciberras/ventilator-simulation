@@ -68,6 +68,16 @@
   color: #ffb15f;
 }
 
+.interactive-setting-button.oxygen-boosted,
+.interactive-setting-button.oxygen-boosted:disabled {
+  opacity: 1;
+  border-color: #e8b94e;
+  background: linear-gradient(#40351c,#2a2214);
+  box-shadow: inset 0 0 0 1px rgba(232,185,78,.16);
+}
+.interactive-setting-button.oxygen-boosted > span,
+.interactive-setting-button.oxygen-boosted > strong { color: #ffe291; }
+
 .interactive-slider-panel {
   position: absolute;
   left: 12px;
@@ -267,6 +277,12 @@
   align-items: flex-start;
 }
 
+.oxygen-button.active.amber {
+  border-color: #e8b94e;
+  color: #ffe291;
+  background: linear-gradient(#40351c,#2a2214);
+}
+
 .oxygen-enrichment-timer {
   position: absolute;
   top: calc(100% + 2px);
@@ -274,7 +290,7 @@
   transform: translateX(-50%);
   min-width: 34px;
   color: #ffbd6b;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: .04em;

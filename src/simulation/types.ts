@@ -60,6 +60,7 @@ export interface Sample {
   patientEffortStart?: boolean
   expiratoryHold?: boolean
   simvSyncWindow?: boolean
+  pressureLimitHit?: boolean
 }
 
 export interface Measurements {
