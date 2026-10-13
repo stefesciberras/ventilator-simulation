@@ -1,0 +1,43 @@
+name: Build v0.64 case media
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.64-case-media
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply v0.64 patch
+        run: python3 scripts/patch_v064.py
+      - name: Build
+        run: npm run build
+      - name: Case media source checks
+        run: |
+          grep -q "mediaIds?: string\[\]" src/instructorAccount.ts
+          grep -q "<CaseMediaPanel" src/App.tsx
+          grep -q "releaseSessionCaseMedia" src/components/CaseMediaPanel.tsx
+          grep -q "createSignedUrl" src/caseMedia.ts
+          grep -q "teaching_session_media" supabase/migrations/20261013_case_media.sql
+          grep -q "v0.64" src/components/SessionPanel.tsx
+      - name: Remove temporary patch files
+        run: rm -f scripts/patch_v064.py .github/workflows/v064_case_media.yml
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "v0.64 Add instructor case media library" || exit 0
+          git push
