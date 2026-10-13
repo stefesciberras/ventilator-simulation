@@ -32,6 +32,9 @@ export function isPermanentInstructor(user: User | null | undefined): user is Us
 }
 
 export async function getInstructorAccount(): Promise<User | null> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+  if (!sessionData.session) return null
   const { data, error } = await supabase.auth.getUser()
   if (error) throw error
   return isPermanentInstructor(data.user) ? data.user : null
