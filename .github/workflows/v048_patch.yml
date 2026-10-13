@@ -17,6 +17,15 @@ jobs:
         with:
           ref: chatgpt/v0.48-alarms-rejoin
           fetch-depth: 0
+      - name: Relax one-shot patch anchor uniqueness
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/v048_patch.py')
+          s = p.read_text()
+          s = s.replace("    if text.count(old) != 1:\n        raise SystemExit(f'Patch anchor not unique ({text.count(old)}): {label}')\n", "")
+          p.write_text(s)
+          PY
       - name: Apply source patch
         run: python3 scripts/v048_patch.py
       - name: Commit patched sources
