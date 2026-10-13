@@ -24,6 +24,7 @@ export interface VentilatorSettings {
   inspiratoryFlow: number
   plateauPercent: number
   pressureControl: number
+  volumeGuaranteePressureLimit: number
   pressureSupport: number
   triggerType: 'pressure' | 'flow'
   triggerSensitivity: number
