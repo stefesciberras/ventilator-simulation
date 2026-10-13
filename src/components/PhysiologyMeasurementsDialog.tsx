@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PhysiologicalMeasurements } from '../physiologyMeasurements'
 
-type MonitorTab = 'general' | 'co2' | 'oesophageal'
+type MonitorTab = 'general' | 'spo2' | 'co2' | 'oesophageal'
 
 interface Props {
   open: boolean
@@ -48,6 +48,7 @@ export function PhysiologyMeasurementsDialog({ open, measurements, onClose }: Pr
         <nav className="monitor-tabs" aria-label="Monitoring categories">
           <button className="monitor-close" type="button" onClick={onClose} aria-label="Close measurements">×</button>
           <button className={tab === 'general' ? 'active' : ''} type="button" onClick={() => setTab('general')}>General</button>
+          <button className={tab === 'spo2' ? 'active' : ''} type="button" onClick={() => setTab('spo2')}>SpO₂</button>
           <button className={tab === 'co2' ? 'active' : ''} type="button" onClick={() => setTab('co2')}>CO₂</button>
           <button className={tab === 'oesophageal' ? 'active' : ''} type="button" disabled={!oesophagealEnabled} title={!oesophagealEnabled ? 'Enable an oesophageal-pressure trace to use this tab' : undefined} onClick={() => setTab('oesophageal')}>Oesophageal</button>
         </nav>

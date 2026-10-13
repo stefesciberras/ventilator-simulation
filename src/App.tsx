@@ -918,7 +918,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.58',
+      appVersion: '0.60',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -953,6 +953,7 @@ export default function App() {
         meanPressureCmH2O: measures.meanPressure,
         minuteVentilationLMin: measures.minuteVentilation,
         endTidalCo2MmHg: endTidalCO2,
+        spo2Percent: latestSample?.spo2 ?? null,
         measuredIERatio,
         totalPeepCmH2O: measures.totalPeep,
         autoPeepCmH2O: measures.autoPeep,
@@ -1003,7 +1004,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.59</span>
+          <span className="version">v0.60</span>
         </div>
       </header>
 
@@ -1139,6 +1140,7 @@ export default function App() {
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
               <div className="metrics-spacer" aria-hidden="true" />
+              <Metric label="SpO₂" value={latestSample?.spo2 == null ? '—' : latestSample.spo2.toFixed(0)} unit="%" />
               <Metric label="EtCO₂" value={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)} unit="mmHg" />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
