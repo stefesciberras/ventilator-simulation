@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import type { SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
+import { loadPanelCollapsed, savePanelCollapsed } from '../panelCollapse'
 import {
   getInstructorAccount,
   listInstructorPresets,
@@ -97,6 +98,12 @@ function CandidateCard({ member, now }: { member: SessionMemberRow; now: number 
 
 export function InstructorLiveRoom({ role, members }: { role: SessionRole; members: SessionMemberRow[] }) {
   const [now, setNow] = useState(() => Date.now())
+  const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed('instructor-live-room'))
+  const toggleCollapsed = () => setCollapsed((current) => {
+    const next = !current
+    savePanelCollapsed('instructor-live-room', next)
+    return next
+  })
   useEffect(() => {
     if (role !== 'instructor') return
     const timer = window.setInterval(() => setNow(Date.now()), 5000)
@@ -112,10 +119,13 @@ export function InstructorLiveRoom({ role, members }: { role: SessionRole; membe
   if (role !== 'instructor') return null
 
   return (
-    <section className="candidate-roster instructor-live-room" aria-label="Candidates">
+    <section className={`candidate-roster instructor-live-room ${collapsed ? 'panel-collapsed' : ''}`} aria-label="Candidates">
       <div className="candidate-roster-heading">
         <div><span className="session-kicker">Live room</span><h3>Candidates</h3></div>
-        <span>{onlineCandidates}/{candidates.length} online</span>
+        <div className="collapsible-heading-actions">
+          <span>{onlineCandidates}/{candidates.length} online</span>
+          <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand candidates' : 'Collapse candidates'} title={collapsed ? 'Expand candidates' : 'Collapse candidates'}>{collapsed ? '▾' : '▴'}</button>
+        </div>
       </div>
       {candidates.length ? (
         <div className="candidate-card-list">
@@ -152,6 +162,12 @@ export function SessionPanel({
   const [displayName, setDisplayName] = useState('')
   const [simulatorExpanded, setSimulatorExpanded] = useState(false)
   const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
+  const [dashboardCollapsed, setDashboardCollapsed] = useState(() => loadPanelCollapsed('instructor-dashboard'))
+  const toggleDashboardCollapsed = () => setDashboardCollapsed((current) => {
+    const next = !current
+    savePanelCollapsed('instructor-dashboard', next)
+    return next
+  })
   const [now, setNow] = useState(() => Date.now())
   const [startWizardOpen, setStartWizardOpen] = useState(false)
   const [startSource, setStartSource] = useState<'current' | 'scenario'>('current')
@@ -199,7 +215,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.66'
+    if (version) version.textContent = 'v0.67'
   }, [])
 
   const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
@@ -369,10 +385,13 @@ export function SessionPanel({
 
   if (role === 'instructor') {
     return (
-      <section className={`session-panel instructor-session-panel ${simulatorExpanded ? 'simulator-expanded' : 'simulator-collapsed'}`}>
+      <section className={`session-panel instructor-session-panel ${simulatorExpanded ? 'simulator-expanded' : 'simulator-collapsed'} ${dashboardCollapsed ? 'panel-collapsed' : ''}`}>
         <div className="session-panel-heading">
           <div><span className="session-kicker">Teaching</span><h2>Instructor dashboard</h2></div>
-          <ConnectionBadge connection={connection} />
+          <div className="collapsible-heading-actions">
+            <ConnectionBadge connection={connection} />
+            <button className="panel-collapse-button" type="button" onClick={toggleDashboardCollapsed} aria-expanded={!dashboardCollapsed} aria-label={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'} title={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'}>{dashboardCollapsed ? '▾' : '▴'}</button>
+          </div>
         </div>
 
         <div className="instructor-dashboard-summary">
@@ -382,7 +401,7 @@ export function SessionPanel({
               <strong>{session?.session_key ?? '———'}</strong>
               <small>Scan the QR code or enter this key manually.</small>
             </div>
-            {candidateJoinUrl && (
+            {candidateJoinUrl && !simulatorExpanded && (
               <div className="session-qr-code" title={candidateJoinUrl} aria-label={`QR code to join session ${session?.session_key ?? ''}`}>
                 <QRCodeSVG value={candidateJoinUrl} size={124} level="M" bgColor="#ffffff" fgColor="#071a24" marginSize={1} />
               </div>
