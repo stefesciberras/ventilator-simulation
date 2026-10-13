@@ -270,7 +270,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
   )
 }
 
-export function PatientControls({ settings, onChange, onReset, transitionSeconds, onTransitionSecondsChange }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void }) {
+export function PatientControls({ settings, onChange, onReset, transitionSeconds, onTransitionSecondsChange, showPatientEffort, onShowPatientEffortChange, patientEffortLocked = false }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void; showPatientEffort: boolean; onShowPatientEffortChange: (value: boolean) => void; patientEffortLocked?: boolean }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
   if (settings.spontaneousRate > 0) previousSpontaneousRate.current = settings.spontaneousRate
@@ -325,6 +325,15 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
           <BreathingToggleIcon off={settings.spontaneousRate === 0} />
         </button>
       </div>
+      <label className={`patient-effort-toggle-row ${patientEffortLocked ? 'locked' : ''}`}>
+        <span>Show patient effort</span>
+        <input
+          type="checkbox"
+          checked={showPatientEffort}
+          disabled={patientEffortLocked}
+          onChange={(event) => onShowPatientEffortChange(event.target.checked)}
+        />
+      </label>
       <Slider label="Compliance" value={settings.compliance} unit=" mL/cmH₂O" min={15} max={100} onChange={(v) => patch({ compliance: v })} />
       <Slider label="Airway resistance" value={settings.resistance} unit=" cmH₂O/L/s" min={3} max={40} onChange={(v) => patch({ resistance: v })} />
       <Slider label="Expiratory resistance" value={settings.expiratoryResistance} unit=" cmH₂O/L/s" min={3} max={50} onChange={(v) => patch({ expiratoryResistance: v })} />

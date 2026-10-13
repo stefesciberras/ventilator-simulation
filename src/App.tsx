@@ -923,7 +923,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.53',
+      appVersion: '0.55',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1000,9 +1000,6 @@ export default function App() {
             role={teachingSession.role}
             currentScenario={currentInstructorScenario}
             onLoadScenario={loadInstructorScenario}
-            showPatientEffort={showPatientEffort}
-            onShowPatientEffortChange={setShowPatientEffort}
-            patientEffortSettingLocked={teachingSession.role === 'candidate'}
           />
           <button
             className={`top-diagnostic-button ${diagnosticCopied ? 'active copied' : ''}`}
@@ -1011,7 +1008,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.54</span>
+          <span className="version">v0.55</span>
         </div>
       </header>
 
@@ -1211,7 +1208,7 @@ export default function App() {
           </fieldset>
           <fieldset className={`session-lock-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
             {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-            <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} />
+            <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} />
           </fieldset>
           <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
