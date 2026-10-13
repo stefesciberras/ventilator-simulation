@@ -17,6 +17,7 @@ interface WaveformProps {
   onCursorChange?: (index: number) => void
   showTime?: boolean
   showSimvSyncWindow?: boolean
+  showPatientEffortMarkers?: boolean
 }
 
 function roundedDownToTen(value: number): number {
@@ -65,7 +66,7 @@ function autoscale(samples: Sample[], signal: Signal, fallbackMin: number, fallb
   return { min: scaledMin, max: scaledMax }
 }
 
-export function Waveform({ samples, signal, label, unit, min, max, accent, frozen = false, cursorIndex = 0, onCursorChange, showTime = false, showSimvSyncWindow = false }: WaveformProps) {
+export function Waveform({ samples, signal, label, unit, min, max, accent, frozen = false, cursorIndex = 0, onCursorChange, showTime = false, showSimvSyncWindow = false, showPatientEffortMarkers = false }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const draggingRef = useRef(false)
   const selectedSample = samples[Math.min(cursorIndex, Math.max(0, samples.length - 1))]
@@ -156,11 +157,41 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
     ctx.stroke()
 
     if (signal === 'pressure') {
+      if (showPatientEffortMarkers) {
+        samples.forEach((sample, index) => {
+          if (!sample.patientEffortStart) return
+          const x = (index / Math.max(1, samples.length - 1)) * width
+
+          // Small lung symbol aligned to the neural-effort onset. It lives at
+          // the top edge of the Paw display so it remains independent of Paw.
+          ctx.save()
+          ctx.translate(x, 2)
+          ctx.strokeStyle = '#84e4f0'
+          ctx.lineWidth = 1.35
+          ctx.lineCap = 'round'
+          ctx.lineJoin = 'round'
+          ctx.beginPath()
+          ctx.moveTo(0, 0)
+          ctx.lineTo(0, 5)
+          ctx.moveTo(0, 4)
+          ctx.lineTo(-2.2, 6)
+          ctx.moveTo(0, 4)
+          ctx.lineTo(2.2, 6)
+          ctx.stroke()
+          ctx.beginPath()
+          ctx.ellipse(-3.4, 8.5, 3, 4.2, -0.15, 0, Math.PI * 2)
+          ctx.ellipse(3.4, 8.5, 3, 4.2, 0.15, 0, Math.PI * 2)
+          ctx.stroke()
+          ctx.restore()
+        })
+      }
+
       samples.forEach((sample, index) => {
-        if (sample.breathTrigger !== 'patient') return
+        if (!sample.ventilatorTriggerDetected) return
         const x = (index / Math.max(1, samples.length - 1)) * width
-        const pressureY = Math.max(1, Math.min(height - 1, toY(sample.pressure)))
-        const tipY = Math.max(12, pressureY - 4)
+        const baseline = sample.ventilatorTriggerBaseline ?? sample.pressure
+        const baselineY = Math.max(1, Math.min(height - 1, toY(baseline)))
+        const tipY = Math.max(11, baselineY - 1)
 
         ctx.fillStyle = '#78e08f'
         ctx.beginPath()
@@ -179,7 +210,7 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
       ctx.lineWidth = 1.5
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke()
     }
-  }, [samples, signal, scaleMin, scaleMax, accent, frozen, cursorIndex, showSimvSyncWindow])
+  }, [samples, signal, scaleMin, scaleMax, accent, frozen, cursorIndex, showSimvSyncWindow, showPatientEffortMarkers])
 
   const updateCursorFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!frozen || !onCursorChange || !samples.length) return

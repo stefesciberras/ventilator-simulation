@@ -308,6 +308,8 @@ function twoLevelSample(
   let pHigh: number
   let pLow: number
   let breathTrigger: Sample['breathTrigger']
+  let ventilatorTriggerDetected = false
+  const patientEffortStart = pmus > 0.1 && state.previousPmus <= 0.1
 
   if (mode === 'BIPAP') {
     previousHigh = state.bipapHigh
@@ -353,6 +355,7 @@ function twoLevelSample(
       const mandatoryCycleOn = phaseElapsed >= nominalTe
 
       if (synchronizedCycleOn || mandatoryCycleOn) {
+        ventilatorTriggerDetected = synchronizedCycleOn
         state.bipapHigh = true
         state.bipapPhaseStart = t
         state.breathStart = t
@@ -413,6 +416,9 @@ function twoLevelSample(
     phase: high ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,
+    ventilatorTriggerDetected,
+    ventilatorTriggerBaseline: ventilatorTriggerDetected ? pLow : undefined,
+    patientEffortStart,
     expiratoryHold: false,
     simvSyncWindow: false,
   }
@@ -463,6 +469,7 @@ export function stepSimulation(
     return sample
   }
 
+  const patientEffortStart = pmus > 0.1 && state.previousPmus <= 0.1
   const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
   const triggerRefractoryPeriod = 0.12
   const triggerResponseDelay = 0.15
@@ -492,17 +499,29 @@ export function stepSimulation(
   const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
   const supportTriggeringDisabled =
     (mode === 'PSV' || isSimv(mode)) && ventilator.pressureSupport <= 0.001
+  const mandatoryMode = mode !== 'PSV'
+  const patientTriggerAllowed =
+    !mandatoryMode ||
+    state.expiratoryTriggerReady ||
+    t - state.lastBreathEnd >= triggerRefractoryPeriod
   const rawTriggerSignalMet = !supportTriggeringDisabled && (ventilator.triggerType === 'flow'
     ? predictedPatientFlowLmin >= flowTriggerSensitivity
     : predictedAirwayPressure <= pressureTriggerLevel)
-  const triggerDetectionEligible = !state.breathActive && !state.inspiratoryHoldActive && !state.expiratoryHoldActive
-  let triggerSignalMet = rawTriggerSignalMet
+  const triggerDetectionEligible =
+    !state.breathActive &&
+    !state.inspiratoryHoldActive &&
+    !state.expiratoryHoldActive &&
+    patientTriggerAllowed
+  let triggerSignalMet = false
+  let ventilatorTriggerDetected = false
 
   if (!triggerDetectionEligible || supportTriggeringDisabled) {
     state.triggerDetectedAt = null
-    triggerSignalMet = false
   } else {
-    if (rawTriggerSignalMet && state.triggerDetectedAt == null) state.triggerDetectedAt = t
+    if (rawTriggerSignalMet && state.triggerDetectedAt == null) {
+      state.triggerDetectedAt = t
+      ventilatorTriggerDetected = true
+    }
     triggerSignalMet = state.triggerDetectedAt != null && t - state.triggerDetectedAt >= triggerResponseDelay
   }
 
@@ -515,12 +534,6 @@ export function stepSimulation(
     triggerSignalMet &&
     state.breathsDuringEffort > 0 &&
     state.breathsDuringEffort < 2 &&
-    t - state.lastBreathEnd >= triggerRefractoryPeriod
-
-  const mandatoryMode = mode !== 'PSV'
-  const patientTriggerAllowed =
-    !mandatoryMode ||
-    state.expiratoryTriggerReady ||
     t - state.lastBreathEnd >= triggerRefractoryPeriod
   const ongoingEffortAfterGate =
     mandatoryMode &&
@@ -829,6 +842,9 @@ export function stepSimulation(
     phase: sampleInspiration ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,
+    ventilatorTriggerDetected,
+    ventilatorTriggerBaseline: ventilatorTriggerDetected ? ventilator.peep : undefined,
+    patientEffortStart,
     expiratoryHold: state.expiratoryHoldActive,
     simvSyncWindow: simvSyncWindowActive,
   }
