@@ -1,0 +1,40 @@
+name: v0.76 slider overlay
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.76-slider-overlay
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.76-slider-overlay
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply v0.76 version patch
+        run: python3 scripts/patch_v076.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Commit integrated changes
+        run: |
+          if git diff --quiet; then
+            echo "No integration changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/SessionPanel.tsx
+          git commit -m "v0.76 Integrate slider overlay version"
+          git push origin HEAD:chatgpt/v0.76-slider-overlay
