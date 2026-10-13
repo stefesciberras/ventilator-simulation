@@ -43,7 +43,7 @@ jobs:
           assert 'label="SpO₂"' in app
           assert '>SpO₂</button>' in dialog
           assert 'oxygenSaturation: window.length ? window[window.length - 1].spo2 : null' in phys
-          assert 'PaO2' not in engine and 'paO2' not in engine
+          assert 'paO2' not in engine and 'pao2' not in engine.lower()
           print('oxygenation semantic checks passed')
           PY
       - name: Commit implementation
