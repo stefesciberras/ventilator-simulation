@@ -19,7 +19,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply patch
-        run: python scripts/v069_patch.py
+        run: |
+          python scripts/v069_patch.py
+          python scripts/v069_fix_twolevel.py
       - name: Build
         run: npm run build
       - name: Semantic checks
@@ -36,6 +38,7 @@ jobs:
           assert 'eliminatedCo2MlMin = alveolarVentilation * state.alveolarCo2 / 0.863' in eng
           assert 'sensorResponseSeconds = activeExpiratoryFlow ? 0.10 : expiratory ? 4.0 : 0.15' in eng
           assert 'airwayCo2' in eng
+          assert 'capnogramValue(' not in eng
           assert 'responseTime = 8' not in eng
           assert 'latestTime - lastExpiratoryFlowTime > 20' in app
           assert 'latestTime - lastExpiratoryFlowTime > 20' in phys
@@ -51,7 +54,7 @@ jobs:
           PY
       - name: Remove temporary files
         run: |
-          rm -f .github/workflows/v069_build.yml scripts/v069_patch.py
+          rm -f .github/workflows/v069_build.yml scripts/v069_patch.py scripts/v069_fix_twolevel.py
       - name: Restore generated TypeScript build cache
         run: git checkout HEAD -- tsconfig.app.tsbuildinfo 2>/dev/null || true
       - name: Commit implementation
