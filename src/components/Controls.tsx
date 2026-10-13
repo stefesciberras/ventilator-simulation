@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { PatientSettings, VentilatorMode, VentilatorSettings } from '../simulation/types'
 import { calculatePredictedBodyWeight } from '../patientMetrics'
+import { loadPanelCollapsed, savePanelCollapsed } from '../panelCollapse'
 
 interface SliderProps {
   label: string
@@ -122,6 +123,13 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
   const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })
   const currentIeRatio = ieRatioFrom(settings)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed('ventilator-settings'))
+  const toggleCollapsed = () => setCollapsed((current) => {
+    const next = !current
+    savePanelCollapsed('ventilator-settings', next)
+    if (next) setModeMenuOpen(false)
+    return next
+  })
 
   const setMode = (mode: VentilatorMode) => {
     const next = { ...settings, mode }
@@ -184,10 +192,13 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
   )
 
   return (
-    <section className="control-section ventilator-settings-section">
+    <section className={`control-section ventilator-settings-section ${collapsed ? 'panel-collapsed' : ''}`}>
       <div className="control-section-title">
         <h2>Ventilator settings</h2>
-        <button className="reset-settings-button" type="button" onClick={onReset}>Reset vent</button>
+        <div className="control-section-title-actions">
+          <button className="reset-settings-button" type="button" onClick={onReset}>Reset vent</button>
+          <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand ventilator settings' : 'Collapse ventilator settings'} title={collapsed ? 'Expand ventilator settings' : 'Collapse ventilator settings'}>{collapsed ? '▾' : '▴'}</button>
+        </div>
       </div>
       <div className="mode-selector">
         <button className={`mode-menu-button ${modeMenuOpen ? 'selected' : ''}`} type="button" onClick={() => setModeMenuOpen((open) => !open)} aria-haspopup="menu" aria-expanded={modeMenuOpen}>
@@ -275,6 +286,12 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
   const predictedBodyWeight = calculatePredictedBodyWeight(settings.sex ?? 'male', settings.heightCm ?? 170)
+  const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed('patient-settings'))
+  const toggleCollapsed = () => setCollapsed((current) => {
+    const next = !current
+    savePanelCollapsed('patient-settings', next)
+    return next
+  })
   if (settings.spontaneousRate > 0) previousSpontaneousRate.current = settings.spontaneousRate
 
   const toggleSpontaneousBreathing = () => {
@@ -294,10 +311,13 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
   }
 
   return (
-    <section className="control-section patient-section">
+    <section className={`control-section patient-section ${collapsed ? 'panel-collapsed' : ''}`}>
       <div className="control-section-title">
         <h2>Patient settings</h2>
-        <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset patient</button>
+        <div className="control-section-title-actions">
+          <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset patient</button>
+          <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand patient settings' : 'Collapse patient settings'} title={collapsed ? 'Expand patient settings' : 'Collapse patient settings'}>{collapsed ? '▾' : '▴'}</button>
+        </div>
       </div>
       <div className="patient-transition-control">
         <label htmlFor="patient-transition-select">

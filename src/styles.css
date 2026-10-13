@@ -190,3 +190,13 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .effort-phase-range.relaxation-handle { z-index: 3; }
 .effort-phase-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; color: #7f9e87; font-size: 9px; text-align: center; }
 .effort-phase-values b { color: #c9e5cf; font-weight: 650; }
+
+
+/* v0.67 collapsible control sections */
+.control-section-title-actions,
+.collapsible-heading-actions { display: flex; align-items: center; gap: 7px; }
+.panel-collapse-button { width: 30px; min-width: 30px; height: 30px; padding: 0; display: inline-grid; place-items: center; border-radius: 7px; color: #9fb8c3; background: #10191e; border-color: #334650; font-size: 14px; line-height: 1; }
+.panel-collapse-button:hover:not(:disabled) { color: #e0f3fa; border-color: #6a8998; }
+.control-section.panel-collapsed { padding-bottom: 5px; }
+.control-section.panel-collapsed .control-section-title { margin-bottom: 0; }
+.control-section.panel-collapsed > :not(.control-section-title) { display: none !important; }

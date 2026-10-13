@@ -175,3 +175,15 @@ body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-pa
   .instructor-session-panel .session-qr-code { justify-self: center; }
 }
 
+
+
+/* v0.67 collapsible instructor panels and compact share card */
+.instructor-session-panel.panel-collapsed { padding-bottom: 12px; }
+.instructor-session-panel.panel-collapsed > :not(.session-panel-heading) { display: none !important; }
+.instructor-session-panel.panel-collapsed .session-panel-heading { margin-bottom: 0; }
+.instructor-live-room.panel-collapsed { padding-bottom: 10px; }
+.instructor-live-room.panel-collapsed > :not(.candidate-roster-heading) { display: none !important; }
+.instructor-live-room.panel-collapsed .candidate-roster-heading { margin-bottom: 0; }
+.instructor-session-panel.simulator-expanded .session-share-card { grid-template-columns: 1fr; }
+.instructor-session-panel.simulator-expanded .session-key-details { justify-items: start; text-align: left; }
+.instructor-session-panel.simulator-expanded .session-key-details small { display: none; }
