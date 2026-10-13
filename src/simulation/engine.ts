@@ -125,14 +125,24 @@ function patientMusclePressure(t: number, patient: PatientSettings): number {
 }
 
 function effectiveRespiratoryRate(state: SimulationState, ventilator: VentilatorSettings, patient: PatientSettings, t: number): number {
-  const fallback = patient.spontaneousRate > 0 ? patient.spontaneousRate : Math.max(ventilator.rate, 1)
+  const mandatoryRate = ventilator.mode === 'PSV' ? 0 : Math.max(ventilator.rate, 0)
+  const fallback = Math.max(patient.spontaneousRate > 0 ? patient.spontaneousRate : 0, mandatoryRate)
   if (state.lastInspirationStart < -50) return fallback
+
   const elapsedSinceInspiration = Math.max(0.01, t - state.lastInspirationStart)
-  const rateLimitedByApnoea = 60 / elapsedSinceInspiration
-  return clamp(Math.min(Math.max(state.estimatedRespiratoryRate, 0.1), rateLimitedByApnoea), 0.1, 80)
+  const referenceRate = Math.max(state.estimatedRespiratoryRate, fallback, 0.1)
+  const expectedCycle = 60 / referenceRate
+
+  // Once two expected cycles have passed with no inspiration, there is no
+  // current alveolar ventilation. An old respiratory rate must not masquerade
+  // as ventilation during prolonged apnoea.
+  if (elapsedSinceInspiration > Math.max(3, expectedCycle * 2)) return 0
+
+  const rateLimitedByMissedBreath = 60 / elapsedSinceInspiration
+  return clamp(Math.min(Math.max(state.estimatedRespiratoryRate, fallback), rateLimitedByMissedBreath), 0, 80)
 }
 
-function co2Target(
+function calculateEffectiveAlveolarVentilation(
   state: SimulationState,
   ventilator: VentilatorSettings,
   patient: PatientSettings,
@@ -144,19 +154,16 @@ function co2Target(
   const deadSpaceL = Math.max(patient.deadSpaceVolume ?? 150, 0) / 1000
   const alveolarVolumeL = Math.max(0, tidalVolumeL - deadSpaceL)
   const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
-
-  // Rexp (cmH2O/L/s) x C (L/cmH2O) gives the expiratory time constant in seconds.
-  // If expiration is short relative to tau, only part of the nominal alveolar
-  // ventilation is effectively cleared before the next inspiration.
   const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
   const expiratoryTime = Math.max(state.lastExpiratoryDuration, 0.05)
   const emptyingFraction = clamp(1 - Math.exp(-expiratoryTime / tau), 0.03, 1)
-  const alveolarVentilation = alveolarVolumeL * respiratoryRate * emptyingFraction
-  const vco2 = Math.max(patient.co2Production ?? 250, 0)
+  return alveolarVolumeL * respiratoryRate * emptyingFraction
+}
 
-  if (alveolarVentilation <= 0.05) return 100
-  // Standard ventilation equation approximation: PCO2 ~= 0.863 x VCO2 / VA.
-  return clamp(0.863 * vco2 / alveolarVentilation, 10, 100)
+function co2TargetFromVentilation(alveolarVentilationLmin: number, patient: PatientSettings): number {
+  const vco2 = Math.max(patient.co2Production ?? 250, 0)
+  if (alveolarVentilationLmin <= 0.05) return 150
+  return clamp(0.863 * vco2 / alveolarVentilationLmin, 10, 150)
 }
 
 function updateAlveolarCo2(
@@ -167,12 +174,26 @@ function updateAlveolarCo2(
   dt: number,
   complianceL: number,
 ) {
-  const target = co2Target(state, ventilator, patient, t, complianceL)
+  const alveolarVentilation = calculateEffectiveAlveolarVentilation(state, ventilator, patient, t, complianceL)
+  const vco2 = Math.max(patient.co2Production ?? 250, 0)
+
+  if (alveolarVentilation <= 0.05) {
+    // With no ventilation, metabolic CO2 continues to accumulate. The effective
+    // CO2 distribution volume is scaled to PBW so a typical adult at VCO2 250
+    // mL/min rises about 5-6 mmHg/min; changing VCO2 changes that slope directly.
+    const heightCm = patient.heightCm ?? 170
+    const pbw = Math.max(20, (patient.sex === 'female' ? 45.5 : 50) + 0.91 * (heightCm - 152.4))
+    const co2DistributionVolumeL = Math.max(15, pbw * 0.6)
+    const riseMmHgPerMinute = 0.863 * vco2 / co2DistributionVolumeL
+    state.alveolarCo2 = clamp(state.alveolarCo2 + (riseMmHgPerMinute / 60) * dt, 0, 150)
+    return
+  }
+
+  const target = co2TargetFromVentilation(alveolarVentilation, patient)
   const responseTime = 8
   const fraction = 1 - Math.exp(-dt / responseTime)
-  state.alveolarCo2 = clamp(state.alveolarCo2 + (target - state.alveolarCo2) * fraction, 0, 100)
+  state.alveolarCo2 = clamp(state.alveolarCo2 + (target - state.alveolarCo2) * fraction, 0, 150)
 }
-
 
 function directSpO2FromAlveolarFraction(alveolarFraction: number, ventilator: VentilatorSettings, patient: PatientSettings): number {
   // v0.61 keeps oxygenation independent from airway mechanics: shunt is an
@@ -257,11 +278,11 @@ function capnogramValue(
   const riseShape = normalRise * (1 - obstruction) + obstructedRise * obstruction
   const phaseIIEndFraction = 0.88 - 0.12 * obstruction
 
-  if (riseProgress < 1) return clamp(etco2 * phaseIIEndFraction * riseShape, 0, 100)
+  if (riseProgress < 1) return clamp(etco2 * phaseIIEndFraction * riseShape, 0, 150)
 
   const plateauElapsed = elapsedExpiration - deadSpaceDelay - riseTime
   const plateauRise = plateauElapsed * (0.05 + 0.08 * obstruction)
-  return clamp(etco2 * Math.min(1, phaseIIEndFraction + plateauRise), 0, 100)
+  return clamp(etco2 * Math.min(1, phaseIIEndFraction + plateauRise), 0, 150)
 }
 
 function updateVentilationTracking(state: SimulationState, sample: Sample, t: number, dt: number) {
