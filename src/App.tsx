@@ -732,7 +732,7 @@ export default function App() {
   ].filter((value): value is string => value != null)
 
   useEffect(() => {
-    if (!audibleAlarmLevel || alarmSilenced) return
+    if (!audibleAlarmLevel || alarmSilenced || frozen || teachingSession.candidateAlarmsSilent) return
     const beep = () => {
       try {
         const AudioContextConstructor = window.AudioContext
@@ -758,7 +758,7 @@ export default function App() {
     beep()
     const interval = window.setInterval(beep, audibleAlarmLevel === 'red' ? 700 : 1300)
     return () => window.clearInterval(interval)
-  }, [audibleAlarmLevel, alarmSilenced])
+  }, [audibleAlarmLevel, alarmSilenced, frozen, teachingSession.candidateAlarmsSilent])
 
   useEffect(() => () => {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
@@ -856,7 +856,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.48',
+      appVersion: '0.49',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -935,7 +935,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.48</span>
+          <span className="version">v0.49</span>
         </div>
       </header>
 
@@ -978,7 +978,7 @@ export default function App() {
             {alarmLevel && (
               <div className={`alarm-banner ${alarmLevel}`} role="alert">
                 <strong>{alarmLabels.join(' • ')}</strong>
-                {alarmSilenced && audibleAlarmLevel && <span>ALARM SILENCED</span>}
+                {(alarmSilenced || teachingSession.candidateAlarmsSilent) && <span>ALARM SILENT</span>}
               </div>
             )}
           </div>

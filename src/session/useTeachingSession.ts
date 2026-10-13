@@ -42,6 +42,7 @@ interface PolicyPatch {
   candidateCanEditVentilator?: boolean
   syncAlarms?: boolean
   candidateCanEditAlarms?: boolean
+  alarmsSilent?: boolean
 }
 
 function getPauseButton(): HTMLButtonElement | null {
@@ -368,6 +369,7 @@ export function useTeachingSession({
     if (patch.candidateCanEditVentilator != null) databasePatch.candidate_can_edit_ventilator = patch.candidateCanEditVentilator
     if (patch.syncAlarms != null) databasePatch.sync_alarms = patch.syncAlarms
     if (patch.candidateCanEditAlarms != null) databasePatch.candidate_can_edit_alarms = patch.candidateCanEditAlarms
+    if (patch.alarmsSilent != null) databasePatch.alarms_silent = patch.alarmsSilent
 
     if (patch.syncPatient === true && !current.sync_patient) {
       patientRevisionRef.current += 1
@@ -608,6 +610,7 @@ export function useTeachingSession({
   const candidateVentilatorLocked = role === 'candidate' && Boolean(session?.sync_ventilator) && !Boolean(session?.candidate_can_edit_ventilator)
   const candidatePatientLocked = role === 'candidate' && Boolean(session?.sync_patient) && !Boolean(session?.candidate_can_edit_patient)
   const candidateAlarmsLocked = role === 'candidate' && Boolean(session?.sync_alarms) && !Boolean(session?.candidate_can_edit_alarms)
+  const candidateAlarmsSilent = role === 'candidate' && Boolean(session?.sync_alarms) && Boolean(session?.alarms_silent)
 
   return {
     role,
@@ -618,6 +621,7 @@ export function useTeachingSession({
     candidateVentilatorLocked,
     candidatePatientLocked,
     candidateAlarmsLocked,
+    candidateAlarmsSilent,
     recoverableInstructor,
     startInstructor,
     resumeInstructor,

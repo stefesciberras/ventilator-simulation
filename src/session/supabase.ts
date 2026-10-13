@@ -38,6 +38,7 @@ export interface TeachingSessionRow {
   candidate_can_edit_alarms: boolean
   alarm_settings: AlarmLimits
   alarm_revision: number
+  alarms_silent: boolean
   instructor_client_id: string | null
   instructor_last_seen: string | null
 }
