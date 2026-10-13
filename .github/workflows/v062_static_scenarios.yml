@@ -1,0 +1,46 @@
+name: Build v0.62 static scenarios
+on:
+  push:
+    branches: [chatgpt/v0.62-static-scenarios]
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply version patch
+        run: python scripts/v062_static_scenarios_patch.py
+      - name: Build
+        run: npm run build
+      - name: Static scenario source checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          account = Path('src/instructorAccount.ts').read_text()
+          controls = Path('src/components/InstructorAccountControls.tsx').read_text()
+          app = Path('src/App.tsx').read_text()
+          assert "kind?: InstructorScenarioKind" in account
+          assert "schemaVersion?: number" in account
+          assert "updateInstructorPreset" in account
+          assert "asStaticScenario" in account
+          assert "Dynamic scenarios" in controls
+          assert "Update from current" in controls
+          assert "Duplicate" in controls
+          assert "Edit details" in controls
+          assert "role !== 'candidate'" in controls
+          assert "v0.62" in controls
+          assert "appVersion: '0.62'" in app
+          print('static scenario semantic checks passed')
+          PY
+      - name: Commit implementation
+        run: |
+          git checkout -- tsconfig.tsbuildinfo 2>/dev/null || true
+          rm -f .github/workflows/v062_static_scenarios.yml scripts/v062_static_scenarios_patch.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "v0.62 Add instructor static scenario manager"
+          git push
