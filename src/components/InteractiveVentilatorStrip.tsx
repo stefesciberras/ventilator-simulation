@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { VentilatorMode, VentilatorSettings } from '../simulation/types'
 import '../interactive-vent-controls.css'
 
@@ -123,6 +124,8 @@ export function VentilatorModeControl({ settings, onChange, disabled = false }: 
 export function InteractiveVentilatorStrip({ settings, onChange, disabled = false }: InteractiveVentilatorStripProps) {
   const [activeKey, setActiveKey] = useState<SettingKey | null>(null)
   const settleTimerRef = useRef<number | null>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
+  const [overlayTarget, setOverlayTarget] = useState<HTMLElement | null>(null)
 
   const currentIeRatio = ieRatioFrom(settings)
 
@@ -186,6 +189,11 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
 
   useEffect(() => () => {
     if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
+  }, [])
+
+  useEffect(() => {
+    const consoleElement = stripRef.current?.closest('.ventilator-console')
+    setOverlayTarget(consoleElement?.querySelector<HTMLElement>('.waveforms') ?? null)
   }, [])
 
   useEffect(() => {
@@ -270,7 +278,7 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
   }
 
   return (
-    <div className={`interactive-vent-strip ${disabled ? 'disabled' : ''}`} aria-label="Ventilator display controls">
+    <div ref={stripRef} className={`interactive-vent-strip ${disabled ? 'disabled' : ''}`} aria-label="Ventilator display controls">
       <div className="interactive-vent-summary">
         {controls.map((control) => (
           <button
@@ -287,7 +295,7 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
           </button>
         ))}
       </div>
-      {activeControl && !disabled && (
+      {activeControl && !disabled && overlayTarget && createPortal(
         <div className="interactive-slider-panel" role="group" aria-label={`Adjust ${activeControl.label}`}>
           <span>{activeControl.label}</span>
           <input
@@ -308,7 +316,8 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
             onChange={(event) => applyValue(activeControl.key, Number(event.currentTarget.value))}
           />
           <strong>{activeControl.display}</strong>
-        </div>
+        </div>,
+        overlayTarget,
       )}
     </div>
   )
