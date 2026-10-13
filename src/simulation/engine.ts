@@ -46,6 +46,8 @@ export interface SimulationState {
   lastExpiratoryDuration: number
   estimatedRespiratoryRate: number
   alveolarCo2: number
+  alveolarOxygenFraction: number
+  spo2: number
 }
 
 export function createSimulationState(): SimulationState {
@@ -84,6 +86,8 @@ export function createSimulationState(): SimulationState {
     lastExpiratoryDuration: 2.5,
     estimatedRespiratoryRate: 12,
     alveolarCo2: 40,
+    alveolarOxygenFraction: 0.16,
+    spo2: 98,
   }
 }
 
@@ -167,6 +171,58 @@ function updateAlveolarCo2(
   const responseTime = 8
   const fraction = 1 - Math.exp(-dt / responseTime)
   state.alveolarCo2 = clamp(state.alveolarCo2 + (target - state.alveolarCo2) * fraction, 0, 100)
+}
+
+
+function directSpO2FromAlveolarFraction(alveolarFraction: number, ventilator: VentilatorSettings, patient: PatientSettings): number {
+  // v0.60 intentionally does not model PaO2. Instead, a smooth saturation curve
+  // maps the dynamic alveolar oxygen reservoir directly to pulse-oximeter SpO2.
+  // Low compliance and severe expiratory obstruction impose a simplified V/Q /
+  // shunt penalty. PEEP can recruit part of the low-compliance penalty.
+  const compliancePenalty = clamp((60 - patient.compliance) / 45, 0, 1) * 0.055
+  const obstructionPenalty = clamp((patient.expiratoryResistance - 8) / 32, 0, 1) * 0.018
+  const recruitment = compliancePenalty * 0.55 * clamp((ventilator.peep - 5) / 10, 0, 1)
+  const effectiveFraction = clamp(alveolarFraction - compliancePenalty - obstructionPenalty + recruitment, 0.01, 0.95)
+  const halfSaturationFraction = 0.063
+  const hillExponent = 5
+  const ratio = Math.pow(halfSaturationFraction / effectiveFraction, hillExponent)
+  return clamp(100 / (1 + ratio), 50, 100)
+}
+
+function updateOxygenation(
+  state: SimulationState,
+  ventilator: VentilatorSettings,
+  patient: PatientSettings,
+  t: number,
+  dt: number,
+  complianceL: number,
+) {
+  const fallbackVt = Math.max(ventilator.tidalVolume / 1000, 0.3)
+  const tidalVolumeL = state.lastExpiredTidalVolume > 0.02 ? state.lastExpiredTidalVolume : fallbackVt
+  const deadSpaceL = Math.max(patient.deadSpaceVolume ?? 150, 0) / 1000
+  const alveolarVolumeL = Math.max(0, tidalVolumeL - deadSpaceL)
+  const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
+  const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
+  const expiratoryTime = Math.max(state.lastExpiratoryDuration, 0.05)
+  const emptyingFraction = clamp(1 - Math.exp(-expiratoryTime / tau), 0.03, 1)
+  const alveolarVentilationLmin = alveolarVolumeL * respiratoryRate * emptyingFraction
+
+  const frcL = clamp(Math.max(patient.frc ?? 2500, 500) / 1000, 0.5, 8)
+  const inspiredOxygenFraction = clamp(ventilator.fio2, 0.21, 1)
+  const oxygenConsumptionLs = Math.max(patient.oxygenConsumption ?? 250, 0) / 1000 / 60
+  const turnoverPerSecond = alveolarVentilationLmin / 60 / frcL
+  const metabolicDepletionPerSecond = oxygenConsumptionLs / frcL
+
+  // Well-mixed FRC reservoir: ventilation washes FAO2 toward FiO2 while VO2
+  // continuously removes oxygen. During apnoea the wash-in term approaches zero,
+  // so FRC and VO2 naturally determine the speed of desaturation.
+  const derivative = turnoverPerSecond * (inspiredOxygenFraction - state.alveolarOxygenFraction) - metabolicDepletionPerSecond
+  state.alveolarOxygenFraction = clamp(state.alveolarOxygenFraction + derivative * dt, 0.01, 0.95)
+
+  const targetSpO2 = directSpO2FromAlveolarFraction(state.alveolarOxygenFraction, ventilator, patient)
+  const pulseOximeterResponseSeconds = targetSpO2 < state.spo2 ? 2.5 : 4
+  const responseFraction = 1 - Math.exp(-dt / pulseOximeterResponseSeconds)
+  state.spo2 = clamp(state.spo2 + (targetSpO2 - state.spo2) * responseFraction, 50, 100)
 }
 
 function capnogramValue(
@@ -412,6 +468,7 @@ function twoLevelSample(
     volume: state.volume * 1000,
     musclePressure: pmus,
     co2: capnogramValue(!high, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
+    spo2: state.spo2,
     oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
     phase: high ? 'inspiration' : 'expiration',
     mode,
@@ -462,6 +519,7 @@ export function stepSimulation(
 
   const pmus = patientMusclePressure(t, patient)
   updateAlveolarCo2(state, ventilator, patient, t, dt, complianceL)
+  updateOxygenation(state, ventilator, patient, t, dt, complianceL)
 
   if (mode === 'APRV' || mode === 'BIPAP') {
     const sample = twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode)
@@ -838,6 +896,7 @@ export function stepSimulation(
     volume: state.volume * 1000,
     musclePressure: pmus,
     co2: capnogramValue(!sampleInspiration, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
+    spo2: state.spo2,
     oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
     phase: sampleInspiration ? 'inspiration' : 'expiration',
     mode,

@@ -1,6 +1,6 @@
 import type { Sample } from './simulation/types'
 
-export const APP_VERSION = '0.59'
+export const APP_VERSION = '0.60'
 export type DiagnosticWaveformSource = 'live' | 'frozen'
 
 export async function copyDiagnosticSnapshot(
@@ -26,6 +26,7 @@ export async function copyDiagnosticSnapshot(
         volume: 'mL',
         musclePressure: 'cmH2O',
         co2: 'mmHg',
+        spo2: '%',
         oesophagealPressure: 'cmH2O',
       },
       columns: [
@@ -35,6 +36,7 @@ export async function copyDiagnosticSnapshot(
         'volume',
         'musclePressure',
         'co2',
+        'spo2',
         'oesophagealPressure',
         'phase',
         'mode',
@@ -49,6 +51,7 @@ export async function copyDiagnosticSnapshot(
         sample.volume,
         sample.musclePressure,
         sample.co2,
+        sample.spo2,
         sample.oesophagealPressure,
         sample.phase,
         sample.mode,

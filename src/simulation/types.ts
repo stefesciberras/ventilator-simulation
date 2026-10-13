@@ -49,6 +49,7 @@ export interface Sample {
   volume: number
   musclePressure: number
   co2: number
+  spo2: number
   oesophagealPressure: number
   phase: 'inspiration' | 'expiration'
   mode: VentilatorMode

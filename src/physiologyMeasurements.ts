@@ -26,6 +26,7 @@ export interface PhysiologicalMeasurements {
   expiredTidalVolume: number | null
   endTidalCO2: number | null
   oxygenPercent: number
+  oxygenSaturation: number | null
   pesMax: number | null
   pesPlateau: number | null
   pesMin: number | null
@@ -297,6 +298,7 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
     expiredTidalVolume: monitor.expiredTidalVolume,
     endTidalCO2: monitor.endTidalCO2,
     oxygenPercent: ventilator.fio2 * 100,
+    oxygenSaturation: window.length ? window[window.length - 1].spo2 : null,
     pesMax: monitor.pesMax,
     pesPlateau: monitor.pesPlateau,
     pesMin: monitor.pesMin,
