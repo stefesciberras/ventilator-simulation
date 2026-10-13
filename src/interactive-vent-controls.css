@@ -1,10 +1,12 @@
 .interactive-vent-strip {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px 12px;
   background: #10171c;
   border-top: 1px solid #27333b;
+  overflow: visible;
 }
 
 .interactive-vent-summary {
@@ -63,15 +65,22 @@
 }
 
 .interactive-slider-panel {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 6px);
+  z-index: 40;
   min-height: 54px;
   display: grid;
   grid-template-columns: minmax(54px, auto) minmax(160px, 1fr) minmax(90px, auto);
   align-items: center;
   gap: 12px;
   padding: 8px 10px;
-  border: 1px solid rgba(219, 117, 31, .7);
+  border: 1px solid rgba(219, 117, 31, .82);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(65, 38, 17, .8), rgba(34, 23, 13, .9));
+  background: linear-gradient(180deg, rgba(65, 38, 17, .96), rgba(34, 23, 13, .97));
+  box-shadow: 0 -8px 24px rgba(0,0,0,.42), 0 6px 18px rgba(0,0,0,.3);
+  backdrop-filter: blur(2px);
 }
 
 .interactive-slider-panel > span {
@@ -279,6 +288,9 @@
   }
 
   .interactive-slider-panel {
+    left: 8px;
+    right: 8px;
+    bottom: calc(100% + 5px);
     grid-template-columns: 1fr auto;
     gap: 7px 10px;
   }
