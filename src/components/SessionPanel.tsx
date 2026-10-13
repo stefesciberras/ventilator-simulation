@@ -215,7 +215,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.67'
+    if (version) version.textContent = 'v0.68'
   }, [])
 
   const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
