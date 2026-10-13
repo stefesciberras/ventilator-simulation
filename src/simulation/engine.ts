@@ -446,11 +446,12 @@ export function stepSimulation(
 
   if (mode === 'VG-PC') {
     const pressureLimit = ventilator.volumeGuaranteePressureLimit ?? 40
-    if (Math.abs(state.vgSettingPressure - pressureLimit) > 0.001) {
-      const maximumDrivingPressure = Math.max(0.1, pressureLimit - 5 - ventilator.peep)
-      state.vgPressureControl = clamp(state.vgPressureControl, Math.min(5, maximumDrivingPressure), maximumDrivingPressure)
-      state.vgSettingPressure = pressureLimit
-    }
+    const maximumDrivingPressure = Math.max(0.1, pressureLimit - 5 - ventilator.peep)
+    const minimumDrivingPressure = Math.min(5, maximumDrivingPressure)
+    // Re-clamp continuously so a PEEP or Pmax change cannot transiently push
+    // AutoFlow above its pressure ceiling during the current breath.
+    state.vgPressureControl = clamp(state.vgPressureControl, minimumDrivingPressure, maximumDrivingPressure)
+    state.vgSettingPressure = pressureLimit
   }
 
   const pmus = patientMusclePressure(t, patient)
@@ -689,7 +690,7 @@ export function stepSimulation(
       if (elapsed >= ventilator.inspiratoryTime) {
         const measuredPlateauDrivingPressure = Math.max(0.1, state.volume / complianceL - pmus)
         state.vgTestPlateauPressure = measuredPlateauDrivingPressure
-        state.vgPressureControl = clamp(measuredPlateauDrivingPressure * 0.8, minimumDrivingPressure, maximumDrivingPressure)
+        state.vgPressureControl = clamp(measuredPlateauDrivingPressure * 0.8, minimumDrivingPressure, Math.min(maximumDrivingPressure, 15))
         state.vgBreathNumber = 1
         finishBreath(state, t, postCycleReleaseGuard)
         inspiration = false
@@ -715,7 +716,7 @@ export function stepSimulation(
       if (excessiveVolume) {
         // AutoFlow volume safeguard: terminate above 130% VT and reduce the
         // next pressure to 75% of the current pressure.
-        state.vgPressureControl = clamp(state.vgPressureControl * 0.75, minimumDrivingPressure, maximumDrivingPressure)
+        state.vgPressureControl = clamp(state.vgPressureControl * 0.75, minimumDrivingPressure, Math.min(maximumDrivingPressure, 15))
         state.vgBreathNumber += 1
         finishBreath(state, t, postCycleReleaseGuard)
         inspiration = false
