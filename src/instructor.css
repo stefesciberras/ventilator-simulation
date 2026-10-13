@@ -127,3 +127,18 @@ body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
 @media (max-width: 619px) {
   .instructor-session-panel .instructor-domain-grid { grid-template-columns: 1fr; }
 }
+
+
+/* v0.50 Live Room placement */
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel > .instructor-live-room {
+  grid-column: 1 / -1;
+}
+.instructor-live-room {
+  width: auto;
+  margin-top: 2px;
+}
+.waveform-options-bar select:disabled,
+.waveform-options-bar button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
