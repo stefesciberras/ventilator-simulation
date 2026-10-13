@@ -41,6 +41,7 @@ export interface TeachingSessionRow {
   alarms_silent: boolean
   candidate_can_edit_waveforms: boolean
   allow_oesophageal_pressure: boolean
+  show_patient_effort: boolean
   instructor_client_id: string | null
   instructor_last_seen: string | null
 }

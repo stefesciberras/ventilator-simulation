@@ -28,6 +28,7 @@ interface SessionPanelProps {
     alarmsSilent?: boolean
     candidateCanEditWaveforms?: boolean
     allowOesophagealPressure?: boolean
+    showPatientEffort?: boolean
   }) => Promise<void>
   onBroadcastNow: () => Promise<void>
 }
@@ -172,7 +173,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.53'
+    if (version) version.textContent = 'v0.54'
   }, [])
 
   const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
@@ -293,6 +294,10 @@ export function SessionPanel({
                 <label className="session-switch-row">
                   <span>Candidate may change</span>
                   <input type="checkbox" checked={Boolean(session?.candidate_can_edit_patient)} disabled={!session?.sync_patient} onChange={(event) => void onUpdatePolicy({ candidateCanEditPatient: event.target.checked })} />
+                </label>
+                <label className="session-switch-row">
+                  <span>Show patient effort to candidate</span>
+                  <input type="checkbox" checked={Boolean(session?.show_patient_effort)} onChange={(event) => void onUpdatePolicy({ showPatientEffort: event.target.checked })} />
                 </label>
               </div>
 
