@@ -1,5 +1,6 @@
 import { createClient, type RealtimeChannel } from '@supabase/supabase-js'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
+import type { AlarmLimits, CandidateAlarmLevel } from '../alarmTypes'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://meigiiqcrvwxcgapzxxi.supabase.co'
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? 'sb_publishable_8BlWpHJsYzB2V8GQh9kqdQ_QUjg7rN-'
@@ -33,6 +34,12 @@ export interface TeachingSessionRow {
   transition_ms: number
   simulation_paused: boolean
   pause_revision: number
+  sync_alarms: boolean
+  candidate_can_edit_alarms: boolean
+  alarm_settings: AlarmLimits
+  alarm_revision: number
+  instructor_client_id: string | null
+  instructor_last_seen: string | null
 }
 
 export interface SessionMemberRow {
@@ -46,6 +53,7 @@ export interface SessionMemberRow {
   patient_settings: PatientSettings | Record<string, never>
   ventilator_settings: VentilatorSettings | Record<string, never>
   state_updated_at: string | null
+  alarm_level: CandidateAlarmLevel
 }
 
 export async function ensureAnonymousSession() {
@@ -59,11 +67,12 @@ export async function ensureAnonymousSession() {
   return data.session
 }
 
-export async function createTeachingSession(patient: PatientSettings, ventilator: VentilatorSettings) {
+export async function createTeachingSession(patient: PatientSettings, ventilator: VentilatorSettings, alarmSettings: AlarmLimits) {
   await ensureAnonymousSession()
   const { data, error } = await supabase.rpc('create_teaching_session', {
     p_patient_settings: patient,
     p_ventilator_settings: ventilator,
+    p_alarm_settings: alarmSettings,
   })
   if (error) throw error
   const result = Array.isArray(data) ? data[0] : data
@@ -118,12 +127,33 @@ export async function touchSessionMember(
   sessionId: string,
   patient: PatientSettings,
   ventilator: VentilatorSettings,
+  alarmLevel: CandidateAlarmLevel = null,
 ) {
   const { error } = await supabase.rpc('touch_session_member', {
     p_session_id: sessionId,
     p_patient_settings: patient,
     p_ventilator_settings: ventilator,
+    p_alarm_level: alarmLevel,
   })
+  if (error) throw error
+}
+
+export async function findActiveInstructorSession() {
+  await ensureAnonymousSession()
+  const { data, error } = await supabase.rpc('find_active_instructor_session')
+  if (error) throw error
+  const result = Array.isArray(data) ? data[0] : data
+  if (!result?.session_id) return null
+  return { sessionId: String(result.session_id), sessionKey: String(result.session_key) }
+}
+
+export async function claimInstructorSession(sessionId: string, clientId: string) {
+  const { error } = await supabase.rpc('claim_instructor_session', { p_session_id: sessionId, p_client_id: clientId })
+  if (error) throw error
+}
+
+export async function touchInstructorSession(sessionId: string, clientId: string) {
+  const { error } = await supabase.rpc('touch_instructor_session', { p_session_id: sessionId, p_client_id: clientId })
   if (error) throw error
 }
 

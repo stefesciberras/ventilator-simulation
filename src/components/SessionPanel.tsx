@@ -15,7 +15,9 @@ interface SessionPanelProps {
   connection: SessionConnection
   session: TeachingSessionRow | null
   error: string | null
+  recoverableInstructor?: { sessionId: string; sessionKey: string } | null
   onStartInstructor: () => Promise<void>
+  onResumeInstructor?: (sessionId?: string) => Promise<void>
   onJoinCandidate: (sessionKey: string, displayName: string) => Promise<void>
   onLeaveSession: () => Promise<void>
   onEndInstructorSession: () => Promise<void>
@@ -24,6 +26,8 @@ interface SessionPanelProps {
     syncVentilator?: boolean
     candidateCanEditPatient?: boolean
     candidateCanEditVentilator?: boolean
+    syncAlarms?: boolean
+    candidateCanEditAlarms?: boolean
   }) => Promise<void>
   onBroadcastNow: () => Promise<void>
 }
@@ -58,6 +62,7 @@ function CandidateCard({ member, now }: { member: SessionMemberRow; now: number 
 
   return (
     <article className={`candidate-card ${online ? 'online' : 'offline'}`}>
+      {member.alarm_level && <div className={`candidate-alarm-strip ${member.alarm_level}`} aria-label={`${member.alarm_level} candidate alarm`} />}
       <div className="candidate-card-heading">
         <div>
           <strong>{member.display_name?.trim() || 'Candidate'}</strong>
@@ -84,7 +89,9 @@ export function SessionPanel({
   connection,
   session,
   error,
+  recoverableInstructor,
   onStartInstructor,
+  onResumeInstructor,
   onJoinCandidate,
   onLeaveSession,
   onEndInstructorSession,
@@ -150,7 +157,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.47'
+    if (version) version.textContent = 'v0.48'
   }, [])
 
   const candidates = useMemo(() => dashboardMembers.filter((member) => member.role === 'candidate'), [dashboardMembers])
@@ -172,6 +179,9 @@ export function SessionPanel({
               Start instructor session
             </button>
             <button type="button" className="session-secondary-button" onClick={() => setJoinMode(true)}>Join as candidate</button>
+            {recoverableInstructor && onResumeInstructor && (
+              <button type="button" className="session-secondary-button" onClick={() => void onResumeInstructor(recoverableInstructor.sessionId)}>Rejoin instructor {recoverableInstructor.sessionKey}</button>
+            )}
           </div>
         ) : (
           <form className="candidate-join-form" onSubmit={(event) => {
@@ -264,6 +274,18 @@ export function SessionPanel({
               <input type="checkbox" checked={Boolean(session?.candidate_can_edit_ventilator)} disabled={!session?.sync_ventilator} onChange={(event) => void onUpdatePolicy({ candidateCanEditVentilator: event.target.checked })} />
             </label>
           </div>
+
+          <div className={`session-domain-card ${session?.sync_alarms ? 'shared' : ''}`}>
+            <div className="session-domain-title"><strong>Alarms</strong><span>{session?.sync_alarms ? 'Shared' : 'Local'}</span></div>
+            <label className="session-switch-row">
+              <span>Share alarm settings</span>
+              <input type="checkbox" checked={Boolean(session?.sync_alarms)} onChange={(event) => void onUpdatePolicy({ syncAlarms: event.target.checked })} />
+            </label>
+            <label className="session-switch-row">
+              <span>Candidate may change</span>
+              <input type="checkbox" checked={Boolean(session?.candidate_can_edit_alarms)} disabled={!session?.sync_alarms} onChange={(event) => void onUpdatePolicy({ candidateCanEditAlarms: event.target.checked })} />
+            </label>
+          </div>
         </div>
 
         <section className="candidate-roster" aria-label="Candidates">
@@ -304,6 +326,9 @@ export function SessionPanel({
           </span>
           <span className={session?.sync_ventilator && !session?.candidate_can_edit_ventilator ? 'locked' : 'available'}>
             Ventilator: {session?.sync_ventilator ? (session.candidate_can_edit_ventilator ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
+          </span>
+          <span className={session?.sync_alarms && !session?.candidate_can_edit_alarms ? 'locked' : 'available'}>
+            Alarms: {session?.sync_alarms ? (session.candidate_can_edit_alarms ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
           </span>
         </div>
       </div>

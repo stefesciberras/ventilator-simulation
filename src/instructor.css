@@ -55,3 +55,34 @@ body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
     grid-column: 1;
   }
 }
+
+
+/* v0.48 alarm lifecycle */
+.alarm-slot {
+  min-height: 42px;
+  height: 42px;
+  background: #0a1014;
+  border-bottom: 1px solid #253139;
+}
+.alarm-slot .alarm-banner {
+  min-height: 42px;
+  height: 42px;
+  margin: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.alarm-banner.grey {
+  background: #343b3f !important;
+  border-color: #56636a !important;
+  color: #c4ced2 !important;
+  box-shadow: none !important;
+}
+.candidate-card { position: relative; overflow: hidden; }
+.candidate-alarm-strip { height: 5px; margin: -10px -10px 8px; }
+.candidate-alarm-strip.yellow { background: #e8b94e; }
+.candidate-alarm-strip.red { background: #e45f5f; }
+.session-domain-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1180px) { .session-domain-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) { .session-domain-grid { grid-template-columns: 1fr; } }

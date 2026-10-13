@@ -6,6 +6,7 @@ import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
 import { copyDiagnosticSnapshot } from './diagnostics'
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
+import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
 import './session.css'
 
@@ -18,19 +19,6 @@ const initialVentilator: VentilatorSettings = {
 
 const initialPatient: PatientSettings = {
   compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
-}
-
-interface AlarmLimits {
-  apneaTime: number
-  peakPressure: number
-  co2Min: number
-  co2Max: number
-  minuteVentilationMin: number
-  minuteVentilationMax: number
-  tidalVolumeMin: number
-  tidalVolumeMax: number
-  respiratoryRateMin: number
-  respiratoryRateMax: number
 }
 
 interface EventMeasurements {
@@ -445,6 +433,8 @@ export default function App() {
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [nebuliser, setNebuliser] = useState(false)
   const [alarmSilenced, setAlarmSilenced] = useState(false)
+  const [alarmClock, setAlarmClock] = useState(() => Date.now())
+  const [alarmLifecycle, setAlarmLifecycle] = useState<Record<string, { activeSince: number | null; resolvedAt: number | null; acknowledged: boolean }>>({})
   const [frozen, setFrozen] = useState(false)
   const [frozenSamples, setFrozenSamples] = useState<Sample[] | null>(null)
   const [traceCursor, setTraceCursor] = useState(Math.floor(WINDOW_SAMPLES * 0.7))
@@ -466,14 +456,18 @@ export default function App() {
     oxygenFailure: null,
   })
   const [diagnosticCopied, setDiagnosticCopied] = useState(false)
+  const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
 
   const teachingSession = useTeachingSession({
     patient,
     ventilator,
+    alarmLimits,
     patientTransitionSeconds,
     setPatient,
     setVentilator,
+    setAlarmLimits,
     setPatientTransitionSeconds,
+    candidateAlarmLevel: candidateAlarmLevelForSession,
   })
 
   const simulationStateRef = useRef(createSimulationState())
@@ -525,6 +519,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
   }, [alarmLimits])
+
+  useEffect(() => {
+    if (teachingSession.candidateAlarmsLocked) setAlarmDialogOpen(false)
+  }, [teachingSession.candidateAlarmsLocked])
 
   useEffect(() => {
     window.localStorage.setItem(WAVEFORM_STORAGE_KEY, JSON.stringify(waveformDisplay))
@@ -630,6 +628,12 @@ export default function App() {
   }
 
   useEffect(() => {
+    const timer = window.setInterval(() => setAlarmClock(Date.now()), 500)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const now = Date.now()
     setAlarmOnsets((current) => {
       let changed = false
       const next = { ...current }
@@ -649,6 +653,24 @@ export default function App() {
       }
       return changed ? next : current
     })
+
+    setAlarmLifecycle((current) => {
+      let changed = false
+      const next = { ...current }
+      for (const [key, active] of Object.entries(alarmConditions)) {
+        const entry = current[key] ?? { activeSince: null, resolvedAt: null, acknowledged: false }
+        if (active) {
+          if (entry.activeSince == null || entry.resolvedAt != null) {
+            next[key] = { activeSince: now, resolvedAt: null, acknowledged: false }
+            changed = true
+          }
+        } else if (entry.activeSince != null && entry.resolvedAt == null) {
+          next[key] = { ...entry, resolvedAt: now }
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
   }, [
     apneaAlarmActive,
     pressureAlarmActive,
@@ -662,28 +684,55 @@ export default function App() {
     currentSimulationTime,
   ])
 
-  const anyAlarmActive = Object.values(alarmConditions).some(Boolean)
+  useEffect(() => {
+    setAlarmLifecycle((current) => {
+      let changed = false
+      const next = { ...current }
+      for (const [key, entry] of Object.entries(current)) {
+        if (entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 120000) {
+          delete next[key]
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [alarmClock])
+
   const criticalAlarmKeys = ['pressure', 'apnea', 'oxygenFailure'] as const
+  const activeAlarmKeys = Object.entries(alarmConditions).filter(([, active]) => active).map(([key]) => key)
+  const resolvedYellowKeys = Object.entries(alarmLifecycle)
+    .filter(([, entry]) => entry.resolvedAt != null && alarmClock - entry.resolvedAt < 10000)
+    .map(([key]) => key)
+  const greyAlarmKeys = Object.entries(alarmLifecycle)
+    .filter(([, entry]) => entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 10000 && alarmClock - entry.resolvedAt < 120000 && !entry.acknowledged)
+    .map(([key]) => key)
   const criticalEscalated = criticalAlarmKeys.some((key) => {
-    if (!alarmConditions[key]) return false
-    const onset = alarmOnsets[key]
-    return onset != null && currentSimulationTime - onset >= 15
+    const entry = alarmLifecycle[key]
+    return Boolean(alarmConditions[key] && entry?.activeSince != null && alarmClock - entry.activeSince >= 15000)
   })
-  const alarmLevel = anyAlarmActive ? (criticalEscalated ? 'red' : 'yellow') : null
+  const audibleAlarmLevel: CandidateAlarmLevel = activeAlarmKeys.length || resolvedYellowKeys.length
+    ? (criticalEscalated ? 'red' : 'yellow')
+    : null
+  const alarmLevel: 'red' | 'yellow' | 'grey' | null = audibleAlarmLevel ?? (greyAlarmKeys.length ? 'grey' : null)
+
+  useEffect(() => {
+    setCandidateAlarmLevelForSession(audibleAlarmLevel)
+  }, [audibleAlarmLevel])
+  const visibleAlarmKeys = new Set([...activeAlarmKeys, ...resolvedYellowKeys, ...greyAlarmKeys])
   const alarmLabels = [
-    pressureAlarmActive ? 'HIGH PRESSURE' : null,
-    apneaAlarmActive ? 'APNOEA' : null,
-    minuteVentilationLowAlarmActive ? 'LOW MINUTE VENTILATION' : null,
-    minuteVentilationHighAlarmActive ? 'HIGH MINUTE VENTILATION' : null,
-    tidalVolumeLowAlarmActive ? 'LOW TIDAL VOLUME' : null,
-    tidalVolumeHighAlarmActive ? 'HIGH TIDAL VOLUME' : null,
-    respiratoryRateLowAlarmActive ? 'LOW RESPIRATORY RATE' : null,
-    respiratoryRateHighAlarmActive ? 'HIGH RESPIRATORY RATE' : null,
-    oxygenFailureActive ? 'OXYGEN FAILURE' : null,
+    visibleAlarmKeys.has('pressure') ? 'HIGH PRESSURE' : null,
+    visibleAlarmKeys.has('apnea') ? 'APNOEA' : null,
+    visibleAlarmKeys.has('minuteVentilationLow') ? 'LOW MINUTE VENTILATION' : null,
+    visibleAlarmKeys.has('minuteVentilationHigh') ? 'HIGH MINUTE VENTILATION' : null,
+    visibleAlarmKeys.has('tidalVolumeLow') ? 'LOW TIDAL VOLUME' : null,
+    visibleAlarmKeys.has('tidalVolumeHigh') ? 'HIGH TIDAL VOLUME' : null,
+    visibleAlarmKeys.has('respiratoryRateLow') ? 'LOW RESPIRATORY RATE' : null,
+    visibleAlarmKeys.has('respiratoryRateHigh') ? 'HIGH RESPIRATORY RATE' : null,
+    visibleAlarmKeys.has('oxygenFailure') ? 'OXYGEN FAILURE' : null,
   ].filter((value): value is string => value != null)
 
   useEffect(() => {
-    if (!alarmLevel || alarmSilenced) return
+    if (!audibleAlarmLevel || alarmSilenced) return
     const beep = () => {
       try {
         const AudioContextConstructor = window.AudioContext
@@ -694,7 +743,7 @@ export default function App() {
         const oscillator = context.createOscillator()
         const gain = context.createGain()
         oscillator.type = 'square'
-        oscillator.frequency.value = alarmLevel === 'red' ? 1040 : 820
+        oscillator.frequency.value = audibleAlarmLevel === 'red' ? 1040 : 820
         gain.gain.setValueAtTime(0.0001, context.currentTime)
         gain.gain.exponentialRampToValueAtTime(0.055, context.currentTime + 0.01)
         gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12)
@@ -707,9 +756,9 @@ export default function App() {
       }
     }
     beep()
-    const interval = window.setInterval(beep, alarmLevel === 'red' ? 700 : 1300)
+    const interval = window.setInterval(beep, audibleAlarmLevel === 'red' ? 700 : 1300)
     return () => window.clearInterval(interval)
-  }, [alarmLevel, alarmSilenced])
+  }, [audibleAlarmLevel, alarmSilenced])
 
   useEffect(() => () => {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
@@ -778,6 +827,14 @@ export default function App() {
   }
 
   const silenceAlarm = () => {
+    setAlarmLifecycle((current) => {
+      const next = { ...current }
+      for (const [key, entry] of Object.entries(current)) {
+        if (entry.resolvedAt != null) delete next[key]
+        else if (alarmConditions[key as keyof typeof alarmConditions]) next[key] = { ...entry, acknowledged: true }
+      }
+      return next
+    })
     setAlarmSilenced(true)
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
     alarmSilenceTimeoutRef.current = window.setTimeout(() => {
@@ -799,7 +856,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.45',
+      appVersion: '0.48',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -878,7 +935,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.45</span>
+          <span className="version">v0.48</span>
         </div>
       </header>
 
@@ -917,12 +974,14 @@ export default function App() {
             </div>
           </div>
 
-          {alarmLevel && (
-            <div className={`alarm-banner ${alarmLevel}`} role="alert">
-              <strong>{alarmLabels.join(' • ')}</strong>
-              {alarmSilenced && <span>ALARM SILENCED</span>}
-            </div>
-          )}
+          <div className="alarm-slot" aria-live="polite">
+            {alarmLevel && (
+              <div className={`alarm-banner ${alarmLevel}`} role="alert">
+                <strong>{alarmLabels.join(' • ')}</strong>
+                {alarmSilenced && audibleAlarmLevel && <span>ALARM SILENCED</span>}
+              </div>
+            )}
+          </div>
 
           <div className="screen-body">
             {alarmDialogOpen && (
@@ -997,7 +1056,7 @@ export default function App() {
 
             <aside className="metrics-panel" aria-label="Measured values">
               <div className="metrics-actions">
-                <button className="metrics-alarm-limits" type="button" onClick={() => setAlarmDialogOpen(true)} title="Set alarm limits">Alarm limits</button>
+                <button className="metrics-alarm-limits" type="button" disabled={teachingSession.candidateAlarmsLocked} onClick={() => setAlarmDialogOpen(true)} title={teachingSession.candidateAlarmsLocked ? 'Alarm limits controlled by instructor' : 'Set alarm limits'}>Alarm limits</button>
               </div>
               <div className="metrics-title">Measured</div>
               <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
@@ -1047,7 +1106,9 @@ export default function App() {
             connection={teachingSession.connection}
             session={teachingSession.session}
             error={teachingSession.error}
+            recoverableInstructor={teachingSession.recoverableInstructor}
             onStartInstructor={teachingSession.startInstructor}
+          onResumeInstructor={teachingSession.resumeInstructor}
             onJoinCandidate={teachingSession.joinCandidate}
             onLeaveSession={teachingSession.leaveSession}
             onEndInstructorSession={teachingSession.endInstructorSession}
