@@ -1,0 +1,46 @@
+name: v0.77.1 oxygen enrichment and inspiratory hold
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.77.1-oxygen-hold
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.77.1-oxygen-hold
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply v0.77.1 patch
+        run: python3 scripts/patch_v0771.py
+      - name: Verify requested behavior is present
+        run: |
+          grep -q "Date.now() + 60_000" src/App.tsx
+          grep -q "oxygen-enrichment-timer" src/App.tsx
+          grep -q "inspiratoryHoldRequested && isSimv(mode)" src/simulation/engine.ts
+          grep -q "v0.77.1" src/App.tsx
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Commit integrated changes
+        run: |
+          if git diff --quiet; then
+            echo "No integration changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/simulation/engine.ts src/components/SessionPanel.tsx src/interactive-vent-controls.css
+          git commit -m "v0.77.1 Add timed oxygen enrichment and SIMV assisted holds"
+          git push origin HEAD:chatgpt/v0.77.1-oxygen-hold
