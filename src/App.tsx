@@ -292,28 +292,45 @@ function getLatestBreathStart(samples: Sample[]): number | null {
 
 function calculateEndTidalCO2(samples: Sample[]): number | null {
   if (samples.length < 2) return null
-  let expiratoryPeak = 0
-  let inExpiration = samples[0].phase === 'expiration'
+  const terminalFlowThreshold = 0.5
+  const latestTime = samples[samples.length - 1].time
+  let lastExpiratoryFlowTime: number | null = null
+  let terminalCandidate: number | null = null
   let lastCompleted: number | null = null
 
-  if (inExpiration) expiratoryPeak = samples[0].co2
-  for (let index = 1; index < samples.length; index += 1) {
-    const previous = samples[index - 1]
+  for (let index = 0; index < samples.length; index += 1) {
     const current = samples[index]
-    if (current.phase === 'expiration') {
-      if (!inExpiration) {
-        inExpiration = true
-        expiratoryPeak = current.co2
-      } else {
-        expiratoryPeak = Math.max(expiratoryPeak, current.co2)
-      }
+    const previous = index > 0 ? samples[index - 1] : null
+
+    if (current.phase === 'expiration' && current.flow < -terminalFlowThreshold) {
+      lastExpiratoryFlowTime = current.time
+      terminalCandidate = current.co2
     }
-    if (previous.phase === 'expiration' && current.phase === 'inspiration' && inExpiration) {
-      lastCompleted = expiratoryPeak
-      inExpiration = false
-      expiratoryPeak = 0
+
+    // EtCO2 is the terminal expired concentration: latch the value at the point
+    // expiratory flow has effectively reached zero, not the maximum CO2 seen in
+    // an arbitrarily long expiratory/apnoeic interval.
+    if (
+      previous &&
+      previous.phase === 'expiration' &&
+      current.phase === 'expiration' &&
+      previous.flow < -terminalFlowThreshold &&
+      current.flow >= -terminalFlowThreshold &&
+      terminalCandidate != null
+    ) {
+      lastCompleted = terminalCandidate
     }
+
+    // If the next inspiration starts before flow crosses the near-zero threshold,
+    // the final actively expired sample is still the end-tidal sample.
+    if (previous && previous.phase === 'expiration' && current.phase === 'inspiration' && terminalCandidate != null) {
+      lastCompleted = terminalCandidate
+      terminalCandidate = null
+    }
+    if (previous && previous.phase === 'inspiration' && current.phase === 'expiration') terminalCandidate = null
   }
+
+  if (lastExpiratoryFlowTime == null || latestTime - lastExpiratoryFlowTime > 20) return null
   return lastCompleted
 }
 
@@ -965,7 +982,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.66',
+      appVersion: '0.69',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1057,7 +1074,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.68</span>
+          <span className="version">v0.69</span>
         </div>
       </header>
 
@@ -1194,7 +1211,7 @@ export default function App() {
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
               <div className="metrics-spacer" aria-hidden="true" />
               <GasMetric
-                etco2={endTidalCO2 == null ? '—' : endTidalCO2.toFixed(0)}
+                etco2={endTidalCO2 == null ? '-' : endTidalCO2.toFixed(0)}
                 spo2={latestSample?.spo2 == null ? '—' : latestSample.spo2.toFixed(0)}
               />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}

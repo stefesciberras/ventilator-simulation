@@ -9,12 +9,12 @@ interface Props {
   onClose: () => void
 }
 
-const display = (number: number | null | undefined, digits = 1) => number == null || !Number.isFinite(number) ? '—' : number.toFixed(digits)
+const display = (number: number | null | undefined, digits = 1, empty = '—') => number == null || !Number.isFinite(number) ? empty : number.toFixed(digits)
 
-function MonitorMetric({ value, label, unit, digits = 1 }: { value: number | null | undefined; label: string; unit: string; digits?: number }) {
+function MonitorMetric({ value, label, unit, digits = 1, empty = '—' }: { value: number | null | undefined; label: string; unit: string; digits?: number; empty?: string }) {
   return (
     <div className="monitor-metric">
-      <strong>{display(value, digits)}</strong>
+      <strong>{display(value, digits, empty)}</strong>
       <div><span>{label}</span><small>{unit}</small></div>
     </div>
   )
@@ -100,7 +100,7 @@ export function PhysiologyMeasurementsDialog({ open, measurements, onClose }: Pr
           {tab === 'co2' && (
             <div className="monitor-grid monitor-grid-sparse">
               <div className="monitor-column">
-                <MonitorMetric value={measurements.endTidalCO2} label="EtCO₂" unit="mmHg" digits={0} />
+                <MonitorMetric value={measurements.endTidalCO2} label="EtCO₂" unit="mmHg" digits={0} empty="-" />
               </div>
             </div>
           )}

@@ -46,6 +46,8 @@ export interface SimulationState {
   lastExpiratoryDuration: number
   estimatedRespiratoryRate: number
   alveolarCo2: number
+  airwayCo2: number
+  lastExpiratoryFlowTime: number
   alveolarOxygenFraction: number
   spo2: number
 }
@@ -86,6 +88,8 @@ export function createSimulationState(): SimulationState {
     lastExpiratoryDuration: 2.5,
     estimatedRespiratoryRate: 12,
     alveolarCo2: 40,
+    airwayCo2: 0,
+    lastExpiratoryFlowTime: -100,
     alveolarOxygenFraction: 0.16,
     spo2: 98,
   }
@@ -160,12 +164,6 @@ function calculateEffectiveAlveolarVentilation(
   return alveolarVolumeL * respiratoryRate * emptyingFraction
 }
 
-function co2TargetFromVentilation(alveolarVentilationLmin: number, patient: PatientSettings): number {
-  const vco2 = Math.max(patient.co2Production ?? 250, 0)
-  if (alveolarVentilationLmin <= 0.05) return 150
-  return clamp(0.863 * vco2 / alveolarVentilationLmin, 10, 150)
-}
-
 function updateAlveolarCo2(
   state: SimulationState,
   ventilator: VentilatorSettings,
@@ -176,23 +174,22 @@ function updateAlveolarCo2(
 ) {
   const alveolarVentilation = calculateEffectiveAlveolarVentilation(state, ventilator, patient, t, complianceL)
   const vco2 = Math.max(patient.co2Production ?? 250, 0)
+  const heightCm = patient.heightCm ?? 170
+  const pbw = Math.max(20, (patient.sex === 'female' ? 45.5 : 50) + 0.91 * (heightCm - 152.4))
 
-  if (alveolarVentilation <= 0.05) {
-    // With no ventilation, metabolic CO2 continues to accumulate. The effective
-    // CO2 distribution volume is scaled to PBW so a typical adult at VCO2 250
-    // mL/min rises about 5-6 mmHg/min; changing VCO2 changes that slope directly.
-    const heightCm = patient.heightCm ?? 170
-    const pbw = Math.max(20, (patient.sex === 'female' ? 45.5 : 50) + 0.91 * (heightCm - 152.4))
-    const co2DistributionVolumeL = Math.max(15, pbw * 0.6)
-    const riseMmHgPerMinute = 0.863 * vco2 / co2DistributionVolumeL
-    state.alveolarCo2 = clamp(state.alveolarCo2 + (riseMmHgPerMinute / 60) * dt, 0, 150)
-    return
-  }
+  // Effective whole-body CO2 capacitance. Dissolved CO2 plus bicarbonate/protein
+  // buffering make the physiologic store much larger than the lung gas volume.
+  // At VCO2 250 mL/min, 1.1 L/kg PBW gives an apnoeic rise of about 3 mmHg/min
+  // in a typical adult. VCO2 scales the rise directly.
+  const co2BufferCapacityL = Math.max(30, pbw * 1.1)
 
-  const target = co2TargetFromVentilation(alveolarVentilation, patient)
-  const responseTime = 8
-  const fraction = 1 - Math.exp(-dt / responseTime)
-  state.alveolarCo2 = clamp(state.alveolarCo2 + (target - state.alveolarCo2) * fraction, 0, 150)
+  // Rearranged alveolar-ventilation equation: at equilibrium,
+  // PCO2 = 0.863 * VCO2 / VA. Away from equilibrium, current PCO2 and VA
+  // determine CO2 elimination; the buffered store integrates the net balance.
+  const eliminatedCo2MlMin = alveolarVentilation * state.alveolarCo2 / 0.863
+  const netCo2MlMin = vco2 - eliminatedCo2MlMin
+  const changeMmHgPerMinute = 0.863 * netCo2MlMin / co2BufferCapacityL
+  state.alveolarCo2 = clamp(state.alveolarCo2 + (changeMmHgPerMinute / 60) * dt, 0, 150)
 }
 
 function directSpO2FromAlveolarFraction(alveolarFraction: number, ventilator: VentilatorSettings, patient: PatientSettings): number {
@@ -255,7 +252,7 @@ function updateOxygenation(
   state.spo2 = clamp(state.spo2 + (targetSpO2 - state.spo2) * responseFraction, 50, 100)
 }
 
-function capnogramValue(
+function capnogramSourceValue(
   expiratory: boolean,
   elapsedExpiration: number,
   patient: PatientSettings,
@@ -283,6 +280,32 @@ function capnogramValue(
   const plateauElapsed = elapsedExpiration - deadSpaceDelay - riseTime
   const plateauRise = plateauElapsed * (0.05 + 0.08 * obstruction)
   return clamp(etco2 * Math.min(1, phaseIIEndFraction + plateauRise), 0, 150)
+}
+
+function updateAirwayCo2(
+  state: SimulationState,
+  expiratory: boolean,
+  flowLmin: number,
+  elapsedExpiration: number,
+  patient: PatientSettings,
+  complianceL: number,
+  t: number,
+  dt: number,
+): number {
+  const activeExpiratoryFlow = expiratory && flowLmin < -0.5
+  if (activeExpiratoryFlow) state.lastExpiratoryFlowTime = t
+
+  // A sidestream/mainstream capnogram samples gas moving past the airway sensor.
+  // Once expiratory flow has effectively stopped, the airway/sampling volume is
+  // no longer replenished from alveoli and its displayed CO2 slowly washes out,
+  // even though the patient's internal CO2 store continues to rise.
+  const target = activeExpiratoryFlow
+    ? capnogramSourceValue(true, elapsedExpiration, patient, complianceL, state.alveolarCo2)
+    : 0
+  const sensorResponseSeconds = activeExpiratoryFlow ? 0.10 : expiratory ? 4.0 : 0.15
+  const fraction = 1 - Math.exp(-dt / sensorResponseSeconds)
+  state.airwayCo2 = clamp(state.airwayCo2 + (target - state.airwayCo2) * fraction, 0, 150)
+  return state.airwayCo2
 }
 
 function updateVentilationTracking(state: SimulationState, sample: Sample, t: number, dt: number) {
@@ -491,13 +514,25 @@ function twoLevelSample(
 
   state.volume = clamp(state.volume + flowLs * dt, 0, 2.5)
 
+  const flowLmin = flowLs * 60
+  const airwayCo2 = updateAirwayCo2(
+    state,
+    !high,
+    flowLmin,
+    t - state.expirationStartTime,
+    patient,
+    complianceL,
+    t,
+    dt,
+  )
+
   const sample: Sample = {
     time: Number(t.toFixed(4)),
     pressure: clamp(targetPressure - spontaneousPressureDeflection, -5, 80),
-    flow: flowLs * 60,
+    flow: flowLmin,
     volume: state.volume * 1000,
     musclePressure: pmus,
-    co2: capnogramValue(!high, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
+    co2: airwayCo2,
     spo2: state.spo2,
     oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
     phase: high ? 'inspiration' : 'expiration',
@@ -919,13 +954,25 @@ export function stepSimulation(
     state.expirationStartTime = t
   }
 
+  const flowLmin = flowLs * 60
+  const airwayCo2 = updateAirwayCo2(
+    state,
+    !sampleInspiration,
+    flowLmin,
+    t - state.expirationStartTime,
+    patient,
+    complianceL,
+    t,
+    dt,
+  )
+
   const sample: Sample = {
     time: Number(t.toFixed(4)),
     pressure: clamp(pressure, -5, 80),
-    flow: flowLs * 60,
+    flow: flowLmin,
     volume: state.volume * 1000,
     musclePressure: pmus,
-    co2: capnogramValue(!sampleInspiration, t - state.expirationStartTime, patient, complianceL, state.alveolarCo2),
+    co2: airwayCo2,
     spo2: state.spo2,
     oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
     phase: sampleInspiration ? 'inspiration' : 'expiration',
