@@ -25,6 +25,18 @@ const flowFor = (tidalVolumeMl: number, inspiratoryTime: number, plateauPercent:
   return (tidalVolumeMl / 1000) / flowTime * 60
 }
 
+const reconcileVolumeControlFromFlow = (settings: VentilatorSettings, requestedFlow: number) => {
+  const fraction = plateauFraction(settings)
+  const cycle = cycleTime(settings.rate)
+  const minimumTi = cycle / (1 + MAX_IE)
+  const maximumTi = cycle / (1 + MIN_IE)
+  const requestedFlowTime = (settings.tidalVolume / 1000) / Math.max(requestedFlow / 60, 0.01)
+  const requestedTi = requestedFlowTime / Math.max(1 - fraction, 0.8)
+  const inspiratoryTime = clamp(requestedTi, minimumTi, maximumTi)
+  const inspiratoryFlow = flowFor(settings.tidalVolume, inspiratoryTime, settings.plateauPercent ?? 0)
+  return { inspiratoryTime, inspiratoryFlow }
+}
+
 const isVolumeMandatoryMode = (mode: VentilatorMode) => mode === 'VC-AC' || mode === 'SIMV-VC'
 const isPressureMandatoryMode = (mode: VentilatorMode) => mode === 'PC-AC' || mode === 'SIMV-PC'
 const isSimvMode = (mode: VentilatorMode) => mode === 'SIMV-VC' || mode === 'SIMV-PC'
@@ -112,16 +124,20 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
 
   const setMode = (mode: VentilatorMode) => {
     const next = { ...settings, mode }
-    if (isVolumeMandatoryMode(mode)) next.inspiratoryFlow = flowFor(next.tidalVolume, next.inspiratoryTime, next.plateauPercent ?? 0)
+    if (isVolumeMandatoryMode(mode)) Object.assign(next, reconcileVolumeControlFromFlow(next, next.inspiratoryFlow))
     onChange(next)
     setModeMenuOpen(false)
   }
 
   const setRate = (rate: number) => {
+    if (isVolumeMandatoryMode(settings.mode)) {
+      const next: VentilatorSettings = { ...settings, rate }
+      Object.assign(next, reconcileVolumeControlFromFlow(next, settings.inspiratoryFlow))
+      onChange(next)
+      return
+    }
     const inspiratoryTime = cycleTime(rate) / (1 + currentIeRatio)
-    const next: VentilatorSettings = { ...settings, rate, inspiratoryTime }
-    if (isVolumeMandatoryMode(settings.mode)) next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
-    onChange(next)
+    onChange({ ...settings, rate, inspiratoryTime })
   }
 
   const setIeRatio = (ratio: number) => {
@@ -134,28 +150,19 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
 
   const setTidalVolume = (tidalVolume: number) => {
     const next: VentilatorSettings = { ...settings, tidalVolume }
-    if (isVolumeMandatoryMode(settings.mode)) next.inspiratoryFlow = flowFor(tidalVolume, settings.inspiratoryTime, settings.plateauPercent ?? 0)
+    if (isVolumeMandatoryMode(settings.mode)) Object.assign(next, reconcileVolumeControlFromFlow(next, settings.inspiratoryFlow))
     onChange(next)
   }
 
   const setInspiratoryFlow = (requestedFlow: number) => {
-    const fraction = plateauFraction(settings)
-    const requestedFlowTime = (settings.tidalVolume / 1000) / Math.max(requestedFlow / 60, 0.01)
-    const requestedTi = requestedFlowTime / Math.max(1 - fraction, 0.8)
-    const requestedRatio = cycleTime(settings.rate) / requestedTi - 1
-    const boundedRatio = clamp(requestedRatio, MIN_IE, MAX_IE)
-    const inspiratoryTime = cycleTime(settings.rate) / (1 + boundedRatio)
-    const inspiratoryFlow = flowFor(settings.tidalVolume, inspiratoryTime, settings.plateauPercent ?? 0)
-    onChange({ ...settings, inspiratoryTime, inspiratoryFlow })
+    onChange({ ...settings, ...reconcileVolumeControlFromFlow(settings, requestedFlow) })
   }
 
   const setPlateauPercent = (plateauPercent: number) => {
     const bounded = clamp(plateauPercent, 0, 20)
-    onChange({
-      ...settings,
-      plateauPercent: bounded,
-      inspiratoryFlow: flowFor(settings.tidalVolume, settings.inspiratoryTime, bounded),
-    })
+    const next: VentilatorSettings = { ...settings, plateauPercent: bounded }
+    Object.assign(next, reconcileVolumeControlFromFlow(next, settings.inspiratoryFlow))
+    onChange(next)
   }
 
   const modes: VentilatorMode[] = ['VC-AC', 'PC-AC', 'PSV', 'SIMV-VC', 'SIMV-PC', 'VG-PC', 'APRV', 'BIPAP']
@@ -251,7 +258,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
             </>
           )}
           {isPressureMandatoryMode(settings.mode) && <Slider label="Pressure control" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />}
-          {settings.mode === 'VG-PC' && <Slider label="Starting pressure" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />}
+          {settings.mode === 'VG-PC' && <Slider label="AutoFlow Pmax" value={settings.volumeGuaranteePressureLimit ?? 40} unit=" cmH₂O" min={20} max={60} onChange={(v) => patch({ volumeGuaranteePressureLimit: v })} />}
           {(settings.mode === 'PSV' || isSimvMode(settings.mode)) && <Slider label="Pressure support" value={settings.pressureSupport} unit=" cmH₂O" min={0} max={25} onChange={(v) => patch({ pressureSupport: v })} />}
           {(settings.mode === 'PSV' || isSimvMode(settings.mode)) && (
             <Slider label="Expiratory trigger (ETS)" value={settings.terminationSensitivity} unit="% peak flow" min={5} max={80} step={5} disabled={zeroPressureSupport} onChange={(v) => patch({ terminationSensitivity: v })} />

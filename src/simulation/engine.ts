@@ -34,6 +34,8 @@ export interface SimulationState {
   suppressEffortUntil: number
   vgPressureControl: number
   vgSettingPressure: number
+  vgBreathNumber: number
+  vgTestPlateauPressure: number
   bipapHigh: boolean
   bipapPhaseStart: number
   expirationStartTime: number
@@ -68,8 +70,10 @@ export function createSimulationState(): SimulationState {
     effortCycleIndex: -1,
     breathsDuringEffort: 0,
     suppressEffortUntil: -100,
-    vgPressureControl: 15,
-    vgSettingPressure: 15,
+    vgPressureControl: 5,
+    vgSettingPressure: 40,
+    vgBreathNumber: 0,
+    vgTestPlateauPressure: 5,
     bipapHigh: true,
     bipapPhaseStart: 0,
     expirationStartTime: -100,
@@ -282,8 +286,10 @@ function adoptMode(
   }
 
   if (mode === 'VG-PC') {
-    state.vgPressureControl = clamp(ventilator.pressureControl, 5, 40)
-    state.vgSettingPressure = ventilator.pressureControl
+    state.vgPressureControl = 5
+    state.vgSettingPressure = ventilator.volumeGuaranteePressureLimit ?? 40
+    state.vgBreathNumber = 0
+    state.vgTestPlateauPressure = 5
   }
 }
 
@@ -438,9 +444,13 @@ export function stepSimulation(
 
   const mode = state.lastMode ?? ventilator.mode
 
-  if (mode === 'VG-PC' && Math.abs(state.vgSettingPressure - ventilator.pressureControl) > 0.001) {
-    state.vgPressureControl = clamp(ventilator.pressureControl, 5, 40)
-    state.vgSettingPressure = ventilator.pressureControl
+  if (mode === 'VG-PC') {
+    const pressureLimit = ventilator.volumeGuaranteePressureLimit ?? 40
+    if (Math.abs(state.vgSettingPressure - pressureLimit) > 0.001) {
+      const maximumDrivingPressure = Math.max(0.1, pressureLimit - 5 - ventilator.peep)
+      state.vgPressureControl = clamp(state.vgPressureControl, Math.min(5, maximumDrivingPressure), maximumDrivingPressure)
+      state.vgSettingPressure = pressureLimit
+    }
   }
 
   const pmus = patientMusclePressure(t, patient)
@@ -609,11 +619,15 @@ export function stepSimulation(
     }
   } else if (state.breathActive && state.activeBreathType === 'vc') {
     const plateauFraction = clamp(ventilator.plateauPercent ?? 0, 0, 20) / 100
-    const flowTime = Math.max(ventilator.inspiratoryTime * (1 - plateauFraction), 0.05)
     const targetFlow = Math.max(ventilator.inspiratoryFlow, 1) / 60
-    const targetVolume = ventilator.tidalVolume / 1000
-    const flowPhaseComplete = elapsed >= flowTime || state.inspiredThisBreath >= targetVolume
-    const totalInspirationComplete = elapsed >= ventilator.inspiratoryTime
+    const targetVolume = Math.max(ventilator.tidalVolume / 1000, 0.01)
+    // Conventional VC: VT and constant inspiratory flow define flow time.
+    // The plateau is added after volume delivery, so Ti cannot independently
+    // truncate a volume-controlled breath.
+    const flowTime = targetVolume / targetFlow
+    const totalInspiratoryTime = flowTime / Math.max(1 - plateauFraction, 0.8)
+    const flowPhaseComplete = elapsed >= flowTime || state.inspiredThisBreath >= targetVolume - 1e-6
+    const totalInspirationComplete = elapsed >= totalInspiratoryTime
 
     if (totalInspirationComplete) {
       if (inspiratoryHoldRequested) {
@@ -629,11 +643,12 @@ export function stepSimulation(
       flowLs = 0
       pressure = ventilator.peep + state.volume / complianceL - pmus
     } else {
-      flowLs = targetFlow
+      const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)
+      flowLs = Math.min(targetFlow, remainingVolume / Math.max(dt, 0.001))
       const elasticPressure = state.volume / complianceL
       const resistivePressure = patient.resistance * flowLs
       const estimatedPatientFlowDemand = pmus / Math.max(patient.resistance, 0.5)
-      const excessDemand = Math.max(0, estimatedPatientFlowDemand - targetFlow)
+      const excessDemand = Math.max(0, estimatedPatientFlowDemand - flowLs)
       const starvationFraction = estimatedPatientFlowDemand > 0
         ? clamp(excessDemand / estimatedPatientFlowDemand, 0, 1)
         : 0
@@ -658,30 +673,71 @@ export function stepSimulation(
       flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
     }
   } else if (state.breathActive && state.activeBreathType === 'vg-pc') {
-    if (elapsed >= ventilator.inspiratoryTime) {
-      if (inspiratoryHoldRequested) {
-        state.inspiratoryHoldActive = true
-        inspiration = true
+    const targetVolume = Math.max(ventilator.tidalVolume / 1000, 0.05)
+    const pressureLimit = ventilator.volumeGuaranteePressureLimit ?? 40
+    const maximumDrivingPressure = Math.max(0.1, pressureLimit - 5 - ventilator.peep)
+    const minimumDrivingPressure = Math.min(5, maximumDrivingPressure)
+
+    if (state.vgBreathNumber === 0) {
+      // Dräger AutoFlow test breath 1: conventional VC with a small plateau.
+      // The measured plateau seeds the pressure-controlled test breath.
+      const testPlateauFraction = 0.1
+      const testFlowTime = Math.max(ventilator.inspiratoryTime * (1 - testPlateauFraction), 0.05)
+      const testFlow = targetVolume / testFlowTime
+      const flowComplete = elapsed >= testFlowTime || state.inspiredThisBreath >= targetVolume - 1e-6
+
+      if (elapsed >= ventilator.inspiratoryTime) {
+        const measuredPlateauDrivingPressure = Math.max(0.1, state.volume / complianceL - pmus)
+        state.vgTestPlateauPressure = measuredPlateauDrivingPressure
+        state.vgPressureControl = clamp(measuredPlateauDrivingPressure * 0.8, minimumDrivingPressure, maximumDrivingPressure)
+        state.vgBreathNumber = 1
+        finishBreath(state, t, postCycleReleaseGuard)
+        inspiration = false
+      } else if (flowComplete) {
         flowLs = 0
         pressure = ventilator.peep + state.volume / complianceL - pmus
       } else {
-        const targetVolume = Math.max(ventilator.tidalVolume / 1000, 0.05)
-        const volumeErrorFraction = (targetVolume - state.inspiredThisBreath) / targetVolume
-        const deadband = 0.03
-        let pressureAdjustment = 0
-        if (Math.abs(volumeErrorFraction) > deadband) {
-          const adjustmentMagnitude = clamp(Math.abs(volumeErrorFraction) * 10, 1, 3)
-          pressureAdjustment = Math.sign(volumeErrorFraction) * adjustmentMagnitude
-        }
-        state.vgPressureControl = clamp(state.vgPressureControl + pressureAdjustment, 5, 40)
-        finishBreath(state, t, postCycleReleaseGuard)
-        inspiration = false
+        const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)
+        flowLs = Math.min(testFlow, remainingVolume / Math.max(dt, 0.001))
+        const elasticPressure = state.volume / complianceL
+        const resistivePressure = patient.resistance * flowLs
+        pressure = ventilator.peep + elasticPressure + resistivePressure - pmus
       }
     } else {
+      // Subsequent breaths are pressure controlled, therefore inspiratory flow
+      // decelerates naturally as elastic recoil approaches the pressure target.
       pressure = ventilator.peep + state.vgPressureControl
       const elasticPressure = state.volume / complianceL
       const availableDrivingPressure = state.vgPressureControl - elasticPressure + pmus
       flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
+
+      const excessiveVolume = state.inspiredThisBreath >= targetVolume * 1.3
+      if (excessiveVolume) {
+        // AutoFlow volume safeguard: terminate above 130% VT and reduce the
+        // next pressure to 75% of the current pressure.
+        state.vgPressureControl = clamp(state.vgPressureControl * 0.75, minimumDrivingPressure, maximumDrivingPressure)
+        state.vgBreathNumber += 1
+        finishBreath(state, t, postCycleReleaseGuard)
+        inspiration = false
+        flowLs = 0
+      } else if (elapsed >= ventilator.inspiratoryTime) {
+        if (inspiratoryHoldRequested) {
+          state.inspiratoryHoldActive = true
+          inspiration = true
+          flowLs = 0
+          pressure = ventilator.peep + state.volume / complianceL - pmus
+        } else {
+          // Compare delivered inspiratory VT with the set VT. Estimate the
+          // pressure needed for the next breath and limit change to +/-3.
+          const deliveredVolume = Math.max(state.inspiredThisBreath, 0.001)
+          const estimatedTargetPressure = state.vgPressureControl * targetVolume / deliveredVolume
+          const pressureAdjustment = clamp(estimatedTargetPressure - state.vgPressureControl, -3, 3)
+          state.vgPressureControl = clamp(state.vgPressureControl + pressureAdjustment, minimumDrivingPressure, maximumDrivingPressure)
+          state.vgBreathNumber += 1
+          finishBreath(state, t, postCycleReleaseGuard)
+          inspiration = false
+        }
+      }
     }
   } else if (state.breathActive && state.activeBreathType === 'ps') {
     pressure = ventilator.peep + ventilator.pressureSupport

@@ -12,7 +12,7 @@ import './session.css'
 
 const initialVentilator: VentilatorSettings = {
   mode: 'VC-AC', fio2: 0.35, peep: 5, rate: 14, tidalVolume: 500, inspiratoryTime: 1,
-  inspiratoryFlow: 30, plateauPercent: 0, pressureControl: 15, pressureSupport: 10, triggerType: 'pressure', triggerSensitivity: 2, flowTriggerSensitivity: 2, terminationSensitivity: 25,
+  inspiratoryFlow: 30, plateauPercent: 0, pressureControl: 15, volumeGuaranteePressureLimit: 40, pressureSupport: 10, triggerType: 'pressure', triggerSensitivity: 2, flowTriggerSensitivity: 2, terminationSensitivity: 25,
   simvSyncWindowPercent: 25, showSimvSyncWindow: false,
   pHigh: 24, pLow: 5, tHigh: 4, tLow: 0.5,
 }
@@ -874,7 +874,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.50',
+      appVersion: '0.51',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -953,7 +953,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.50</span>
+          <span className="version">v0.51</span>
         </div>
       </header>
 
@@ -983,7 +983,11 @@ export default function App() {
                   {conventionalTimedMode && <span>I:E <b>1:{ieRatio.toFixed(1)}</b></span>}
                   {volumeMandatoryMode && <span>Flow <b>{ventilator.inspiratoryFlow.toFixed(0)} L/min</b></span>}
                   {volumeMandatoryMode && <span>Plateau <b>{ventilator.plateauPercent ?? 0}%</b></span>}
-                  {activeMode === 'VG-PC' && <span>VT target <b>{ventilator.tidalVolume} mL</b></span>}
+                  {activeMode === 'VG-PC' && (<>
+                    <span>VT target <b>{ventilator.tidalVolume} mL</b></span>
+                    <span>Pinsp <b>{(ventilator.peep + simulationStateRef.current.vgPressureControl).toFixed(0)} cmH₂O</b></span>
+                    <span>Pmax <b>{ventilator.volumeGuaranteePressureLimit ?? 40} cmH₂O</b></span>
+                  </>)}
                   {(activeMode === 'PSV' || simvMode) && <span>PS <b>{ventilator.pressureSupport}</b></span>}
                   {(activeMode === 'PSV' || simvMode) && <span>ETS <b>{ventilator.terminationSensitivity}%</b></span>}
                   {simvMode && <span>Sync <b>{ventilator.simvSyncWindowPercent ?? 25}%</b></span>}
