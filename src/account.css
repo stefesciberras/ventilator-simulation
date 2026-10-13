@@ -96,6 +96,18 @@
 .settings-summary-grid span { display: block; color: #758892; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
 .settings-summary-grid strong { display: block; margin-top: 4px; font-size: 12px; color: #d9e7eb; overflow-wrap: anywhere; }
 
+.supabase-settings-section { border-top: 1px solid #293941; padding: 17px 0; margin-bottom: 17px; border-bottom: 1px solid #293941; }
+.supabase-settings-section > p { margin: 9px 0 14px; color: #84979f; font-size: 11px; line-height: 1.45; }
+.supabase-settings-fields { display: grid; gap: 10px; }
+.supabase-settings-fields label { display: grid; gap: 6px; }
+.supabase-settings-fields label > span { color: #98aab2; font-size: 11px; }
+.supabase-settings-fields input { width: 100%; min-height: 42px; border: 1px solid #3a4d58; border-radius: 8px; background: #091116; color: #edf5f7; padding: 9px 11px; outline: none; font: inherit; }
+.supabase-settings-fields input:focus { border-color: #69c5e4; box-shadow: 0 0 0 2px rgba(105,197,228,.12); }
+.supabase-settings-fields input:disabled { opacity: .55; cursor: not-allowed; }
+.supabase-settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.supabase-settings-note { display: block; margin-top: 10px; color: #72858e; font-size: 9px; line-height: 1.45; }
+.supabase-settings-section .account-message, .supabase-settings-section .account-error { margin-top: 10px; }
+
 .scenario-settings-section { border-top: 1px solid #293941; padding-top: 17px; }
 .scenario-settings-heading { display: flex; justify-content: space-between; gap: 12px; align-items: flex-end; }
 .scenario-settings-heading span { display: block; color: #7f939c; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
