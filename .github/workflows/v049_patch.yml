@@ -17,6 +17,18 @@ jobs:
         with:
           ref: chatgpt/v0.49-instructor-layout-alarm-silence
           fetch-depth: 0
+      - name: Fix current alarm banner anchor
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/v049_patch.py')
+          s = p.read_text()
+          s = s.replace(
+              '              {alarmSilenced && <span>ALARM SILENCED</span>}\\n',
+              '              {alarmSilenced && audibleAlarmLevel && <span>ALARM SILENCED</span>}\\n',
+          )
+          p.write_text(s)
+          PY
       - name: Apply source patch
         run: python3 scripts/v049_patch.py
       - name: Build
