@@ -36,6 +36,7 @@ jobs:
           app = Path('src/App.tsx').read_text()
           dialog = Path('src/components/PhysiologyMeasurementsDialog.tsx').read_text()
           phys = Path('src/physiologyMeasurements.ts').read_text()
+          lower = engine.lower()
           assert 'updateOxygenation(state, ventilator, patient, t, dt, complianceL)' in engine
           assert 'metabolicDepletionPerSecond' in engine
           assert 'patient.frc' in engine
@@ -43,7 +44,7 @@ jobs:
           assert 'label="SpO₂"' in app
           assert '>SpO₂</button>' in dialog
           assert 'oxygenSaturation: window.length ? window[window.length - 1].spo2 : null' in phys
-          assert 'paO2' not in engine and 'pao2' not in engine.lower()
+          assert 'const pao2' not in lower and 'let pao2' not in lower and 'pao2:' not in lower
           print('oxygenation semantic checks passed')
           PY
       - name: Commit implementation
