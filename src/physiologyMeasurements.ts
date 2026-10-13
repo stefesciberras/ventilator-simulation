@@ -1,0 +1,212 @@
+import type { Sample, VentilatorSettings } from './simulation/types'
+
+export interface PhysiologicalMeasurements {
+  setMinuteVentilation: number | null
+  actualMinuteVentilation: number
+  totalRespiratoryRate: number
+  setRespiratoryRate: number | null
+  triggeredRespiratoryRate: number
+  inspiratoryResistance: number | null
+  expiratoryResistance: number | null
+  inspiratoryCompliance: number | null
+  expiratoryCompliance: number | null
+  inspiratoryTimeConstant: number | null
+  expiratoryTimeConstant: number | null
+  inspiratoryTime: number | null
+  expiratoryTime: number | null
+}
+
+const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
+
+const median = (values: number[]) => {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
+}
+
+function recentWindow(samples: Sample[], seconds = 60) {
+  if (!samples.length) return []
+  const latest = samples[samples.length - 1].time
+  return samples.filter((sample) => sample.time >= latest - seconds)
+}
+
+function measuredTiming(samples: Sample[]) {
+  const completed: Array<{ ti: number; te: number }> = []
+  let inspirationStart: number | null = null
+  let expirationStart: number | null = null
+
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    if (previous.phase === 'expiration' && current.phase === 'inspiration') {
+      if (inspirationStart != null && expirationStart != null) {
+        const ti = expirationStart - inspirationStart
+        const te = current.time - expirationStart
+        if (ti > 0.05 && te > 0.05) completed.push({ ti, te })
+      }
+      inspirationStart = current.time
+      expirationStart = null
+    } else if (previous.phase === 'inspiration' && current.phase === 'expiration' && inspirationStart != null) {
+      expirationStart = current.time
+    }
+  }
+
+  const recent = completed.slice(-4)
+  return {
+    inspiratoryTime: mean(recent.map((cycle) => cycle.ti)),
+    expiratoryTime: mean(recent.map((cycle) => cycle.te)),
+  }
+}
+
+function measuredRatesAndVentilation(samples: Sample[]) {
+  if (samples.length < 2) return { totalRate: 0, triggeredRate: 0, minuteVentilation: 0 }
+  const latest = samples[samples.length - 1].time
+  const start = samples[0].time
+  const duration = Math.max(1, latest - start)
+  let inspirations = 0
+  let patientTriggers = 0
+  let expiredVolumeLitres = 0
+
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    const dt = Math.max(0, current.time - previous.time)
+    if (previous.phase === 'expiration' && current.phase === 'inspiration') inspirations += 1
+    if (current.breathTrigger === 'patient') patientTriggers += 1
+    const previousExpiredFlow = Math.max(0, -previous.flow) / 60
+    const currentExpiredFlow = Math.max(0, -current.flow) / 60
+    expiredVolumeLitres += ((previousExpiredFlow + currentExpiredFlow) / 2) * dt
+  }
+
+  return {
+    totalRate: inspirations * 60 / duration,
+    triggeredRate: patientTriggers * 60 / duration,
+    minuteVentilation: expiredVolumeLitres * 60 / duration,
+  }
+}
+
+function measuredInspiratoryMechanics(samples: Sample[]) {
+  const passiveExpirationPressures = samples
+    .filter((sample) => sample.phase === 'expiration' && sample.musclePressure < 0.1 && Math.abs(sample.flow) < 5)
+    .map((sample) => sample.pressure)
+  const baselinePressure = median(passiveExpirationPressures)
+  if (baselinePressure == null) return { resistance: null, compliance: null }
+
+  const rows: Array<{ volume: number; flow: number; pressure: number }> = []
+  let inspirationBaselineVolume: number | null = null
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    if (previous.phase === 'expiration' && current.phase === 'inspiration') {
+      inspirationBaselineVolume = previous.volume
+    }
+    if (current.phase !== 'inspiration' || inspirationBaselineVolume == null) continue
+    const flow = current.flow / 60
+    if (flow <= 0.03) continue
+    const volume = Math.max(0, (current.volume - inspirationBaselineVolume) / 1000)
+    const pressure = current.pressure - baselinePressure + current.musclePressure
+    if (volume < 0.005 || pressure <= 0) continue
+    rows.push({ volume, flow, pressure })
+  }
+
+  const recentRows = rows.slice(-1200)
+  if (recentRows.length < 20) return { resistance: null, compliance: null }
+
+  let vv = 0
+  let vf = 0
+  let ff = 0
+  let vy = 0
+  let fy = 0
+  for (const row of recentRows) {
+    vv += row.volume * row.volume
+    vf += row.volume * row.flow
+    ff += row.flow * row.flow
+    vy += row.volume * row.pressure
+    fy += row.flow * row.pressure
+  }
+  const determinant = vv * ff - vf * vf
+  if (Math.abs(determinant) < 1e-8) return { resistance: null, compliance: null }
+
+  const elastance = (vy * ff - fy * vf) / determinant
+  const resistance = (fy * vv - vy * vf) / determinant
+  if (!Number.isFinite(elastance) || !Number.isFinite(resistance) || elastance <= 0 || resistance <= 0) {
+    return { resistance: null, compliance: null }
+  }
+
+  const compliance = 1000 / elastance
+  return {
+    resistance: resistance >= 0.1 && resistance <= 150 ? resistance : null,
+    compliance: compliance >= 1 && compliance <= 500 ? compliance : null,
+  }
+}
+
+function measuredExpiratoryTimeConstant(samples: Sample[]) {
+  const estimates = samples
+    .filter((sample) => sample.phase === 'expiration' && sample.musclePressure < 0.1 && sample.flow < -1.2 && sample.volume > 20)
+    .map((sample) => {
+      const volumeLitres = sample.volume / 1000
+      const expiratoryFlowLs = -sample.flow / 60
+      return volumeLitres / expiratoryFlowLs
+    })
+    .filter((value) => Number.isFinite(value) && value >= 0.03 && value <= 10)
+  return median(estimates.slice(-1000))
+}
+
+function expiratoryComplianceFromHold(samples: Sample[], baselinePressure: number | null) {
+  if (baselinePressure == null) return null
+  const estimates = samples
+    .filter((sample) => sample.expiratoryHold && sample.volume > 20)
+    .map((sample) => {
+      const recoilPressure = sample.pressure - baselinePressure + sample.musclePressure
+      return recoilPressure > 0.2 ? sample.volume / recoilPressure : Number.NaN
+    })
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 500)
+  return median(estimates)
+}
+
+export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator: VentilatorSettings): PhysiologicalMeasurements {
+  const window = recentWindow(samples, 60)
+  const rates = measuredRatesAndVentilation(window)
+  const timing = measuredTiming(window)
+  const inspiratoryMechanics = measuredInspiratoryMechanics(window)
+  const expiratoryTimeConstant = measuredExpiratoryTimeConstant(window)
+  const baselinePressure = median(window
+    .filter((sample) => sample.phase === 'expiration' && sample.musclePressure < 0.1 && Math.abs(sample.flow) < 5)
+    .map((sample) => sample.pressure))
+
+  const holdCompliance = expiratoryComplianceFromHold(window, baselinePressure)
+  // The current EDUVENT lung is a single-compartment model with one elastic
+  // compliance for inspiration and expiration. When no expiratory hold is
+  // available, use the independently waveform-derived inspiratory compliance
+  // as the elastic term needed to separate Rexp from the measured expiratory RC.
+  const expiratoryCompliance = holdCompliance ?? inspiratoryMechanics.compliance
+  const expiratoryResistance = expiratoryTimeConstant != null && expiratoryCompliance != null
+    ? expiratoryTimeConstant / (expiratoryCompliance / 1000)
+    : null
+  const inspiratoryTimeConstant = inspiratoryMechanics.resistance != null && inspiratoryMechanics.compliance != null
+    ? inspiratoryMechanics.resistance * inspiratoryMechanics.compliance / 1000
+    : null
+
+  const setRate = ventilator.mode === 'PSV' || ventilator.mode === 'APRV' ? null : ventilator.rate
+  const volumeTargeted = ventilator.mode === 'VC-AC' || ventilator.mode === 'SIMV-VC' || ventilator.mode === 'VG-PC'
+  const setMinuteVentilation = volumeTargeted && setRate != null
+    ? ventilator.tidalVolume * setRate / 1000
+    : null
+
+  return {
+    setMinuteVentilation,
+    actualMinuteVentilation: rates.minuteVentilation,
+    totalRespiratoryRate: rates.totalRate,
+    setRespiratoryRate: setRate,
+    triggeredRespiratoryRate: rates.triggeredRate,
+    inspiratoryResistance: inspiratoryMechanics.resistance,
+    expiratoryResistance,
+    inspiratoryCompliance: inspiratoryMechanics.compliance,
+    expiratoryCompliance,
+    inspiratoryTimeConstant,
+    expiratoryTimeConstant,
+    inspiratoryTime: timing.inspiratoryTime,
+    expiratoryTime: timing.expiratoryTime,
+  }
+}
