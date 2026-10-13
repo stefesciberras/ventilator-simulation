@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { SessionRole } from '../session/useTeachingSession'
 import {
+  asStaticScenario,
   createInstructorAccount,
   createInstructorPreset,
   deleteInstructorPreset,
@@ -10,6 +11,7 @@ import {
   signInInstructor,
   signOutInstructor,
   subscribeToInstructorAccount,
+  updateInstructorPreset,
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
@@ -30,6 +32,16 @@ function CloudIcon({ connected }: { connected: boolean }) {
   )
 }
 
+function ScenarioIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 5.5h14v13H5z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M8 9h8M8 12h5M8 15h7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M8 3.5h8v4H8z" fill="#0e171c" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function MenuIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -46,10 +58,38 @@ function accountLabel(user: User | null) {
   return user?.email ?? 'Instructor cloud account'
 }
 
+function summaryItems(scenario: InstructorScenarioSnapshot) {
+  const patient = scenario.patient
+  const ventilator = scenario.ventilator
+  return [
+    ventilator.mode,
+    `FiO₂ ${Math.round(ventilator.fio2 * 100)}%`,
+    `PEEP ${ventilator.peep}`,
+    `RR ${ventilator.rate}`,
+    `VT ${ventilator.tidalVolume} mL`,
+    `C ${patient.compliance}`,
+    `Rexp ${patient.expiratoryResistance}`,
+    `Spont ${patient.spontaneousRate}`,
+    `Shunt ${Math.round((patient.shuntFraction ?? 0.03) * 100)}%`,
+  ]
+}
+
+function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
+  const names = new Set(presets.map((preset) => preset.name.toLocaleLowerCase()))
+  let candidate = `${baseName} copy`
+  let suffix = 2
+  while (names.has(candidate.toLocaleLowerCase())) {
+    candidate = `${baseName} copy ${suffix}`
+    suffix += 1
+  }
+  return candidate
+}
+
 export function InstructorAccountControls({ role, currentScenario, onLoadScenario }: InstructorAccountControlsProps) {
   const [account, setAccount] = useState<User | null>(null)
   const [accountOpen, setAccountOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [scenarioOpen, setScenarioOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -58,8 +98,17 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const [error, setError] = useState<string | null>(null)
   const [presets, setPresets] = useState<InstructorPresetRow[]>([])
   const [presetName, setPresetName] = useState('')
+  const [presetDescription, setPresetDescription] = useState('')
   const [presetBusy, setPresetBusy] = useState(false)
   const [presetMessage, setPresetMessage] = useState<string | null>(null)
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+
+  const staticPresets = useMemo(
+    () => presets.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'),
+    [presets],
+  )
 
   const refreshPresets = async (nextAccount: User | null = account) => {
     if (!nextAccount) {
@@ -153,6 +202,13 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     }
   }
 
+  const openScenarios = () => {
+    setScenarioOpen(true)
+    setPresetMessage(null)
+    setEditingPresetId(null)
+    if (account) void refreshPresets(account)
+  }
+
   const saveScenario = async () => {
     if (!account) {
       setPresetMessage('Connect an instructor cloud account first.')
@@ -161,8 +217,12 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     setPresetBusy(true)
     setPresetMessage(null)
     try {
-      const created = await createInstructorPreset(presetName, currentScenario)
+      const created = await createInstructorPreset(
+        presetName,
+        asStaticScenario(currentScenario, presetDescription),
+      )
       setPresetName('')
+      setPresetDescription('')
       setPresetMessage(`Saved “${created.name}”.`)
       await refreshPresets(account)
     } catch (cause) {
@@ -175,6 +235,65 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const loadScenario = (preset: InstructorPresetRow) => {
     onLoadScenario(preset.scenario)
     setPresetMessage(`Loaded “${preset.name}”.`)
+    setScenarioOpen(false)
+  }
+
+  const updateFromCurrent = async (preset: InstructorPresetRow) => {
+    if (!account || !window.confirm(`Replace the saved state in “${preset.name}” with the current simulator settings?`)) return
+    setPresetBusy(true)
+    setPresetMessage(null)
+    try {
+      await updateInstructorPreset(preset.id, {
+        scenario: asStaticScenario(currentScenario, preset.scenario.description ?? ''),
+      })
+      setPresetMessage(`Updated “${preset.name}” from the current simulator state.`)
+      await refreshPresets(account)
+    } catch (cause) {
+      setPresetMessage(cause instanceof Error ? cause.message : 'Unable to update scenario.')
+    } finally {
+      setPresetBusy(false)
+    }
+  }
+
+  const duplicateScenario = async (preset: InstructorPresetRow) => {
+    if (!account) return
+    setPresetBusy(true)
+    setPresetMessage(null)
+    try {
+      const created = await createInstructorPreset(nextCopyName(preset.name, presets), preset.scenario)
+      setPresetMessage(`Duplicated as “${created.name}”.`)
+      await refreshPresets(account)
+    } catch (cause) {
+      setPresetMessage(cause instanceof Error ? cause.message : 'Unable to duplicate scenario.')
+    } finally {
+      setPresetBusy(false)
+    }
+  }
+
+  const beginEdit = (preset: InstructorPresetRow) => {
+    setEditingPresetId(preset.id)
+    setEditName(preset.name)
+    setEditDescription(preset.scenario.description ?? '')
+    setPresetMessage(null)
+  }
+
+  const saveDetails = async (preset: InstructorPresetRow) => {
+    if (!account) return
+    setPresetBusy(true)
+    setPresetMessage(null)
+    try {
+      const updated = await updateInstructorPreset(preset.id, {
+        name: editName,
+        scenario: asStaticScenario(preset.scenario, editDescription),
+      })
+      setEditingPresetId(null)
+      setPresetMessage(`Updated details for “${updated.name}”.`)
+      await refreshPresets(account)
+    } catch (cause) {
+      setPresetMessage(cause instanceof Error ? cause.message : 'Unable to update scenario details.')
+    } finally {
+      setPresetBusy(false)
+    }
   }
 
   const removeScenario = async (preset: InstructorPresetRow) => {
@@ -183,6 +302,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     setPresetMessage(null)
     try {
       await deleteInstructorPreset(preset.id)
+      if (editingPresetId === preset.id) setEditingPresetId(null)
       setPresetMessage(`Deleted “${preset.name}”.`)
       await refreshPresets(account)
     } catch (cause) {
@@ -203,6 +323,17 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
       >
         <CloudIcon connected={Boolean(account)} />
       </button>
+      {role !== 'candidate' && (
+        <button
+          type="button"
+          className="top-account-button scenario-top-button"
+          title="Instructor scenarios"
+          aria-label="Open instructor scenarios"
+          onClick={openScenarios}
+        >
+          <ScenarioIcon />
+        </button>
+      )}
       <button
         type="button"
         className="top-account-button"
@@ -249,6 +380,99 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
         </div>
       )}
 
+      {scenarioOpen && (
+        <div className="account-dialog-backdrop" onMouseDown={() => setScenarioOpen(false)}>
+          <section className="account-dialog scenario-manager-dialog" role="dialog" aria-modal="true" aria-label="Instructor scenarios" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="account-dialog-heading">
+              <div><span>Instructor tools</span><h2>Scenarios</h2></div>
+              <button type="button" className="account-close-button" onClick={() => setScenarioOpen(false)} aria-label="Close scenarios"><CloseIcon /></button>
+            </div>
+
+            <div className="scenario-type-tabs" role="tablist" aria-label="Scenario type">
+              <button type="button" className="selected" role="tab" aria-selected="true">Static presets</button>
+              <button type="button" role="tab" aria-selected="false" disabled>Dynamic scenarios <small>later</small></button>
+            </div>
+            <p className="scenario-intro">A static preset captures the complete patient, ventilator, alarm, transition and waveform setup at one point in time. Load it before or during an instructor session. Dynamic timelines will build on the same base state later.</p>
+
+            {account ? (
+              <>
+                <section className="scenario-create-card">
+                  <div className="scenario-settings-heading">
+                    <div><span>New static preset</span><h3>Capture current simulator state</h3></div>
+                    <small>{account.email}</small>
+                  </div>
+                  <div className="scenario-create-fields">
+                    <label>
+                      <span>Name</span>
+                      <input value={presetName} onChange={(event) => setPresetName(event.target.value)} maxLength={80} placeholder="e.g. Severe ARDS – initial state" />
+                    </label>
+                    <label>
+                      <span>Instructor notes</span>
+                      <textarea value={presetDescription} onChange={(event) => setPresetDescription(event.target.value)} maxLength={500} rows={3} placeholder="Optional teaching notes, expected problem or objective…" />
+                    </label>
+                  </div>
+                  <button type="button" className="account-primary-button scenario-save-current" disabled={presetBusy || !presetName.trim()} onClick={() => void saveScenario()}>Save current state as preset</button>
+                </section>
+
+                <div className="scenario-library-heading">
+                  <div><span>Library</span><strong>{staticPresets.length} static {staticPresets.length === 1 ? 'preset' : 'presets'}</strong></div>
+                  <small>Most recently updated first</small>
+                </div>
+
+                <div className="scenario-card-list">
+                  {staticPresets.length ? staticPresets.map((preset) => {
+                    const editing = editingPresetId === preset.id
+                    return (
+                      <article className="scenario-card" key={preset.id}>
+                        <div className="scenario-card-heading">
+                          <div>
+                            <span className="scenario-kind-badge">Static</span>
+                            <strong>{preset.name}</strong>
+                            <small>Updated {new Date(preset.updated_at).toLocaleString()}</small>
+                          </div>
+                        </div>
+
+                        {editing ? (
+                          <div className="scenario-edit-fields">
+                            <label><span>Name</span><input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={80} /></label>
+                            <label><span>Instructor notes</span><textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value)} maxLength={500} rows={3} /></label>
+                            <div className="scenario-edit-actions">
+                              <button type="button" className="account-primary-button" disabled={presetBusy || !editName.trim()} onClick={() => void saveDetails(preset)}>Save details</button>
+                              <button type="button" disabled={presetBusy} onClick={() => setEditingPresetId(null)}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {preset.scenario.description ? <p className="scenario-description">{preset.scenario.description}</p> : <p className="scenario-description empty">No instructor notes.</p>}
+                            <div className="scenario-summary-chips">
+                              {summaryItems(preset.scenario).map((item) => <span key={item}>{item}</span>)}
+                            </div>
+                            <div className="scenario-card-actions">
+                              <button type="button" className="scenario-load-button" disabled={presetBusy} onClick={() => loadScenario(preset)}>Load</button>
+                              <button type="button" disabled={presetBusy} onClick={() => void updateFromCurrent(preset)}>Update from current</button>
+                              <button type="button" disabled={presetBusy} onClick={() => beginEdit(preset)}>Edit details</button>
+                              <button type="button" disabled={presetBusy} onClick={() => void duplicateScenario(preset)}>Duplicate</button>
+                              <button type="button" className="scenario-delete-button" disabled={presetBusy} onClick={() => void removeScenario(preset)}>Delete</button>
+                            </div>
+                          </>
+                        )}
+                      </article>
+                    )
+                  }) : <div className="scenario-empty">No static scenarios saved yet. Configure the patient and ventilator, then capture the current state above.</div>}
+                </div>
+              </>
+            ) : (
+              <div className="scenario-signin-card">
+                <strong>Cloud account required</strong>
+                <p>Static scenarios are saved privately to your instructor account so they are available on any device.</p>
+                <button type="button" className="account-primary-button" onClick={() => { setScenarioOpen(false); setAccountOpen(true) }}>Sign in to instructor account</button>
+              </div>
+            )}
+            {presetMessage && <div className="account-message">{presetMessage}</div>}
+          </section>
+        </div>
+      )}
+
       {settingsOpen && (
         <div className="account-dialog-backdrop" onMouseDown={() => setSettingsOpen(false)}>
           <section className="account-dialog settings-dialog" role="dialog" aria-modal="true" aria-label="EDUVENT settings" onMouseDown={(event) => event.stopPropagation()}>
@@ -258,45 +482,21 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
             </div>
 
             <div className="settings-summary-grid">
-              <div><span>Version</span><strong>v0.55</strong></div>
+              <div><span>Version</span><strong>v0.62</strong></div>
               <div><span>Teaching room</span><strong>2-hour lifetime</strong></div>
               <div><span>Cloud</span><strong>{account ? 'Connected' : 'Not signed in'}</strong></div>
             </div>
 
-            <section className="scenario-settings-section">
-              <div className="scenario-settings-heading">
-                <div><span>Instructor presets</span><h3>Cloud scenarios</h3></div>
-                {account && <small>{account.email}</small>}
-              </div>
-              <p>Save the current patient, ventilator, alarm, transition and waveform setup as an instructor scenario.</p>
-
-              {account ? (
-                <>
-                  <div className="scenario-save-row">
-                    <input value={presetName} onChange={(event) => setPresetName(event.target.value)} maxLength={80} placeholder="e.g. Flow starvation" aria-label="Scenario name" />
-                    <button type="button" className="account-primary-button" disabled={presetBusy || !presetName.trim()} onClick={() => void saveScenario()}>Save current</button>
-                  </div>
-
-                  <div className="scenario-list">
-                    {presets.length ? presets.map((preset) => (
-                      <article className="scenario-row" key={preset.id}>
-                        <div>
-                          <strong>{preset.name}</strong>
-                          <small>Updated {new Date(preset.updated_at).toLocaleString()}</small>
-                        </div>
-                        <div className="scenario-row-actions">
-                          <button type="button" disabled={presetBusy} onClick={() => loadScenario(preset)}>Load</button>
-                          <button type="button" className="scenario-delete-button" disabled={presetBusy} onClick={() => void removeScenario(preset)}>Delete</button>
-                        </div>
-                      </article>
-                    )) : <div className="scenario-empty">No cloud scenarios saved yet.</div>}
-                  </div>
-                </>
-              ) : (
-                <button type="button" className="account-secondary-button" onClick={() => { setSettingsOpen(false); setAccountOpen(true) }}>Sign in to use cloud scenarios</button>
-              )}
-              {presetMessage && <div className="account-message">{presetMessage}</div>}
-            </section>
+            {role !== 'candidate' && (
+              <section className="scenario-settings-section">
+                <div className="scenario-settings-heading">
+                  <div><span>Instructor tools</span><h3>Scenarios</h3></div>
+                  {account && <small>{staticPresets.length} saved</small>}
+                </div>
+                <p>Prepare and manage reusable static teaching states. Dynamic scenario timelines will be added later.</p>
+                <button type="button" className="account-secondary-button" onClick={() => { setSettingsOpen(false); openScenarios() }}>Manage scenarios</button>
+              </section>
+            )}
           </section>
         </div>
       )}

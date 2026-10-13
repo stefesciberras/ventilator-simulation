@@ -4,8 +4,13 @@ import type { PatientSettings, VentilatorSettings } from './simulation/types'
 import { supabase } from './session/supabase'
 
 export type ScenarioWaveform = 'volume' | 'co2' | 'oesophagealPressure'
+export type InstructorScenarioKind = 'static' | 'dynamic'
 
 export interface InstructorScenarioSnapshot {
+  /** Optional on older presets; missing values are treated as v1 static scenarios. */
+  schemaVersion?: number
+  kind?: InstructorScenarioKind
+  description?: string
   ventilator: VentilatorSettings
   patient: PatientSettings
   alarmLimits: AlarmLimits
@@ -23,6 +28,31 @@ export interface InstructorPresetRow {
   scenario: InstructorScenarioSnapshot
   created_at: string
   updated_at: string
+}
+
+export function asStaticScenario(
+  scenario: InstructorScenarioSnapshot,
+  description = scenario.description ?? '',
+): InstructorScenarioSnapshot {
+  return {
+    ...scenario,
+    schemaVersion: 1,
+    kind: 'static',
+    description: description.trim(),
+  }
+}
+
+function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScenarioSnapshot {
+  return {
+    ...scenario,
+    schemaVersion: scenario.schemaVersion ?? 1,
+    kind: scenario.kind ?? 'static',
+    description: scenario.description ?? '',
+  }
+}
+
+function normalisePreset(row: InstructorPresetRow): InstructorPresetRow {
+  return { ...row, scenario: normaliseScenario(row.scenario) }
 }
 
 export function isPermanentInstructor(user: User | null | undefined): user is User {
@@ -98,7 +128,7 @@ export async function listInstructorPresets(): Promise<InstructorPresetRow[]> {
     .eq('instructor_id', user.id)
     .order('updated_at', { ascending: false })
   if (error) throw error
-  return (data ?? []) as InstructorPresetRow[]
+  return ((data ?? []) as InstructorPresetRow[]).map(normalisePreset)
 }
 
 export async function createInstructorPreset(name: string, scenario: InstructorScenarioSnapshot) {
@@ -111,7 +141,7 @@ export async function createInstructorPreset(name: string, scenario: InstructorS
     .insert({
       instructor_id: user.id,
       name: cleanName,
-      scenario,
+      scenario: normaliseScenario(scenario),
       updated_at: now,
     })
     .select('*')
@@ -120,7 +150,34 @@ export async function createInstructorPreset(name: string, scenario: InstructorS
     if (error.code === '23505') throw new Error('You already have a scenario with that name.')
     throw error
   }
-  return data as InstructorPresetRow
+  return normalisePreset(data as InstructorPresetRow)
+}
+
+export async function updateInstructorPreset(
+  id: string,
+  updates: { name?: string; scenario?: InstructorScenarioSnapshot },
+) {
+  const user = await requirePermanentInstructor()
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (updates.name !== undefined) {
+    const cleanName = updates.name.trim()
+    if (!cleanName) throw new Error('Enter a scenario name.')
+    payload.name = cleanName
+  }
+  if (updates.scenario !== undefined) payload.scenario = normaliseScenario(updates.scenario)
+
+  const { data, error } = await supabase
+    .from('instructor_presets')
+    .update(payload)
+    .eq('id', id)
+    .eq('instructor_id', user.id)
+    .select('*')
+    .single()
+  if (error) {
+    if (error.code === '23505') throw new Error('You already have a scenario with that name.')
+    throw error
+  }
+  return normalisePreset(data as InstructorPresetRow)
 }
 
 export async function deleteInstructorPreset(id: string) {
