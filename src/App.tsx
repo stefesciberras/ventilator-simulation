@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
+import { InstructorAccountControls } from './components/InstructorAccountControls'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
@@ -8,6 +9,7 @@ import { copyDiagnosticSnapshot } from './diagnostics'
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
 import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
+import type { InstructorScenarioSnapshot } from './instructorAccount'
 import './session.css'
 
 const initialVentilator: VentilatorSettings = {
@@ -477,6 +479,22 @@ export default function App() {
     [teachingSession.candidateOesophagealPressureAllowed],
   )
 
+  const currentInstructorScenario: InstructorScenarioSnapshot = {
+    ventilator,
+    patient,
+    alarmLimits,
+    patientTransitionSeconds,
+    waveformDisplay,
+  }
+
+  const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {
+    setVentilator({ ...scenario.ventilator })
+    setPatient({ ...scenario.patient })
+    setAlarmLimits({ ...scenario.alarmLimits })
+    setPatientTransitionSeconds(scenario.patientTransitionSeconds)
+    setWaveformDisplay({ ...scenario.waveformDisplay })
+  }
+
   useEffect(() => {
     if (teachingSession.candidateOesophagealPressureAllowed) return
     setWaveformDisplay((current) => {
@@ -874,7 +892,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.52',
+      appVersion: '0.53',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -946,6 +964,11 @@ export default function App() {
         <div className="status-cluster">
           <span className={`status-dot ${frozen ? 'paused' : ''}`} />
           <span>{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>
+          <InstructorAccountControls
+            role={teachingSession.role}
+            currentScenario={currentInstructorScenario}
+            onLoadScenario={loadInstructorScenario}
+          />
           <button
             className={`top-diagnostic-button ${diagnosticCopied ? 'active copied' : ''}`}
             type="button"
@@ -953,7 +976,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.52</span>
+          <span className="version">v0.53</span>
         </div>
       </header>
 
