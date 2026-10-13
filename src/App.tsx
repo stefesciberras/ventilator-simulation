@@ -534,6 +534,7 @@ export default function App() {
   const [diagnosticCopied, setDiagnosticCopied] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
+  const previousApneaAlarmActiveRef = useRef(false)
 
   const teachingSession = useTeachingSession({
     patient,
@@ -783,6 +784,55 @@ export default function App() {
     oxygenFailure: oxygenFailureActive,
   }
 
+  // Alarm annunciation is episode-scoped. When a breath resolves apnoea, do not
+  // resurrect alarm-lifecycle entries that were resolved/suppressed during the
+  // apnoeic episode. Clear those stale annunciations immediately, then let the
+  // ordinary alarm evaluator below add back only conditions that are genuinely
+  // active in the recovered ventilation state. O2 failure is deliberately kept.
+  const apneaJustResolved = previousApneaAlarmActiveRef.current && !apneaAlarmActive
+  useEffect(() => {
+    const wasActive = previousApneaAlarmActiveRef.current
+    previousApneaAlarmActiveRef.current = apneaAlarmActive
+    if (!wasActive || apneaAlarmActive) return
+
+    const staleApneaEpisodeKeys = new Set([
+      'apnea',
+      'pressure',
+      'co2Low',
+      'co2High',
+      'minuteVentilationLow',
+      'minuteVentilationHigh',
+      'tidalVolumeLow',
+      'tidalVolumeHigh',
+      'respiratoryRateLow',
+      'respiratoryRateHigh',
+    ])
+
+    setAlarmLifecycle((current) => {
+      let changed = false
+      const next = { ...current }
+      for (const key of staleApneaEpisodeKeys) {
+        if (key in next) {
+          delete next[key]
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+
+    setAlarmOnsets((current) => {
+      let changed = false
+      const next = { ...current }
+      for (const key of staleApneaEpisodeKeys) {
+        if (next[key] != null) {
+          next[key] = null
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [apneaAlarmActive])
+
   useEffect(() => {
     const timer = window.setInterval(() => setAlarmClock(Date.now()), 500)
     return () => window.clearInterval(timer)
@@ -858,10 +908,10 @@ export default function App() {
   const alarmVisibleDuringApnea = (key: string) => !apneaAlarmActive || key === 'apnea' || key === 'oxygenFailure'
   const activeAlarmKeys = Object.entries(alarmConditions).filter(([, active]) => active).map(([key]) => key)
   const resolvedYellowKeys = Object.entries(alarmLifecycle)
-    .filter(([key, entry]) => alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt < 10000)
+    .filter(([key, entry]) => !apneaJustResolved && alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt < 10000)
     .map(([key]) => key)
   const greyAlarmKeys = Object.entries(alarmLifecycle)
-    .filter(([key, entry]) => alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 10000 && alarmClock - entry.resolvedAt < 120000 && !entry.acknowledged)
+    .filter(([key, entry]) => !apneaJustResolved && alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 10000 && alarmClock - entry.resolvedAt < 120000 && !entry.acknowledged)
     .map(([key]) => key)
   const criticalEscalated = criticalAlarmKeys.some((key) => {
     const entry = alarmLifecycle[key]
@@ -1013,7 +1063,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.71',
+      appVersion: '0.72',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1111,7 +1161,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.71</span>
+          <span className="version">v0.72</span>
         </div>
       </header>
 
