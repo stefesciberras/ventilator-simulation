@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import { CandidateInvitation } from './CandidateInvitation'
 import type { SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
@@ -215,7 +216,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.72'
+    if (version) version.textContent = 'v0.73'
   }, [])
 
   const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
@@ -400,6 +401,9 @@ export function SessionPanel({
               <span>Candidate session key</span>
               <strong>{session?.session_key ?? '———'}</strong>
               <small>Scan the QR code or enter this key manually.</small>
+              {candidateJoinUrl && session?.session_key && (
+                <CandidateInvitation sessionKey={session.session_key} joinUrl={candidateJoinUrl} />
+              )}
             </div>
             {candidateJoinUrl && !simulatorExpanded && (
               <div className="session-qr-code" title={candidateJoinUrl} aria-label={`QR code to join session ${session?.session_key ?? ''}`}>
