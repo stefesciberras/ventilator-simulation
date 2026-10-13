@@ -23,6 +23,40 @@ import {
 export type SessionRole = 'standalone' | 'instructor' | 'candidate'
 export type SessionConnection = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
+export interface RecoverableCandidateSession {
+  sessionKey: string
+  displayName: string
+  expiresAt: string
+}
+
+const CANDIDATE_RECOVERY_STORAGE_KEY = 'eduvent.candidate-session-recovery'
+
+function readCandidateRecovery(): RecoverableCandidateSession | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(CANDIDATE_RECOVERY_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<RecoverableCandidateSession>
+    if (typeof parsed.sessionKey !== 'string' || parsed.sessionKey.length !== 6 || typeof parsed.expiresAt !== 'string') return null
+    return { sessionKey: parsed.sessionKey, displayName: typeof parsed.displayName === 'string' ? parsed.displayName : '', expiresAt: parsed.expiresAt }
+  } catch {
+    return null
+  }
+}
+
+function persistCandidateRecovery(recovery: RecoverableCandidateSession) {
+  try { window.localStorage.setItem(CANDIDATE_RECOVERY_STORAGE_KEY, JSON.stringify(recovery)) } catch { /* local recovery is optional */ }
+}
+
+function removeCandidateRecovery() {
+  try { window.localStorage.removeItem(CANDIDATE_RECOVERY_STORAGE_KEY) } catch { /* local recovery is optional */ }
+}
+
+function candidateRecoveryIsExpired(recovery: RecoverableCandidateSession) {
+  const expiresAt = Date.parse(recovery.expiresAt)
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now()
+}
+
 interface UseTeachingSessionArgs {
   patient: PatientSettings
   ventilator: VentilatorSettings
@@ -79,6 +113,7 @@ export function useTeachingSession({
   const [members, setMembers] = useState<SessionMemberRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [recoverableInstructor, setRecoverableInstructor] = useState<{ sessionId: string; sessionKey: string } | null>(null)
+  const [recoverableCandidate, setRecoverableCandidate] = useState<RecoverableCandidateSession | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const membersChannelRef = useRef<RealtimeChannel | null>(null)
   const roleRef = useRef<SessionRole>('standalone')
@@ -172,6 +207,8 @@ export function useTeachingSession({
         storeSession(next)
         if (roleRef.current === 'candidate') {
           if (next.status === 'ended') {
+            removeCandidateRecovery()
+            setRecoverableCandidate(null)
             setConnection('idle')
             setError('The instructor ended this teaching session.')
             void closeTeachingSessionChannel(channelRef.current)
@@ -241,7 +278,7 @@ export function useTeachingSession({
     }
   }
 
-  const joinCandidate = async (sessionKey: string, displayName: string) => {
+  const joinCandidate = async (sessionKey: string, displayName: string, recoveryAttempt = false) => {
     setConnection('connecting')
     setError(null)
     try {
@@ -249,6 +286,13 @@ export function useTeachingSession({
       roleRef.current = 'candidate'
       setRole('candidate')
       const row = await fetchTeachingSession(joined.sessionId)
+      const recovery: RecoverableCandidateSession = {
+        sessionKey: row.session_key,
+        displayName: displayName.trim(),
+        expiresAt: row.expires_at,
+      }
+      persistCandidateRecovery(recovery)
+      setRecoverableCandidate(recovery)
       patientRevisionRef.current = 0
       ventilatorRevisionRef.current = 0
       alarmRevisionRef.current = 0
@@ -258,19 +302,48 @@ export function useTeachingSession({
       await touchSessionMember(joined.sessionId, patientRef.current, ventilatorRef.current, alarmLevelRef.current)
       await attachSubscription(joined.sessionId)
     } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Unable to join teaching session.'
+      if (recoveryAttempt && /expired|not found|ended/i.test(message)) {
+        removeCandidateRecovery()
+        setRecoverableCandidate(null)
+      }
       setConnection('error')
-      setError(cause instanceof Error ? cause.message : 'Unable to join teaching session.')
+      setError(message)
       roleRef.current = 'standalone'
       setRole('standalone')
     }
+  }
+
+  const resumeCandidate = async () => {
+    const recovery = readCandidateRecovery()
+    if (!recovery) {
+      setRecoverableCandidate(null)
+      return
+    }
+    await joinCandidate(recovery.sessionKey, recovery.displayName, true)
   }
 
   const attachInstructorLease = (sessionId: string, clientId: string) => {
     if (instructorHeartbeatRef.current != null) window.clearInterval(instructorHeartbeatRef.current)
     const heartbeat = () => {
       void touchInstructorSession(sessionId, clientId).catch((cause) => {
+        const message = cause instanceof Error ? cause.message : 'Instructor control lease was lost.'
+        if (/expired/i.test(message)) {
+          sessionStorage.removeItem('eduvent.instructor-session-id')
+          sessionStorage.removeItem('eduvent.instructor-client-id')
+          instructorClientIdRef.current = null
+          roleRef.current = 'standalone'
+          setRole('standalone')
+          storeSession(null)
+          setMembers([])
+          setConnection('idle')
+          setError('This teaching session expired 2 hours after it was created.')
+          void closeTeachingSessionChannel(channelRef.current)
+          void closeTeachingSessionChannel(membersChannelRef.current)
+          return
+        }
         setConnection('error')
-        setError(cause instanceof Error ? cause.message : 'Instructor control lease was lost.')
+        setError(message)
       })
     }
     heartbeat()
@@ -327,7 +400,35 @@ export function useTeachingSession({
     })()
   }, [])
 
+  useEffect(() => {
+    const recovery = readCandidateRecovery()
+    if (!recovery) return
+    if (candidateRecoveryIsExpired(recovery)) {
+      removeCandidateRecovery()
+      return
+    }
+    setRecoverableCandidate(recovery)
+  }, [])
+
+  useEffect(() => {
+    if (!recoverableCandidate) return
+    const expiresAt = Date.parse(recoverableCandidate.expiresAt)
+    if (!Number.isFinite(expiresAt)) return
+    const remainingMs = expiresAt - Date.now()
+    if (remainingMs <= 0) {
+      removeCandidateRecovery()
+      setRecoverableCandidate(null)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      removeCandidateRecovery()
+      setRecoverableCandidate(null)
+    }, remainingMs)
+    return () => window.clearTimeout(timer)
+  }, [recoverableCandidate?.expiresAt])
+
   const leaveSession = async () => {
+    const leavingRole = roleRef.current
     if (patientBroadcastTimerRef.current != null) window.clearTimeout(patientBroadcastTimerRef.current)
     if (ventilatorBroadcastTimerRef.current != null) window.clearTimeout(ventilatorBroadcastTimerRef.current)
     if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
@@ -343,6 +444,10 @@ export function useTeachingSession({
     setMembers([])
     setConnection('idle')
     setError(null)
+    if (leavingRole === 'candidate') {
+      removeCandidateRecovery()
+      setRecoverableCandidate(null)
+    }
   }
 
   const endInstructorSession = async () => {
@@ -563,6 +668,8 @@ export function useTeachingSession({
         if (!active || roleRef.current !== 'candidate') return
         storeSession(fresh)
         if (fresh.status === 'ended') {
+          removeCandidateRecovery()
+          setRecoverableCandidate(null)
           setConnection('idle')
           setError('The instructor ended this teaching session.')
           roleRef.current = 'standalone'
@@ -586,7 +693,19 @@ export function useTeachingSession({
   useEffect(() => {
     if (role !== 'candidate' || !session?.id) return
     const sendHeartbeat = () => {
-      void touchSessionMember(session.id, patientRef.current, ventilatorRef.current, alarmLevelRef.current).catch(() => {
+      void touchSessionMember(session.id, patientRef.current, ventilatorRef.current, alarmLevelRef.current).catch((cause) => {
+        const message = cause instanceof Error ? cause.message : ''
+        if (/expired|ended/i.test(message)) {
+          removeCandidateRecovery()
+          setRecoverableCandidate(null)
+          roleRef.current = 'standalone'
+          setRole('standalone')
+          storeSession(null)
+          setConnection('idle')
+          setError('This teaching session expired 2 hours after it was created.')
+          void closeTeachingSessionChannel(channelRef.current)
+          return
+        }
         // Realtime/session connectivity owns the visible connection state; telemetry may recover independently.
       })
     }
@@ -631,9 +750,11 @@ export function useTeachingSession({
     candidateWaveformsLocked,
     candidateOesophagealPressureAllowed,
     recoverableInstructor,
+    recoverableCandidate,
     startInstructor,
     resumeInstructor,
     joinCandidate,
+    resumeCandidate,
     leaveSession,
     endInstructorSession,
     updatePolicy,

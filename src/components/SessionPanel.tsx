@@ -11,9 +11,11 @@ interface SessionPanelProps {
   members: SessionMemberRow[]
   error: string | null
   recoverableInstructor?: { sessionId: string; sessionKey: string } | null
+  recoverableCandidate?: { sessionKey: string; displayName: string; expiresAt: string } | null
   onStartInstructor: () => Promise<void>
   onResumeInstructor?: (sessionId?: string) => Promise<void>
   onJoinCandidate: (sessionKey: string, displayName: string) => Promise<void>
+  onResumeCandidate?: () => Promise<void>
   onLeaveSession: () => Promise<void>
   onEndInstructorSession: () => Promise<void>
   onUpdatePolicy: (patch: {
@@ -123,9 +125,11 @@ export function SessionPanel({
   members,
   error,
   recoverableInstructor,
+  recoverableCandidate,
   onStartInstructor,
   onResumeInstructor,
   onJoinCandidate,
+  onResumeCandidate,
   onLeaveSession,
   onEndInstructorSession,
   onUpdatePolicy,
@@ -137,6 +141,12 @@ export function SessionPanel({
   const [simulatorExpanded, setSimulatorExpanded] = useState(false)
   const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
   const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!recoverableCandidate) return
+    setSessionKey(recoverableCandidate.sessionKey)
+    setDisplayName(recoverableCandidate.displayName)
+  }, [recoverableCandidate])
 
   useEffect(() => {
     const body = document.body
@@ -162,7 +172,7 @@ export function SessionPanel({
 
   useEffect(() => {
     const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.51'
+    if (version) version.textContent = 'v0.52'
   }, [])
 
   const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
@@ -184,6 +194,9 @@ export function SessionPanel({
               Start instructor session
             </button>
             <button type="button" className="session-secondary-button" onClick={() => setJoinMode(true)}>Join as candidate</button>
+            {recoverableCandidate && onResumeCandidate && (
+              <button type="button" className="session-secondary-button" disabled={connection === 'connecting'} onClick={() => void onResumeCandidate()}>Rejoin candidate {recoverableCandidate.sessionKey}</button>
+            )}
             {recoverableInstructor && onResumeInstructor && (
               <button type="button" className="session-secondary-button" onClick={() => void onResumeInstructor(recoverableInstructor.sessionId)}>Rejoin instructor {recoverableInstructor.sessionKey}</button>
             )}
