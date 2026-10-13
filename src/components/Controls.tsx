@@ -13,6 +13,7 @@ interface SliderProps {
   displayValue?: string
   onChange: (value: number) => void
   disabled?: boolean
+  className?: string
 }
 
 const MIN_IE = 0.5
@@ -45,9 +46,9 @@ const isSimvMode = (mode: VentilatorMode) => mode === 'SIMV-VC' || mode === 'SIM
 const hasConventionalMandatoryTiming = (mode: VentilatorMode) => mode !== 'PSV' && mode !== 'APRV' && mode !== 'BIPAP'
 const usesTidalVolume = (mode: VentilatorMode) => isVolumeMandatoryMode(mode) || mode === 'VG-PC'
 
-function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange, disabled = false }: SliderProps) {
+function Slider({ label, value, unit, min, max, step = 1, displayValue, onChange, disabled = false, className = '' }: SliderProps) {
   return (
-    <label className={`control-row ${disabled ? 'disabled' : ''}`}>
+    <label className={`control-row ${disabled ? 'disabled' : ''} ${className}`.trim()}>
       <div className="control-heading"><span>{label}</span><strong>{displayValue ?? `${value}${unit}`}</strong></div>
       <input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} />
     </label>
@@ -119,7 +120,7 @@ function SyncWindowIcon() {
   )
 }
 
-export function VentilatorControls({ settings, onChange, onReset }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void; onReset: () => void }) {
+export function VentilatorControls({ settings, onChange, onReset, fio2Override, fio2BoostActive = false }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void; onReset: () => void; fio2Override?: number; fio2BoostActive?: boolean }) {
   const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })
   const currentIeRatio = ieRatioFrom(settings)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
@@ -213,7 +214,7 @@ export function VentilatorControls({ settings, onChange, onReset }: { settings: 
         )}
       </div>
 
-      <Slider label="FiO₂" value={Math.round(settings.fio2 * 100)} unit="%" min={21} max={100} onChange={(v) => patch({ fio2: v / 100 })} />
+      <Slider label="FiO₂" value={Math.round((fio2Override ?? settings.fio2) * 100)} unit="%" min={21} max={100} disabled={fio2BoostActive} className={fio2BoostActive ? 'oxygen-boosted-control' : ''} onChange={(v) => patch({ fio2: v / 100 })} />
 
       {settings.mode === 'APRV' ? (
         <>

@@ -8,11 +8,11 @@
   to { background: linear-gradient(90deg,#f23b3b,#c41616); box-shadow: inset 0 -1px 0 rgba(255,255,255,.28), 0 0 16px rgba(242,59,59,.45); }
 }
 .alarm-dialog-backdrop { position: absolute; inset: 0; z-index: 12; display: grid; place-items: center; padding: 24px; background: rgba(2,5,7,.68); backdrop-filter: blur(2px); }
-.alarm-dialog { width: min(760px, 98%); max-height: min(82vh, 720px); overflow-y: auto; padding: 16px; border: 1px solid #455761; border-radius: 12px; background: #11191e; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
+.alarm-dialog { width: min(900px, 98%); max-height: min(82vh, 720px); overflow-y: auto; padding: 16px; border: 1px solid #455761; border-radius: 12px; background: #11191e; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
 .alarm-dialog-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; color: #f2f7f9; }
 .alarm-dialog-title strong { text-transform: uppercase; letter-spacing: .09em; font-size: 13px; }
 .alarm-dialog-title button { width: 34px; height: 34px; padding: 0; font-size: 22px; line-height: 1; }
-.alarm-slider-grid { display: grid; grid-template-columns: repeat(5,minmax(110px,1fr)); gap: 10px; padding: 6px 0 10px; overflow-x: auto; }
+.alarm-slider-grid { display: grid; grid-template-columns: repeat(6,minmax(110px,1fr)); gap: 10px; padding: 6px 0 10px; overflow-x: auto; }
 .alarm-slider-card { min-width: 0; padding: 12px 10px; border: 1px solid #2c3b44; border-radius: 9px; background: #0b1217; text-align: center; }
 .alarm-slider-card > span { display: block; min-height: 30px; color: #a9b8bf; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
 .alarm-slider-card > strong { display: block; margin: 4px 0 8px; color: #eef6f8; font-size: 21px; }
@@ -71,7 +71,7 @@
 .vertical-dual-handle.high { z-index: 4; }
 @media (max-width: 760px) {
   .alarm-dialog { width: min(96vw, 760px); }
-  .alarm-slider-grid { grid-template-columns: repeat(5,110px); }
+  .alarm-slider-grid { grid-template-columns: repeat(6,110px); }
 }
 
 /* Mobile alarm controls: prevent the page from stealing vertical drags from range handles. */
