@@ -2,10 +2,50 @@ import { createClient, type RealtimeChannel } from '@supabase/supabase-js'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import type { AlarmLimits, CandidateAlarmLevel } from '../alarmTypes'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://meigiiqcrvwxcgapzxxi.supabase.co'
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? 'sb_publishable_8BlWpHJsYzB2V8GQh9kqdQ_QUjg7rN-'
+const SUPABASE_CONFIG_STORAGE_KEY = 'eduvent.supabase-config'
+const DEFAULT_SUPABASE_URL = 'https://meigiiqcrvwxcgapzxxi.supabase.co'
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_8BlWpHJsYzB2V8GQh9kqdQ_QUjg7rN-'
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export interface SupabaseLocalConfiguration { project: string; publishableKey: string }
+export interface SupabaseConfiguration { url: string; publishableKey: string; source: 'local' | 'environment' | 'default' }
+
+function projectInputToUrl(project: string) {
+  const value = project.trim()
+  if (!value) throw new Error('Enter a Supabase project URL or project reference.')
+  if (/^https?:\/\//i.test(value)) return new URL(value).origin.replace(/\/$/, '')
+  if (!/^[a-z0-9-]+$/i.test(value)) throw new Error('Invalid Supabase project reference.')
+  return `https://${value}.supabase.co`
+}
+
+export function getSupabaseLocalOverride(): SupabaseLocalConfiguration | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw=window.localStorage.getItem(SUPABASE_CONFIG_STORAGE_KEY); if(!raw) return null
+    const parsed=JSON.parse(raw) as Partial<SupabaseLocalConfiguration>
+    if(typeof parsed.project!=='string'||typeof parsed.publishableKey!=='string'||!parsed.project.trim()||!parsed.publishableKey.trim()) return null
+    return {project:parsed.project.trim(),publishableKey:parsed.publishableKey.trim()}
+  } catch { return null }
+}
+
+export function getSupabaseConfiguration(): SupabaseConfiguration {
+  const local=getSupabaseLocalOverride()
+  if(local) return {url:projectInputToUrl(local.project),publishableKey:local.publishableKey,source:'local'}
+  const url=import.meta.env.VITE_SUPABASE_URL?.trim(), key=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
+  if(url&&key) return {url:projectInputToUrl(url),publishableKey:key,source:'environment'}
+  return {url:DEFAULT_SUPABASE_URL,publishableKey:DEFAULT_SUPABASE_PUBLISHABLE_KEY,source:'default'}
+}
+
+export function saveSupabaseLocalOverride(project:string,publishableKey:string){
+  if(typeof window==='undefined') return
+  const normalizedProject=project.trim(), normalizedKey=publishableKey.trim(); projectInputToUrl(normalizedProject)
+  if(!normalizedKey) throw new Error('Enter the Supabase publishable key.')
+  if(!normalizedKey.startsWith('sb_publishable_')&&!normalizedKey.startsWith('eyJ')) throw new Error('This does not look like a Supabase publishable/anon key.')
+  window.localStorage.setItem(SUPABASE_CONFIG_STORAGE_KEY,JSON.stringify({project:normalizedProject,publishableKey:normalizedKey}))
+}
+export function clearSupabaseLocalOverride(){ if(typeof window!=='undefined') window.localStorage.removeItem(SUPABASE_CONFIG_STORAGE_KEY) }
+
+const activeSupabaseConfiguration=getSupabaseConfiguration()
+export const supabase = createClient(activeSupabaseConfiguration.url, activeSupabaseConfiguration.publishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,

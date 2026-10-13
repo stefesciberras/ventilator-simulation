@@ -15,6 +15,12 @@ import {
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
+import {
+  clearSupabaseLocalOverride,
+  getSupabaseConfiguration,
+  getSupabaseLocalOverride,
+  saveSupabaseLocalOverride,
+} from '../session/supabase'
 import '../account.css'
 
 interface InstructorAccountControlsProps {
@@ -105,6 +111,40 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const initialSupabaseConfig = getSupabaseLocalOverride()
+  const activeSupabaseConfig = getSupabaseConfiguration()
+  const [supabaseProject, setSupabaseProject] = useState(initialSupabaseConfig?.project ?? activeSupabaseConfig.url)
+  const [supabasePublishableKey, setSupabasePublishableKey] = useState(initialSupabaseConfig?.publishableKey ?? activeSupabaseConfig.publishableKey)
+  const [supabaseConfigMessage, setSupabaseConfigMessage] = useState<string | null>(null)
+  const [supabaseConfigError, setSupabaseConfigError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!settingsOpen) return
+    const local = getSupabaseLocalOverride()
+    const active = getSupabaseConfiguration()
+    setSupabaseProject(local?.project ?? active.url)
+    setSupabasePublishableKey(local?.publishableKey ?? active.publishableKey)
+    setSupabaseConfigMessage(null)
+    setSupabaseConfigError(null)
+  }, [settingsOpen])
+
+  const saveCentreSupabase = () => {
+    if (role !== 'standalone') { setSupabaseConfigError('End or leave the teaching session before changing centre configuration.'); return }
+    setSupabaseConfigMessage(null); setSupabaseConfigError(null)
+    try {
+      saveSupabaseLocalOverride(supabaseProject, supabasePublishableKey)
+      setSupabaseConfigMessage('Centre configuration saved. EDUVENT is reconnecting…')
+      window.setTimeout(() => window.location.reload(), 250)
+    } catch (cause) { setSupabaseConfigError(cause instanceof Error ? cause.message : 'Unable to save Supabase configuration.') }
+  }
+
+  const resetCentreSupabase = () => {
+    if (role !== 'standalone') { setSupabaseConfigError('End or leave the teaching session before changing centre configuration.'); return }
+    clearSupabaseLocalOverride()
+    setSupabaseConfigMessage('Local override cleared. EDUVENT is reconnecting to the deployment default…')
+    setSupabaseConfigError(null)
+    window.setTimeout(() => window.location.reload(), 250)
+  }
 
   const staticPresets = useMemo(
     () => presets.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'),
@@ -483,10 +523,30 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
             </div>
 
             <div className="settings-summary-grid">
-              <div><span>Version</span><strong>v0.65</strong></div>
+              <div><span>Version</span><strong>v0.66</strong></div>
               <div><span>Teaching room</span><strong>2-hour lifetime</strong></div>
               <div><span>Cloud</span><strong>{account ? 'Connected' : 'Not signed in'}</strong></div>
             </div>
+
+            <section className="supabase-settings-section">
+              <div className="scenario-settings-heading">
+                <div><span>Centre configuration</span><h3>Supabase</h3></div>
+                <small>{getSupabaseConfiguration().source === 'local' ? 'Local override' : getSupabaseConfiguration().source === 'environment' ? 'Deployment environment' : 'Built-in default'}</small>
+              </div>
+              <p>Each centre can connect this EDUVENT installation to its own Supabase project. The configuration is stored only in this browser and overrides deployment environment variables.</p>
+              <div className="supabase-settings-fields">
+                <label><span>Project URL or project reference</span><input value={supabaseProject} disabled={role !== 'standalone'} onChange={(event) => setSupabaseProject(event.target.value)} placeholder="e.g. abcdefghijklmnop or https://abcdefgh.supabase.co" autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label>
+                <label><span>Publishable key</span><input value={supabasePublishableKey} disabled={role !== 'standalone'} onChange={(event) => setSupabasePublishableKey(event.target.value)} placeholder="sb_publishable_…" autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label>
+              </div>
+              <div className="supabase-settings-actions">
+                <button type="button" className="account-primary-button" disabled={role !== 'standalone'} onClick={saveCentreSupabase}>Save & reconnect</button>
+                <button type="button" className="account-secondary-button" disabled={role !== 'standalone' || !getSupabaseLocalOverride()} onClick={resetCentreSupabase}>Use deployment default</button>
+              </div>
+              <small className="supabase-settings-note">The publishable key is browser-visible by design. Never enter a Supabase service-role or secret key here. Database and media security must be enforced with RLS.</small>
+              {role !== 'standalone' && <div className="account-hint">Centre configuration is locked while a teaching session is active.</div>}
+              {supabaseConfigMessage && <div className="account-message">{supabaseConfigMessage}</div>}
+              {supabaseConfigError && <div className="account-error">{supabaseConfigError}</div>}
+            </section>
 
             {role !== 'candidate' && (
               <section className="scenario-settings-section">
