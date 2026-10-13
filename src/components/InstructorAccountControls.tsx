@@ -523,7 +523,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
             </div>
 
             <div className="settings-summary-grid">
-              <div><span>Version</span><strong>v0.68</strong></div>
+              <div><span>Version</span><strong>v0.69</strong></div>
               <div><span>Teaching room</span><strong>2-hour lifetime</strong></div>
               <div><span>Cloud</span><strong>{account ? 'Connected' : 'Not signed in'}</strong></div>
             </div>

@@ -209,6 +209,37 @@ function latestCompletedExpiredVolume(samples: Sample[]) {
   return latest
 }
 
+function measuredEndTidalCO2(samples: Sample[]): number | null {
+  if (samples.length < 2) return null
+  const terminalFlowThreshold = 0.5
+  const latestTime = samples[samples.length - 1].time
+  let lastExpiratoryFlowTime: number | null = null
+  let terminalCandidate: number | null = null
+  let lastCompleted: number | null = null
+
+  for (let index = 0; index < samples.length; index += 1) {
+    const current = samples[index]
+    const previous = index > 0 ? samples[index - 1] : null
+    if (current.phase === 'expiration' && current.flow < -terminalFlowThreshold) {
+      lastExpiratoryFlowTime = current.time
+      terminalCandidate = current.co2
+    }
+    if (
+      previous && previous.phase === 'expiration' && current.phase === 'expiration' &&
+      previous.flow < -terminalFlowThreshold && current.flow >= -terminalFlowThreshold &&
+      terminalCandidate != null
+    ) lastCompleted = terminalCandidate
+    if (previous && previous.phase === 'expiration' && current.phase === 'inspiration' && terminalCandidate != null) {
+      lastCompleted = terminalCandidate
+      terminalCandidate = null
+    }
+    if (previous && previous.phase === 'inspiration' && current.phase === 'expiration') terminalCandidate = null
+  }
+
+  if (lastExpiratoryFlowTime == null || latestTime - lastExpiratoryFlowTime > 20) return null
+  return lastCompleted
+}
+
 function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings) {
   const recent = recentWindow(samples, 20)
   const passiveEndExpiration = recent
@@ -223,7 +254,7 @@ function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings
     .slice(-80)
     .map((sample) => sample.oesophagealPressure))
   const endExpPes = median(passiveEndExpiration.map((sample) => sample.oesophagealPressure))
-  const co2Expiration = recent.filter((sample) => sample.phase === 'expiration').map((sample) => sample.co2)
+  const endTidalCO2 = measuredEndTidalCO2(samples)
   const pesValues = recent.map((sample) => sample.oesophagealPressure)
   const positiveFlows = recent.map((sample) => sample.flow).filter((flow) => flow > 0)
   const negativeFlows = recent.map((sample) => Math.abs(Math.min(0, sample.flow))).filter((flow) => flow > 0)
@@ -239,7 +270,7 @@ function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings
     expiratoryFlow: negativeFlows.length ? Math.max(...negativeFlows) : null,
     inspiredTidalVolume: latestCompletedInspiratoryVolume(recent),
     expiredTidalVolume: latestCompletedExpiredVolume(recent),
-    endTidalCO2: co2Expiration.length ? Math.max(...co2Expiration) : null,
+    endTidalCO2,
     pesMax: pesValues.length ? Math.max(...pesValues) : null,
     pesPlateau,
     pesMin: pesValues.length ? Math.min(...pesValues) : null,
