@@ -7,32 +7,21 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Apply integration patch
-        run: python3 scripts/patch_v080.py
       - name: Verify transport integration
         run: |
           grep -q "WebRtcRuntimeTransport" src/session/useTeachingSession.ts
           grep -q "runtimeTransportKind" src/session/useTeachingSession.ts
           grep -q "Peer-to-peer" src/components/SessionPanel.tsx
           grep -q "APP_VERSION = '0.80.0'" src/appVersion.ts
+          grep -q "eduvent.local" appliance/bootstrap.sh
       - name: Install dependencies
         run: npm ci
       - name: Build
         run: npm run build
-      - name: Commit integrated changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.tsx src/appVersion.ts src/components/SessionPanel.tsx src/session/localRuntimeTransport.ts src/session/useTeachingSession.ts src/session/webRtcRuntimeTransport.ts
-          git diff --cached --quiet && exit 0
-          git commit -m "v0.80 add multi-runtime teaching transport"
-          git push
