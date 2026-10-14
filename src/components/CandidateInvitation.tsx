@@ -1,23 +1,26 @@
 import { useMemo, useState } from 'react'
+import { supabase } from '../session/supabase'
 import '../candidate-invitation.css'
 
 interface CandidateInvitationProps {
+  sessionId: string
   sessionKey: string
   joinUrl: string
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MAX_RECIPIENTS = 25
 
 function splitRecipients(value: string) {
   return Array.from(new Set(
     value
       .split(/[\s,;]+/)
-      .map((item) => item.trim())
+      .map((item) => item.trim().toLowerCase())
       .filter(Boolean),
   ))
 }
 
-export function CandidateInvitation({ sessionKey, joinUrl }: CandidateInvitationProps) {
+export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: CandidateInvitationProps) {
   const [open, setOpen] = useState(false)
   const [emails, setEmails] = useState('')
   const [status, setStatus] = useState<string | null>(null)
@@ -31,8 +34,6 @@ export function CandidateInvitation({ sessionKey, joinUrl }: CandidateInvitation
     '',
     'Open the link, enter your name, and join the session.',
   ].join('\n'), [joinUrl, sessionKey])
-
-  const subject = `EDUVENT teaching session ${sessionKey}`
 
   const copyInvitation = async () => {
     try {
@@ -49,39 +50,40 @@ export function CandidateInvitation({ sessionKey, joinUrl }: CandidateInvitation
       setStatus('Enter at least one candidate email address.')
       return
     }
+    if (recipients.length > MAX_RECIPIENTS) {
+      setStatus(`Send to at most ${MAX_RECIPIENTS} candidates at a time.`)
+      return
+    }
     const invalid = recipients.filter((email) => !EMAIL_RE.test(email))
     if (invalid.length) {
       setStatus(`Check the following email address${invalid.length > 1 ? 'es' : ''}: ${invalid.join(', ')}`)
       return
     }
 
-    const endpoint = (import.meta.env.VITE_EDUVENT_INVITE_EMAIL_ENDPOINT as string | undefined)?.trim()
-    if (!endpoint) {
-      const mailto = `mailto:${encodeURIComponent(recipients.join(','))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(invitationText)}`
-      window.location.href = mailto
-      setStatus('Opening your email application with the invitation prepared.')
-      return
-    }
-
     setSending(true)
     setStatus(null)
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke<{ sent?: number; error?: string }>('send-candidate-invite', {
+        body: {
+          sessionId,
           recipients,
-          subject,
-          text: invitationText,
-          sessionKey,
           joinUrl,
-        }),
+        },
       })
-      if (!response.ok) {
-        const detail = await response.text().catch(() => '')
-        throw new Error(detail || `Invitation service returned ${response.status}.`)
+
+      if (error) {
+        let message = error.message || 'Unable to send the invitation.'
+        const context = (error as { context?: Response }).context
+        if (context instanceof Response) {
+          const payload = await context.clone().json().catch(() => null) as { error?: string } | null
+          if (payload?.error) message = payload.error
+        }
+        throw new Error(message)
       }
-      setStatus(`Invitation sent to ${recipients.length} candidate${recipients.length === 1 ? '' : 's'}.`)
+      if (data?.error) throw new Error(data.error)
+
+      const sent = data?.sent ?? recipients.length
+      setStatus(`Invitation sent through Brevo to ${sent} candidate${sent === 1 ? '' : 's'}.`)
     } catch (cause) {
       setStatus(cause instanceof Error ? cause.message : 'Unable to send the invitation.')
     } finally {
@@ -89,7 +91,7 @@ export function CandidateInvitation({ sessionKey, joinUrl }: CandidateInvitation
     }
   }
 
-  if (!sessionKey || !joinUrl) return null
+  if (!sessionId || !sessionKey || !joinUrl) return null
 
   return (
     <div className="candidate-invitation">
@@ -134,12 +136,12 @@ export function CandidateInvitation({ sessionKey, joinUrl }: CandidateInvitation
                 placeholder="candidate1@example.com, candidate2@example.com"
                 rows={3}
               />
-              <small>Separate multiple addresses with commas, spaces, semicolons or new lines.</small>
+              <small>Separate multiple addresses with commas, spaces, semicolons or new lines. Maximum {MAX_RECIPIENTS} recipients per send.</small>
               <button type="button" className="session-primary-button" disabled={sending} onClick={() => void emailInvitation()}>
                 {sending ? 'Sending…' : 'Email invitation'}
               </button>
               <small className="candidate-invite-delivery-note">
-                Deployments can provide VITE_EDUVENT_INVITE_EMAIL_ENDPOINT for server-side delivery. Without it, EDUVENT opens the instructor's email application with the invitation prepared.
+                Invitations are sent securely by the EDUVENT Supabase Edge Function through Brevo.
               </small>
             </div>
 
