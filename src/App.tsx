@@ -106,18 +106,20 @@ function formatSimulationClock(seconds: number): string {
     : `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
-function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>
+type MetricAlarmLevel = 'yellow' | 'red' | null
+
+function Metric({ label, value, unit, alarmLevel = null }: { label: string; value: string; unit: string; alarmLevel?: MetricAlarmLevel }) {
+  return <div className={`metric ${alarmLevel ? `metric-alarm-${alarmLevel}` : ''}`}><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>
 }
 
-function GasMetric({ etco2, spo2 }: { etco2: string; spo2: string }) {
+function GasMetric({ etco2, spo2, spo2AlarmLevel = null }: { etco2: string; spo2: string; spo2AlarmLevel?: MetricAlarmLevel }) {
   return (
     <div className="metric gas-metric" aria-label={`EtCO₂ ${etco2} millimetres of mercury, SpO₂ ${spo2} percent`}>
       <div className="gas-metric-item co2">
         <span>EtCO₂</span>
         <div><strong>{etco2}</strong><small>mmHg</small></div>
       </div>
-      <div className="gas-metric-item spo2">
+      <div className={`gas-metric-item spo2 ${spo2AlarmLevel ? `metric-alarm-${spo2AlarmLevel}` : ''}`}>
         <span>SpO₂</span>
         <div><strong>{spo2}</strong><small>%</small></div>
       </div>
@@ -542,6 +544,7 @@ export default function App() {
   })
   const [diagnosticCopied, setDiagnosticCopied] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
+  const [instructorSimulatorExpanded, setInstructorSimulatorExpanded] = useState(false)
   const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
   const previousApneaAlarmActiveRef = useRef(false)
 
@@ -967,6 +970,19 @@ export default function App() {
     setCandidateAlarmLevelForSession(audibleAlarmLevel)
   }, [audibleAlarmLevel])
   const visibleAlarmKeys = new Set([...activeAlarmKeys, ...resolvedYellowKeys, ...greyAlarmKeys])
+  const measurementAlarmNeedsAttention = (...keys: string[]) => keys.some((key) => {
+    const entry = alarmLifecycle[key]
+    if (entry?.acknowledged) return false
+    if (alarmConditions[key as keyof typeof alarmConditions]) return true
+    return entry?.resolvedAt != null && alarmClock - entry.resolvedAt < 120000
+  })
+  const ppeakMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('pressureLimit', 'pressure') ? 'yellow' : null
+  const tidalVolumeMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('tidalVolumeLow', 'tidalVolumeHigh') ? 'yellow' : null
+  const minuteVentilationMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('minuteVentilationLow', 'minuteVentilationHigh') ? 'yellow' : null
+  const respiratoryRateMetricAlarm: MetricAlarmLevel = apneaAlarmActive && !alarmLifecycle.apnea?.acknowledged
+    ? 'red'
+    : measurementAlarmNeedsAttention('respiratoryRateLow', 'respiratoryRateHigh') ? 'yellow' : null
+  const spo2MetricAlarm: MetricAlarmLevel = latestSample?.spo2 != null && latestSample.spo2 < 85 ? 'red' : null
   const alarmLabels = [
     visibleAlarmKeys.has('pressureLimit') ? 'PRESSURE LIMIT' : null,
     visibleAlarmKeys.has('pressure') ? 'HIGH PRESSURE' : null,
@@ -1251,6 +1267,18 @@ export default function App() {
       </header>
 
       <div className="workspace">
+        {teachingSession.role === 'instructor' && (
+          <button
+            type="button"
+            className={`instructor-ventilator-toggle ${instructorSimulatorExpanded ? 'expanded' : 'collapsed'}`}
+            onClick={() => setInstructorSimulatorExpanded((current) => !current)}
+            aria-expanded={instructorSimulatorExpanded}
+            title={instructorSimulatorExpanded ? 'Hide ventilator display' : 'Show ventilator display'}
+          >
+            <span>VENTILATOR</span>
+            <small>{instructorSimulatorExpanded ? 'HIDE' : 'SHOW'}</small>
+          </button>
+        )}
         <section className="ventilator-console">
           <div className="console-mode-bar">
             <VentilatorModeControl
@@ -1393,10 +1421,10 @@ export default function App() {
                 <button className="metrics-alarm-limits" type="button" disabled={teachingSession.candidateAlarmsLocked} onClick={() => setAlarmDialogOpen(true)} title={teachingSession.candidateAlarmsLocked ? 'Alarm limits controlled by instructor' : 'Set alarm limits'}>Alarm limits</button>
               </div>
               <div className="metrics-title">Measured</div>
-              <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" />
-              <Metric label="VTe" value={tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '-'} unit={tidalVolumeDisplayAvailable ? 'mL' : ''} />
-              <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" />
-              <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" />
+              <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" alarmLevel={ppeakMetricAlarm} />
+              <Metric label="VTe" value={tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '-'} unit={tidalVolumeDisplayAvailable ? 'mL' : ''} alarmLevel={tidalVolumeMetricAlarm} />
+              <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" alarmLevel={respiratoryRateMetricAlarm} />
+              <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" alarmLevel={minuteVentilationMetricAlarm} />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
               <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
@@ -1404,6 +1432,7 @@ export default function App() {
               <GasMetric
                 etco2={endTidalCO2 == null ? '-' : endTidalCO2.toFixed(0)}
                 spo2={latestSample?.spo2 == null ? '—' : latestSample.spo2.toFixed(0)}
+                spo2AlarmLevel={spo2MetricAlarm}
               />
               {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
@@ -1421,6 +1450,8 @@ export default function App() {
         <aside className="control-panel">
           <SessionPanel
             role={teachingSession.role}
+            simulatorExpanded={instructorSimulatorExpanded}
+            onSimulatorExpandedChange={setInstructorSimulatorExpanded}
             connection={teachingSession.connection}
             localRuntimeConnection={teachingSession.localRuntimeConnection}
             localRuntimeUrl={teachingSession.localRuntimeUrl}

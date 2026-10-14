@@ -1,12 +1,54 @@
+.instructor-ventilator-toggle { display: none; }
+
 body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .workspace {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 86px minmax(0, 1fr);
 }
 
 body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .ventilator-console {
   display: none;
 }
 
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1;
+  position: sticky;
+  top: 18px;
+  min-height: calc(100vh - 112px);
+  max-height: calc(100vh - 112px);
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 12px 8px;
+  border-color: rgba(126, 199, 231, .3);
+  border-radius: 15px;
+  background: linear-gradient(180deg, #111d24, #0b1419);
+  color: #9fc5d5;
+}
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle span,
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle small {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+body.eduvent-instructor-mode .instructor-ventilator-toggle span {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+body.eduvent-instructor-mode .instructor-ventilator-toggle small {
+  color: #63b9da;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+body.eduvent-instructor-mode .instructor-ventilator-toggle:hover:not(:disabled) {
+  border-color: #61bedd;
+  background: linear-gradient(180deg, #17303b, #0e2028);
+}
+
 body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel {
+  grid-column: 2;
+  grid-row: 1;
   max-height: none;
   overflow: visible;
   display: grid;
@@ -25,10 +67,33 @@ body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-pa
 }
 
 body.eduvent-instructor-mode.eduvent-instructor-simulator-open .workspace {
-  grid-template-columns: minmax(0, 1fr) 430px;
+  grid-template-columns: minmax(0, 1fr) 34px 430px;
 }
-
+body.eduvent-instructor-mode.eduvent-instructor-simulator-open .ventilator-console { grid-column: 1; grid-row: 1; }
+body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: stretch;
+  min-width: 0;
+  padding: 7px 3px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 10px;
+  border-color: rgba(126, 199, 231, .25);
+  background: #101a20;
+  color: #91b8c8;
+}
+body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle span,
+body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle small {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
 body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
+  grid-column: 3;
+  grid-row: 1;
   display: block;
   max-height: calc(100vh - 92px);
   overflow-y: auto;
@@ -46,10 +111,42 @@ body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
 }
 
 @media (max-width: 1100px) {
-  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel {
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .workspace,
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .workspace {
     grid-template-columns: 1fr;
   }
-
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle {
+    grid-column: 1;
+    grid-row: 1;
+    position: static;
+    min-height: 42px;
+    max-height: 42px;
+    flex-direction: row;
+  }
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .ventilator-console { grid-column: 1; grid-row: 1; }
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 36px;
+    flex-direction: row;
+  }
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle span,
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle small,
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle span,
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle small {
+    writing-mode: horizontal-tb;
+    transform: none;
+  }
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel {
+    grid-column: 1;
+    grid-row: 2;
+    grid-template-columns: 1fr;
+  }
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
+    grid-column: 1;
+    grid-row: 3;
+    max-height: none;
+  }
   body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel > .session-panel,
   body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel > .disclaimer {
     grid-column: 1;

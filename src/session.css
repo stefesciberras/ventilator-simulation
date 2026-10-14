@@ -317,21 +317,6 @@
 .candidate-count-card strong small { font-size: 11px; color: #86b795; }
 .candidate-count-card em { color: #789385; font-size: 10px; font-style: normal; }
 
-.instructor-simulator-toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-  padding: 10px 11px;
-  border: 1px solid rgba(126, 199, 231, .18);
-  border-radius: 10px;
-  background: rgba(31, 93, 121, .07);
-}
-.instructor-simulator-toggle-row > div { display: grid; gap: 2px; }
-.instructor-simulator-toggle-row strong { color: #ddecf3; font-size: 12px; }
-.instructor-simulator-toggle-row span { color: #7f9ba8; font-size: 10px; }
-
 .candidate-roster {
   margin: 12px 0;
   padding: 12px;
@@ -372,71 +357,12 @@
 .candidate-state-grid strong { display: block; margin-top: 2px; overflow: hidden; color: #d9e9ef; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .candidate-empty-state { padding: 18px 12px; color: #728a95; font-size: 11px; line-height: 1.45; text-align: center; }
 
-/* Instructor mode uses the dashboard as the primary workspace. The full simulator remains available via the dashboard toggle. */
-body:has(.instructor-session-panel.simulator-collapsed) .workspace {
-  grid-template-columns: minmax(0, 1fr) 86px;
-}
-body:has(.instructor-session-panel.simulator-collapsed) .control-panel {
-  grid-column: 1;
-  grid-row: 1;
-  max-height: none;
-}
-body:has(.instructor-session-panel.simulator-collapsed) .ventilator-console {
-  position: sticky;
-  top: 18px;
-  grid-column: 2;
-  grid-row: 1;
-  min-height: calc(100vh - 112px);
-  max-height: calc(100vh - 112px);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  border-color: rgba(126, 199, 231, .24);
-  background: linear-gradient(180deg, #111d24, #0b1419);
-}
-body:has(.instructor-session-panel.simulator-collapsed) .ventilator-console > * { display: none !important; }
-body:has(.instructor-session-panel.simulator-collapsed) .ventilator-console::before {
-  content: 'VENTILATOR';
-  color: #7da5b6;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .18em;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-}
-body:has(.instructor-session-panel.simulator-collapsed) .control-panel > .session-lock-fieldset,
-body:has(.instructor-session-panel.simulator-collapsed) .control-panel > .disclaimer {
-  max-width: 760px;
-}
-body:has(.instructor-session-panel.simulator-expanded) .workspace {
-  grid-template-columns: minmax(0, 1fr) 430px;
-}
-
-@media (max-width: 1040px) {
-  body:has(.instructor-session-panel.simulator-collapsed) .workspace,
-  body:has(.instructor-session-panel.simulator-expanded) .workspace { grid-template-columns: 1fr; }
-  body:has(.instructor-session-panel.simulator-collapsed) .control-panel,
-  body:has(.instructor-session-panel.simulator-expanded) .control-panel { grid-column: 1; grid-row: 1; }
-  body:has(.instructor-session-panel.simulator-collapsed) .ventilator-console {
-    grid-column: 1;
-    grid-row: 2;
-    position: static;
-    min-height: 58px;
-    max-height: 58px;
-  }
-  body:has(.instructor-session-panel.simulator-collapsed) .ventilator-console::before {
-    writing-mode: horizontal-tb;
-    transform: none;
-  }
-}
-
 @media (max-width: 820px) {
   .session-domain-grid { grid-template-columns: 1fr; }
   .session-danger-button { margin-left: 0; }
   .instructor-dashboard-summary { grid-template-columns: 1fr; }
   .candidate-count-card { margin-top: -4px; }
   .candidate-state-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .instructor-simulator-toggle-row { align-items: stretch; flex-direction: column; }
 }
 
 
