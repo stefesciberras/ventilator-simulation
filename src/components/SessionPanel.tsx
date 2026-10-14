@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { CandidateInvitation } from './CandidateInvitation'
 import type { SessionConnection, SessionRole } from '../session/useTeachingSession'
+import type { LocalRuntimeConnection } from '../session/localRuntimeTransport'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import { loadPanelCollapsed, savePanelCollapsed } from '../panelCollapse'
@@ -16,6 +17,8 @@ import '../instructor.css'
 interface SessionPanelProps {
   role: SessionRole
   connection: SessionConnection
+  localRuntimeConnection: LocalRuntimeConnection
+  localRuntimeUrl: string | null
   session: TeachingSessionRow | null
   members: SessionMemberRow[]
   error: string | null
@@ -55,6 +58,18 @@ function ConnectionBadge({ connection }: { connection: SessionConnection }) {
           ? 'Connection error'
           : 'Offline'
   return <span className={`session-connection ${connection}`}><span className="session-connection-dot" />{label}</span>
+}
+
+function LocalRuntimeBadge({ connection, url }: { connection: LocalRuntimeConnection; url: string | null }) {
+  if (connection === 'disabled') return null
+  const label = connection === 'connected'
+    ? 'LAN live'
+    : connection === 'connecting'
+      ? 'LAN connecting…'
+      : connection === 'reconnecting'
+        ? 'LAN reconnecting…'
+        : 'LAN unavailable'
+  return <span className={`local-runtime-badge ${connection}`} title={url ?? 'Local runtime relay'}><i />{label}</span>
 }
 
 function hasVentilatorSettings(value: SessionMemberRow['ventilator_settings']): value is VentilatorSettings {
@@ -142,6 +157,8 @@ export function InstructorLiveRoom({ role, members }: { role: SessionRole; membe
 export function SessionPanel({
   role,
   connection,
+  localRuntimeConnection,
+  localRuntimeUrl,
   session,
   members,
   error,
@@ -386,6 +403,7 @@ export function SessionPanel({
           <div><span className="session-kicker">Teaching</span><h2>Instructor dashboard</h2></div>
           <div className="collapsible-heading-actions">
             <ConnectionBadge connection={connection} />
+            <LocalRuntimeBadge connection={localRuntimeConnection} url={localRuntimeUrl} />
             <button className="panel-collapse-button" type="button" onClick={toggleDashboardCollapsed} aria-expanded={!dashboardCollapsed} aria-label={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'} title={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'}>{dashboardCollapsed ? '▾' : '▴'}</button>
           </div>
         </div>
@@ -509,7 +527,10 @@ export function SessionPanel({
     <section className="session-panel candidate-session-panel">
       <div className="session-panel-heading">
         <div><span className="session-kicker">Teaching</span><h2>Candidate session</h2></div>
-        <ConnectionBadge connection={connection} />
+        <div className="session-transport-badges">
+          <ConnectionBadge connection={connection} />
+          <LocalRuntimeBadge connection={localRuntimeConnection} url={localRuntimeUrl} />
+        </div>
       </div>
       <div className="candidate-session-summary">
         <span>Session <strong>{session?.session_key ?? '———'}</strong></span>

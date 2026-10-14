@@ -8,13 +8,16 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "deploy": "wrangler deploy",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "local": "npm run build && node server/local-session-server.mjs",
+    "local:serve": "node server/local-session-server.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "latest",
     "qrcode.react": "^4.2.0",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "latest",

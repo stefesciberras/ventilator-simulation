@@ -466,3 +466,41 @@ body:has(.instructor-session-panel.simulator-expanded) .workspace {
 .session-start-note { padding: 8px 9px; border: 1px solid #33434a; border-radius: 8px; background: #111a1e; color: #91a4ab; font-size: 10px; line-height: 1.4; }
 .session-start-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
 @media (max-width: 620px) { .session-start-actions { grid-template-columns: 1fr; } }
+
+
+/* v0.78 local-runtime transport */
+.session-transport-badges {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.local-runtime-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  border: 1px solid rgb(118 197 155 / 28%);
+  border-radius: 999px;
+  padding: .24rem .5rem;
+  background: rgb(65 132 98 / 11%);
+  color: #a8cfba;
+  font-size: .69rem;
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.local-runtime-badge i {
+  width: .48rem;
+  height: .48rem;
+  border-radius: 50%;
+  background: #71848d;
+  box-shadow: 0 0 0 2px rgb(113 132 141 / 15%);
+}
+.local-runtime-badge.connected { color: #baf2d2; border-color: rgb(82 216 143 / 42%); background: rgb(42 143 88 / 16%); }
+.local-runtime-badge.connected i { background: #4fe08d; box-shadow: 0 0 0 2px rgb(79 224 141 / 17%), 0 0 10px rgb(79 224 141 / 38%); }
+.local-runtime-badge.connecting i,
+.local-runtime-badge.reconnecting i { background: #e4c05d; }
+.local-runtime-badge.error { color: #f0abab; border-color: rgb(236 94 94 / 38%); background: rgb(135 39 39 / 16%); }
+.local-runtime-badge.error i { background: #ef6666; }
