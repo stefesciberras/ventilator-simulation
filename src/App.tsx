@@ -25,7 +25,7 @@ const initialVentilator: VentilatorSettings = {
 }
 
 const initialPatient: PatientSettings = {
-  sex: 'male', heightCm: 170, oxygenConsumption: 250, frc: 2500, shuntFraction: 0.03,
+  sex: 'male', heightCm: 170, oxygenConsumption: 250, frc: 2500, shuntFraction: 0.03, maxSpO2: 100,
   compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
 }
 
@@ -203,6 +203,7 @@ function interpolatePatientSettings(from: PatientSettings, to: PatientSettings, 
     oxygenConsumption: lerp(from.oxygenConsumption ?? 250, to.oxygenConsumption ?? 250),
     frc: lerp(from.frc ?? 2500, to.frc ?? 2500),
     shuntFraction: lerp(from.shuntFraction ?? 0.03, to.shuntFraction ?? 0.03),
+    maxSpO2: lerp(from.maxSpO2 ?? 100, to.maxSpO2 ?? 100),
     compliance: lerp(from.compliance, to.compliance),
     resistance: lerp(from.resistance, to.resistance),
     expiratoryResistance: lerp(from.expiratoryResistance, to.expiratoryResistance),
@@ -1099,7 +1100,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.77.2',
+      appVersion: '0.77.3',
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1167,7 +1168,29 @@ export default function App() {
 
   const oxygenBoostTimer = `0:${String(oxygenBoostSecondsRemaining).padStart(2, '0')}`
   const resetVentilator = () => setVentilator({ ...initialVentilator })
-  const resetPatient = () => setPatient({ ...initialPatient })
+  const resetPatientRespiratory = () => setPatient((current) => ({
+    ...current,
+    compliance: initialPatient.compliance,
+    resistance: initialPatient.resistance,
+    expiratoryResistance: initialPatient.expiratoryResistance,
+    spontaneousRate: initialPatient.spontaneousRate,
+    effort: initialPatient.effort,
+    neuralInspiratoryTime: initialPatient.neuralInspiratoryTime,
+    effortRisePercent: initialPatient.effortRisePercent,
+    effortRelaxationPercent: initialPatient.effortRelaxationPercent,
+    endExpiratoryOesophagealPressure: initialPatient.endExpiratoryOesophagealPressure,
+  }))
+  const resetPatientPhysiology = () => setPatient((current) => ({
+    ...current,
+    sex: initialPatient.sex,
+    heightCm: initialPatient.heightCm,
+    oxygenConsumption: initialPatient.oxygenConsumption,
+    frc: initialPatient.frc,
+    shuntFraction: initialPatient.shuntFraction,
+    maxSpO2: initialPatient.maxSpO2,
+    co2Production: initialPatient.co2Production,
+    deadSpaceVolume: initialPatient.deadSpaceVolume,
+  }))
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
 
   return (
@@ -1212,7 +1235,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.77.2</span>
+          <span className="version">v0.77.3</span>
         </div>
       </header>
 
@@ -1294,8 +1317,8 @@ export default function App() {
                       <small className="alarm-priority">Critical</small>
                       <strong>{alarmLimits.peakPressure} <small>cmH₂O</small></strong>
                       <div className="vertical-slider-wrap">
-                        <em>{alarmLimits.pressureLimit}</em>
-                        <input className="vertical-alarm-slider" type="range" min="0" max={alarmLimits.pressureLimit} step="1" value={alarmLimits.peakPressure} onChange={(event) => setAlarmLimits((current) => ({ ...current, peakPressure: Math.min(Number(event.target.value), current.pressureLimit) }))} />
+                        <em>60</em>
+                        <input className="vertical-alarm-slider" type="range" min="0" max="60" step="1" value={alarmLimits.peakPressure} onChange={(event) => setAlarmLimits((current) => ({ ...current, peakPressure: Math.min(Number(event.target.value), current.pressureLimit) }))} />
                         <em>0</em>
                       </div>
                     </label>
@@ -1410,7 +1433,7 @@ export default function App() {
           </fieldset>
           <fieldset className={`session-lock-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
             {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-            <PatientControls settings={patient} onChange={setPatient} onReset={resetPatient} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} />
+            <PatientControls settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />
           </fieldset>
           <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>

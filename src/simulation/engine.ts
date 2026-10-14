@@ -220,12 +220,10 @@ function directSpO2FromAlveolarFraction(alveolarFraction: number, ventilator: Ve
   const effectiveFraction = clamp(alveolarFraction - obstructionPenalty, 0.01, 0.95)
 
   // Convert the alveolar oxygen reservoir to an approximate end-capillary PO2
-  // and then to haemoglobin saturation. The previous model mixed saturations
-  // directly, which created an artificial hard SpO2 ceiling in large shunts: a
-  // rise from 35% to 100% FiO2 could become invisible once the ventilated blood
-  // was already near 100% saturation. Mixing oxygen content retains the limited
-  // response of true shunt while allowing hyperoxia in ventilated units to make
-  // an appropriate, modest contribution after blood streams mix.
+  // and oxygen content. The shunt model then uses a Fick-style oxygen-content
+  // balance rather than mixing fixed saturations. This matters when VO2 rises:
+  // greater systemic extraction lowers mixed-venous oxygen content, so the same
+  // shunt fraction produces a larger arterial oxygen-content penalty.
   const endCapillaryPo2 = clamp(effectiveFraction * 650, 20, 650)
   const ventilatedSaturation = clamp(saturationFromOxygenTension(endCapillaryPo2), 50, 100)
 
@@ -237,21 +235,32 @@ function directSpO2FromAlveolarFraction(alveolarFraction: number, ventilator: Ve
   const haemoglobin = 15
   const oxygenCapacity = 1.34 * haemoglobin
   const ventilatedContent = oxygenCapacity * (ventilatedSaturation / 100) + 0.003 * endCapillaryPo2
-  const venousLikeSaturation = 75
-  const venousLikePo2 = 40
-  const venousContent = oxygenCapacity * (venousLikeSaturation / 100) + 0.003 * venousLikePo2
-  const mixedContent = ventilatedContent * (1 - effectiveShunt) + venousContent * effectiveShunt
 
-  // Invert the content relationship numerically to obtain an equivalent mixed
-  // arterial saturation for the pulse-oximeter model.
+  // EDUVENT does not yet have a cardiovascular model, so use a teaching
+  // reference cardiac output of 5 L/min. At VO2 250 mL/min this yields the
+  // familiar ~5 mL/dL arteriovenous oxygen-content difference. Combining the
+  // classic shunt equation with Fick gives:
+  // CaO2 = CcO2 - Qs/(Qt-Qs) * (VO2/CO).
+  const referenceCardiacOutputLMin = 5
+  const oxygenExtractionMlDl = Math.max(patient.oxygenConsumption ?? 250, 0) / referenceCardiacOutputLMin / 10
+  const shuntContentPenalty = effectiveShunt >= 0.999
+    ? ventilatedContent
+    : (effectiveShunt / Math.max(1 - effectiveShunt, 0.001)) * oxygenExtractionMlDl
+  const arterialContent = clamp(ventilatedContent - shuntContentPenalty, oxygenContentForSaturation(50), ventilatedContent)
+
+  // Invert oxygen content numerically to obtain the equivalent arterial
+  // saturation, then apply the optional instructor-set SpO2 ceiling. The ceiling
+  // is a scenario control, not part of the shunt calculation itself.
   let low = 50
   let high = 100
   for (let iteration = 0; iteration < 24; iteration += 1) {
     const mid = (low + high) / 2
-    if (oxygenContentForSaturation(mid) < mixedContent) low = mid
+    if (oxygenContentForSaturation(mid) < arterialContent) low = mid
     else high = mid
   }
-  return clamp((low + high) / 2, 50, 100)
+  const physiologicalSaturation = clamp((low + high) / 2, 50, 100)
+  const maxSpO2 = clamp(patient.maxSpO2 ?? 100, 80, 100)
+  return Math.min(physiologicalSaturation, maxSpO2)
 }
 
 function updateOxygenation(
