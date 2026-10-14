@@ -214,11 +214,6 @@ export function SessionPanel({
   }, [role])
 
 
-  useEffect(() => {
-    const version = document.querySelector<HTMLElement>('.version')
-    if (version) version.textContent = 'v0.77.3'
-  }, [])
-
   const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
   const onlineCandidates = candidates.filter((member) => {
     const lastSeen = new Date(member.last_seen).getTime()
