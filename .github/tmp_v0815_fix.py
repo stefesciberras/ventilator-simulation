@@ -2,7 +2,8 @@ from pathlib import Path
 
 p = Path('src/simulation/engine.ts')
 text = p.read_text()
-old = """  const airwayCo2 = updateAirwayCo2(
+old = """  const flowLmin = flowLs * 60
+  const airwayCo2 = updateAirwayCo2(
     state,
     !sampleInspiration,
     flowLmin,
@@ -13,7 +14,10 @@ old = """  const airwayCo2 = updateAirwayCo2(
     dt,
   )
 """
-new = """  const airwayCo2 = updateAirwayCo2(
+new = """  const flowLmin = flowLs * 60
+  const deadSpaceReferenceVtMl = Math.max(state.lastExpiredTidalVolume * 1000, ventilator.tidalVolume, 1)
+  const totalDeadSpaceVolumeMl = calculateEffectiveDeadSpace(patient, deadSpaceReferenceVtMl).deadSpaceMl
+  const airwayCo2 = updateAirwayCo2(
     state,
     !sampleInspiration,
     flowLmin,
@@ -26,6 +30,6 @@ new = """  const airwayCo2 = updateAirwayCo2(
   )
 """
 if old not in text:
-    raise SystemExit('updateAirwayCo2 call target not found')
+    raise SystemExit('final airway CO2 block target not found')
 p.write_text(text.replace(old, new, 1))
-print('Added total dead-space argument to airway CO2 model')
+print('Scoped total dead-space calculation to final airway CO2 sampling block')
