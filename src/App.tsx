@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
 import { InstructorAccountControls } from './components/InstructorAccountControls'
@@ -555,6 +556,8 @@ export default function App() {
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const [instructorSimulatorExpanded, setInstructorSimulatorExpanded] = useState(false)
   const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')
+  const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
+  const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
   const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1101px)').matches)
   const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
 
@@ -1241,6 +1244,28 @@ export default function App() {
   }))
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
 
+  const handleMobileWorkspaceTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (!window.matchMedia('(max-width: 680px)').matches || event.touches.length !== 1) {
+      mobileSwipeStartRef.current = null
+      return
+    }
+    const touch = event.touches[0]
+    const target = event.target as HTMLElement
+    const blocked = Boolean(target.closest('button, input, select, textarea, a, [role=\"slider\"], .waveform-card.cursor-enabled'))
+    mobileSwipeStartRef.current = { x: touch.clientX, y: touch.clientY, blocked }
+  }
+
+  const handleMobileWorkspaceTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    const start = mobileSwipeStartRef.current
+    mobileSwipeStartRef.current = null
+    if (!start || start.blocked || event.changedTouches.length !== 1) return
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < 55 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return
+    setMobileWorkspacePage(deltaX > 0 ? 'ventilator' : 'settings')
+  }
+
   return (
     <main className="app-shell">
       <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={physiologyMeasurements} oesophagealEnabled={oesophagealMonitoringEnabled} onClose={() => setMeasurementsOpen(false)} />
@@ -1288,7 +1313,16 @@ export default function App() {
         </div>
       </header>
 
-      <div className="workspace">
+      <nav className="mobile-workspace-switcher" aria-label="Mobile workspace pages">
+        <button type="button" className={mobileWorkspacePage === 'ventilator' ? 'active' : ''} aria-current={mobileWorkspacePage === 'ventilator' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('ventilator')}>Ventilator</button>
+        <button type="button" className={mobileWorkspacePage === 'settings' ? 'active' : ''} aria-current={mobileWorkspacePage === 'settings' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('settings')}>Controls</button>
+      </nav>
+
+      <div
+        className={`workspace mobile-page-${mobileWorkspacePage}`}
+        onTouchStart={handleMobileWorkspaceTouchStart}
+        onTouchEnd={handleMobileWorkspaceTouchEnd}
+      >
         {teachingSession.role === 'instructor' && (
           <button
             type="button"

@@ -312,3 +312,27 @@ body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-pa
 .instructor-session-panel.simulator-expanded .session-share-card { grid-template-columns: 1fr; }
 .instructor-session-panel.simulator-expanded .session-key-details { justify-items: start; text-align: left; }
 .instructor-session-panel.simulator-expanded .session-key-details small { display: none; }
+
+
+/* v0.81.1 mobile workspace pages supersede instructor show/hide rail */
+@media (max-width: 680px) {
+  body.eduvent-instructor-mode .instructor-ventilator-toggle { display: none !important; }
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .workspace,
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .workspace { grid-template-columns: 1fr; }
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .ventilator-console,
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .ventilator-console {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel,
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
+    grid-column: 1;
+    grid-row: 1;
+    max-height: none;
+    overflow: visible;
+  }
+  body.eduvent-instructor-mode .workspace.mobile-page-ventilator > .ventilator-console { display: block !important; }
+  body.eduvent-instructor-mode .workspace.mobile-page-ventilator > .control-panel { display: none !important; }
+  body.eduvent-instructor-mode .workspace.mobile-page-settings > .ventilator-console { display: none !important; }
+  body.eduvent-instructor-mode .workspace.mobile-page-settings > .control-panel { display: block !important; }
+}
