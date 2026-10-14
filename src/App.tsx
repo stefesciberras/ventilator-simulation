@@ -27,7 +27,7 @@ const initialVentilator: VentilatorSettings = {
 }
 
 const initialPatient: PatientSettings = {
-  sex: 'male', heightCm: 170, oxygenConsumption: 250, frc: 2500, shuntFraction: 0.03, maxSpO2: 100,
+  sex: 'male', heightCm: 170, oxygenConsumption: 250, frc: 1980, shuntFraction: 0.03, maxSpO2: 100,
   compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
 }
 
