@@ -1,4 +1,5 @@
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
+import { calculateEffectiveDeadSpace } from './patientMetrics'
 
 export interface PhysiologicalMeasurements {
   setMinuteVentilation: number | null
@@ -26,7 +27,8 @@ export interface PhysiologicalMeasurements {
   expiredTidalVolume: number | null
   alveolarTidalVolume: number | null
   alveolarMinuteVentilation: number
-  deadSpaceVolume: number
+  totalDeadSpaceVolume: number
+  vdVt: number
   endTidalCO2: number | null
   oxygenPercent: number
   oxygenSaturation: number | null
@@ -305,9 +307,11 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
   const setRate = ventilator.mode === 'PSV' || ventilator.mode === 'APRV' ? null : ventilator.rate
   const volumeTargeted = ventilator.mode === 'VC-AC' || ventilator.mode === 'SIMV-VC' || ventilator.mode === 'VG-PC'
   const setMinuteVentilation = volumeTargeted && setRate != null ? ventilator.tidalVolume * setRate / 1000 : null
-  const deadSpaceVolume = Math.max(0, patient.deadSpaceVolume ?? 150)
-  const alveolarTidalVolume = monitor.expiredTidalVolume == null ? null : Math.max(0, monitor.expiredTidalVolume - deadSpaceVolume)
-  const alveolarMinuteVentilation = Math.max(0, rates.minuteVentilation - (deadSpaceVolume / 1000) * rates.totalRate)
+  const deadSpaceReferenceVt = monitor.expiredTidalVolume ?? ventilator.tidalVolume
+  const effectiveDeadSpace = calculateEffectiveDeadSpace(patient, deadSpaceReferenceVt)
+  const totalDeadSpaceVolume = effectiveDeadSpace.deadSpaceMl
+  const alveolarTidalVolume = monitor.expiredTidalVolume == null ? null : Math.max(0, monitor.expiredTidalVolume - totalDeadSpaceVolume)
+  const alveolarMinuteVentilation = Math.max(0, rates.minuteVentilation - (totalDeadSpaceVolume / 1000) * rates.totalRate)
 
   return {
     setMinuteVentilation,
@@ -335,7 +339,8 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
     expiredTidalVolume: monitor.expiredTidalVolume,
     alveolarTidalVolume,
     alveolarMinuteVentilation,
-    deadSpaceVolume,
+    totalDeadSpaceVolume,
+    vdVt: effectiveDeadSpace.vdVt,
     endTidalCO2: monitor.endTidalCO2,
     oxygenPercent: ventilator.fio2 * 100,
     oxygenSaturation: window.length ? window[window.length - 1].spo2 : null,

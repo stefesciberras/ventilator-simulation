@@ -1,4 +1,5 @@
 import type { Measurements, PatientSettings, Sample, VentilatorMode, VentilatorSettings } from './types'
+import { calculateEffectiveDeadSpace } from '../patientMetrics'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -156,7 +157,7 @@ function calculateEffectiveAlveolarVentilation(
 ): number {
   const fallbackVt = Math.max(ventilator.tidalVolume / 1000, 0.3)
   const tidalVolumeL = state.lastExpiredTidalVolume > 0.02 ? state.lastExpiredTidalVolume : fallbackVt
-  const deadSpaceL = Math.max(patient.deadSpaceVolume ?? 150, 0) / 1000
+  const deadSpaceL = calculateEffectiveDeadSpace(patient, tidalVolumeL * 1000).deadSpaceMl / 1000
   const alveolarVolumeL = Math.max(0, tidalVolumeL - deadSpaceL)
   const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
   const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
@@ -273,7 +274,7 @@ function updateOxygenation(
 ) {
   const fallbackVt = Math.max(ventilator.tidalVolume / 1000, 0.3)
   const tidalVolumeL = state.lastExpiredTidalVolume > 0.02 ? state.lastExpiredTidalVolume : fallbackVt
-  const deadSpaceL = Math.max(patient.deadSpaceVolume ?? 150, 0) / 1000
+  const deadSpaceL = calculateEffectiveDeadSpace(patient, tidalVolumeL * 1000).deadSpaceMl / 1000
   const alveolarVolumeL = Math.max(0, tidalVolumeL - deadSpaceL)
   const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
   const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
@@ -305,12 +306,13 @@ function capnogramSourceValue(
   patient: PatientSettings,
   complianceL: number,
   etco2: number,
+  deadSpaceVolumeMl: number,
 ): number {
   if (!expiratory || elapsedExpiration < 0) return 0
 
   const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
   const obstruction = clamp((tau - 0.45) / 1.8, 0, 1)
-  const deadSpaceDelay = 0.03 + Math.max(patient.deadSpaceVolume ?? 150, 0) / 5000 + 0.05 * obstruction
+  const deadSpaceDelay = 0.03 + deadSpaceVolumeMl / 5000 + 0.05 * obstruction
   if (elapsedExpiration <= deadSpaceDelay) return 0
 
   // The same expiratory time constant that limits CO2 clearance also shapes
@@ -338,6 +340,7 @@ function updateAirwayCo2(
   complianceL: number,
   t: number,
   dt: number,
+  deadSpaceVolumeMl: number,
 ): number {
   const activeExpiratoryFlow = expiratory && flowLmin < -0.5
   if (activeExpiratoryFlow) state.lastExpiratoryFlowTime = t
@@ -349,7 +352,7 @@ function updateAirwayCo2(
   if (!activeExpiratoryFlow && expiratory && elapsedExpiration < 8) return state.airwayCo2
 
   const target = activeExpiratoryFlow
-    ? capnogramSourceValue(true, elapsedExpiration, patient, complianceL, state.alveolarCo2)
+    ? capnogramSourceValue(true, elapsedExpiration, patient, complianceL, state.alveolarCo2, deadSpaceVolumeMl)
     : 0
   const sensorResponseSeconds = activeExpiratoryFlow ? 0.10 : expiratory ? 4.0 : 0.15
   const fraction = 1 - Math.exp(-dt / sensorResponseSeconds)
@@ -564,6 +567,8 @@ function twoLevelSample(
   state.volume = clamp(state.volume + flowLs * dt, 0, 2.5)
 
   const flowLmin = flowLs * 60
+  const deadSpaceReferenceVtMl = Math.max(state.lastExpiredTidalVolume * 1000, ventilator.tidalVolume, 1)
+  const totalDeadSpaceVolumeMl = calculateEffectiveDeadSpace(patient, deadSpaceReferenceVtMl).deadSpaceMl
   const airwayCo2 = updateAirwayCo2(
     state,
     !high,
@@ -573,6 +578,7 @@ function twoLevelSample(
     complianceL,
     t,
     dt,
+    totalDeadSpaceVolumeMl,
   )
 
   const sample: Sample = {
@@ -1040,6 +1046,8 @@ export function stepSimulation(
   }
 
   const flowLmin = flowLs * 60
+  const deadSpaceReferenceVtMl = Math.max(state.lastExpiredTidalVolume * 1000, ventilator.tidalVolume, 1)
+  const totalDeadSpaceVolumeMl = calculateEffectiveDeadSpace(patient, deadSpaceReferenceVtMl).deadSpaceMl
   const airwayCo2 = updateAirwayCo2(
     state,
     !sampleInspiration,
@@ -1049,6 +1057,7 @@ export function stepSimulation(
     complianceL,
     t,
     dt,
+    totalDeadSpaceVolumeMl,
   )
 
   const sample: Sample = {

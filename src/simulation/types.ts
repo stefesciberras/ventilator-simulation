@@ -17,7 +17,9 @@ export interface PatientSettings {
   effortRelaxationPercent: number
   endExpiratoryOesophagealPressure: number
   co2Production: number
-  deadSpaceVolume: number
+  vdVt: number
+  /** Legacy v0.81.4 value retained only so old saved scenarios can be interpreted. */
+  deadSpaceVolume?: number
 }
 
 export interface VentilatorSettings {

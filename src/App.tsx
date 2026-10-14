@@ -28,7 +28,7 @@ const initialVentilator: VentilatorSettings = {
 
 const initialPatient: PatientSettings = {
   sex: 'male', heightCm: 170, oxygenConsumption: 250, frc: 1980, shuntFraction: 0.03, maxSpO2: 100,
-  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, deadSpaceVolume: 150,
+  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, vdVt: 0.4,
 }
 
 interface EventMeasurements {
@@ -218,7 +218,7 @@ function interpolatePatientSettings(from: PatientSettings, to: PatientSettings, 
     effortRelaxationPercent: lerp(from.effortRelaxationPercent, to.effortRelaxationPercent),
     endExpiratoryOesophagealPressure: lerp(from.endExpiratoryOesophagealPressure, to.endExpiratoryOesophagealPressure),
     co2Production: lerp(from.co2Production, to.co2Production),
-    deadSpaceVolume: lerp(from.deadSpaceVolume, to.deadSpaceVolume),
+    vdVt: lerp(from.vdVt ?? 0.4, to.vdVt ?? 0.4),
   }
 }
 
@@ -575,7 +575,7 @@ export default function App() {
     ventilator,
     alarmLimits,
     patientTransitionSeconds,
-    setPatient,
+    setPatient: (next) => setPatient({ ...initialPatient, ...next, vdVt: next.vdVt ?? 0.4 }),
     setVentilator,
     setAlarmLimits,
     setPatientTransitionSeconds,
@@ -618,7 +618,7 @@ export default function App() {
       mediaCount: scenario.mediaIds?.length ?? 0,
     })
     setVentilator({ ...scenario.ventilator })
-    setPatient({ ...scenario.patient })
+    setPatient({ ...initialPatient, ...scenario.patient, vdVt: scenario.patient.vdVt ?? 0.4 })
     setAlarmLimits({ ...scenario.alarmLimits })
     setPatientTransitionSeconds(scenario.patientTransitionSeconds)
     setWaveformDisplay({ ...scenario.waveformDisplay })
@@ -629,7 +629,7 @@ export default function App() {
     if (scenario) {
       loadInstructorScenario(scenario)
       await teachingSession.startInstructor({
-        patient: scenario.patient,
+        patient: { ...initialPatient, ...scenario.patient, vdVt: scenario.patient.vdVt ?? 0.4 },
         ventilator: scenario.ventilator,
         alarmLimits: scenario.alarmLimits,
         patientTransitionSeconds: scenario.patientTransitionSeconds,
@@ -1211,7 +1211,8 @@ export default function App() {
         autoPeepCmH2O: measures.autoPeep,
         alveolarTidalVolumeMl: physiologyMeasurements.alveolarTidalVolume,
         alveolarMinuteVentilationLMin: physiologyMeasurements.alveolarMinuteVentilation,
-        deadSpaceVolumeMl: physiologyMeasurements.deadSpaceVolume,
+        totalDeadSpaceVolumeMl: physiologyMeasurements.totalDeadSpaceVolume,
+        vdVt: physiologyMeasurements.vdVt,
       },
       waveformSummary: {
         visibleVolumeMinMl: waveformVolumeMin,
@@ -1280,7 +1281,7 @@ export default function App() {
     shuntFraction: initialPatient.shuntFraction,
     maxSpO2: initialPatient.maxSpO2,
     co2Production: initialPatient.co2Production,
-    deadSpaceVolume: initialPatient.deadSpaceVolume,
+    vdVt: initialPatient.vdVt,
   }))
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
 
