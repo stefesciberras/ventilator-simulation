@@ -1,1 +1,86 @@
-placeholder
+/* v0.80.2 — keep measured values in a right-hand column on narrow screens. */
+@media (max-width: 680px) {
+  .screen-body {
+    grid-template-columns: minmax(0, 1fr) 112px;
+  }
+
+  .waveforms {
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .metrics-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-top: 0;
+    border-left: 1px solid #253139;
+  }
+
+  .metrics-title {
+    grid-column: auto;
+    padding: 9px 7px 7px;
+  }
+
+  .metric {
+    padding: 9px 6px;
+    text-align: right;
+    border-right: 0;
+  }
+
+  .metric:nth-of-type(3n + 1) {
+    border-right: 0;
+  }
+
+  .metric strong {
+    font-size: 19px;
+  }
+
+  .metric small {
+    display: block;
+    margin: 2px 0 0;
+    font-size: 7px;
+  }
+
+  .metrics-spacer {
+    grid-column: auto;
+    width: auto;
+  }
+
+  .gas-metric {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .gas-metric-item {
+    padding: 9px 4px;
+  }
+
+  .gas-metric-item + .gas-metric-item {
+    border-left: 0;
+    border-top: 1px solid #26343c;
+  }
+
+  .gas-metric-item > div {
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+  }
+
+  .gas-metric-item strong {
+    font-size: 18px;
+  }
+
+  .cursor-hint {
+    grid-column: auto;
+    margin-top: auto;
+    padding: 7px 4px;
+  }
+}
+
+@media (max-width: 400px) {
+  .screen-body {
+    grid-template-columns: minmax(0, 1fr) 100px;
+  }
+}
