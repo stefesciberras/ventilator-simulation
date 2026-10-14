@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(cat src/appVersion.ts)" = "export const APP_VERSION = '0.77.6'"
-          test "$(grep -o "sessionId={session.id}" src/components/SessionPanel.tsx | wc -l | tr -d ' ')" = "2"
+          test "$(grep -o "sessionId={session.id}" src/components/SessionPanel.tsx | wc -l | tr -d ' ')" = "1"
           grep -q "supabase.functions.invoke" src/components/CandidateInvitation.tsx
           grep -q "BREVO_API_KEY" supabase/functions/send-candidate-invite/index.ts
           grep -q "Only the instructor who owns this teaching session" supabase/functions/send-candidate-invite/index.ts
