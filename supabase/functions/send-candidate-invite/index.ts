@@ -121,28 +121,78 @@ Deno.serve(async (req: Request) => {
     const sessionKey = String(session.session_key)
     const safeJoinUrl = escapeHtml(joinUrl)
     const safeSessionKey = escapeHtml(sessionKey)
+    const preheader = 'You have been invited to join a live EDUVENT mechanical ventilation teaching session.'
+
     const htmlContent = `<!doctype html>
-<html>
-  <body style="font-family:Arial,Helvetica,sans-serif;color:#16232d;line-height:1.5;margin:0;padding:24px;background:#f4f7f8">
-    <div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #dce5e8;border-radius:12px;padding:28px">
-      <p style="margin:0 0 8px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#59717d">EDUVENT</p>
-      <h2 style="margin:0 0 16px;font-size:22px;color:#10232d">Mechanical Ventilation Teaching Session</h2>
-      <p>You have been invited to join an EDUVENT teaching session.</p>
-      <p style="font-size:16px">Session key: <strong>${safeSessionKey}</strong></p>
-      <p style="margin:24px 0">
-        <a href="${safeJoinUrl}" style="display:inline-block;background:#0e596d;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Join teaching session</a>
-      </p>
-      <p style="font-size:13px;color:#5b6f78">Open the link and enter your name to join. If the button does not work, copy this address into your browser:</p>
-      <p style="font-size:12px;word-break:break-all;color:#36515d">${safeJoinUrl}</p>
-    </div>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light only">
+    <title>EDUVENT teaching session invitation</title>
+  </head>
+  <body style="margin:0;padding:0;background:#eef4f6;font-family:Arial,Helvetica,sans-serif;color:#17313b;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${preheader}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#eef4f6;margin:0;padding:0;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #d7e3e7;border-radius:16px;overflow:hidden;box-shadow:0 8px 28px rgba(24,58,70,.08);">
+            <tr>
+              <td style="background:#0c3542;padding:28px 32px;">
+                <div style="font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#9fd6df;">EDUVENT</div>
+                <div style="margin-top:8px;font-size:25px;line-height:1.2;font-weight:700;color:#ffffff;">You're invited to a teaching session</div>
+                <div style="margin-top:8px;font-size:14px;line-height:1.5;color:#c8dde2;">Interactive mechanical ventilation simulation</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0 0 18px;font-size:16px;line-height:1.65;color:#29454f;">You have been invited by your instructor to join a live EDUVENT session. Open the session on the device you will use during the simulation.</p>
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:22px 0;background:#f4f8f9;border:1px solid #dce8eb;border-radius:12px;">
+                  <tr>
+                    <td style="padding:18px 20px;">
+                      <div style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6a858f;">Session key</div>
+                      <div style="margin-top:5px;font-family:Menlo,Consolas,monospace;font-size:24px;font-weight:700;letter-spacing:.12em;color:#0c5063;">${safeSessionKey}</div>
+                    </td>
+                  </tr>
+                </table>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:26px 0 22px;">
+                  <tr>
+                    <td bgcolor="#0e6578" style="border-radius:10px;">
+                      <a href="${safeJoinUrl}" style="display:inline-block;padding:14px 24px;font-size:16px;font-weight:700;line-height:1;color:#ffffff;text-decoration:none;border-radius:10px;">Join EDUVENT session</a>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#5c737c;">After opening the link, enter your name when prompted. Keep this email available in case you need to reconnect.</p>
+
+                <div style="margin-top:24px;padding-top:20px;border-top:1px solid #e5ecef;">
+                  <div style="font-size:12px;line-height:1.5;color:#7a8e96;">If the button does not open EDUVENT, copy and paste this address into your browser:</div>
+                  <div style="margin-top:7px;font-size:12px;line-height:1.5;word-break:break-all;color:#35606e;">${safeJoinUrl}</div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f7fafb;padding:18px 32px;border-top:1px solid #e4ecef;">
+                <div style="font-size:12px;line-height:1.5;color:#789099;">This is a transactional invitation to an EDUVENT teaching session. If you were not expecting this email, you can ignore it.</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>`
+
+    const textContent = `EDUVENT teaching session invitation\n\nYou have been invited by your instructor to join a live EDUVENT mechanical ventilation teaching session.\n\nSession key: ${sessionKey}\n\nJoin the session:\n${joinUrl}\n\nOpen the link and enter your name when prompted. Keep this email available in case you need to reconnect.\n\nIf you were not expecting this invitation, you can ignore this email.`
 
     const brevoPayload: Record<string, unknown> = {
       sender: { name: fromName || 'EDUVENT', email: fromEmail },
       to: recipients.map((email) => ({ email })),
-      subject: `EDUVENT teaching session ${sessionKey}`,
+      subject: 'You’re invited to an EDUVENT teaching session',
       htmlContent,
+      textContent,
       tags: ['eduvent-candidate-invite'],
     }
     if (replyTo && EMAIL_RE.test(replyTo)) brevoPayload.replyTo = { email: replyTo }
