@@ -322,13 +322,13 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
   }
 
   const normalAdultFrc = Math.round(calculatePredictedBodyWeight('male', 170) * 30)
-  const normalPhysiology = { sex: 'male' as const, heightCm: 170, oxygenConsumption: 250, frc: normalAdultFrc, maxSpO2: 100, co2Production: 250, deadSpaceVolume: 150 }
+  const normalPhysiology = { sex: 'male' as const, heightCm: 170, oxygenConsumption: 250, frc: normalAdultFrc, maxSpO2: 100, co2Production: 250, vdVt: 0.4 }
   const presets: Record<string, PatientSettings> = {
     Normal: { ...normalPhysiology, shuntFraction: 0.03, compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5 },
-    ARDS: { ...normalPhysiology, shuntFraction: 0.25, compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 0, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25, endExpiratoryOesophagealPressure: -5 },
-    COPD: { ...normalPhysiology, shuntFraction: 0.05, compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -5 },
-    Asthma: { ...normalPhysiology, shuntFraction: 0.04, compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30, endExpiratoryOesophagealPressure: -5 },
-    Paed: { sex: 'male', heightCm: 110, oxygenConsumption: 120, frc: 500, shuntFraction: 0.03, maxSpO2: 100, co2Production: 100, deadSpaceVolume: 40, compliance: 20, resistance: 8, expiratoryResistance: 10, spontaneousRate: 22, effort: 5, neuralInspiratoryTime: 0.7, effortRisePercent: 40, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -4 },
+    ARDS: { ...normalPhysiology, vdVt: 0.6, shuntFraction: 0.25, compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 0, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25, endExpiratoryOesophagealPressure: -5 },
+    COPD: { ...normalPhysiology, vdVt: 0.5, shuntFraction: 0.05, compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -5 },
+    Asthma: { ...normalPhysiology, vdVt: 0.5, shuntFraction: 0.04, compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30, endExpiratoryOesophagealPressure: -5 },
+    Paed: { sex: 'male', heightCm: 110, oxygenConsumption: 120, frc: 500, shuntFraction: 0.03, maxSpO2: 100, co2Production: 100, vdVt: 0.4, compliance: 20, resistance: 8, expiratoryResistance: 10, spontaneousRate: 22, effort: 5, neuralInspiratoryTime: 0.7, effortRisePercent: 40, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -4 },
   }
 
   const applyPreset = (name: string) => {
@@ -424,7 +424,7 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
       <Slider label="Shunt" value={Math.round((settings.shuntFraction ?? 0.03) * 100)} unit="%" min={0} max={50} step={1} onChange={(v) => patch({ shuntFraction: v / 100 })} />
       {showSpO2Ceiling && <Slider label="Maximum SpO₂" value={Math.round(settings.maxSpO2 ?? 100)} unit="%" min={80} max={100} step={1} onChange={(v) => patch({ maxSpO2: v })} />}
       <Slider label="VCO₂ production" value={settings.co2Production ?? 250} unit=" mL/min" min={100} max={500} step={10} onChange={(v) => patch({ co2Production: v })} />
-      <Slider label="Dead space volume" value={settings.deadSpaceVolume ?? 150} unit=" mL" min={20} max={400} step={5} onChange={(v) => patch({ deadSpaceVolume: v })} />
+      <Slider label="Vd/Vt" value={Number((settings.vdVt ?? 0.4).toFixed(2))} unit="" min={0.1} max={0.9} step={0.05} displayValue={(settings.vdVt ?? 0.4).toFixed(2)} onChange={(v) => patch({ vdVt: v })} />
       </div>}
     </section>
   )
