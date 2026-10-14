@@ -26,6 +26,7 @@ interface ControlSpec {
   label: string
   value: number
   display: string
+  unit: string
   min: number
   max: number
   step: number
@@ -134,48 +135,48 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
   const controls = useMemo<ControlSpec[]>(() => {
     const displayedFio2 = Math.round((fio2Override ?? settings.fio2) * 100)
     const specs: ControlSpec[] = [
-      { key: 'fio2', label: 'FiO₂', value: displayedFio2, display: `${displayedFio2}%`, min: 21, max: 100, step: 1 },
+      { key: 'fio2', label: 'FiO₂', value: displayedFio2, display: `${displayedFio2}`, unit: '%', min: 21, max: 100, step: 1 },
     ]
 
     if (settings.mode === 'APRV') {
       specs.push(
-        { key: 'pHigh', label: 'Phigh', value: settings.pHigh, display: `${settings.pHigh} cmH₂O`, min: 10, max: 40, step: 1 },
-        { key: 'pLow', label: 'Plow', value: settings.pLow, display: `${settings.pLow} cmH₂O`, min: 0, max: 15, step: 1 },
-        { key: 'tHigh', label: 'Thigh', value: settings.tHigh, display: `${settings.tHigh.toFixed(1)} s`, min: 0.5, max: 10, step: 0.1 },
-        { key: 'tLow', label: 'Tlow', value: settings.tLow, display: `${settings.tLow.toFixed(2)} s`, min: 0.2, max: 2, step: 0.05 },
+        { key: 'pHigh', label: 'Phigh', value: settings.pHigh, display: `${settings.pHigh}`, unit: 'cmH₂O', min: 10, max: 40, step: 1 },
+        { key: 'pLow', label: 'Plow', value: settings.pLow, display: `${settings.pLow}`, unit: 'cmH₂O', min: 0, max: 15, step: 1 },
+        { key: 'tHigh', label: 'Thigh', value: settings.tHigh, display: `${settings.tHigh.toFixed(1)}`, unit: 's', min: 0.5, max: 10, step: 0.1 },
+        { key: 'tLow', label: 'Tlow', value: settings.tLow, display: `${settings.tLow.toFixed(2)}`, unit: 's', min: 0.2, max: 2, step: 0.05 },
       )
       return specs
     }
 
-    specs.push({ key: 'peep', label: 'PEEP', value: settings.peep, display: `${settings.peep} cmH₂O`, min: 0, max: 20, step: 1 })
+    specs.push({ key: 'peep', label: 'PEEP', value: settings.peep, display: `${settings.peep}`, unit: 'cmH₂O', min: 0, max: 20, step: 1 })
 
     if (settings.mode === 'BIPAP') {
       specs.push(
-        { key: 'pressureControl', label: 'Pinsp', value: settings.pressureControl, display: `${settings.pressureControl} cmH₂O`, min: 5, max: 30, step: 1 },
-        { key: 'rate', label: 'RR', value: settings.rate, display: `${settings.rate}/min`, min: 5, max: 35, step: 1 },
-        { key: 'ieRatio', label: 'I:E', value: Number(currentIeRatio.toFixed(1)), display: `1:${currentIeRatio.toFixed(1)}`, min: MIN_IE, max: MAX_IE, step: 0.1 },
+        { key: 'pressureControl', label: 'Pinsp', value: settings.pressureControl, display: `${settings.pressureControl}`, unit: 'cmH₂O', min: 5, max: 30, step: 1 },
+        { key: 'rate', label: 'RR', value: settings.rate, display: `${settings.rate}`, unit: '/min', min: 5, max: 35, step: 1 },
+        { key: 'ieRatio', label: 'I:E', value: Number(currentIeRatio.toFixed(1)), display: `1:${currentIeRatio.toFixed(1)}`, unit: '', min: MIN_IE, max: MAX_IE, step: 0.1 },
       )
       return specs
     }
 
-    if (settings.mode !== 'PSV') specs.push({ key: 'rate', label: isSimvMode(settings.mode) ? 'SIMV RR' : 'RR', value: settings.rate, display: `${settings.rate}/min`, min: 5, max: 35, step: 1 })
-    if (usesTidalVolume(settings.mode)) specs.push({ key: 'tidalVolume', label: settings.mode === 'VG-PC' ? 'VT target' : 'VT', value: settings.tidalVolume, display: `${settings.tidalVolume} mL`, min: 250, max: 800, step: 10 })
-    if (hasConventionalMandatoryTiming(settings.mode)) specs.push({ key: 'ieRatio', label: 'I:E', value: Number(currentIeRatio.toFixed(1)), display: `1:${currentIeRatio.toFixed(1)}`, min: MIN_IE, max: MAX_IE, step: 0.1 })
+    if (settings.mode !== 'PSV') specs.push({ key: 'rate', label: isSimvMode(settings.mode) ? 'SIMV RR' : 'RR', value: settings.rate, display: `${settings.rate}`, unit: '/min', min: 5, max: 35, step: 1 })
+    if (usesTidalVolume(settings.mode)) specs.push({ key: 'tidalVolume', label: settings.mode === 'VG-PC' ? 'VT target' : 'VT', value: settings.tidalVolume, display: `${settings.tidalVolume}`, unit: 'mL', min: 250, max: 800, step: 10 })
+    if (hasConventionalMandatoryTiming(settings.mode)) specs.push({ key: 'ieRatio', label: 'I:E', value: Number(currentIeRatio.toFixed(1)), display: `1:${currentIeRatio.toFixed(1)}`, unit: '', min: MIN_IE, max: MAX_IE, step: 0.1 })
     if (isVolumeMandatoryMode(settings.mode)) {
       specs.push(
-        { key: 'inspiratoryFlow', label: 'Flow', value: Number(settings.inspiratoryFlow.toFixed(0)), display: `${settings.inspiratoryFlow.toFixed(0)} L/min`, min: 10, max: 140, step: 1 },
-        { key: 'plateauPercent', label: 'Plateau', value: settings.plateauPercent ?? 0, display: `${settings.plateauPercent ?? 0}% Ti`, min: 0, max: 20, step: 1 },
+        { key: 'inspiratoryFlow', label: 'Flow', value: Number(settings.inspiratoryFlow.toFixed(0)), display: `${settings.inspiratoryFlow.toFixed(0)}`, unit: 'L/min', min: 10, max: 140, step: 1 },
+        { key: 'plateauPercent', label: 'Plateau', value: settings.plateauPercent ?? 0, display: `${settings.plateauPercent ?? 0}`, unit: '% Ti', min: 0, max: 20, step: 1 },
       )
     }
-    if (isPressureMandatoryMode(settings.mode)) specs.push({ key: 'pressureControl', label: 'Pinsp', value: settings.pressureControl, display: `${settings.pressureControl} cmH₂O`, min: 5, max: 30, step: 1 })
-    if (settings.mode === 'VG-PC') specs.push({ key: 'volumeGuaranteePressureLimit', label: 'Pmax', value: settings.volumeGuaranteePressureLimit ?? 40, display: `${settings.volumeGuaranteePressureLimit ?? 40} cmH₂O`, min: 20, max: 60, step: 1 })
+    if (isPressureMandatoryMode(settings.mode)) specs.push({ key: 'pressureControl', label: 'Pinsp', value: settings.pressureControl, display: `${settings.pressureControl}`, unit: 'cmH₂O', min: 5, max: 30, step: 1 })
+    if (settings.mode === 'VG-PC') specs.push({ key: 'volumeGuaranteePressureLimit', label: 'Pmax', value: settings.volumeGuaranteePressureLimit ?? 40, display: `${settings.volumeGuaranteePressureLimit ?? 40}`, unit: 'cmH₂O', min: 20, max: 60, step: 1 })
     if (settings.mode === 'PSV' || isSimvMode(settings.mode)) {
       specs.push(
-        { key: 'pressureSupport', label: 'PS', value: settings.pressureSupport, display: `${settings.pressureSupport} cmH₂O`, min: 0, max: 25, step: 1 },
-        { key: 'terminationSensitivity', label: 'ETS', value: settings.terminationSensitivity, display: `${settings.terminationSensitivity}%`, min: 5, max: 80, step: 5 },
+        { key: 'pressureSupport', label: 'PS', value: settings.pressureSupport, display: `${settings.pressureSupport}`, unit: 'cmH₂O', min: 0, max: 25, step: 1 },
+        { key: 'terminationSensitivity', label: 'ETS', value: settings.terminationSensitivity, display: `${settings.terminationSensitivity}`, unit: '%', min: 5, max: 80, step: 5 },
       )
     }
-    if (isSimvMode(settings.mode)) specs.push({ key: 'simvSyncWindowPercent', label: 'Sync', value: settings.simvSyncWindowPercent ?? 25, display: `${settings.simvSyncWindowPercent ?? 25}%`, min: 5, max: 75, step: 5 })
+    if (isSimvMode(settings.mode)) specs.push({ key: 'simvSyncWindowPercent', label: 'Sync', value: settings.simvSyncWindowPercent ?? 25, display: `${settings.simvSyncWindowPercent ?? 25}`, unit: '%', min: 5, max: 75, step: 5 })
 
     return specs
   }, [settings, currentIeRatio, fio2Override])
@@ -296,7 +297,7 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
             title={disabled ? 'Ventilator settings controlled by instructor' : fio2BoostActive && control.key === 'fio2' ? 'O₂ enrichment temporarily overrides FiO₂ to 100%' : `Adjust ${control.label}`}
           >
             <span>{control.label}</span>
-            <strong>{control.display}</strong>
+            <strong><b>{control.display}</b>{control.unit && <small>{control.unit}</small>}</strong>
           </button>
         ))}
       </div>
@@ -320,7 +321,7 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
             onInput={(event) => applyValue(activeControl.key, Number(event.currentTarget.value))}
             onChange={(event) => applyValue(activeControl.key, Number(event.currentTarget.value))}
           />
-          <strong>{activeControl.display}</strong>
+          <strong>{activeControl.display}{activeControl.unit ? ` ${activeControl.unit}` : ''}</strong>
         </div>,
         overlayTarget,
       )}

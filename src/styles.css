@@ -237,3 +237,9 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .gas-metric-item.metric-alarm-red span,
 .gas-metric-item.metric-alarm-red strong,
 .gas-metric-item.metric-alarm-red small { color: #ff9a9a !important; }
+
+
+/* v0.80.1 compact mobile ventilator toolbar */
+@media (max-width: 680px) {
+  .workspace > .mobile-candidate-session-slot { order: -2; }
+}

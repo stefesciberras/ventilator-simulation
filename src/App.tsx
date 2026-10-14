@@ -229,6 +229,14 @@ function PauseIcon({ paused }: { paused: boolean }) {
   )
 }
 
+function FreezeWaveformIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 9h4V5l5 7-5 7v-4H2zm20 0h-4V5l-5 7 5 7v-4h4zM11 3h2v18h-2z" fill="currentColor" />
+    </svg>
+  )
+}
+
 function NebuliserIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1276,6 +1284,34 @@ export default function App() {
       </header>
 
       <div className="workspace">
+        {teachingSession.role === 'candidate' && (
+          <div className="mobile-candidate-session-slot">
+            <SessionPanel
+            role={teachingSession.role}
+            simulatorExpanded={instructorSimulatorExpanded}
+            onSimulatorExpandedChange={setInstructorSimulatorExpanded}
+            connection={teachingSession.connection}
+            localRuntimeConnection={teachingSession.localRuntimeConnection}
+            localRuntimeUrl={teachingSession.localRuntimeUrl}
+            runtimeTransportKind={teachingSession.runtimeTransportKind}
+            session={teachingSession.session}
+            members={teachingSession.members}
+            error={teachingSession.error}
+            recoverableInstructor={teachingSession.recoverableInstructor}
+            recoverableCandidate={teachingSession.recoverableCandidate}
+            currentScenario={currentInstructorScenario}
+            onLoadScenario={loadInstructorScenario}
+            onStartInstructor={startInstructorSession}
+            onResumeInstructor={teachingSession.resumeInstructor}
+            onJoinCandidate={teachingSession.joinCandidate}
+            onResumeCandidate={teachingSession.resumeCandidate}
+            onLeaveSession={teachingSession.leaveSession}
+            onEndInstructorSession={teachingSession.endInstructorSession}
+            onUpdatePolicy={teachingSession.updatePolicy}
+            onBroadcastNow={teachingSession.broadcastNow}
+          />
+          </div>
+        )}
         {teachingSession.role === 'instructor' && (
           <button
             type="button"
@@ -1305,9 +1341,9 @@ export default function App() {
               {oxygenBoost && <span className="oxygen-enrichment-timer" aria-live="polite">{oxygenBoostTimer}</span>}
             </div>
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
-            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} disabled={teachingSession.candidatePauseLocked} title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Pause and freeze waveforms')} aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Pause simulation')}><PauseIcon paused={frozen} /></button>
+            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} disabled={teachingSession.candidatePauseLocked} title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Freeze waveforms')} aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Freeze waveforms')}><FreezeWaveformIcon /></button>
             <button
-              className={`hardware-button ${inspiratoryHoldPressed ? 'active' : ''}`}
+              className={`hardware-button hold-button ${inspiratoryHoldPressed ? 'active' : ''}`}
               disabled={frozen || !manualHoldAvailable}
               title={!manualHoldAvailable ? 'Inspiratory hold is unavailable in this mode' : 'Press and hold for an inspiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginInspiratoryHold() }}
@@ -1315,9 +1351,9 @@ export default function App() {
               onPointerCancel={releaseInspiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginInspiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseInspiratoryHold() } }}
-            >Insp Hold</button>
+            ><span className="hold-label-desktop">Insp Hold</span><span className="hold-label-mobile">Insp <PauseIcon paused={false} /></span></button>
             <button
-              className={`hardware-button ${expiratoryHoldPressed ? 'active' : ''}`}
+              className={`hardware-button hold-button ${expiratoryHoldPressed ? 'active' : ''}`}
               disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}
               title={(activeMode === 'APRV' || activeMode === 'BIPAP') ? 'Expiratory hold is unavailable in two-level pressure modes' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
@@ -1325,7 +1361,7 @@ export default function App() {
               onPointerCancel={releaseExpiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
-            >Exp Hold</button>
+            ><span className="hold-label-desktop">Exp Hold</span><span className="hold-label-mobile">Exp <PauseIcon paused={false} /></span></button>
             <button className="hardware-button icon-button measurements-button" type="button" onClick={() => setMeasurementsOpen(true)} title="Physiological measurements" aria-label="Open physiological measurements"><MeasurementsInfoIcon /></button>
             <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
             </div>
