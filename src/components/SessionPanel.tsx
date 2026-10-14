@@ -187,6 +187,7 @@ export function SessionPanel({
   const [sessionKey, setSessionKey] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
+  const [candidateCollapsed, setCandidateCollapsed] = useState(true)
   const [dashboardCollapsed, setDashboardCollapsed] = useState(() => loadPanelCollapsed('instructor-dashboard'))
   const toggleDashboardCollapsed = () => setDashboardCollapsed((current) => {
     const next = !current
@@ -215,6 +216,10 @@ export function SessionPanel({
     setSessionKey(recoverableCandidate.sessionKey)
     setDisplayName(recoverableCandidate.displayName)
   }, [recoverableCandidate])
+
+  useEffect(() => {
+    if (role === 'candidate') setCandidateCollapsed(true)
+  }, [role, session?.id])
 
   useEffect(() => {
     const body = document.body
@@ -521,35 +526,47 @@ export function SessionPanel({
   }
 
   return (
-    <section className="session-panel candidate-session-panel">
+    <section className={`session-panel candidate-session-panel ${candidateCollapsed ? 'candidate-mobile-collapsed' : ''}`}>
       <div className="session-panel-heading">
         <div><span className="session-kicker">Teaching</span><h2>Candidate session</h2></div>
-        <div className="session-transport-badges">
-          <ConnectionBadge connection={connection} />
-          <RuntimeTransportBadge connection={localRuntimeConnection} url={localRuntimeUrl} kind={runtimeTransportKind} />
+        <div className="candidate-session-heading-actions">
+          <div className="session-transport-badges">
+            <ConnectionBadge connection={connection} />
+            <RuntimeTransportBadge connection={localRuntimeConnection} url={localRuntimeUrl} kind={runtimeTransportKind} />
+          </div>
+          <button
+            className="panel-collapse-button candidate-session-collapse-button"
+            type="button"
+            onClick={() => setCandidateCollapsed((value) => !value)}
+            aria-expanded={!candidateCollapsed}
+            aria-label={candidateCollapsed ? 'Expand candidate session' : 'Collapse candidate session'}
+            title={candidateCollapsed ? 'Expand candidate session' : 'Collapse candidate session'}
+          >{candidateCollapsed ? '▾' : '▴'}</button>
         </div>
       </div>
-      <div className="candidate-session-summary">
-        <span>Session <strong>{session?.session_key ?? '———'}</strong></span>
-        <div className="candidate-control-status">
-          <span className={session?.sync_patient && !session?.candidate_can_edit_patient ? 'locked' : 'available'}>
-            Patient: {session?.sync_patient ? (session.candidate_can_edit_patient ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
-          </span>
-          <span className={session?.sync_ventilator && !session?.candidate_can_edit_ventilator ? 'locked' : 'available'}>
-            Ventilator: {session?.sync_ventilator ? (session.candidate_can_edit_ventilator ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
-          </span>
-          <span className={!session?.candidate_can_edit_waveforms ? 'locked' : 'available'}>
-            Waveforms: {session?.candidate_can_edit_waveforms ? 'editable' : 'instructor locked'} • Oesophageal pressure: {session?.allow_oesophageal_pressure ? 'available' : 'hidden'}
-          </span>
-          <span className={session?.sync_alarms && !session?.candidate_can_edit_alarms ? 'locked' : 'available'}>
-            Alarms: {session?.sync_alarms ? (session.candidate_can_edit_alarms ? 'shared / editable' : 'instructor controlled') : 'candidate local'}{session?.sync_alarms && session?.alarms_silent ? ' / silent' : ''}
-          </span>
+      <div className="candidate-session-body">
+        <div className="candidate-session-summary">
+          <span>Session <strong>{session?.session_key ?? '———'}</strong></span>
+          <div className="candidate-control-status">
+            <span className={session?.sync_patient && !session?.candidate_can_edit_patient ? 'locked' : 'available'}>
+              Patient: {session?.sync_patient ? (session.candidate_can_edit_patient ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
+            </span>
+            <span className={session?.sync_ventilator && !session?.candidate_can_edit_ventilator ? 'locked' : 'available'}>
+              Ventilator: {session?.sync_ventilator ? (session.candidate_can_edit_ventilator ? 'shared / editable' : 'instructor controlled') : 'candidate local'}
+            </span>
+            <span className={!session?.candidate_can_edit_waveforms ? 'locked' : 'available'}>
+              Waveforms: {session?.candidate_can_edit_waveforms ? 'editable' : 'instructor locked'} • Oesophageal pressure: {session?.allow_oesophageal_pressure ? 'available' : 'hidden'}
+            </span>
+            <span className={session?.sync_alarms && !session?.candidate_can_edit_alarms ? 'locked' : 'available'}>
+              Alarms: {session?.sync_alarms ? (session.candidate_can_edit_alarms ? 'shared / editable' : 'instructor controlled') : 'candidate local'}{session?.sync_alarms && session?.alarms_silent ? ' / silent' : ''}
+            </span>
+          </div>
         </div>
+        {session?.simulation_paused && <div className="session-warning">Simulation paused by instructor. The instructor controls when it resumes.</div>}
+        {connection === 'reconnecting' && <div className="session-warning">Connection lost. Simulation continues with the last received settings while EDUVENT reconnects.</div>}
+        {error && <div className="session-error" role="alert">{error}</div>}
+        <button type="button" className="session-secondary-button" onClick={() => void onLeaveSession()}>Leave session</button>
       </div>
-      {session?.simulation_paused && <div className="session-warning">Simulation paused by instructor. The instructor controls when it resumes.</div>}
-      {connection === 'reconnecting' && <div className="session-warning">Connection lost. Simulation continues with the last received settings while EDUVENT reconnects.</div>}
-      {error && <div className="session-error" role="alert">{error}</div>}
-      <button type="button" className="session-secondary-button" onClick={() => void onLeaveSession()}>Leave session</button>
     </section>
   )
 }

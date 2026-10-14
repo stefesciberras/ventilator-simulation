@@ -15,24 +15,28 @@
 
 .interactive-vent-summary {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
   align-items: stretch;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .interactive-setting-button {
-  min-height: 46px;
-  padding: 7px 10px;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 50px;
+  padding: 6px 5px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   gap: 2px;
   border: 1px solid rgba(111, 137, 150, .48);
   border-radius: 7px;
   background: linear-gradient(#172128, #11191e);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
-  text-align: left;
+  text-align: center;
 }
 
 .interactive-setting-button > span {
@@ -41,16 +45,24 @@
   color: #81949d;
   letter-spacing: .07em;
   text-transform: uppercase;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .interactive-setting-button > strong {
-  margin-top: 3px;
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   color: #eef6f8;
-  font-size: 14px;
-  line-height: 1.05;
+  line-height: 1;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.interactive-setting-button > strong > b { font-size: 14px; font-weight: 700; }
+.interactive-setting-button > strong > small { margin-top: 2px; color: #788b94; font-size: 7px; font-weight: 650; line-height: 1; }
 
 .interactive-setting-button:hover:not(:disabled) {
   border-color: #849daa;
@@ -271,6 +283,9 @@
   font-size: 18px;
 }
 
+.hold-label-mobile { display: none; }
+.hold-label-mobile svg { width: 15px; height: 15px; }
+
 .oxygen-enrichment-control {
   position: relative;
   display: inline-flex;
@@ -305,7 +320,7 @@
   }
 
   .console-top-actions {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 }
 
@@ -318,16 +333,38 @@
     width: 100%;
     margin-left: 0;
     justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
+  .console-top-actions .hardware-button {
+    flex: 0 0 auto;
+    min-height: 38px;
+    height: 38px;
+    padding: 5px 6px;
+  }
+
+  .console-top-actions .icon-button { width: 38px; }
+  .console-top-actions .icon-button svg { width: 21px; height: 21px; }
+  .console-top-actions .oxygen-button { min-width: 42px; font-size: 16px; }
+  .console-top-actions .hold-button { min-width: 53px; font-size: 9px; }
+  .hold-label-desktop { display: none; }
+  .hold-label-mobile { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+
   .interactive-vent-summary {
-    gap: 6px;
+    gap: 3px;
+    flex-wrap: nowrap;
   }
 
   .interactive-setting-button {
-    min-height: 44px;
-    padding: 7px 8px;
+    min-height: 46px;
+    padding: 5px 2px;
   }
+  .interactive-setting-button > span { font-size: 7px; letter-spacing: .03em; }
+  .interactive-setting-button > strong > b { font-size: 12px; }
+  .interactive-setting-button > strong > small { font-size: 6.5px; }
 
   .interactive-slider-panel {
     left: 8px;

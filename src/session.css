@@ -430,3 +430,19 @@
 .local-runtime-badge.reconnecting i { background: #e4c05d; }
 .local-runtime-badge.error { color: #f0abab; border-color: rgb(236 94 94 / 38%); background: rgb(135 39 39 / 16%); }
 .local-runtime-badge.error i { background: #ef6666; }
+
+
+/* v0.80.1 mobile candidate session */
+.mobile-candidate-session-slot { display: none; }
+.candidate-session-heading-actions { display: flex; align-items: center; gap: 7px; }
+.candidate-session-collapse-button { display: none; }
+@media (max-width: 680px) {
+  .mobile-candidate-session-slot { display: block; grid-column: 1 / -1; }
+  .mobile-candidate-session-slot .session-panel { margin-bottom: 0; }
+  .control-panel > .candidate-session-panel { display: none; }
+  .candidate-session-collapse-button { display: inline-grid; }
+  .candidate-session-panel.candidate-mobile-collapsed .session-panel-heading { margin-bottom: 0; }
+  .candidate-session-panel.candidate-mobile-collapsed .candidate-session-body { display: none; }
+  .candidate-session-heading-actions { min-width: 0; }
+  .candidate-session-heading-actions .session-transport-badges { min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+}
