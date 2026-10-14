@@ -554,7 +554,6 @@ export default function App() {
   })
   const [diagnosticCopied, setDiagnosticCopied] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
-  const [instructorSimulatorExpanded, setInstructorSimulatorExpanded] = useState(false)
   const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
   const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
@@ -785,6 +784,15 @@ export default function App() {
   const activeMode = latestSample?.mode ?? ventilator.mode
   const currentSimulationTime = latestSample?.time ?? simulationTimeRef.current
   const scenarioElapsedTime = Math.max(0, currentSimulationTime - scenarioClockOriginRef.current)
+  const scenarioClockSync = teachingSession.scenarioClockSync
+  const displayedScenarioElapsedTime = teachingSession.role === 'candidate' && scenarioClockSync
+    ? Math.max(0, scenarioClockSync.elapsedMs / 1000 + (scenarioClockSync.paused ? 0 : (Date.now() - scenarioClockSync.receivedAt) / 1000))
+    : scenarioElapsedTime
+
+  useEffect(() => {
+    if (teachingSession.role !== 'candidate') teachingSession.updateScenarioElapsedMs(scenarioElapsedTime * 1000)
+  }, [teachingSession.role, scenarioElapsedTime])
+
   const eventMeasures = useMemo(
     () => calculateEventMeasurements(measurementSamples, alarmLimits.apneaTime, currentSimulationTime),
     [measurementSamples, alarmLimits.apneaTime, currentSimulationTime],
@@ -1283,9 +1291,9 @@ export default function App() {
             <PauseIcon paused={simulationPaused} />
             <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
           </button>
-          <div className={`simulation-clock ${simulationPaused ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(scenarioElapsedTime)}`}>
+          <div className={`simulation-clock ${simulationPaused ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(displayedScenarioElapsedTime)}`}>
             <span>TIME</span>
-            <strong>{formatSimulationClock(scenarioElapsedTime)}</strong>
+            <strong>{formatSimulationClock(displayedScenarioElapsedTime)}</strong>
           </div>
         </div>
         <div className="status-cluster">
@@ -1323,17 +1331,6 @@ export default function App() {
         onTouchStart={handleMobileWorkspaceTouchStart}
         onTouchEnd={handleMobileWorkspaceTouchEnd}
       >
-        {teachingSession.role === 'instructor' && (
-          <button
-            type="button"
-            className={`instructor-ventilator-toggle ${instructorSimulatorExpanded ? 'expanded' : 'collapsed'}`}
-            onClick={() => setInstructorSimulatorExpanded((current) => !current)}
-            aria-expanded={instructorSimulatorExpanded}
-            title={instructorSimulatorExpanded ? 'Hide ventilator display' : 'Show ventilator display'}
-          >
-            <span>{instructorSimulatorExpanded ? 'HIDE VENTILATOR' : 'SHOW VENTILATOR'}</span>
-          </button>
-        )}
         <section className="ventilator-console">
           <div className="console-mode-bar">
             <VentilatorModeControl
@@ -1522,8 +1519,8 @@ export default function App() {
               <div className="control-tab-pane teaching-tab-pane" role="tabpanel">
                 <SessionPanel
                   role={teachingSession.role}
-                  simulatorExpanded={instructorSimulatorExpanded}
-                  onSimulatorExpandedChange={setInstructorSimulatorExpanded}
+                  simulatorExpanded={teachingSession.role === 'instructor'}
+                  onSimulatorExpandedChange={() => undefined}
                   connection={teachingSession.connection}
                   localRuntimeConnection={teachingSession.localRuntimeConnection}
                   localRuntimeUrl={teachingSession.localRuntimeUrl}
