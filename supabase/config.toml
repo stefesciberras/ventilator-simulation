@@ -1,0 +1,2 @@
+[functions.send-candidate-invite]
+verify_jwt = false
