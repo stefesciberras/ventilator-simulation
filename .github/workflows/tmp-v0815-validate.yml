@@ -20,21 +20,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Capture patch/build diagnostics
+      - name: Apply v0.81.5 patches
         run: |
-          set +e
-          : > .github/tmp_v0815_debug2.txt
-          python .github/tmp_v0815_patch.py >> .github/tmp_v0815_debug2.txt 2>&1
-          echo "PATCH_STATUS=$?" >> .github/tmp_v0815_debug2.txt
-          python .github/tmp_v0815_fix.py >> .github/tmp_v0815_debug2.txt 2>&1
-          echo "FIX_STATUS=$?" >> .github/tmp_v0815_debug2.txt
-          npm ci >> .github/tmp_v0815_debug2.txt 2>&1
-          echo "NPM_CI_STATUS=$?" >> .github/tmp_v0815_debug2.txt
-          npm run build >> .github/tmp_v0815_debug2.txt 2>&1
-          echo "BUILD_STATUS=$?" >> .github/tmp_v0815_debug2.txt
-          git restore src/App.tsx src/appVersion.ts src/components/Controls.tsx src/components/PhysiologyMeasurementsDialog.tsx src/patientMetrics.ts src/physiologyMeasurements.ts src/simulation/engine.ts src/simulation/types.ts 2>/dev/null || true
+          python .github/tmp_v0815_patch.py
+          python .github/tmp_v0815_fix.py
+          npm ci
+          npm run build
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/tmp_v0815_debug2.txt
-          git commit -m "Record v0.81.5 second validation error [skip ci]"
+          git add src/App.tsx src/appVersion.ts src/components/Controls.tsx src/components/PhysiologyMeasurementsDialog.tsx src/patientMetrics.ts src/physiologyMeasurements.ts src/simulation/engine.ts src/simulation/types.ts
+          git commit -m "Implement v0.81.5 VdVt physiology model [skip ci]"
           git push
+      - name: Validate committed tree
+        run: npm run build
