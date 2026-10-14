@@ -16,6 +16,8 @@ import '../instructor.css'
 
 interface SessionPanelProps {
   role: SessionRole
+  simulatorExpanded: boolean
+  onSimulatorExpandedChange: (expanded: boolean) => void
   connection: SessionConnection
   localRuntimeConnection: LocalRuntimeConnection
   localRuntimeUrl: string | null
@@ -156,6 +158,8 @@ export function InstructorLiveRoom({ role, members }: { role: SessionRole; membe
 
 export function SessionPanel({
   role,
+  simulatorExpanded,
+  onSimulatorExpandedChange,
   connection,
   localRuntimeConnection,
   localRuntimeUrl,
@@ -178,7 +182,6 @@ export function SessionPanel({
   const [joinMode, setJoinMode] = useState(false)
   const [sessionKey, setSessionKey] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [simulatorExpanded, setSimulatorExpanded] = useState(false)
   const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
   const [dashboardCollapsed, setDashboardCollapsed] = useState(() => loadPanelCollapsed('instructor-dashboard'))
   const toggleDashboardCollapsed = () => setDashboardCollapsed((current) => {
@@ -221,8 +224,8 @@ export function SessionPanel({
   }, [role, simulatorExpanded])
 
   useEffect(() => {
-    if (role !== 'instructor') setSimulatorExpanded(false)
-  }, [role])
+    if (role !== 'instructor' && simulatorExpanded) onSimulatorExpandedChange(false)
+  }, [role, simulatorExpanded, onSimulatorExpandedChange])
 
   useEffect(() => {
     if (role !== 'instructor') return
@@ -429,16 +432,6 @@ export function SessionPanel({
             <strong>{onlineCandidates}<small> online</small></strong>
             <em>{candidates.length} joined</em>
           </div>
-        </div>
-
-        <div className="instructor-simulator-toggle-row">
-          <div>
-            <strong>Ventilator display</strong>
-            <span>{simulatorExpanded ? 'Waveforms and measured values are visible' : 'Hidden while you manage the teaching session'}</span>
-          </div>
-          <button type="button" className="session-secondary-button" onClick={() => setSimulatorExpanded((value) => !value)}>
-            {simulatorExpanded ? 'Hide ventilator display' : 'Show ventilator display'}
-          </button>
         </div>
 
         {session?.simulation_paused && <div className="instructor-pause-banner">All candidate simulations are paused by the instructor.</div>}

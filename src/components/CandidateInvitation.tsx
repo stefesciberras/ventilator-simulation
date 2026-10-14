@@ -103,7 +103,7 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
       const sent = data?.sent ?? recipients.length
       reportEmailResult(
         'success',
-        `Invitation email sent to ${sent} candidate${sent === 1 ? '' : 's'}. Brevo accepted ${sent === 1 ? 'it' : 'them'} for delivery.`,
+        `Invitation email sent to ${sent} candidate${sent === 1 ? '' : 's'}.`,
       )
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Unable to send the invitation.'
@@ -140,7 +140,6 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
             <div className="candidate-invite-link-card">
               <span>Direct join link</span>
               <strong>{joinUrl}</strong>
-              <small>Candidate enters their name after opening the link.</small>
             </div>
 
             <textarea readOnly value={invitationText} aria-label="Invitation text" rows={7} />
@@ -162,9 +161,6 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
               <button type="button" className="session-primary-button" disabled={sending} onClick={() => void emailInvitation()}>
                 {sending ? 'Sending…' : 'Email invitation'}
               </button>
-              <small className="candidate-invite-delivery-note">
-                Invitations are sent securely by the EDUVENT Supabase Edge Function through Brevo.
-              </small>
             </div>
 
             {status && <div className="candidate-invite-status" role="status">{status}</div>}
