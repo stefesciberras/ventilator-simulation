@@ -124,6 +124,7 @@ export function useTeachingSession({
   const [localRuntimeConnection, setLocalRuntimeConnection] = useState<LocalRuntimeConnection>('disabled')
   const [localRuntimeUrl, setLocalRuntimeUrl] = useState<string | null>(() => getDefaultLocalRuntimeUrl())
   const [runtimeTransportKind, setRuntimeTransportKind] = useState<RuntimeTransportKind>(() => getDefaultLocalRuntimeUrl() ? getLocalRuntimeProfile() : 'webrtc')
+  const [scenarioClockSync, setScenarioClockSync] = useState<{ elapsedMs: number; receivedAt: number; paused: boolean } | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const membersChannelRef = useRef<RealtimeChannel | null>(null)
   const roleRef = useRef<SessionRole>('standalone')
@@ -134,6 +135,7 @@ export function useTeachingSession({
   const patientTransitionSecondsRef = useRef(patientTransitionSeconds)
   const alarmLevelRef = useRef<CandidateAlarmLevel>(candidateAlarmLevel)
   const simulationPausedRef = useRef(simulationPaused)
+  const scenarioElapsedMsRef = useRef(0)
   const patientRevisionRef = useRef(0)
   const ventilatorRevisionRef = useRef(0)
   const alarmRevisionRef = useRef(0)
@@ -170,6 +172,7 @@ export function useTeachingSession({
     if (role !== 'standalone') return
     simulationPausedRef.current = false
     setSimulationPaused(false)
+    setScenarioClockSync(null)
   }, [role])
 
   const buildLocalRuntimeSnapshot = (row = sessionRef.current): LocalRuntimeSnapshot | null => {
@@ -179,6 +182,7 @@ export function useTeachingSession({
       sessionKey: row.session_key,
       status: row.status,
       sentAt: Date.now(),
+      scenarioElapsedMs: Math.max(0, Math.round(scenarioElapsedMsRef.current)),
       patient: patientRef.current,
       ventilator: ventilatorRef.current,
       alarmLimits: alarmLimitsRef.current,
@@ -256,6 +260,13 @@ export function useTeachingSession({
     }
     if (snapshot.policy.syncAlarms) setAlarmLimits(snapshot.alarmLimits)
     setSimulationPaused(snapshot.simulationPaused)
+    if (typeof snapshot.scenarioElapsedMs === 'number' && Number.isFinite(snapshot.scenarioElapsedMs)) {
+      setScenarioClockSync({
+        elapsedMs: Math.max(0, snapshot.scenarioElapsedMs),
+        receivedAt: Date.now(),
+        paused: snapshot.simulationPaused,
+      })
+    }
   }
 
   const handleLocalRuntimeEnvelope = (envelope: LocalRuntimeEnvelope) => {
@@ -313,6 +324,11 @@ export function useTeachingSession({
   const subscribeRuntimeEvents = (listener: (envelope: LocalRuntimeEnvelope) => void) => {
     runtimeEventListenersRef.current.add(listener)
     return () => runtimeEventListenersRef.current.delete(listener)
+  }
+
+  const updateScenarioElapsedMs = (elapsedMs: number) => {
+    if (!Number.isFinite(elapsedMs)) return
+    scenarioElapsedMsRef.current = Math.max(0, elapsedMs)
   }
 
   const applyCandidateSession = (next: TeachingSessionRow, force = false) => {
@@ -635,6 +651,7 @@ export function useTeachingSession({
     setMembers([])
     setConnection('idle')
     setError(null)
+    setScenarioClockSync(null)
     if (leavingRole === 'candidate') {
       removeCandidateRecovery()
       setRecoverableCandidate(null)
@@ -960,6 +977,7 @@ export function useTeachingSession({
     localRuntimeConnection,
     localRuntimeUrl,
     runtimeTransportKind,
+    scenarioClockSync,
     session,
     members,
     error,
@@ -983,5 +1001,6 @@ export function useTeachingSession({
     broadcastNow,
     broadcastRuntimeEvent,
     subscribeRuntimeEvents,
+    updateScenarioElapsedMs,
   }
 }

@@ -21,6 +21,7 @@ export interface LocalRuntimeSnapshot {
   sessionKey: string
   status: 'active' | 'paused' | 'ended'
   sentAt: number
+  scenarioElapsedMs?: number
   patient: PatientSettings
   ventilator: VentilatorSettings
   alarmLimits: AlarmLimits
