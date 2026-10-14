@@ -1275,8 +1275,7 @@ export default function App() {
             aria-expanded={instructorSimulatorExpanded}
             title={instructorSimulatorExpanded ? 'Hide ventilator display' : 'Show ventilator display'}
           >
-            <span>VENTILATOR</span>
-            <small>{instructorSimulatorExpanded ? 'HIDE' : 'SHOW'}</small>
+            <span>{instructorSimulatorExpanded ? 'HIDE VENTILATOR' : 'SHOW VENTILATOR'}</span>
           </button>
         )}
         <section className="ventilator-console">
@@ -1471,11 +1470,11 @@ export default function App() {
             onUpdatePolicy={teachingSession.updatePolicy}
             onBroadcastNow={teachingSession.broadcastNow}
           />
-          <fieldset className={`session-lock-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
+          <fieldset className={`session-lock-fieldset ventilator-settings-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
             {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
             <VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />
           </fieldset>
-          <fieldset className={`session-lock-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
+          <fieldset className={`session-lock-fieldset patient-settings-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
             {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
             <PatientControls settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />
           </fieldset>
