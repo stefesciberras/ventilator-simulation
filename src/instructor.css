@@ -1,7 +1,7 @@
 .instructor-ventilator-toggle { display: none; }
 
 body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .workspace {
-  grid-template-columns: 86px minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
 }
 
 body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .ventilator-console {
@@ -18,26 +18,20 @@ body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor
   max-height: calc(100vh - 112px);
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  padding: 12px 8px;
+  gap: 0;
+  padding: 10px 4px;
   border-color: rgba(126, 199, 231, .3);
   border-radius: 15px;
   background: linear-gradient(180deg, #111d24, #0b1419);
   color: #9fc5d5;
 }
-body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle span,
-body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle small {
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle span {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
+  white-space: nowrap;
 }
 body.eduvent-instructor-mode .instructor-ventilator-toggle span {
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .18em;
-}
-body.eduvent-instructor-mode .instructor-ventilator-toggle small {
-  color: #63b9da;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 900;
   letter-spacing: .12em;
 }
@@ -52,7 +46,7 @@ body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-pa
   max-height: none;
   overflow: visible;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -64,6 +58,35 @@ body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-pa
 
 body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel > .session-lock-fieldset {
   min-width: 0;
+}
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel > .ventilator-settings-fieldset {
+  grid-column: 1;
+}
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel > .patient-settings-fieldset {
+  grid-column: 2 / 4;
+}
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .patient-section:not(.panel-collapsed) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 14px;
+  align-items: start;
+}
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .patient-section:not(.panel-collapsed) > .control-section-title {
+  grid-column: 1;
+  grid-row: 1;
+}
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .patient-section:not(.panel-collapsed) > .patient-respiratory-controls {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+}
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .patient-section:not(.panel-collapsed) > .patient-physiology-column {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  min-width: 0;
+}
+body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .patient-physiology-title {
+  margin-bottom: 12px;
 }
 
 body.eduvent-instructor-mode.eduvent-instructor-simulator-open .workspace {
@@ -86,10 +109,10 @@ body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-venti
   background: #101a20;
   color: #91b8c8;
 }
-body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle span,
-body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle small {
+body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle span {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
+  white-space: nowrap;
 }
 body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
   grid-column: 3;
@@ -131,9 +154,7 @@ body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
     flex-direction: row;
   }
   body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle span,
-  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .instructor-ventilator-toggle small,
-  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle span,
-  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle small {
+  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .instructor-ventilator-toggle span {
     writing-mode: horizontal-tb;
     transform: none;
   }
@@ -141,6 +162,13 @@ body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
     grid-column: 1;
     grid-row: 2;
     grid-template-columns: 1fr;
+  }
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel > .ventilator-settings-fieldset,
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel > .patient-settings-fieldset {
+    grid-column: 1;
+  }
+  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .patient-section:not(.panel-collapsed) {
+    display: block;
   }
   body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {
     grid-column: 1;
