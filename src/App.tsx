@@ -1422,6 +1422,8 @@ export default function App() {
           <SessionPanel
             role={teachingSession.role}
             connection={teachingSession.connection}
+            localRuntimeConnection={teachingSession.localRuntimeConnection}
+            localRuntimeUrl={teachingSession.localRuntimeUrl}
             session={teachingSession.session}
             members={teachingSession.members}
             error={teachingSession.error}

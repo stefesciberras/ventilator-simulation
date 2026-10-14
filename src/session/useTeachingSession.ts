@@ -19,6 +19,13 @@ import {
   type TeachingSessionRow,
   updateTeachingSession,
 } from './supabase'
+import {
+  LocalRuntimeTransport,
+  getDefaultLocalRuntimeUrl,
+  type LocalRuntimeConnection,
+  type LocalRuntimeEnvelope,
+  type LocalRuntimeSnapshot,
+} from './localRuntimeTransport'
 
 export type SessionRole = 'standalone' | 'instructor' | 'candidate'
 export type SessionConnection = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
@@ -111,6 +118,8 @@ export function useTeachingSession({
   const [error, setError] = useState<string | null>(null)
   const [recoverableInstructor, setRecoverableInstructor] = useState<{ sessionId: string; sessionKey: string } | null>(null)
   const [recoverableCandidate, setRecoverableCandidate] = useState<RecoverableCandidateSession | null>(null)
+  const [localRuntimeConnection, setLocalRuntimeConnection] = useState<LocalRuntimeConnection>('disabled')
+  const [localRuntimeUrl, setLocalRuntimeUrl] = useState<string | null>(() => getDefaultLocalRuntimeUrl())
   const channelRef = useRef<RealtimeChannel | null>(null)
   const membersChannelRef = useRef<RealtimeChannel | null>(null)
   const roleRef = useRef<SessionRole>('standalone')
@@ -132,6 +141,10 @@ export function useTeachingSession({
   const telemetryTimerRef = useRef<number | null>(null)
   const instructorHeartbeatRef = useRef<number | null>(null)
   const instructorClientIdRef = useRef<string | null>(null)
+  const localRuntimeConnectionRef = useRef<LocalRuntimeConnection>('disabled')
+  const localTransportRef = useRef<LocalRuntimeTransport | null>(null)
+  const localCheckpointTimerRef = useRef<number | null>(null)
+  const runtimeEventListenersRef = useRef(new Set<(envelope: LocalRuntimeEnvelope) => void>())
 
   const storeSession = (next: TeachingSessionRow | null) => {
     sessionRef.current = next
@@ -145,6 +158,151 @@ export function useTeachingSession({
   useEffect(() => { alarmLimitsRef.current = alarmLimits }, [alarmLimits])
   useEffect(() => { patientTransitionSecondsRef.current = patientTransitionSeconds }, [patientTransitionSeconds])
   useEffect(() => { alarmLevelRef.current = candidateAlarmLevel }, [candidateAlarmLevel])
+  useEffect(() => { localRuntimeConnectionRef.current = localRuntimeConnection }, [localRuntimeConnection])
+
+  const buildLocalRuntimeSnapshot = (row = sessionRef.current): LocalRuntimeSnapshot | null => {
+    if (!row) return null
+    return {
+      sessionId: row.id,
+      sessionKey: row.session_key,
+      status: row.status,
+      sentAt: Date.now(),
+      patient: patientRef.current,
+      ventilator: ventilatorRef.current,
+      alarmLimits: alarmLimitsRef.current,
+      patientTransitionMs: Math.max(0, Math.round(patientTransitionSecondsRef.current * 1000)),
+      simulationPaused,
+      policy: {
+        syncPatient: Boolean(row.sync_patient),
+        syncVentilator: Boolean(row.sync_ventilator),
+        candidateCanEditPatient: Boolean(row.candidate_can_edit_patient),
+        candidateCanEditVentilator: Boolean(row.candidate_can_edit_ventilator),
+        syncAlarms: Boolean(row.sync_alarms),
+        candidateCanEditAlarms: Boolean(row.candidate_can_edit_alarms),
+        alarmsSilent: Boolean(row.alarms_silent),
+        candidateCanEditWaveforms: Boolean(row.candidate_can_edit_waveforms),
+        allowOesophagealPressure: Boolean(row.allow_oesophageal_pressure),
+        showPatientEffort: Boolean(row.show_patient_effort),
+      },
+    }
+  }
+
+  const publishLocalRuntimeSnapshot = (row = sessionRef.current) => {
+    if (roleRef.current !== 'instructor') return false
+    const snapshot = buildLocalRuntimeSnapshot(row)
+    return snapshot ? Boolean(localTransportRef.current?.publish({ type: 'snapshot', snapshot })) : false
+  }
+
+  const applyLocalRuntimeSnapshot = (snapshot: LocalRuntimeSnapshot) => {
+    if (roleRef.current !== 'candidate') return
+    const current = sessionRef.current
+    if (!current || snapshot.sessionId !== current.id || snapshot.sessionKey !== current.session_key) return
+    if (snapshot.status === 'ended') {
+      removeCandidateRecovery()
+      setRecoverableCandidate(null)
+      setConnection('idle')
+      setError('The instructor ended this teaching session.')
+      roleRef.current = 'standalone'
+      setRole('standalone')
+      localTransportRef.current?.disconnect()
+      localTransportRef.current = null
+      return
+    }
+
+    const merged: TeachingSessionRow = {
+      ...current,
+      status: snapshot.status,
+      sync_patient: snapshot.policy.syncPatient,
+      sync_ventilator: snapshot.policy.syncVentilator,
+      candidate_can_edit_patient: snapshot.policy.candidateCanEditPatient,
+      candidate_can_edit_ventilator: snapshot.policy.candidateCanEditVentilator,
+      sync_alarms: snapshot.policy.syncAlarms,
+      candidate_can_edit_alarms: snapshot.policy.candidateCanEditAlarms,
+      alarms_silent: snapshot.policy.alarmsSilent,
+      candidate_can_edit_waveforms: snapshot.policy.candidateCanEditWaveforms,
+      allow_oesophageal_pressure: snapshot.policy.allowOesophagealPressure,
+      show_patient_effort: snapshot.policy.showPatientEffort,
+      patient_settings: snapshot.patient,
+      ventilator_settings: snapshot.ventilator,
+      alarm_settings: snapshot.alarmLimits,
+      transition_ms: snapshot.patientTransitionMs,
+      simulation_paused: snapshot.simulationPaused,
+      updated_at: new Date(snapshot.sentAt).toISOString(),
+    }
+    storeSession(merged)
+
+    if (snapshot.policy.syncPatient) {
+      suppressPatientBroadcastRef.current = true
+      setPatient(snapshot.patient)
+      setPatientTransitionSeconds(Math.max(0, Math.round(snapshot.patientTransitionMs / 1000)))
+      window.setTimeout(() => { suppressPatientBroadcastRef.current = false }, 0)
+    }
+    if (snapshot.policy.syncVentilator) {
+      suppressVentilatorBroadcastRef.current = true
+      setVentilator(snapshot.ventilator)
+      window.setTimeout(() => { suppressVentilatorBroadcastRef.current = false }, 0)
+    }
+    if (snapshot.policy.syncAlarms) setAlarmLimits(snapshot.alarmLimits)
+    setSimulationPaused(snapshot.simulationPaused)
+  }
+
+  const handleLocalRuntimeEnvelope = (envelope: LocalRuntimeEnvelope) => {
+    if (envelope.payload.type === 'snapshot') applyLocalRuntimeSnapshot(envelope.payload.snapshot)
+    for (const listener of runtimeEventListenersRef.current) listener(envelope)
+  }
+
+  const attachLocalRuntime = (nextRole: 'instructor' | 'candidate', row: TeachingSessionRow) => {
+    localTransportRef.current?.disconnect()
+    localTransportRef.current = null
+    const url = getDefaultLocalRuntimeUrl()
+    setLocalRuntimeUrl(url)
+    if (!url) {
+      localRuntimeConnectionRef.current = 'disabled'
+      setLocalRuntimeConnection('disabled')
+      return
+    }
+
+    const clientId = nextRole === 'instructor'
+      ? (instructorClientIdRef.current ?? crypto.randomUUID())
+      : crypto.randomUUID()
+    const transport = new LocalRuntimeTransport({
+      url,
+      role: nextRole,
+      sessionKey: row.session_key,
+      sessionId: row.id,
+      clientId,
+      onConnection: (state) => {
+        localRuntimeConnectionRef.current = state
+        setLocalRuntimeConnection(state)
+        if (state === 'connected') {
+          if (roleRef.current !== 'standalone') setConnection('connected')
+          if (nextRole === 'instructor') window.setTimeout(() => publishLocalRuntimeSnapshot(), 0)
+        }
+      },
+      onEnvelope: handleLocalRuntimeEnvelope,
+    })
+    localTransportRef.current = transport
+    transport.connect()
+  }
+
+  const broadcastRuntimeEvent = (eventType: string, payload: unknown, scenarioTimeMs: number) => {
+    if (roleRef.current !== 'instructor') return false
+    return Boolean(localTransportRef.current?.publish({
+      type: 'scenario-event',
+      event: {
+        eventId: crypto.randomUUID(),
+        scenarioTimeMs: Math.max(0, scenarioTimeMs),
+        emittedAt: Date.now(),
+        eventType,
+        payload,
+      },
+    }))
+  }
+
+  const subscribeRuntimeEvents = (listener: (envelope: LocalRuntimeEnvelope) => void) => {
+    runtimeEventListenersRef.current.add(listener)
+    return () => runtimeEventListenersRef.current.delete(listener)
+  }
 
   const applyCandidateSession = (next: TeachingSessionRow, force = false) => {
     const nextPatientRevision = Number(next.patient_revision ?? 0)
@@ -203,7 +361,6 @@ export function useTeachingSession({
     channelRef.current = subscribeToTeachingSession(
       sessionId,
       (next) => {
-        storeSession(next)
         if (roleRef.current === 'candidate') {
           if (next.status === 'ended') {
             removeCandidateRecovery()
@@ -215,23 +372,29 @@ export function useTeachingSession({
             setRole('standalone')
             return
           }
+          if (localRuntimeConnectionRef.current === 'connected') return
+          storeSession(next)
           applyCandidateSession(next)
+          return
         }
+        storeSession(next)
       },
       async (status) => {
         if (status === 'SUBSCRIBED') {
           setConnection('connected')
           try {
             const fresh = await fetchTeachingSession(sessionId)
-            storeSession(fresh)
-            if (roleRef.current === 'candidate') applyCandidateSession(fresh)
+            if (roleRef.current !== 'candidate' || localRuntimeConnectionRef.current !== 'connected') {
+              storeSession(fresh)
+              if (roleRef.current === 'candidate') applyCandidateSession(fresh)
+            }
           } catch {
             // The realtime stream remains active; the next database update will resynchronise state.
           }
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          setConnection('reconnecting')
+          setConnection(localRuntimeConnectionRef.current === 'connected' ? 'connected' : 'reconnecting')
         } else if (status === 'CLOSED' && roleRef.current !== 'standalone') {
-          setConnection('reconnecting')
+          setConnection(localRuntimeConnectionRef.current === 'connected' ? 'connected' : 'reconnecting')
         }
       },
     )
@@ -276,6 +439,7 @@ export function useTeachingSession({
       await attachSubscription(created.sessionId)
       await attachMemberSubscription(created.sessionId)
       attachInstructorLease(created.sessionId, clientId)
+      attachLocalRuntime('instructor', row)
       setRecoverableInstructor(null)
     } catch (cause) {
       setConnection('error')
@@ -308,6 +472,7 @@ export function useTeachingSession({
       applyCandidateSession(row, true)
       await touchSessionMember(joined.sessionId, patientRef.current, ventilatorRef.current, alarmLevelRef.current)
       await attachSubscription(joined.sessionId)
+      attachLocalRuntime('candidate', row)
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Unable to join teaching session.'
       if (recoveryAttempt && /expired|not found|ended/i.test(message)) {
@@ -386,6 +551,7 @@ export function useTeachingSession({
       await attachSubscription(found.sessionId)
       await attachMemberSubscription(found.sessionId)
       attachInstructorLease(found.sessionId, clientId)
+      attachLocalRuntime('instructor', row)
     } catch (cause) {
       setConnection('error')
       setError(cause instanceof Error ? cause.message : 'Unable to rejoin instructor session.')
@@ -442,6 +608,11 @@ export function useTeachingSession({
     if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
     if (telemetryTimerRef.current != null) window.clearTimeout(telemetryTimerRef.current)
     if (instructorHeartbeatRef.current != null) window.clearInterval(instructorHeartbeatRef.current)
+    if (localCheckpointTimerRef.current != null) window.clearInterval(localCheckpointTimerRef.current)
+    localTransportRef.current?.disconnect()
+    localTransportRef.current = null
+    localRuntimeConnectionRef.current = 'disabled'
+    setLocalRuntimeConnection('disabled')
     await closeTeachingSessionChannel(channelRef.current)
     await closeTeachingSessionChannel(membersChannelRef.current)
     channelRef.current = null
@@ -461,6 +632,7 @@ export function useTeachingSession({
   const endInstructorSession = async () => {
     const current = sessionRef.current
     if (roleRef.current === 'instructor' && current) {
+      publishLocalRuntimeSnapshot({ ...current, status: 'ended' })
       try {
         await updateTeachingSession(current.id, { status: 'ended' })
       } catch {
@@ -506,6 +678,9 @@ export function useTeachingSession({
       databasePatch.alarm_revision = alarmRevisionRef.current
     }
 
+    const optimistic = { ...current, ...databasePatch, updated_at: new Date().toISOString() } as TeachingSessionRow
+    storeSession(optimistic)
+    publishLocalRuntimeSnapshot(optimistic)
     try {
       const next = await updateTeachingSession(current.id, databasePatch)
       storeSession(next)
@@ -518,6 +693,7 @@ export function useTeachingSession({
   const broadcastNow = async () => {
     const current = sessionRef.current
     if (roleRef.current !== 'instructor' || !current) return
+    publishLocalRuntimeSnapshot(current)
     const patch: Partial<TeachingSessionRow> = {}
     if (current.sync_patient) {
       patientRevisionRef.current += 1
@@ -639,6 +815,44 @@ export function useTeachingSession({
     }
   }, [simulationPaused, role, session?.id])
 
+  // The LAN relay is the runtime fast path. It publishes immediately from React state,
+  // while Supabase remains the durable cloud copy and fallback transport.
+  useEffect(() => {
+    if (role !== 'instructor' || !session?.id) return
+    publishLocalRuntimeSnapshot(session)
+  }, [
+    role,
+    session?.id,
+    session?.status,
+    session?.sync_patient,
+    session?.sync_ventilator,
+    session?.candidate_can_edit_patient,
+    session?.candidate_can_edit_ventilator,
+    session?.sync_alarms,
+    session?.candidate_can_edit_alarms,
+    session?.alarms_silent,
+    session?.candidate_can_edit_waveforms,
+    session?.allow_oesophageal_pressure,
+    session?.show_patient_effort,
+    patient,
+    ventilator,
+    alarmLimits,
+    patientTransitionSeconds,
+    simulationPaused,
+    localRuntimeConnection,
+  ])
+
+  useEffect(() => {
+    if (localCheckpointTimerRef.current != null) window.clearInterval(localCheckpointTimerRef.current)
+    if (role !== 'instructor' || !session?.id || localRuntimeConnection !== 'connected') return
+    publishLocalRuntimeSnapshot(session)
+    localCheckpointTimerRef.current = window.setInterval(() => publishLocalRuntimeSnapshot(), 5000)
+    return () => {
+      if (localCheckpointTimerRef.current != null) window.clearInterval(localCheckpointTimerRef.current)
+      localCheckpointTimerRef.current = null
+    }
+  }, [role, session?.id, localRuntimeConnection])
+
   // Realtime remains the fast path, but the teaching session row is authoritative.
   // Refreshing it once per second makes instructor pause/resume resilient to a
   // dropped postgres_changes notification without affecting candidate-local pause.
@@ -651,7 +865,6 @@ export function useTeachingSession({
       try {
         const fresh = await fetchTeachingSession(sessionId)
         if (!active || roleRef.current !== 'candidate') return
-        storeSession(fresh)
         if (fresh.status === 'ended') {
           removeCandidateRecovery()
           setRecoverableCandidate(null)
@@ -661,7 +874,10 @@ export function useTeachingSession({
           setRole('standalone')
           return
         }
-        applyCandidateSession(fresh)
+        if (localRuntimeConnectionRef.current !== 'connected') {
+          storeSession(fresh)
+          applyCandidateSession(fresh)
+        }
       } catch {
         // Realtime and the next refresh can recover independently.
       }
@@ -711,6 +927,8 @@ export function useTeachingSession({
   }, [patient, ventilator, candidateAlarmLevel, role, session?.id])
 
   useEffect(() => () => {
+    localTransportRef.current?.disconnect()
+    if (localCheckpointTimerRef.current != null) window.clearInterval(localCheckpointTimerRef.current)
     void closeTeachingSessionChannel(channelRef.current)
     void closeTeachingSessionChannel(membersChannelRef.current)
   }, [])
@@ -727,6 +945,8 @@ export function useTeachingSession({
   return {
     role,
     connection,
+    localRuntimeConnection,
+    localRuntimeUrl,
     session,
     members,
     error,
@@ -748,5 +968,7 @@ export function useTeachingSession({
     endInstructorSession,
     updatePolicy,
     broadcastNow,
+    broadcastRuntimeEvent,
+    subscribeRuntimeEvents,
   }
 }
