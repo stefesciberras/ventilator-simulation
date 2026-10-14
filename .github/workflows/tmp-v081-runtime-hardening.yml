@@ -34,133 +34,59 @@ jobs:
               p.write_text(text.replace(old, new))
 
           app = 'src/App.tsx'
-          replace(app,
-              "  const [frozen, setFrozen] = useState(false)\n",
-              "  const [waveformFrozen, setWaveformFrozen] = useState(false)\n  const [simulationPaused, setSimulationPaused] = useState(false)\n")
-          replace(app,
-              "    simulationPaused: frozen,\n    setSimulationPaused: setFrozen,\n",
-              "    simulationPaused,\n    setSimulationPaused,\n")
-          replace(app,
-              "  const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {\n    scenarioClockOriginRef.current = simulationTimeRef.current\n",
-              "  const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {\n    if (teachingSession.role === 'instructor') setSimulationPaused(true)\n    setWaveformFrozen(false)\n    setFrozenSamples(null)\n    scenarioClockOriginRef.current = simulationTimeRef.current\n")
-          replace(app,
-              "  useEffect(() => {\n    if (frozen) return\n    const timer = window.setInterval(() => {\n",
-              "  useEffect(() => {\n    if (simulationPaused) return\n    const timer = window.setInterval(() => {\n")
-          replace(app,
-              "  }, [effectiveVentilator, patient, frozen, holdOptions])\n",
-              "  }, [effectiveVentilator, patient, simulationPaused, holdOptions])\n")
-          replace(app,
-              "  const samples = frozen && frozenSamples ? frozenSamples : movingSamples\n",
-              "  const samples = waveformFrozen && frozenSamples ? frozenSamples : movingSamples\n")
-          replace(app,
-              "    if (!audibleAlarmLevel || alarmSilenced || frozen || teachingSession.candidateAlarmsSilent) return\n",
-              "    if (!audibleAlarmLevel || alarmSilenced || simulationPaused || teachingSession.candidateAlarmsSilent) return\n")
-          replace(app,
-              "  }, [audibleAlarmLevel, alarmSilenced, frozen, teachingSession.candidateAlarmsSilent])\n",
-              "  }, [audibleAlarmLevel, alarmSilenced, simulationPaused, teachingSession.candidateAlarmsSilent])\n")
-          replace(app,
-              "  useEffect(() => {\n    if (!frozen) return\n    const onKeyDown = (event: KeyboardEvent) => {\n",
-              "  useEffect(() => {\n    if (!waveformFrozen) return\n    const onKeyDown = (event: KeyboardEvent) => {\n")
-          replace(app,
-              "  }, [frozen, samples.length])\n",
-              "  }, [waveformFrozen, samples.length])\n")
-          replace(app,
-              "  useEffect(() => {\n    if (!frozen) {\n      if (frozenSamples) setFrozenSamples(null)\n",
-              "  useEffect(() => {\n    if (!waveformFrozen) {\n      if (frozenSamples) setFrozenSamples(null)\n")
-          replace(app,
-              "  }, [frozen, frozenSamples, movingSamples])\n",
-              "  }, [waveformFrozen, frozenSamples, movingSamples])\n")
-          replace(app,
-              "  const toggleFreeze = () => {\n    if (!frozen) {\n      setFrozenSamples(movingSamples)\n      setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))\n      setFrozen(true)\n    } else {\n      setFrozen(false)\n      setFrozenSamples(null)\n    }\n  }\n",
-              "  const toggleFreeze = () => {\n    if (!waveformFrozen) {\n      setFrozenSamples(movingSamples)\n      setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))\n      setWaveformFrozen(true)\n    } else {\n      setWaveformFrozen(false)\n      setFrozenSamples(null)\n    }\n  }\n")
-          replace(app,
-              "    if (frozen || !manualHoldAvailable || inspiratoryHoldPressed) return\n",
-              "    if (waveformFrozen || simulationPaused || !manualHoldAvailable || inspiratoryHoldPressed) return\n")
-          replace(app,
-              "    if (frozen || activeMode === 'APRV' || expiratoryHoldPressed) return\n",
-              "    if (waveformFrozen || simulationPaused || activeMode === 'APRV' || expiratoryHoldPressed) return\n")
+          replace(app, "  const [frozen, setFrozen] = useState(false)\n", "  const [waveformFrozen, setWaveformFrozen] = useState(false)\n  const [simulationPaused, setSimulationPaused] = useState(false)\n")
+          replace(app, "    simulationPaused: frozen,\n    setSimulationPaused: setFrozen,\n", "    simulationPaused,\n    setSimulationPaused,\n")
+          replace(app, "  const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {\n    scenarioClockOriginRef.current = simulationTimeRef.current\n", "  const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {\n    if (teachingSession.role === 'instructor') setSimulationPaused(true)\n    setWaveformFrozen(false)\n    setFrozenSamples(null)\n    scenarioClockOriginRef.current = simulationTimeRef.current\n")
+          replace(app, "  useEffect(() => {\n    if (frozen) return\n    const timer = window.setInterval(() => {\n", "  useEffect(() => {\n    if (simulationPaused) return\n    const timer = window.setInterval(() => {\n")
+          replace(app, "  }, [effectiveVentilator, patient, frozen, holdOptions])\n", "  }, [effectiveVentilator, patient, simulationPaused, holdOptions])\n")
+          replace(app, "  const samples = frozen && frozenSamples ? frozenSamples : movingSamples\n", "  const samples = waveformFrozen && frozenSamples ? frozenSamples : movingSamples\n")
+          replace(app, "    if (!audibleAlarmLevel || alarmSilenced || frozen || teachingSession.candidateAlarmsSilent) return\n", "    if (!audibleAlarmLevel || alarmSilenced || simulationPaused || teachingSession.candidateAlarmsSilent) return\n")
+          replace(app, "  }, [audibleAlarmLevel, alarmSilenced, frozen, teachingSession.candidateAlarmsSilent])\n", "  }, [audibleAlarmLevel, alarmSilenced, simulationPaused, teachingSession.candidateAlarmsSilent])\n")
+          replace(app, "  useEffect(() => {\n    if (!frozen) return\n    const onKeyDown = (event: KeyboardEvent) => {\n", "  useEffect(() => {\n    if (!waveformFrozen) return\n    const onKeyDown = (event: KeyboardEvent) => {\n")
+          replace(app, "  }, [frozen, samples.length])\n", "  }, [waveformFrozen, samples.length])\n")
+          replace(app, "  useEffect(() => {\n    if (!frozen) {\n      if (frozenSamples) setFrozenSamples(null)\n", "  useEffect(() => {\n    if (!waveformFrozen) {\n      if (frozenSamples) setFrozenSamples(null)\n")
+          replace(app, "  }, [frozen, frozenSamples, movingSamples])\n", "  }, [waveformFrozen, frozenSamples, movingSamples])\n")
+          replace(app, "  const toggleFreeze = () => {\n    if (!frozen) {\n", "  const toggleFreeze = () => {\n    if (!waveformFrozen) {\n")
+          replace(app, "      setFrozen(true)\n", "      setWaveformFrozen(true)\n")
+          replace(app, "      setFrozen(false)\n", "      setWaveformFrozen(false)\n")
+          replace(app, "    if (frozen || !manualHoldAvailable || inspiratoryHoldPressed) return\n", "    if (waveformFrozen || simulationPaused || !manualHoldAvailable || inspiratoryHoldPressed) return\n")
+          replace(app, "    if (frozen || activeMode === 'APRV' || expiratoryHoldPressed) return\n", "    if (waveformFrozen || simulationPaused || activeMode === 'APRV' || expiratoryHoldPressed) return\n")
           replace(app, "    setFrozen(true)\n", "    setWaveformFrozen(true)\n", expected=2)
-          replace(app,
-              "      simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },\n",
-              "      simulation: { time: currentSimulationTime, paused: simulationPaused, waveformFrozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },\n")
-          replace(app,
-              "    }, samples, frozen && frozenSamples ? 'frozen' : 'live', DT)\n",
-              "    }, samples, waveformFrozen && frozenSamples ? 'frozen' : 'live', DT)\n")
-
-          old_top = '''          <button
-            className={`top-simulation-pause ${frozen ? 'paused' : ''}`}
-            type="button"
-            onClick={toggleFreeze}
-            disabled={teachingSession.candidatePauseLocked}
-            aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume whole simulation' : 'Pause whole simulation')}
-            title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume whole simulation' : 'Pause whole simulation')}
-          >
-            <PauseIcon paused={frozen} />
-            <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
-          </button>
-          <div className={`simulation-clock ${frozen ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(scenarioElapsedTime)}`}>
-'''
-          new_top = '''          <button
-            className={`top-simulation-pause ${simulationPaused ? 'paused' : ''}`}
-            type="button"
-            onClick={() => setSimulationPaused((paused) => !paused)}
-            disabled={teachingSession.role === 'candidate'}
-            aria-label={teachingSession.role === 'candidate' ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor') : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
-            title={teachingSession.role === 'candidate' ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor') : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
-          >
-            <PauseIcon paused={simulationPaused} />
-            <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
-          </button>
-          <div className={`simulation-clock ${simulationPaused ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(scenarioElapsedTime)}`}>
-'''
-          replace(app, old_top, new_top)
-          replace(app,
-              "          <span className={`status-dot ${frozen ? 'paused' : ''}`} />\n          <span>{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>\n",
-              "          <span className={`status-dot ${simulationPaused ? 'paused' : ''}`} />\n          <span>{simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>\n")
-          replace(app,
-              "            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} disabled={teachingSession.candidatePauseLocked} title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Freeze waveforms')} aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Freeze waveforms')}><FreezeWaveformIcon /></button>\n",
-              "            <button className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''}`} onClick={toggleFreeze} title={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'} aria-label={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'}><FreezeWaveformIcon /></button>\n")
+          replace(app, "      simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },\n", "      simulation: { time: currentSimulationTime, paused: simulationPaused, waveformFrozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },\n")
+          replace(app, "    }, samples, frozen && frozenSamples ? 'frozen' : 'live', DT)\n", "    }, samples, waveformFrozen && frozenSamples ? 'frozen' : 'live', DT)\n")
+          replace(app, "            className={`top-simulation-pause ${frozen ? 'paused' : ''}`}\n", "            className={`top-simulation-pause ${simulationPaused ? 'paused' : ''}`}\n")
+          replace(app, "            onClick={toggleFreeze}\n", "            onClick={() => setSimulationPaused((paused) => !paused)}\n")
+          replace(app, "            disabled={teachingSession.candidatePauseLocked}\n", "            disabled={teachingSession.role === 'candidate'}\n")
+          replace(app, "            aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume whole simulation' : 'Pause whole simulation')}\n", "            aria-label={teachingSession.role === 'candidate' ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor') : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}\n")
+          replace(app, "            title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume whole simulation' : 'Pause whole simulation')}\n", "            title={teachingSession.role === 'candidate' ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor') : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}\n")
+          replace(app, "            <PauseIcon paused={frozen} />\n", "            <PauseIcon paused={simulationPaused} />\n")
+          replace(app, "            <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>\n", "            <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>\n")
+          replace(app, "          <div className={`simulation-clock ${frozen ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(scenarioElapsedTime)}`}>\n", "          <div className={`simulation-clock ${simulationPaused ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(scenarioElapsedTime)}`}>\n")
+          replace(app, "          <span className={`status-dot ${frozen ? 'paused' : ''}`} />\n          <span>{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>\n", "          <span className={`status-dot ${simulationPaused ? 'paused' : ''}`} />\n          <span>{simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>\n")
+          replace(app, "            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} disabled={teachingSession.candidatePauseLocked} title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Freeze waveforms')} aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Freeze waveforms')}><FreezeWaveformIcon /></button>\n", "            <button className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''}`} onClick={toggleFreeze} title={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'} aria-label={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'}><FreezeWaveformIcon /></button>\n")
           replace(app, "              disabled={frozen || !manualHoldAvailable}\n", "              disabled={waveformFrozen || simulationPaused || !manualHoldAvailable}\n")
           replace(app, "              disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}\n", "              disabled={waveformFrozen || simulationPaused || activeMode === 'APRV' || activeMode === 'BIPAP'}\n")
           replace(app, "frozen={frozen}", "frozen={waveformFrozen}", expected=4)
-          replace(app,
-              "              {frozen && selectedSample && <div className=\"cursor-hint\">← → or drag trace cursor</div>}\n",
-              "              {waveformFrozen && selectedSample && <div className=\"cursor-hint\">← → or drag trace cursor</div>}\n")
-          replace(app,
-              "                  session={teachingSession.session}\n                  members={teachingSession.members}\n",
-              "                  session={teachingSession.session}\n                  simulationPaused={simulationPaused}\n                  onSimulationPausedChange={setSimulationPaused}\n                  members={teachingSession.members}\n")
+          replace(app, "              {frozen && selectedSample && <div className=\"cursor-hint\">← → or drag trace cursor</div>}\n", "              {waveformFrozen && selectedSample && <div className=\"cursor-hint\">← → or drag trace cursor</div>}\n")
+          replace(app, "                  session={teachingSession.session}\n                  members={teachingSession.members}\n", "                  session={teachingSession.session}\n                  simulationPaused={simulationPaused}\n                  onSimulationPausedChange={setSimulationPaused}\n                  members={teachingSession.members}\n")
 
           panel = 'src/components/SessionPanel.tsx'
-          replace(panel,
-              "  session: TeachingSessionRow | null\n  members: SessionMemberRow[]\n",
-              "  session: TeachingSessionRow | null\n  simulationPaused: boolean\n  onSimulationPausedChange: (paused: boolean) => void\n  members: SessionMemberRow[]\n")
-          replace(panel,
-              "  session,\n  members,\n",
-              "  session,\n  simulationPaused,\n  onSimulationPausedChange,\n  members,\n")
-          replace(panel,
-              "        {session?.simulation_paused && <div className=\"instructor-pause-banner\">All candidate simulations are paused by the instructor.</div>}\n",
-              "        {simulationPaused && <div className=\"instructor-pause-banner\">All candidate simulations are paused by the instructor.</div>}\n")
-          replace(panel,
-              "        <div className=\"session-action-row\">\n          <button type=\"button\" className=\"session-secondary-button\" onClick={() => void onBroadcastNow()}>Push current settings</button>\n",
-              "        <div className=\"session-action-row\">\n          <button type=\"button\" className={simulationPaused ? 'session-primary-button' : 'session-secondary-button'} aria-pressed={simulationPaused} onClick={() => onSimulationPausedChange(!simulationPaused)}>{simulationPaused ? 'Resume all simulations' : 'Pause all simulations'}</button>\n          <button type=\"button\" className=\"session-secondary-button\" onClick={() => void onBroadcastNow()}>Push current settings</button>\n")
-          replace(panel,
-              "        {session?.simulation_paused && <div className=\"session-warning\">Simulation paused by instructor. The instructor controls when it resumes.</div>}\n",
-              "        {simulationPaused && <div className=\"session-warning\">Simulation paused by instructor. The instructor controls when it resumes.</div>}\n")
+          replace(panel, "  session: TeachingSessionRow | null\n  members: SessionMemberRow[]\n", "  session: TeachingSessionRow | null\n  simulationPaused: boolean\n  onSimulationPausedChange: (paused: boolean) => void\n  members: SessionMemberRow[]\n")
+          replace(panel, "  session,\n  members,\n", "  session,\n  simulationPaused,\n  onSimulationPausedChange,\n  members,\n")
+          replace(panel, "        {session?.simulation_paused && <div className=\"instructor-pause-banner\">All candidate simulations are paused by the instructor.</div>}\n", "        {simulationPaused && <div className=\"instructor-pause-banner\">All candidate simulations are paused by the instructor.</div>}\n")
+          replace(panel, "        <div className=\"session-action-row\">\n          <button type=\"button\" className=\"session-secondary-button\" onClick={() => void onBroadcastNow()}>Push current settings</button>\n", "        <div className=\"session-action-row\">\n          <button type=\"button\" className={simulationPaused ? 'session-primary-button' : 'session-secondary-button'} aria-pressed={simulationPaused} onClick={() => onSimulationPausedChange(!simulationPaused)}>{simulationPaused ? 'Resume all simulations' : 'Pause all simulations'}</button>\n          <button type=\"button\" className=\"session-secondary-button\" onClick={() => void onBroadcastNow()}>Push current settings</button>\n")
+          replace(panel, "        {session?.simulation_paused && <div className=\"session-warning\">Simulation paused by instructor. The instructor controls when it resumes.</div>}\n", "        {simulationPaused && <div className=\"session-warning\">Simulation paused by instructor. The instructor controls when it resumes.</div>}\n")
 
           hook = 'src/session/useTeachingSession.ts'
-          replace(hook,
-              "  const patientTransitionSecondsRef = useRef(patientTransitionSeconds)\n  const alarmLevelRef = useRef<CandidateAlarmLevel>(candidateAlarmLevel)\n",
-              "  const patientTransitionSecondsRef = useRef(patientTransitionSeconds)\n  const alarmLevelRef = useRef<CandidateAlarmLevel>(candidateAlarmLevel)\n  const simulationPausedRef = useRef(simulationPaused)\n")
-          replace(hook,
-              "  useEffect(() => { alarmLevelRef.current = candidateAlarmLevel }, [candidateAlarmLevel])\n  useEffect(() => { localRuntimeConnectionRef.current = localRuntimeConnection }, [localRuntimeConnection])\n",
-              "  useEffect(() => { alarmLevelRef.current = candidateAlarmLevel }, [candidateAlarmLevel])\n  useEffect(() => { simulationPausedRef.current = simulationPaused }, [simulationPaused])\n  useEffect(() => { localRuntimeConnectionRef.current = localRuntimeConnection }, [localRuntimeConnection])\n\n  useEffect(() => {\n    if (role !== 'standalone') return\n    simulationPausedRef.current = false\n    setSimulationPaused(false)\n  }, [role])\n")
+          replace(hook, "  const patientTransitionSecondsRef = useRef(patientTransitionSeconds)\n  const alarmLevelRef = useRef<CandidateAlarmLevel>(candidateAlarmLevel)\n", "  const patientTransitionSecondsRef = useRef(patientTransitionSeconds)\n  const alarmLevelRef = useRef<CandidateAlarmLevel>(candidateAlarmLevel)\n  const simulationPausedRef = useRef(simulationPaused)\n")
+          replace(hook, "  useEffect(() => { alarmLevelRef.current = candidateAlarmLevel }, [candidateAlarmLevel])\n  useEffect(() => { localRuntimeConnectionRef.current = localRuntimeConnection }, [localRuntimeConnection])\n", "  useEffect(() => { alarmLevelRef.current = candidateAlarmLevel }, [candidateAlarmLevel])\n  useEffect(() => { simulationPausedRef.current = simulationPaused }, [simulationPaused])\n  useEffect(() => { localRuntimeConnectionRef.current = localRuntimeConnection }, [localRuntimeConnection])\n\n  useEffect(() => {\n    if (role !== 'standalone') return\n    simulationPausedRef.current = false\n    setSimulationPaused(false)\n  }, [role])\n")
           replace(hook, "      simulationPaused,\n      policy: {\n", "      simulationPaused: simulationPausedRef.current,\n      policy: {\n")
           replace(hook, "      const localPaused = simulationPaused\n", "      const localPaused = simulationPausedRef.current\n")
 
           replace('src/appVersion.ts', "export const APP_VERSION = '0.80.3'\n", "export const APP_VERSION = '0.81.0'\n")
           PY
 
-          npm install
+          npm install --no-package-lock
           npm run build
 
           if git diff --quiet; then
@@ -169,9 +95,8 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.tsx src/components/SessionPanel.tsx src/session/useTeachingSession.ts src/appVersion.ts package-lock.json
+          git add src/App.tsx src/components/SessionPanel.tsx src/session/useTeachingSession.ts src/appVersion.ts
           git commit -m "Harden v0.81 pause and waveform freeze state"
           git push origin HEAD:chatgpt/v0.81-runtime-hardening
       - name: Validate committed tree
-        run: |
-          npm run build
+        run: npm run build
