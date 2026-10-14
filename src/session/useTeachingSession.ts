@@ -74,6 +74,8 @@ interface UseTeachingSessionArgs {
   setAlarmLimits: (next: AlarmLimits) => void
   setPatientTransitionSeconds: (seconds: number) => void
   candidateAlarmLevel: CandidateAlarmLevel
+  simulationPaused: boolean
+  setSimulationPaused: (paused: boolean) => void
 }
 
 interface PolicyPatch {
@@ -89,21 +91,6 @@ interface PolicyPatch {
   showPatientEffort?: boolean
 }
 
-function getPauseButton(): HTMLButtonElement | null {
-  return document.querySelector<HTMLButtonElement>('.top-simulation-pause')
-}
-
-function isSimulationPausedInDom(): boolean {
-  return Boolean(getPauseButton()?.classList.contains('paused'))
-}
-
-function setSimulationPausedInDom(paused: boolean) {
-  const button = getPauseButton()
-  if (!button) return
-  const current = button.classList.contains('paused')
-  if (current !== paused) button.click()
-}
-
 export function useTeachingSession({
   patient,
   ventilator,
@@ -114,6 +101,8 @@ export function useTeachingSession({
   setAlarmLimits,
   setPatientTransitionSeconds,
   candidateAlarmLevel,
+  simulationPaused,
+  setSimulationPaused,
 }: UseTeachingSessionArgs) {
   const [role, setRole] = useState<SessionRole>('standalone')
   const [connection, setConnection] = useState<SessionConnection>('idle')
@@ -184,7 +173,7 @@ export function useTeachingSession({
       setAlarmLimits(next.alarm_settings)
     }
 
-    if (pauseChanged) setSimulationPausedInDom(Boolean(next.simulation_paused))
+    if (pauseChanged) setSimulationPaused(Boolean(next.simulation_paused))
 
     patientRevisionRef.current = Math.max(patientRevisionRef.current, nextPatientRevision)
     ventilatorRevisionRef.current = Math.max(ventilatorRevisionRef.current, nextVentilatorRevision)
@@ -274,7 +263,7 @@ export function useTeachingSession({
       alarmRevisionRef.current = Number(row.alarm_revision ?? 0)
       pauseRevisionRef.current = Number(row.pause_revision ?? 0)
 
-      const localPaused = isSimulationPausedInDom()
+      const localPaused = simulationPaused
       if (localPaused !== Boolean(row.simulation_paused)) {
         pauseRevisionRef.current += 1
         row = await updateTeachingSession(created.sessionId, {
@@ -389,6 +378,7 @@ export function useTeachingSession({
       ventilatorRevisionRef.current = Number(row.ventilator_revision ?? 0)
       alarmRevisionRef.current = Number(row.alarm_revision ?? 0)
       pauseRevisionRef.current = Number(row.pause_revision ?? 0)
+      setSimulationPaused(Boolean(row.simulation_paused))
       sessionStorage.setItem('eduvent.instructor-session-id', found.sessionId)
       sessionStorage.setItem('eduvent.instructor-client-id', clientId)
       storeSession(row)
@@ -627,51 +617,27 @@ export function useTeachingSession({
 
   useEffect(() => {
     if (role !== 'instructor' || !session?.id) return
-    const button = getPauseButton()
-    if (!button) return
-
-    const publishPauseState = () => {
-      if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
-      pauseBroadcastTimerRef.current = window.setTimeout(async () => {
-        const latest = sessionRef.current
-        if (!latest || roleRef.current !== 'instructor') return
-        const paused = isSimulationPausedInDom()
-        if (paused === Boolean(latest.simulation_paused)) return
-        pauseRevisionRef.current = Math.max(pauseRevisionRef.current, Number(latest.pause_revision ?? 0)) + 1
-        try {
-          const next = await updateTeachingSession(latest.id, {
-            simulation_paused: paused,
-            pause_revision: pauseRevisionRef.current,
-          })
-          storeSession(next)
-          setError(null)
-        } catch (cause) {
-          setError(cause instanceof Error ? cause.message : 'Unable to broadcast simulation pause state.')
-        }
-      }, 40)
-    }
-
-    const observer = new MutationObserver(publishPauseState)
-    observer.observe(button, { attributes: true, attributeFilter: ['class'] })
-    return () => {
-      observer.disconnect()
-      if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
-    }
-  }, [role, session?.id])
-
-  useEffect(() => {
-    if (role !== 'candidate') return
-    const button = getPauseButton()
-    if (!button) return
-    const protectInstructorPause = (event: MouseEvent) => {
-      if (sessionRef.current?.simulation_paused && button.classList.contains('paused')) {
-        event.preventDefault()
-        event.stopImmediatePropagation()
+    if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
+    pauseBroadcastTimerRef.current = window.setTimeout(async () => {
+      const latest = sessionRef.current
+      if (!latest || roleRef.current !== 'instructor') return
+      if (simulationPaused === Boolean(latest.simulation_paused)) return
+      pauseRevisionRef.current = Math.max(pauseRevisionRef.current, Number(latest.pause_revision ?? 0)) + 1
+      try {
+        const next = await updateTeachingSession(latest.id, {
+          simulation_paused: simulationPaused,
+          pause_revision: pauseRevisionRef.current,
+        })
+        storeSession(next)
+        setError(null)
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Unable to broadcast simulation pause state.')
       }
+    }, 40)
+    return () => {
+      if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
     }
-    button.addEventListener('click', protectInstructorPause, true)
-    return () => button.removeEventListener('click', protectInstructorPause, true)
-  }, [role])
+  }, [simulationPaused, role, session?.id])
 
   // Realtime remains the fast path, but the teaching session row is authoritative.
   // Refreshing it once per second makes instructor pause/resume resilient to a
@@ -754,6 +720,7 @@ export function useTeachingSession({
   const candidateAlarmsLocked = role === 'candidate' && Boolean(session?.sync_alarms) && !Boolean(session?.candidate_can_edit_alarms)
   const candidateAlarmsSilent = role === 'candidate' && Boolean(session?.sync_alarms) && Boolean(session?.alarms_silent)
   const candidateWaveformsLocked = role === 'candidate' && !Boolean(session?.candidate_can_edit_waveforms)
+  const candidatePauseLocked = role === 'candidate' && Boolean(session?.simulation_paused)
   const candidateOesophagealPressureAllowed = role !== 'candidate' || session == null || Boolean(session.allow_oesophageal_pressure)
   const candidatePatientEffortVisible = role === 'candidate' && Boolean(session?.show_patient_effort)
 
@@ -768,6 +735,7 @@ export function useTeachingSession({
     candidateAlarmsLocked,
     candidateAlarmsSilent,
     candidateWaveformsLocked,
+    candidatePauseLocked,
     candidateOesophagealPressureAllowed,
     candidatePatientEffortVisible,
     recoverableInstructor,

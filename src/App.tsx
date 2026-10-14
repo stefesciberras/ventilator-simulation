@@ -555,6 +555,8 @@ export default function App() {
     setAlarmLimits,
     setPatientTransitionSeconds,
     candidateAlarmLevel: candidateAlarmLevelForSession,
+    simulationPaused: frozen,
+    setSimulationPaused: setFrozen,
   })
 
   const candidateWaveformOptions = useMemo(
@@ -1025,7 +1027,11 @@ export default function App() {
   }, [frozen, samples.length])
 
   useEffect(() => {
-    if (!frozen || frozenSamples) return
+    if (!frozen) {
+      if (frozenSamples) setFrozenSamples(null)
+      return
+    }
+    if (frozenSamples) return
     setFrozenSamples(movingSamples)
     setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
   }, [frozen, frozenSamples, movingSamples])
@@ -1207,8 +1213,9 @@ export default function App() {
             className={`top-simulation-pause ${frozen ? 'paused' : ''}`}
             type="button"
             onClick={toggleFreeze}
-            aria-label={frozen ? 'Resume whole simulation' : 'Pause whole simulation'}
-            title={frozen ? 'Resume whole simulation' : 'Pause whole simulation'}
+            disabled={teachingSession.candidatePauseLocked}
+            aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume whole simulation' : 'Pause whole simulation')}
+            title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume whole simulation' : 'Pause whole simulation')}
           >
             <PauseIcon paused={frozen} />
             <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
@@ -1262,7 +1269,7 @@ export default function App() {
               {oxygenBoost && <span className="oxygen-enrichment-timer" aria-live="polite">{oxygenBoostTimer}</span>}
             </div>
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
-            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume simulation' : 'Pause and freeze waveforms'} aria-label={frozen ? 'Resume simulation' : 'Pause simulation'}><PauseIcon paused={frozen} /></button>
+            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} disabled={teachingSession.candidatePauseLocked} title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Pause and freeze waveforms')} aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Pause simulation')}><PauseIcon paused={frozen} /></button>
             <button
               className={`hardware-button ${inspiratoryHoldPressed ? 'active' : ''}`}
               disabled={frozen || !manualHoldAvailable}
