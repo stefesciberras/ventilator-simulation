@@ -1,0 +1,49 @@
+name: v0.77.3 oxygen physiology controls
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.77.3-oxygen-physiology-controls
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.77.3-oxygen-physiology-controls
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply v0.77.3 patch
+        run: python3 scripts/patch_v0773.py
+      - name: Verify requested behavior
+        run: |
+          grep -q 'max="60" step="1" value={alarmLimits.peakPressure}' src/App.tsx
+          grep -q 'maxSpO2: number' src/simulation/types.ts
+          grep -q 'referenceCardiacOutputLMin = 5' src/simulation/engine.ts
+          grep -q 'Maximum SpO₂' src/components/Controls.tsx
+          grep -q 'Reset physiological' src/components/Controls.tsx
+          grep -q 'Reset respiratory' src/components/Controls.tsx
+          grep -q 'v0.77.3' src/App.tsx
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Commit integrated changes
+        run: |
+          if git diff --quiet; then
+            echo "No integration changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/Controls.tsx src/components/SessionPanel.tsx src/simulation/types.ts src/simulation/engine.ts src/styles.css
+          git commit -m "v0.77.3 Refine oxygen physiology and patient resets"
+          git push origin HEAD:chatgpt/v0.77.3-oxygen-physiology-controls
