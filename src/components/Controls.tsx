@@ -283,7 +283,7 @@ export function VentilatorControls({ settings, onChange, onReset, fio2Override, 
   )
 }
 
-export function PatientControls({ settings, onChange, onReset, transitionSeconds, onTransitionSecondsChange, showPatientEffort, onShowPatientEffortChange, patientEffortLocked = false }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void; showPatientEffort: boolean; onShowPatientEffortChange: (value: boolean) => void; patientEffortLocked?: boolean }) {
+export function PatientControls({ settings, onChange, onReset, onResetPhysiology, transitionSeconds, onTransitionSecondsChange, showPatientEffort, onShowPatientEffortChange, patientEffortLocked = false, showSpO2Ceiling = true }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; onResetPhysiology: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void; showPatientEffort: boolean; onShowPatientEffortChange: (value: boolean) => void; patientEffortLocked?: boolean; showSpO2Ceiling?: boolean }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
   const predictedBodyWeight = calculatePredictedBodyWeight(settings.sex ?? 'male', settings.heightCm ?? 170)
@@ -304,11 +304,12 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
     }
   }
 
-  const presets: Record<string, Partial<PatientSettings>> = {
-    Normal: { shuntFraction: 0.03, compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50 },
-    ARDS: { shuntFraction: 0.25, compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25 },
-    COPD: { shuntFraction: 0.05, compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40 },
-    Asthma: { shuntFraction: 0.04, compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30 },
+  const normalPhysiology = { sex: 'male' as const, heightCm: 170, oxygenConsumption: 250, frc: 2500, maxSpO2: 100, co2Production: 250, deadSpaceVolume: 150 }
+  const presets: Record<string, PatientSettings> = {
+    Normal: { ...normalPhysiology, shuntFraction: 0.03, compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5 },
+    ARDS: { ...normalPhysiology, shuntFraction: 0.25, compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 25, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25, endExpiratoryOesophagealPressure: -5 },
+    COPD: { ...normalPhysiology, shuntFraction: 0.05, compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -5 },
+    Asthma: { ...normalPhysiology, shuntFraction: 0.04, compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30, endExpiratoryOesophagealPressure: -5 },
   }
 
   return (
@@ -316,7 +317,7 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
       <div className="control-section-title">
         <h2>Patient settings</h2>
         <div className="control-section-title-actions">
-          <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset patient</button>
+          <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset respiratory</button>
           <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand patient settings' : 'Collapse patient settings'} title={collapsed ? 'Expand patient settings' : 'Collapse patient settings'}>{collapsed ? '▾' : '▴'}</button>
         </div>
       </div>
@@ -333,7 +334,7 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
         </label>
         <small>{transitionSeconds === 0 ? 'Changes apply immediately' : `Patient physiology transitions smoothly over ${transitionSeconds} s`}</small>
       </div>
-      <div className="preset-row">{Object.keys(presets).map((name) => <button key={name} onClick={() => patch(presets[name])}>{name}</button>)}</div>
+      <div className="preset-row">{Object.keys(presets).map((name) => <button key={name} onClick={() => onChange({ ...presets[name] })}>{name}</button>)}</div>
       <div className="patient-rr-control">
         <div className="patient-rr-slider">
           <Slider label="Spontaneous RR" value={settings.spontaneousRate} unit="/min" min={0} max={35} onChange={(v) => patch({ spontaneousRate: v })} />
@@ -368,7 +369,10 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
         onChange={(effortRisePercent, effortRelaxationPercent) => patch({ effortRisePercent, effortRelaxationPercent })}
       />
       <Slider label="End-expiratory Pes" value={settings.endExpiratoryOesophagealPressure ?? -5} unit=" cmH₂O" min={-15} max={15} step={0.5} onChange={(v) => patch({ endExpiratoryOesophagealPressure: v })} />
-      <div className="patient-subsection-title">Physiological</div>
+      <div className="patient-subsection-heading">
+        <div className="patient-subsection-title">Physiological</div>
+        <button className="reset-settings-button patient-reset-button" type="button" onClick={onResetPhysiology}>Reset physiological</button>
+      </div>
       <div className="patient-sex-selector" role="group" aria-label="Patient sex used for predicted body weight">
         <span>Sex</span>
         <div>
@@ -380,6 +384,7 @@ export function PatientControls({ settings, onChange, onReset, transitionSeconds
       <Slider label="Oxygen consumption (VO₂)" value={settings.oxygenConsumption ?? 250} unit=" mL/min" min={100} max={600} step={10} onChange={(v) => patch({ oxygenConsumption: v })} />
       <Slider label="FRC" value={settings.frc ?? 2500} unit=" mL" min={800} max={5000} step={50} onChange={(v) => patch({ frc: v })} />
       <Slider label="Shunt" value={Math.round((settings.shuntFraction ?? 0.03) * 100)} unit="%" min={0} max={50} step={1} onChange={(v) => patch({ shuntFraction: v / 100 })} />
+      {showSpO2Ceiling && <Slider label="Maximum SpO₂" value={Math.round(settings.maxSpO2 ?? 100)} unit="%" min={80} max={100} step={1} onChange={(v) => patch({ maxSpO2: v })} />}
       <Slider label="VCO₂ production" value={settings.co2Production ?? 250} unit=" mL/min" min={100} max={500} step={10} onChange={(v) => patch({ co2Production: v })} />
       <Slider label="Dead space volume" value={settings.deadSpaceVolume ?? 150} unit=" mL" min={50} max={400} step={10} onChange={(v) => patch({ deadSpaceVolume: v })} />
     </section>

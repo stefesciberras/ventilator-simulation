@@ -6,6 +6,7 @@ export interface PatientSettings {
   oxygenConsumption: number
   frc: number
   shuntFraction: number
+  maxSpO2: number
   compliance: number
   resistance: number
   expiratoryResistance: number

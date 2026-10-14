@@ -142,6 +142,9 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .patient-transition-control label { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #9fc7aa; font-size: 11px; }
 .patient-transition-control select { min-width: 92px; padding: 6px 8px; border: 1px solid #456151; border-radius: 6px; color: #e5f2e8; background: #111b17; }
 .patient-transition-control small { display: block; margin-top: 5px; color: #708c79; font-size: 9px; }
+.patient-subsection-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.patient-subsection-heading .patient-subsection-title { margin-top: 0; }
+.patient-subsection-heading .reset-settings-button { flex: 0 0 auto; }
 
 .patient-rr-control { display: flex; align-items: flex-end; gap: 8px; margin: 2px 0 4px; }
 .patient-rr-slider { flex: 1; min-width: 0; }
