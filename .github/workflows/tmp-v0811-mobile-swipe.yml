@@ -1,0 +1,80 @@
+name: Temporary v0.81.1 mobile swipe pages
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.81.1-mobile-swipe-pages
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.81.1-mobile-swipe-pages
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply mobile swipe pages
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, expected=1):
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual != expected:
+                  raise SystemExit(f'{path}: expected {expected} occurrence(s), found {actual}: {old[:120]!r}')
+              p.write_text(text.replace(old, new))
+
+          app = 'src/App.tsx'
+          replace(app,
+              "import { useEffect, useMemo, useRef, useState } from 'react'\n",
+              "import { useEffect, useMemo, useRef, useState } from 'react'\nimport type { TouchEvent } from 'react'\n")
+
+          replace(app,
+              "  const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')\n",
+              "  const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')\n  const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')\n  const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)\n")
+
+          replace(app,
+              "  const isHoldKey = (key: string) => key === ' ' || key === 'Enter'\n\n  return (\n",
+              "  const isHoldKey = (key: string) => key === ' ' || key === 'Enter'\n\n  const handleMobileWorkspaceTouchStart = (event: TouchEvent<HTMLDivElement>) => {\n    if (!window.matchMedia('(max-width: 680px)').matches || event.touches.length !== 1) {\n      mobileSwipeStartRef.current = null\n      return\n    }\n    const touch = event.touches[0]\n    const target = event.target as HTMLElement\n    const blocked = Boolean(target.closest('button, input, select, textarea, a, [role=\\\"slider\\\"], .waveform-card.cursor-enabled'))\n    mobileSwipeStartRef.current = { x: touch.clientX, y: touch.clientY, blocked }\n  }\n\n  const handleMobileWorkspaceTouchEnd = (event: TouchEvent<HTMLDivElement>) => {\n    const start = mobileSwipeStartRef.current\n    mobileSwipeStartRef.current = null\n    if (!start || start.blocked || event.changedTouches.length !== 1) return\n    const touch = event.changedTouches[0]\n    const deltaX = touch.clientX - start.x\n    const deltaY = touch.clientY - start.y\n    if (Math.abs(deltaX) < 55 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return\n    setMobileWorkspacePage(deltaX > 0 ? 'ventilator' : 'settings')\n  }\n\n  return (\n")
+
+          replace(app,
+              "      <div className=\"workspace\">\n",
+              "      <nav className=\"mobile-workspace-switcher\" aria-label=\"Mobile workspace pages\">\n        <button type=\"button\" className={mobileWorkspacePage === 'ventilator' ? 'active' : ''} aria-current={mobileWorkspacePage === 'ventilator' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('ventilator')}>Ventilator</button>\n        <button type=\"button\" className={mobileWorkspacePage === 'settings' ? 'active' : ''} aria-current={mobileWorkspacePage === 'settings' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('settings')}>Controls</button>\n      </nav>\n\n      <div\n        className={`workspace mobile-page-${mobileWorkspacePage}`}\n        onTouchStart={handleMobileWorkspaceTouchStart}\n        onTouchEnd={handleMobileWorkspaceTouchEnd}\n      >\n")
+
+          styles = 'src/styles.css'
+          p = Path(styles)
+          text = p.read_text()
+          anchor = "@media (max-width: 680px) {\n  .control-panel { padding-top: 15px; }\n  .control-tabs { top: -15px; }\n}\n"
+          addition = anchor + "\n\n/* v0.81.1 narrow mobile two-page workspace */\n.mobile-workspace-switcher { display: none; }\n@media (max-width: 680px) {\n  .mobile-workspace-switcher {\n    display: grid;\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n    gap: 5px;\n    margin: 0 0 8px;\n    padding: 4px;\n    border: 1px solid #293b45;\n    border-radius: 10px;\n    background: rgba(10, 16, 20, .96);\n  }\n  .mobile-workspace-switcher button {\n    min-width: 0;\n    min-height: 36px;\n    padding: 7px 8px;\n    font-size: 10px;\n    font-weight: 800;\n    letter-spacing: .06em;\n    text-transform: uppercase;\n    color: #8da4ae;\n    background: #111a20;\n    border-color: transparent;\n  }\n  .mobile-workspace-switcher button.active {\n    color: #e2f8ff;\n    border-color: #5bbbdc;\n    background: #17313d;\n  }\n  .workspace { touch-action: pan-y; }\n  .workspace.mobile-page-ventilator > .control-panel { display: none !important; }\n  .workspace.mobile-page-settings > .ventilator-console { display: none !important; }\n  .workspace.mobile-page-settings > .instructor-ventilator-toggle { display: none !important; }\n  .workspace.mobile-page-settings > .control-panel { display: block; width: 100%; }\n  .workspace.mobile-page-ventilator > .ventilator-console { display: block; width: 100%; }\n}\n"
+          if text.count(anchor) != 1:
+              raise SystemExit('styles.css: mobile tab anchor not found uniquely')
+          p.write_text(text.replace(anchor, addition))
+
+          instructor = 'src/instructor.css'
+          p = Path(instructor)
+          text = p.read_text()
+          text += "\n\n/* v0.81.1 mobile workspace pages supersede instructor show/hide rail */\n@media (max-width: 680px) {\n  body.eduvent-instructor-mode .instructor-ventilator-toggle { display: none !important; }\n  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .workspace,\n  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .workspace { grid-template-columns: 1fr; }\n  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .ventilator-console,\n  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .ventilator-console {\n    grid-column: 1;\n    grid-row: 1;\n  }\n  body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-panel,\n  body.eduvent-instructor-mode.eduvent-instructor-simulator-open .control-panel {\n    grid-column: 1;\n    grid-row: 1;\n    max-height: none;\n    overflow: visible;\n  }\n  body.eduvent-instructor-mode .workspace.mobile-page-ventilator > .ventilator-console { display: block !important; }\n  body.eduvent-instructor-mode .workspace.mobile-page-ventilator > .control-panel { display: none !important; }\n  body.eduvent-instructor-mode .workspace.mobile-page-settings > .ventilator-console { display: none !important; }\n  body.eduvent-instructor-mode .workspace.mobile-page-settings > .control-panel { display: block !important; }\n}\n"
+          p.write_text(text)
+
+          Path('src/appVersion.ts').write_text("export const APP_VERSION = '0.81.1'\n")
+          PY
+          npm ci
+          npm run build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/styles.css src/instructor.css src/appVersion.ts
+          git commit -m "Add narrow mobile swipe workspace pages"
+          git push origin HEAD:chatgpt/v0.81.1-mobile-swipe-pages
+      - name: Validate committed tree
+        shell: bash
+        run: |
+          npm run build
