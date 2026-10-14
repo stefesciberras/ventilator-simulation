@@ -39,7 +39,7 @@
 }
 .monitor-tabs {
   display: grid;
-  grid-template-columns: 82px repeat(3, minmax(0, 1fr));
+  grid-template-columns: 82px repeat(4, minmax(0, 1fr));
   min-height: 70px;
   border-bottom: 1px solid #52636c;
   background: #26343b;
@@ -122,7 +122,7 @@
 @media (max-width: 860px) {
   .monitor-dialog { min-height: 0; }
   .monitor-tabs {
-    grid-template-columns: 58px repeat(3, minmax(0, 1fr));
+    grid-template-columns: 58px repeat(4, minmax(0, 1fr));
     min-height: 56px;
   }
   .monitor-tabs button { font-size: 15px; }
@@ -138,7 +138,7 @@
 
 @media (max-width: 520px) {
   .physiology-dialog-backdrop { padding: 7px; }
-  .monitor-tabs { grid-template-columns: 48px repeat(3, minmax(0, 1fr)); }
+  .monitor-tabs { grid-template-columns: 48px repeat(4, minmax(0, 1fr)); }
   .monitor-tabs button { font-size: 12px; padding: 5px; }
   .monitor-tabs .monitor-close { font-size: 26px; }
   .monitor-panel { margin: 7px; padding: 13px; }

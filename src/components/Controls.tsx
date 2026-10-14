@@ -123,6 +123,8 @@ function SyncWindowIcon() {
 export function VentilatorControls({ settings, onChange, onReset, fio2Override, fio2BoostActive = false, collapsible = true }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void; onReset: () => void; fio2Override?: number; fio2BoostActive?: boolean; collapsible?: boolean }) {
   const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })
   const currentIeRatio = ieRatioFrom(settings)
+  const minimumInspiratoryTime = cycleTime(settings.rate) / (1 + MAX_IE)
+  const maximumInspiratoryTime = cycleTime(settings.rate) / (1 + MIN_IE)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed('ventilator-settings'))
   const toggleCollapsed = () => setCollapsed((current) => {
@@ -153,6 +155,13 @@ export function VentilatorControls({ settings, onChange, onReset, fio2Override, 
   const setIeRatio = (ratio: number) => {
     const boundedRatio = clamp(ratio, MIN_IE, MAX_IE)
     const inspiratoryTime = cycleTime(settings.rate) / (1 + boundedRatio)
+    const next: VentilatorSettings = { ...settings, inspiratoryTime }
+    if (isVolumeMandatoryMode(settings.mode)) next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
+    onChange(next)
+  }
+
+  const setInspiratoryTime = (requestedTime: number) => {
+    const inspiratoryTime = clamp(requestedTime, minimumInspiratoryTime, maximumInspiratoryTime)
     const next: VentilatorSettings = { ...settings, inspiratoryTime }
     if (isVolumeMandatoryMode(settings.mode)) next.inspiratoryFlow = flowFor(next.tidalVolume, inspiratoryTime, next.plateauPercent ?? 0)
     onChange(next)
@@ -227,14 +236,15 @@ export function VentilatorControls({ settings, onChange, onReset, fio2Override, 
         <>
           <Slider label="Pinsp" value={settings.pressureControl} unit=" cmH₂O" min={5} max={30} onChange={(v) => patch({ pressureControl: v })} />
           <Slider label="PEEP" value={settings.peep} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ peep: v })} />
-          <Slider label="Rate" value={settings.rate} unit="/min" min={5} max={35} onChange={setRate} />
+          <Slider label="Rate" value={settings.rate} unit="/min" min={5} max={40} onChange={setRate} />
           <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
+          <Slider label="Tinsp" value={Number(settings.inspiratoryTime.toFixed(2))} unit=" s" min={Number(minimumInspiratoryTime.toFixed(2))} max={Number(maximumInspiratoryTime.toFixed(2))} step={0.05} onChange={setInspiratoryTime} />
           {triggerControls}
         </>
       ) : (
         <>
           <Slider label="PEEP" value={settings.peep} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ peep: v })} />
-          {settings.mode !== 'PSV' && <Slider label={isSimvMode(settings.mode) ? 'SIMV rate' : 'Rate'} value={settings.rate} unit="/min" min={5} max={35} onChange={setRate} />}
+          {settings.mode !== 'PSV' && <Slider label={isSimvMode(settings.mode) ? 'SIMV rate' : 'Rate'} value={settings.rate} unit="/min" min={5} max={40} onChange={setRate} />}
           {isSimvMode(settings.mode) && (
             <div className="sync-window-control">
               <div className="sync-window-slider">
@@ -262,7 +272,10 @@ export function VentilatorControls({ settings, onChange, onReset, fio2Override, 
           )}
           {usesTidalVolume(settings.mode) && <Slider label={settings.mode === 'VG-PC' ? 'Target tidal volume' : 'Tidal volume'} value={settings.tidalVolume} unit=" mL" min={250} max={800} step={10} onChange={setTidalVolume} />}
           {hasConventionalMandatoryTiming(settings.mode) && (
-            <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
+            <>
+              <Slider label="I:E ratio" value={Number(currentIeRatio.toFixed(1))} unit="" min={MIN_IE} max={MAX_IE} step={0.1} displayValue={`1:${currentIeRatio.toFixed(1)}`} onChange={setIeRatio} />
+              <Slider label="Tinsp" value={Number(settings.inspiratoryTime.toFixed(2))} unit=" s" min={Number(minimumInspiratoryTime.toFixed(2))} max={Number(maximumInspiratoryTime.toFixed(2))} step={0.05} onChange={setInspiratoryTime} />
+            </>
           )}
           {isVolumeMandatoryMode(settings.mode) && (
             <>

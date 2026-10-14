@@ -1,4 +1,4 @@
-import type { Sample, VentilatorSettings } from './simulation/types'
+import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
 
 export interface PhysiologicalMeasurements {
   setMinuteVentilation: number | null
@@ -24,6 +24,9 @@ export interface PhysiologicalMeasurements {
   expiratoryFlow: number | null
   inspiredTidalVolume: number | null
   expiredTidalVolume: number | null
+  alveolarTidalVolume: number | null
+  alveolarMinuteVentilation: number
+  deadSpaceVolume: number
   endTidalCO2: number | null
   oxygenPercent: number
   oxygenSaturation: number | null
@@ -279,7 +282,7 @@ function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings
   }
 }
 
-export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator: VentilatorSettings): PhysiologicalMeasurements {
+export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator: VentilatorSettings, patient: PatientSettings): PhysiologicalMeasurements {
   const window = recentWindow(samples, 60)
   const rates = measuredRatesAndVentilation(window)
   const timing = measuredTiming(window)
@@ -302,6 +305,9 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
   const setRate = ventilator.mode === 'PSV' || ventilator.mode === 'APRV' ? null : ventilator.rate
   const volumeTargeted = ventilator.mode === 'VC-AC' || ventilator.mode === 'SIMV-VC' || ventilator.mode === 'VG-PC'
   const setMinuteVentilation = volumeTargeted && setRate != null ? ventilator.tidalVolume * setRate / 1000 : null
+  const deadSpaceVolume = Math.max(0, patient.deadSpaceVolume ?? 150)
+  const alveolarTidalVolume = monitor.expiredTidalVolume == null ? null : Math.max(0, monitor.expiredTidalVolume - deadSpaceVolume)
+  const alveolarMinuteVentilation = Math.max(0, rates.minuteVentilation - (deadSpaceVolume / 1000) * rates.totalRate)
 
   return {
     setMinuteVentilation,
@@ -327,6 +333,9 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
     expiratoryFlow: monitor.expiratoryFlow,
     inspiredTidalVolume: monitor.inspiredTidalVolume,
     expiredTidalVolume: monitor.expiredTidalVolume,
+    alveolarTidalVolume,
+    alveolarMinuteVentilation,
+    deadSpaceVolume,
     endTidalCO2: monitor.endTidalCO2,
     oxygenPercent: ventilator.fio2 * 100,
     oxygenSaturation: window.length ? window[window.length - 1].spo2 : null,

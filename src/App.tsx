@@ -785,7 +785,7 @@ export default function App() {
   const samples = waveformFrozen && frozenSamples ? frozenSamples : movingSamples
   const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
-  const physiologyMeasurements = useMemo(() => calculatePhysiologicalMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
+  const physiologyMeasurements = useMemo(() => calculatePhysiologicalMeasurements(measurementSamples, effectiveVentilator, effectivePatientRef.current), [measurementSamples, effectiveVentilator, patient])
   const measuredIERatio = useMemo(() => calculateMeasuredIERatio(measurementSamples), [measurementSamples])
   const endTidalCO2 = useMemo(() => calculateEndTidalCO2(measurementSamples), [measurementSamples])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
@@ -1209,6 +1209,9 @@ export default function App() {
         measuredIERatio,
         totalPeepCmH2O: measures.totalPeep,
         autoPeepCmH2O: measures.autoPeep,
+        alveolarTidalVolumeMl: physiologyMeasurements.alveolarTidalVolume,
+        alveolarMinuteVentilationLMin: physiologyMeasurements.alveolarMinuteVentilation,
+        deadSpaceVolumeMl: physiologyMeasurements.deadSpaceVolume,
       },
       waveformSummary: {
         visibleVolumeMinMl: waveformVolumeMin,
