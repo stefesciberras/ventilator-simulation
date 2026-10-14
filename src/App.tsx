@@ -553,6 +553,7 @@ export default function App() {
   const [diagnosticCopied, setDiagnosticCopied] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const [instructorSimulatorExpanded, setInstructorSimulatorExpanded] = useState(false)
+  const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')
   const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1101px)').matches)
   const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
 
@@ -1284,34 +1285,6 @@ export default function App() {
       </header>
 
       <div className="workspace">
-        {teachingSession.role === 'candidate' && (
-          <div className="mobile-candidate-session-slot">
-            <SessionPanel
-            role={teachingSession.role}
-            simulatorExpanded={instructorSimulatorExpanded}
-            onSimulatorExpandedChange={setInstructorSimulatorExpanded}
-            connection={teachingSession.connection}
-            localRuntimeConnection={teachingSession.localRuntimeConnection}
-            localRuntimeUrl={teachingSession.localRuntimeUrl}
-            runtimeTransportKind={teachingSession.runtimeTransportKind}
-            session={teachingSession.session}
-            members={teachingSession.members}
-            error={teachingSession.error}
-            recoverableInstructor={teachingSession.recoverableInstructor}
-            recoverableCandidate={teachingSession.recoverableCandidate}
-            currentScenario={currentInstructorScenario}
-            onLoadScenario={loadInstructorScenario}
-            onStartInstructor={startInstructorSession}
-            onResumeInstructor={teachingSession.resumeInstructor}
-            onJoinCandidate={teachingSession.joinCandidate}
-            onResumeCandidate={teachingSession.resumeCandidate}
-            onLeaveSession={teachingSession.leaveSession}
-            onEndInstructorSession={teachingSession.endInstructorSession}
-            onUpdatePolicy={teachingSession.updatePolicy}
-            onBroadcastNow={teachingSession.broadcastNow}
-          />
-          </div>
-        )}
         {teachingSession.role === 'instructor' && (
           <button
             type="button"
@@ -1367,13 +1340,16 @@ export default function App() {
             </div>
           </div>
 
-          <div className="alarm-slot" aria-live="polite">
-            {alarmLevel && (
-              <div className={`alarm-banner ${alarmLevel}`} role="alert">
-                <strong>{alarmLabels.join(' • ')}</strong>
-                {(alarmSilenced || teachingSession.candidateAlarmsSilent) && <span>ALARM SILENT</span>}
-              </div>
-            )}
+          <div className="alarm-row">
+            <div className="alarm-slot" aria-live="polite">
+              {alarmLevel && (
+                <div className={`alarm-banner ${alarmLevel}`} role="alert">
+                  <strong>{alarmLabels.join(' • ')}</strong>
+                  {(alarmSilenced || teachingSession.candidateAlarmsSilent) && <span>ALARM SILENT</span>}
+                </div>
+              )}
+            </div>
+            <button className="mobile-alarm-limits-button" type="button" disabled={teachingSession.candidateAlarmsLocked} onClick={() => setAlarmDialogOpen(true)}>Alarm limits</button>
           </div>
 
           <div className="screen-body">
@@ -1464,7 +1440,6 @@ export default function App() {
               <div className="metrics-actions">
                 <button className="metrics-alarm-limits" type="button" disabled={teachingSession.candidateAlarmsLocked} onClick={() => setAlarmDialogOpen(true)} title={teachingSession.candidateAlarmsLocked ? 'Alarm limits controlled by instructor' : 'Set alarm limits'}>Alarm limits</button>
               </div>
-              <div className="metrics-title">Measured</div>
               <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" alarmLevel={ppeakMetricAlarm} />
               <Metric label="VTe" value={tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '-'} unit={tidalVolumeDisplayAvailable ? 'mL' : ''} alarmLevel={tidalVolumeMetricAlarm} />
               <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" alarmLevel={respiratoryRateMetricAlarm} />
@@ -1491,40 +1466,66 @@ export default function App() {
           />
         </section>
 
-        <aside className="control-panel">
-          <SessionPanel
-            role={teachingSession.role}
-            simulatorExpanded={instructorSimulatorExpanded}
-            onSimulatorExpandedChange={setInstructorSimulatorExpanded}
-            connection={teachingSession.connection}
-            localRuntimeConnection={teachingSession.localRuntimeConnection}
-            localRuntimeUrl={teachingSession.localRuntimeUrl}
-            runtimeTransportKind={teachingSession.runtimeTransportKind}
-            session={teachingSession.session}
-            members={teachingSession.members}
-            error={teachingSession.error}
-            recoverableInstructor={teachingSession.recoverableInstructor}
-            recoverableCandidate={teachingSession.recoverableCandidate}
-            currentScenario={currentInstructorScenario}
-            onLoadScenario={loadInstructorScenario}
-            onStartInstructor={startInstructorSession}
-            onResumeInstructor={teachingSession.resumeInstructor}
-            onJoinCandidate={teachingSession.joinCandidate}
-            onResumeCandidate={teachingSession.resumeCandidate}
-            onLeaveSession={teachingSession.leaveSession}
-            onEndInstructorSession={teachingSession.endInstructorSession}
-            onUpdatePolicy={teachingSession.updatePolicy}
-            onBroadcastNow={teachingSession.broadcastNow}
-          />
-          <fieldset className={`session-lock-fieldset ventilator-settings-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
-            {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-            <VentilatorControls collapsible={teachingSession.role !== 'instructor' || instructorSimulatorExpanded || !wideInstructorLayout} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />
-          </fieldset>
-          <fieldset className={`session-lock-fieldset patient-settings-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
-            {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-            <PatientControls collapsible={teachingSession.role !== 'instructor' || instructorSimulatorExpanded || !wideInstructorLayout} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />
-          </fieldset>
-          <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
+        <aside className="control-panel tabbed-control-panel">
+          <nav className="control-tabs" role="tablist" aria-label="Simulator controls">
+            {(['teaching', 'vent', 'patient', 'physio'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={controlTab === tab}
+                className={controlTab === tab ? 'active' : ''}
+                onClick={() => setControlTab(tab)}
+              >{tab === 'teaching' ? 'Teaching' : tab === 'vent' ? 'Vent' : tab === 'patient' ? 'Patient' : 'Physio'}</button>
+            ))}
+          </nav>
+          <div className="control-tab-content">
+            {controlTab === 'teaching' && (
+              <div className="control-tab-pane teaching-tab-pane" role="tabpanel">
+                <SessionPanel
+                  role={teachingSession.role}
+                  simulatorExpanded={instructorSimulatorExpanded}
+                  onSimulatorExpandedChange={setInstructorSimulatorExpanded}
+                  connection={teachingSession.connection}
+                  localRuntimeConnection={teachingSession.localRuntimeConnection}
+                  localRuntimeUrl={teachingSession.localRuntimeUrl}
+                  runtimeTransportKind={teachingSession.runtimeTransportKind}
+                  session={teachingSession.session}
+                  members={teachingSession.members}
+                  error={teachingSession.error}
+                  recoverableInstructor={teachingSession.recoverableInstructor}
+                  recoverableCandidate={teachingSession.recoverableCandidate}
+                  currentScenario={currentInstructorScenario}
+                  onLoadScenario={loadInstructorScenario}
+                  onStartInstructor={startInstructorSession}
+                  onResumeInstructor={teachingSession.resumeInstructor}
+                  onJoinCandidate={teachingSession.joinCandidate}
+                  onResumeCandidate={teachingSession.resumeCandidate}
+                  onLeaveSession={teachingSession.leaveSession}
+                  onEndInstructorSession={teachingSession.endInstructorSession}
+                  onUpdatePolicy={teachingSession.updatePolicy}
+                  onBroadcastNow={teachingSession.broadcastNow}
+                />
+                <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
+              </div>
+            )}
+            {controlTab === 'vent' && (
+              <div className="control-tab-pane" role="tabpanel">
+                <fieldset className={`session-lock-fieldset ventilator-settings-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
+                  {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
+                  <VentilatorControls collapsible={false} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />
+                </fieldset>
+              </div>
+            )}
+            {(controlTab === 'patient' || controlTab === 'physio') && (
+              <div className="control-tab-pane" role="tabpanel">
+                <fieldset className={`session-lock-fieldset patient-settings-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
+                  {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
+                  <PatientControls view={controlTab === 'physio' ? 'physiology' : 'patient'} collapsible={false} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />
+                </fieldset>
+              </div>
+            )}
+          </div>
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
         </aside>
       </div>
