@@ -1,0 +1,44 @@
+name: v0.78 local resilience
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.78-local-resilience
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.78-local-resilience
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply integration patch
+        run: python3 scripts/patch_v078.py
+      - name: Install dependencies and update lockfile
+        run: npm install
+      - name: Build
+        run: npm run build
+      - name: Smoke-test local server
+        run: |
+          node server/local-session-server.mjs > /tmp/eduvent-local.log 2>&1 &
+          pid=$!
+          sleep 2
+          curl --fail http://127.0.0.1:4173/health
+          kill $pid
+          wait $pid || true
+          cat /tmp/eduvent-local.log
+      - name: Commit integrated v0.78 changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json src/appVersion.ts src/App.tsx src/session/useTeachingSession.ts src/components/SessionPanel.tsx src/session.css docs/local-teaching-server.md
+          git commit -m "v0.78 Integrate resilient LAN runtime transport"
+          git push
