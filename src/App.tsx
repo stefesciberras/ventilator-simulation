@@ -1463,6 +1463,7 @@ export default function App() {
             connection={teachingSession.connection}
             localRuntimeConnection={teachingSession.localRuntimeConnection}
             localRuntimeUrl={teachingSession.localRuntimeUrl}
+            runtimeTransportKind={teachingSession.runtimeTransportKind}
             session={teachingSession.session}
             members={teachingSession.members}
             error={teachingSession.error}
