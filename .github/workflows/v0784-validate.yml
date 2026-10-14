@@ -1,0 +1,41 @@
+name: v0.78.4 validate
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.78.4-instructor-layout-alarm-highlights
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: python3 scripts/patch_v0784.py
+      - name: Verify requested behavior
+        run: |
+          ! grep -R "Candidate enters their name after opening the link" -n src
+          ! grep -R "Invitations are sent securely by the EDUVENT Supabase Edge Function through Brevo" -n src
+          ! grep -R "Brevo accepted" -n src/components/CandidateInvitation.tsx
+          grep -q "instructor-ventilator-toggle" src/App.tsx
+          grep -q "metric-alarm-yellow" src/styles.css
+          grep -q "spo2 < 85" src/App.tsx
+          grep -q "APP_VERSION = '0.78.4'" src/appVersion.ts
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Commit integrated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/CandidateInvitation.tsx src/components/SessionPanel.tsx src/instructor.css src/session.css src/styles.css src/appVersion.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "v0.78.4 refine instructor layout and alarm highlights"
+          git push
