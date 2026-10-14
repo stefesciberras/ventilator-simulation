@@ -19,11 +19,10 @@ replace_once(
     "export const APP_VERSION = '0.77.6'\n",
 )
 
-replace_all_exact(
+replace_once(
     'src/components/SessionPanel.tsx',
     '<CandidateInvitation sessionKey={session.session_key} joinUrl={candidateJoinUrl} />',
     '<CandidateInvitation sessionId={session.id} sessionKey={session.session_key} joinUrl={candidateJoinUrl} />',
-    2,
 )
 
 print('v0.77.6 Brevo invitation wiring applied')
