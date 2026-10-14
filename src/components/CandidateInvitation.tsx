@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../session/supabase'
 import '../candidate-invitation.css'
 
@@ -6,6 +6,11 @@ interface CandidateInvitationProps {
   sessionId: string
   sessionKey: string
   joinUrl: string
+}
+
+type InviteToast = {
+  kind: 'success' | 'error'
+  message: string
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -25,6 +30,13 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
   const [emails, setEmails] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [toast, setToast] = useState<InviteToast | null>(null)
+
+  useEffect(() => {
+    if (!toast) return
+    const timeout = window.setTimeout(() => setToast(null), toast.kind === 'error' ? 8000 : 5500)
+    return () => window.clearTimeout(timeout)
+  }, [toast])
 
   const invitationText = useMemo(() => [
     'You have been invited to join an EDUVENT teaching session.',
@@ -34,6 +46,11 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
     '',
     'Open the link, enter your name, and join the session.',
   ].join('\n'), [joinUrl, sessionKey])
+
+  const reportEmailResult = (kind: InviteToast['kind'], message: string) => {
+    setStatus(message)
+    setToast({ kind, message })
+  }
 
   const copyInvitation = async () => {
     try {
@@ -47,23 +64,24 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
   const emailInvitation = async () => {
     const recipients = splitRecipients(emails)
     if (!recipients.length) {
-      setStatus('Enter at least one candidate email address.')
+      reportEmailResult('error', 'Enter at least one candidate email address.')
       return
     }
     if (recipients.length > MAX_RECIPIENTS) {
-      setStatus(`Send to at most ${MAX_RECIPIENTS} candidates at a time.`)
+      reportEmailResult('error', `Send to at most ${MAX_RECIPIENTS} candidates at a time.`)
       return
     }
     const invalid = recipients.filter((email) => !EMAIL_RE.test(email))
     if (invalid.length) {
-      setStatus(`Check the following email address${invalid.length > 1 ? 'es' : ''}: ${invalid.join(', ')}`)
+      reportEmailResult('error', `Check the following email address${invalid.length > 1 ? 'es' : ''}: ${invalid.join(', ')}`)
       return
     }
 
     setSending(true)
     setStatus(null)
+    setToast(null)
     try {
-      const { data, error } = await supabase.functions.invoke<{ sent?: number; error?: string }>('send-candidate-invite', {
+      const { data, error } = await supabase.functions.invoke<{ sent?: number; messageId?: string | null; error?: string }>('send-candidate-invite', {
         body: {
           sessionId,
           recipients,
@@ -83,9 +101,13 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
       if (data?.error) throw new Error(data.error)
 
       const sent = data?.sent ?? recipients.length
-      setStatus(`Invitation sent through Brevo to ${sent} candidate${sent === 1 ? '' : 's'}.`)
+      reportEmailResult(
+        'success',
+        `Invitation email sent to ${sent} candidate${sent === 1 ? '' : 's'}. Brevo accepted ${sent === 1 ? 'it' : 'them'} for delivery.`,
+      )
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : 'Unable to send the invitation.')
+      const message = cause instanceof Error ? cause.message : 'Unable to send the invitation.'
+      reportEmailResult('error', message)
     } finally {
       setSending(false)
     }
@@ -147,6 +169,20 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
 
             {status && <div className="candidate-invite-status" role="status">{status}</div>}
           </section>
+        </div>
+      )}
+
+      {toast && (
+        <div
+          className={`candidate-invite-toast ${toast.kind}`}
+          role={toast.kind === 'error' ? 'alert' : 'status'}
+          aria-live={toast.kind === 'error' ? 'assertive' : 'polite'}
+        >
+          <div>
+            <strong>{toast.kind === 'success' ? 'Invitation sent' : 'Invitation not sent'}</strong>
+            <span>{toast.message}</span>
+          </div>
+          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss notification">×</button>
         </div>
       )}
     </div>
