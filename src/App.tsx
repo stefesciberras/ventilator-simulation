@@ -9,7 +9,7 @@ import { InteractiveVentilatorStrip, VentilatorModeControl } from './components/
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
-import { copyDiagnosticSnapshot } from './diagnostics'
+import { appendScenarioLog, copyDiagnosticSnapshot, copyScenarioLogs } from './diagnostics'
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
 import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
@@ -552,7 +552,8 @@ export default function App() {
     respiratoryRateHigh: null,
     oxygenFailure: null,
   })
-  const [diagnosticCopied, setDiagnosticCopied] = useState(false)
+  const [diagnosticCopied, setDiagnosticCopied] = useState<'simulation' | 'scenario' | null>(null)
+  const [diagnosticMenuOpen, setDiagnosticMenuOpen] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
@@ -607,6 +608,15 @@ export default function App() {
     setWaveformFrozen(false)
     setFrozenSamples(null)
     scenarioClockOriginRef.current = simulationTimeRef.current
+    appendScenarioLog('scenario.loaded', {
+      role: teachingSession.role,
+      sessionId: teachingSession.session?.id ?? null,
+      kind: scenario.kind ?? 'static',
+      ventilatorMode: scenario.ventilator.mode,
+      fio2: scenario.ventilator.fio2,
+      peep: scenario.ventilator.peep,
+      mediaCount: scenario.mediaIds?.length ?? 0,
+    })
     setVentilator({ ...scenario.ventilator })
     setPatient({ ...scenario.patient })
     setAlarmLimits({ ...scenario.alarmLimits })
@@ -1208,8 +1218,27 @@ export default function App() {
       },
       cursor: { index: traceCursor, selectedSample: selectedSample ?? null },
     }, samples, waveformFrozen && frozenSamples ? 'frozen' : 'live', DT)
-    setDiagnosticCopied(copied)
-    if (copied) window.setTimeout(() => setDiagnosticCopied(false), 1800)
+    setDiagnosticMenuOpen(false)
+    setDiagnosticCopied(copied ? 'simulation' : null)
+    if (copied) window.setTimeout(() => setDiagnosticCopied(null), 1800)
+  }
+
+  const copyScenarioDiagnostics = async () => {
+    const copied = await copyScenarioLogs({
+      role: teachingSession.role,
+      sessionId: teachingSession.session?.id ?? null,
+      sessionKey: teachingSession.session?.session_key ?? null,
+      sessionStatus: teachingSession.session?.status ?? null,
+      connection: teachingSession.connection,
+      runtimeTransport: teachingSession.runtimeTransportKind,
+      runtimeConnection: teachingSession.localRuntimeConnection,
+      scenarioElapsedSeconds: displayedScenarioElapsedTime,
+      simulationPaused,
+      candidateCount: teachingSession.members.filter((member) => member.role === 'candidate').length,
+    })
+    setDiagnosticMenuOpen(false)
+    setDiagnosticCopied(copied ? 'scenario' : null)
+    if (copied) window.setTimeout(() => setDiagnosticCopied(null), 1800)
   }
 
   const toggleOxygenBoost = () => {
@@ -1310,13 +1339,27 @@ export default function App() {
             scenarioMediaIds={scenarioMediaIds}
             onScenarioMediaIdsChange={setScenarioMediaIds}
           />
-          <button
-            className={`top-diagnostic-button ${diagnosticCopied ? 'active copied' : ''}`}
-            type="button"
-            onClick={copyDiagnostics}
-            title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
-            aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
-          ><DiagnosticIcon copied={diagnosticCopied} /></button>
+          <div className="top-diagnostic-menu">
+            <button
+              className={`top-diagnostic-button ${diagnosticMenuOpen ? 'active' : ''} ${diagnosticCopied ? 'copied' : ''}`}
+              type="button"
+              onClick={() => setDiagnosticMenuOpen((open) => !open)}
+              title={diagnosticCopied ? `${diagnosticCopied === 'simulation' ? 'Simulation' : 'Scenario'} logs copied` : 'Diagnostics'}
+              aria-label="Open diagnostics menu"
+              aria-haspopup="menu"
+              aria-expanded={diagnosticMenuOpen}
+            ><DiagnosticIcon copied={Boolean(diagnosticCopied)} /></button>
+            {diagnosticMenuOpen && (
+              <div className="top-diagnostic-dropdown" role="menu" aria-label="Copy diagnostics">
+                <button type="button" role="menuitem" onClick={() => void copyDiagnostics()}>
+                  <strong>Simulation Logs</strong><small>Settings, alarms and visible waveform</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void copyScenarioDiagnostics()}>
+                  <strong>Scenario Logs</strong><small>Teaching-session and scenario runtime events</small>
+                </button>
+              </div>
+            )}
+          </div>
           <span className="version">v{APP_VERSION}</span>
         </div>
       </header>
@@ -1503,7 +1546,7 @@ export default function App() {
 
         <aside className="control-panel tabbed-control-panel">
           <nav className="control-tabs" role="tablist" aria-label="Simulator controls">
-            {(['teaching', 'vent', 'patient', 'physio'] as const).map((tab) => (
+            {(['vent', 'patient', 'physio', 'teaching'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
