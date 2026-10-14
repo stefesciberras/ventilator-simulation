@@ -397,7 +397,7 @@ export function SessionPanel({
               <strong>{session?.session_key ?? '———'}</strong>
               <small>Scan the QR code or enter this key manually.</small>
               {candidateJoinUrl && session?.session_key && (
-                <CandidateInvitation sessionKey={session.session_key} joinUrl={candidateJoinUrl} />
+                <CandidateInvitation sessionId={session.id} sessionKey={session.session_key} joinUrl={candidateJoinUrl} />
               )}
             </div>
             {candidateJoinUrl && !simulatorExpanded && (
