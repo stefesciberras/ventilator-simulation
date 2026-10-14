@@ -1,9 +1,9 @@
 Applied v0.81.5 Vd/Vt physiology model
 PATCH_STATUS=0
-Added total dead-space argument to airway CO2 model
+Scoped total dead-space calculation to final airway CO2 sampling block
 FIX_STATUS=0
 
-added 75 packages, and audited 76 packages in 3s
+added 75 packages, and audited 76 packages in 5s
 
 18 packages are looking for funding
   run `npm fund` for details
@@ -14,5 +14,30 @@ NPM_CI_STATUS=0
 > ventilator-simulation@0.1.0 build
 > tsc -b && vite build
 
-src/simulation/engine.ts(1058,5): error TS2304: Cannot find name 'totalDeadSpaceVolumeMl'.
-BUILD_STATUS=1
+[36mvite v8.3.4 [32mbuilding ventilator_simulation environment for production...[36m[39m
+transforming...
+✓ 4 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/ventilator_simulation/.vite/manifest.json  0.15 kB │ gzip: 0.11 kB
+dist/ventilator_simulation/wrangler.json        1.38 kB │ gzip: 0.66 kB
+dist/ventilator_simulation/index.js             0.36 kB │ gzip: 0.26 kB
+
+[32m✓ built in 23ms[39m
+[36mvite v8.3.4 [32mbuilding client environment for production...[36m[39m
+transforming...
+✓ 89 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/.assetsignore                0.02 kB
+dist/client/index.html                   0.45 kB │ gzip:   0.29 kB
+dist/client/assets/index-DxOpcAkW.css   82.78 kB │ gzip:  16.15 kB
+dist/client/assets/index-DKLBMMQ0.js   648.26 kB │ gzip: 180.55 kB
+
+[32m✓ built in 226ms[39m
+[33m[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+BUILD_STATUS=0
