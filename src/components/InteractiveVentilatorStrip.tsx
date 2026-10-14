@@ -153,13 +153,13 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
     if (settings.mode === 'BIPAP') {
       specs.push(
         { key: 'pressureControl', label: 'Pinsp', value: settings.pressureControl, display: `${settings.pressureControl}`, unit: 'cmH₂O', min: 5, max: 30, step: 1 },
-        { key: 'rate', label: 'RR', value: settings.rate, display: `${settings.rate}`, unit: '/min', min: 5, max: 35, step: 1 },
+        { key: 'rate', label: 'RR', value: settings.rate, display: `${settings.rate}`, unit: '/min', min: 5, max: 40, step: 1 },
         { key: 'ieRatio', label: 'I:E', value: Number(currentIeRatio.toFixed(1)), display: `1:${currentIeRatio.toFixed(1)}`, unit: '', min: MIN_IE, max: MAX_IE, step: 0.1 },
       )
       return specs
     }
 
-    if (settings.mode !== 'PSV') specs.push({ key: 'rate', label: isSimvMode(settings.mode) ? 'SIMV RR' : 'RR', value: settings.rate, display: `${settings.rate}`, unit: '/min', min: 5, max: 35, step: 1 })
+    if (settings.mode !== 'PSV') specs.push({ key: 'rate', label: isSimvMode(settings.mode) ? 'SIMV RR' : 'RR', value: settings.rate, display: `${settings.rate}`, unit: '/min', min: 5, max: 40, step: 1 })
     if (usesTidalVolume(settings.mode)) specs.push({ key: 'tidalVolume', label: settings.mode === 'VG-PC' ? 'VT target' : 'VT', value: settings.tidalVolume, display: `${settings.tidalVolume}`, unit: 'mL', min: 250, max: 800, step: 10 })
     if (hasConventionalMandatoryTiming(settings.mode)) specs.push({ key: 'ieRatio', label: 'I:E', value: Number(currentIeRatio.toFixed(1)), display: `1:${currentIeRatio.toFixed(1)}`, unit: '', min: MIN_IE, max: MAX_IE, step: 0.1 })
     if (isVolumeMandatoryMode(settings.mode)) {

@@ -113,7 +113,7 @@ h1 { margin: 2px 0 0; font-size: clamp(20px, 2vw, 30px); font-weight: 650; lette
 .mode-menu { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 6px); display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; padding: 8px; border: 1px solid #41545f; border-radius: 10px; background: #0e171c; box-shadow: 0 14px 36px rgba(0,0,0,.55); }
 .mode-menu button { padding: 9px 6px; font-size: 10px; white-space: nowrap; }
 
-.preset-row { grid-template-columns: repeat(4, 1fr); }
+.preset-row { grid-template-columns: repeat(5, 1fr); }
 .preset-row button { padding: 7px 3px; font-size: 11px; }
 .trigger-controls { margin: 10px 0 2px; }
 .trigger-type-selector { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; margin-bottom: 6px; }
@@ -141,12 +141,13 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .patient-section input[type="range"] { accent-color: #70c584; }
 .patient-section .preset-row button { border-color: #3d5f46; color: #cfe9d4; background: #16251a; }
 .patient-section .preset-row button:hover:not(:disabled) { border-color: #6ba87a; background: #1c3021; }
+.patient-section .preset-row button.selected-preset { color: #f0fff3; border-color: #82cb91; background: #24442b; box-shadow: inset 0 0 0 1px rgba(130,203,145,.18); }
 .patient-reset-button { border-color: #45634c; color: #9bcaa4; background: #142118; }
 .patient-reset-button:hover:not(:disabled) { color: #d8efdd; border-color: #6ca77a; background: #1a2c1e; }
-.patient-transition-control { margin: 8px 0 12px; padding: 9px 10px; border: 1px solid #294337; border-radius: 8px; background: rgba(50,104,73,.08); }
+.patient-shared-profile-controls { margin: 6px 0 14px; }
+.patient-transition-control { margin: 4px 0 10px; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .patient-transition-control label { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #9fc7aa; font-size: 11px; }
 .patient-transition-control select { min-width: 92px; padding: 6px 8px; border: 1px solid #456151; border-radius: 6px; color: #e5f2e8; background: #111b17; }
-.patient-transition-control small { display: block; margin-top: 5px; color: #708c79; font-size: 9px; }
 .patient-subsection-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
 .patient-subsection-heading .patient-subsection-title { margin-top: 0; }
 .patient-subsection-heading .reset-settings-button { flex: 0 0 auto; }
@@ -303,3 +304,22 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
   .workspace.mobile-page-settings > .control-panel { display: block; width: 100%; }
   .workspace.mobile-page-ventilator > .ventilator-console { display: block; width: 100%; }
 }
+
+
+/* v0.81.4 physiology palette and shared patient profile controls */
+.patient-section.physiology-view {
+  border-color: rgba(166, 109, 221, .38);
+  background: linear-gradient(180deg, rgba(102, 61, 128, .16), rgba(55, 34, 72, .08));
+}
+.patient-section.physiology-view h2 { color: #d2a2f0; }
+.patient-section.physiology-view .control-heading span,
+.patient-section.physiology-view .patient-sex-selector > span { color: #c1a4d3; }
+.patient-section.physiology-view input[type="range"] { accent-color: #a66ddd; }
+.patient-section.physiology-view .patient-reset-button { border-color: #71508a; color: #caa4df; background: #20172a; }
+.patient-section.physiology-view .patient-reset-button:hover:not(:disabled) { color: #efdfff; border-color: #a875c5; background: #2a1b38; }
+.patient-section.physiology-view .patient-transition-control label { color: #c2a2d4; }
+.patient-section.physiology-view .patient-transition-control select { border-color: #705087; color: #f1e7f7; background: #19121f; }
+.patient-section.physiology-view .preset-row button { border-color: #604476; color: #dbc4e8; background: #1d1525; }
+.patient-section.physiology-view .preset-row button:hover:not(:disabled) { border-color: #986ab5; background: #291d34; }
+.patient-section.physiology-view .preset-row button.selected-preset { color: #fff4ff; border-color: #bd86e0; background: #482b5d; box-shadow: inset 0 0 0 1px rgba(189,134,224,.2); }
+.patient-section.physiology-view .patient-sex-selector button.selected { color: #f5eaff; border-color: #ad79ce; background: #422953; }

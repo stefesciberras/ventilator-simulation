@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PhysiologicalMeasurements } from '../physiologyMeasurements'
 
-type MonitorTab = 'general' | 'spo2' | 'co2' | 'oesophageal'
+type MonitorTab = 'general' | 'spo2' | 'co2' | 'extra' | 'oesophageal'
 
 interface Props {
   open: boolean
@@ -44,6 +44,7 @@ export function PhysiologyMeasurementsDialog({ open, measurements, oesophagealEn
           <button className={tab === 'general' ? 'active' : ''} type="button" onClick={() => setTab('general')}>General</button>
           <button className={tab === 'spo2' ? 'active' : ''} type="button" onClick={() => setTab('spo2')}>SpO₂</button>
           <button className={tab === 'co2' ? 'active' : ''} type="button" onClick={() => setTab('co2')}>CO₂</button>
+          <button className={tab === 'extra' ? 'active' : ''} type="button" onClick={() => setTab('extra')}>Extra</button>
           <button className={tab === 'oesophageal' ? 'active' : ''} type="button" disabled={!oesophagealEnabled} title={!oesophagealEnabled ? 'Enable an oesophageal-pressure trace to use this tab' : undefined} onClick={() => setTab('oesophageal')}>Oesophageal</button>
         </nav>
 
@@ -95,6 +96,16 @@ export function PhysiologyMeasurementsDialog({ open, measurements, oesophagealEn
             <div className="monitor-grid monitor-grid-sparse">
               <div className="monitor-column">
                 <MonitorMetric value={measurements.endTidalCO2} label="EtCO₂" unit="mmHg" digits={0} empty="-" />
+              </div>
+            </div>
+          )}
+
+          {tab === 'extra' && (
+            <div className="monitor-grid monitor-grid-sparse">
+              <div className="monitor-column">
+                <MonitorMetric value={measurements.alveolarTidalVolume} label="Alveolar VT" unit="mL" digits={0} />
+                <MonitorMetric value={measurements.alveolarMinuteVentilation} label="Alveolar MinVol" unit="L/min" digits={2} />
+                <MonitorMetric value={measurements.deadSpaceVolume} label="Dead space" unit="mL" digits={0} />
               </div>
             </div>
           )}
