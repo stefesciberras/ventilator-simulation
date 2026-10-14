@@ -283,7 +283,7 @@ export function VentilatorControls({ settings, onChange, onReset, fio2Override, 
   )
 }
 
-export function PatientControls({ settings, onChange, onReset, onResetPhysiology, transitionSeconds, onTransitionSecondsChange, showPatientEffort, onShowPatientEffortChange, patientEffortLocked = false, showSpO2Ceiling = true, collapsible = true }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; onResetPhysiology: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void; showPatientEffort: boolean; onShowPatientEffortChange: (value: boolean) => void; patientEffortLocked?: boolean; showSpO2Ceiling?: boolean; collapsible?: boolean }) {
+export function PatientControls({ settings, onChange, onReset, onResetPhysiology, transitionSeconds, onTransitionSecondsChange, showPatientEffort, onShowPatientEffortChange, patientEffortLocked = false, showSpO2Ceiling = true, collapsible = true, view = 'both' }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; onResetPhysiology: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void; showPatientEffort: boolean; onShowPatientEffortChange: (value: boolean) => void; patientEffortLocked?: boolean; showSpO2Ceiling?: boolean; collapsible?: boolean; view?: 'patient' | 'physiology' | 'both' }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
   const predictedBodyWeight = calculatePredictedBodyWeight(settings.sex ?? 'male', settings.heightCm ?? 170)
@@ -314,14 +314,14 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
 
   return (
     <section className={`control-section patient-section ${collapsible && collapsed ? 'panel-collapsed' : ''}`}>
-      <div className="control-section-title">
+      {view !== 'physiology' && <div className="control-section-title">
         <h2>Patient settings</h2>
         <div className="control-section-title-actions">
           <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset respiratory</button>
           {collapsible && <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand patient settings' : 'Collapse patient settings'} title={collapsed ? 'Expand patient settings' : 'Collapse patient settings'}>{collapsed ? '▾' : '▴'}</button>}
         </div>
-      </div>
-      <div className="patient-respiratory-controls">
+      </div>}
+      {view !== 'physiology' && <div className="patient-respiratory-controls">
       <div className="patient-transition-control">
         <label htmlFor="patient-transition-select">
           <span>Patient transition</span>
@@ -370,8 +370,8 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
         onChange={(effortRisePercent, effortRelaxationPercent) => patch({ effortRisePercent, effortRelaxationPercent })}
       />
       <Slider label="End-expiratory Pes" value={settings.endExpiratoryOesophagealPressure ?? -5} unit=" cmH₂O" min={-15} max={15} step={0.5} onChange={(v) => patch({ endExpiratoryOesophagealPressure: v })} />
-      </div>
-      <div className="patient-physiology-column">
+      </div>}
+      {view !== 'patient' && <div className="patient-physiology-column">
         <div className="control-section-title patient-physiology-title">
           <h2>Physiology settings</h2>
           <button className="reset-settings-button patient-reset-button" type="button" onClick={onResetPhysiology}>Reset physiological</button>
@@ -390,7 +390,7 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
       {showSpO2Ceiling && <Slider label="Maximum SpO₂" value={Math.round(settings.maxSpO2 ?? 100)} unit="%" min={80} max={100} step={1} onChange={(v) => patch({ maxSpO2: v })} />}
       <Slider label="VCO₂ production" value={settings.co2Production ?? 250} unit=" mL/min" min={100} max={500} step={10} onChange={(v) => patch({ co2Production: v })} />
       <Slider label="Dead space volume" value={settings.deadSpaceVolume ?? 150} unit=" mL" min={50} max={400} step={10} onChange={(v) => patch({ deadSpaceVolume: v })} />
-      </div>
+      </div>}
     </section>
   )
 }

@@ -1,86 +1,32 @@
-/* v0.80.2 — keep measured values in a right-hand column on narrow screens. */
+/* v0.80.3 compact mobile measured-value rail */
 @media (max-width: 680px) {
-  .screen-body {
-    grid-template-columns: minmax(0, 1fr) 112px;
-  }
-
-  .waveforms {
-    min-width: 0;
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .metrics-panel {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    border-top: 0;
-    border-left: 1px solid #253139;
-  }
-
-  .metrics-title {
-    grid-column: auto;
-    padding: 9px 7px 7px;
-  }
-
-  .metric {
-    padding: 9px 6px;
-    text-align: right;
-    border-right: 0;
-  }
-
-  .metric:nth-of-type(3n + 1) {
-    border-right: 0;
-  }
-
-  .metric strong {
-    font-size: 19px;
-  }
-
-  .metric small {
-    display: block;
-    margin: 2px 0 0;
-    font-size: 7px;
-  }
-
-  .metrics-spacer {
-    grid-column: auto;
-    width: auto;
-  }
-
-  .gas-metric {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .gas-metric-item {
-    padding: 9px 4px;
-  }
-
-  .gas-metric-item + .gas-metric-item {
-    border-left: 0;
-    border-top: 1px solid #26343c;
-  }
-
-  .gas-metric-item > div {
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-  }
-
-  .gas-metric-item strong {
-    font-size: 18px;
-  }
-
-  .cursor-hint {
-    grid-column: auto;
-    margin-top: auto;
-    padding: 7px 4px;
-  }
+  .screen-body { grid-template-columns: minmax(0, 1fr) 124px; align-items: stretch; }
+  .waveforms { min-width: 0; padding-left: 7px; padding-right: 7px; }
+  .waveforms.four-traces .waveform-card { height: 132px; }
+  .metrics-panel { display: flex; flex-direction: column; min-width: 0; border-top: 0; border-left: 1px solid #253139; }
+  .metrics-title, .metrics-actions { display: none !important; }
+  .metric { flex: 1 1 0; min-height: 0; padding: 5px 6px; display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; column-gap: 3px; text-align: right; border-right: 0; }
+  .metric > span { display: block; text-align: left; font-size: 8px; line-height: 1.05; letter-spacing: .03em; }
+  .metric > strong { margin: 0; font-size: 17px; line-height: 1; }
+  .metric > small { display: block; margin: 0; font-size: 6.5px; line-height: 1; white-space: nowrap; }
+  .metric:nth-of-type(3n + 1) { border-right: 0; }
+  .metrics-spacer { display: none; }
+  .gas-metric { flex: 2 1 0; display: flex; flex-direction: column; padding: 0; }
+  .gas-metric-item { flex: 1 1 0; min-height: 0; padding: 5px 6px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 3px; }
+  .gas-metric-item + .gas-metric-item { border-left: 0; border-top: 1px solid #26343c; }
+  .gas-metric-item > span { text-align: left; font-size: 8px; }
+  .gas-metric-item > div { display: flex; flex-direction: row; justify-content: flex-end; align-items: baseline; gap: 3px; }
+  .gas-metric-item strong { font-size: 17px; }
+  .gas-metric-item small { font-size: 6.5px; }
+  .cursor-hint { flex: 0 0 auto; margin-top: 0; padding: 5px 3px; }
+  .alarm-row { display: flex; width: 100%; align-items: stretch; border-bottom: 1px solid #26343c; }
+  .alarm-slot { flex: 1 1 auto; min-width: 0; }
+  .alarm-banner { width: 100%; min-height: 34px; height: 100%; }
+  .mobile-alarm-limits-button { display: block; flex: 0 0 86px; border-radius: 0; border-top: 0; border-bottom: 0; border-right: 0; padding: 5px 6px; font-size: 9px; font-weight: 700; white-space: nowrap; }
+  .tabbed-control-panel { order: -2; }
 }
-
 @media (max-width: 400px) {
-  .screen-body {
-    grid-template-columns: minmax(0, 1fr) 100px;
-  }
+  .screen-body { grid-template-columns: minmax(0, 1fr) 112px; }
+  .metric { padding-left: 4px; padding-right: 4px; }
+  .mobile-alarm-limits-button { flex-basis: 80px; }
 }
