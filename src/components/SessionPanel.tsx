@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { CandidateInvitation } from './CandidateInvitation'
-import type { SessionConnection, SessionRole } from '../session/useTeachingSession'
+import type { RuntimeTransportKind, SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { LocalRuntimeConnection } from '../session/localRuntimeTransport'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
@@ -21,6 +21,7 @@ interface SessionPanelProps {
   connection: SessionConnection
   localRuntimeConnection: LocalRuntimeConnection
   localRuntimeUrl: string | null
+  runtimeTransportKind: RuntimeTransportKind
   session: TeachingSessionRow | null
   members: SessionMemberRow[]
   error: string | null
@@ -62,16 +63,18 @@ function ConnectionBadge({ connection }: { connection: SessionConnection }) {
   return <span className={`session-connection ${connection}`}><span className="session-connection-dot" />{label}</span>
 }
 
-function LocalRuntimeBadge({ connection, url }: { connection: LocalRuntimeConnection; url: string | null }) {
-  if (connection === 'disabled') return null
+function RuntimeTransportBadge({ connection, url, kind }: { connection: LocalRuntimeConnection; url: string | null; kind: RuntimeTransportKind }) {
+  if (connection === 'disabled' || kind === 'cloud') return null
+  const name = kind === 'webrtc' ? 'Peer-to-peer' : kind === 'appliance' ? 'EDUVENT box' : 'LAN server'
   const label = connection === 'connected'
-    ? 'LAN live'
+    ? `${name} live`
     : connection === 'connecting'
-      ? 'LAN connecting…'
+      ? `${name} connecting…`
       : connection === 'reconnecting'
-        ? 'LAN reconnecting…'
-        : 'LAN unavailable'
-  return <span className={`local-runtime-badge ${connection}`} title={url ?? 'Local runtime relay'}><i />{label}</span>
+        ? `${name} reconnecting…`
+        : `${name} unavailable`
+  const title = kind === 'webrtc' ? 'Direct WebRTC DataChannel; Supabase signalling/fallback' : (url ?? 'Local runtime relay')
+  return <span className={`local-runtime-badge ${connection}`} title={title}><i />{label}</span>
 }
 
 function hasVentilatorSettings(value: SessionMemberRow['ventilator_settings']): value is VentilatorSettings {
@@ -163,6 +166,7 @@ export function SessionPanel({
   connection,
   localRuntimeConnection,
   localRuntimeUrl,
+  runtimeTransportKind,
   session,
   members,
   error,
@@ -406,7 +410,7 @@ export function SessionPanel({
           <div><span className="session-kicker">Teaching</span><h2>Instructor dashboard</h2></div>
           <div className="collapsible-heading-actions">
             <ConnectionBadge connection={connection} />
-            <LocalRuntimeBadge connection={localRuntimeConnection} url={localRuntimeUrl} />
+            <RuntimeTransportBadge connection={localRuntimeConnection} url={localRuntimeUrl} kind={runtimeTransportKind} />
             <button className="panel-collapse-button" type="button" onClick={toggleDashboardCollapsed} aria-expanded={!dashboardCollapsed} aria-label={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'} title={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'}>{dashboardCollapsed ? '▾' : '▴'}</button>
           </div>
         </div>
@@ -522,7 +526,7 @@ export function SessionPanel({
         <div><span className="session-kicker">Teaching</span><h2>Candidate session</h2></div>
         <div className="session-transport-badges">
           <ConnectionBadge connection={connection} />
-          <LocalRuntimeBadge connection={localRuntimeConnection} url={localRuntimeUrl} />
+          <RuntimeTransportBadge connection={localRuntimeConnection} url={localRuntimeUrl} kind={runtimeTransportKind} />
         </div>
       </div>
       <div className="candidate-session-summary">

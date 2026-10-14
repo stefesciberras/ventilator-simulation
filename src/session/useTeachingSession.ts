@@ -22,13 +22,16 @@ import {
 import {
   LocalRuntimeTransport,
   getDefaultLocalRuntimeUrl,
+  getLocalRuntimeProfile,
   type LocalRuntimeConnection,
   type LocalRuntimeEnvelope,
   type LocalRuntimeSnapshot,
 } from './localRuntimeTransport'
+import { WebRtcRuntimeTransport } from './webRtcRuntimeTransport'
 
 export type SessionRole = 'standalone' | 'instructor' | 'candidate'
 export type SessionConnection = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+export type RuntimeTransportKind = 'cloud' | 'webrtc' | 'local-server' | 'appliance'
 
 export interface RecoverableCandidateSession {
   sessionKey: string
@@ -120,6 +123,7 @@ export function useTeachingSession({
   const [recoverableCandidate, setRecoverableCandidate] = useState<RecoverableCandidateSession | null>(null)
   const [localRuntimeConnection, setLocalRuntimeConnection] = useState<LocalRuntimeConnection>('disabled')
   const [localRuntimeUrl, setLocalRuntimeUrl] = useState<string | null>(() => getDefaultLocalRuntimeUrl())
+  const [runtimeTransportKind, setRuntimeTransportKind] = useState<RuntimeTransportKind>(() => getDefaultLocalRuntimeUrl() ? getLocalRuntimeProfile() : 'webrtc')
   const channelRef = useRef<RealtimeChannel | null>(null)
   const membersChannelRef = useRef<RealtimeChannel | null>(null)
   const roleRef = useRef<SessionRole>('standalone')
@@ -142,7 +146,7 @@ export function useTeachingSession({
   const instructorHeartbeatRef = useRef<number | null>(null)
   const instructorClientIdRef = useRef<string | null>(null)
   const localRuntimeConnectionRef = useRef<LocalRuntimeConnection>('disabled')
-  const localTransportRef = useRef<LocalRuntimeTransport | null>(null)
+  const localTransportRef = useRef<LocalRuntimeTransport | WebRtcRuntimeTransport | null>(null)
   const localCheckpointTimerRef = useRef<number | null>(null)
   const runtimeEventListenersRef = useRef(new Set<(envelope: LocalRuntimeEnvelope) => void>())
 
@@ -256,22 +260,16 @@ export function useTeachingSession({
     localTransportRef.current = null
     const url = getDefaultLocalRuntimeUrl()
     setLocalRuntimeUrl(url)
-    if (!url) {
-      localRuntimeConnectionRef.current = 'disabled'
-      setLocalRuntimeConnection('disabled')
-      return
-    }
 
     const clientId = nextRole === 'instructor'
       ? (instructorClientIdRef.current ?? crypto.randomUUID())
       : crypto.randomUUID()
-    const transport = new LocalRuntimeTransport({
-      url,
+    const callbacks = {
       role: nextRole,
       sessionKey: row.session_key,
       sessionId: row.id,
       clientId,
-      onConnection: (state) => {
+      onConnection: (state: LocalRuntimeConnection) => {
         localRuntimeConnectionRef.current = state
         setLocalRuntimeConnection(state)
         if (state === 'connected') {
@@ -280,7 +278,12 @@ export function useTeachingSession({
         }
       },
       onEnvelope: handleLocalRuntimeEnvelope,
-    })
+    }
+
+    const transport = url
+      ? new LocalRuntimeTransport({ ...callbacks, url })
+      : new WebRtcRuntimeTransport(callbacks)
+    setRuntimeTransportKind(url ? getLocalRuntimeProfile() : 'webrtc')
     localTransportRef.current = transport
     transport.connect()
   }
@@ -613,6 +616,7 @@ export function useTeachingSession({
     localTransportRef.current = null
     localRuntimeConnectionRef.current = 'disabled'
     setLocalRuntimeConnection('disabled')
+    setRuntimeTransportKind('cloud')
     await closeTeachingSessionChannel(channelRef.current)
     await closeTeachingSessionChannel(membersChannelRef.current)
     channelRef.current = null
@@ -815,8 +819,8 @@ export function useTeachingSession({
     }
   }, [simulationPaused, role, session?.id])
 
-  // The LAN relay is the runtime fast path. It publishes immediately from React state,
-  // while Supabase remains the durable cloud copy and fallback transport.
+  // The selected runtime transport (WebRTC, PC relay, or appliance relay) is the fast path.
+  // Supabase remains the durable cloud copy and fallback transport.
   useEffect(() => {
     if (role !== 'instructor' || !session?.id) return
     publishLocalRuntimeSnapshot(session)
@@ -947,6 +951,7 @@ export function useTeachingSession({
     connection,
     localRuntimeConnection,
     localRuntimeUrl,
+    runtimeTransportKind,
     session,
     members,
     error,

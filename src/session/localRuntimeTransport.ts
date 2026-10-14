@@ -82,6 +82,18 @@ export function getDefaultLocalRuntimeUrl(): string | null {
   return `ws://${window.location.host}/eduvent-session`
 }
 
+export type LocalRuntimeProfile = 'local-server' | 'appliance'
+
+export function getLocalRuntimeProfile(): LocalRuntimeProfile {
+  if (typeof window === 'undefined') return 'local-server'
+  const query = new URLSearchParams(window.location.search).get('runtimeProfile')?.trim().toLowerCase()
+  const stored = window.localStorage.getItem('eduvent.runtime-profile')?.trim().toLowerCase()
+  const selected = query || stored
+  if (selected === 'appliance') return 'appliance'
+  if (window.location.hostname === 'eduvent.local' || window.location.hostname.startsWith('eduvent-box')) return 'appliance'
+  return 'local-server'
+}
+
 export function saveLocalRuntimeUrl(url: string | null) {
   if (typeof window === 'undefined') return
   if (!url) {
