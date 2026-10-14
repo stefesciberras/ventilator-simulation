@@ -133,6 +133,7 @@ export function useTeachingSession({
   const alarmLimitsRef = useRef(alarmLimits)
   const patientTransitionSecondsRef = useRef(patientTransitionSeconds)
   const alarmLevelRef = useRef<CandidateAlarmLevel>(candidateAlarmLevel)
+  const simulationPausedRef = useRef(simulationPaused)
   const patientRevisionRef = useRef(0)
   const ventilatorRevisionRef = useRef(0)
   const alarmRevisionRef = useRef(0)
@@ -162,7 +163,14 @@ export function useTeachingSession({
   useEffect(() => { alarmLimitsRef.current = alarmLimits }, [alarmLimits])
   useEffect(() => { patientTransitionSecondsRef.current = patientTransitionSeconds }, [patientTransitionSeconds])
   useEffect(() => { alarmLevelRef.current = candidateAlarmLevel }, [candidateAlarmLevel])
+  useEffect(() => { simulationPausedRef.current = simulationPaused }, [simulationPaused])
   useEffect(() => { localRuntimeConnectionRef.current = localRuntimeConnection }, [localRuntimeConnection])
+
+  useEffect(() => {
+    if (role !== 'standalone') return
+    simulationPausedRef.current = false
+    setSimulationPaused(false)
+  }, [role])
 
   const buildLocalRuntimeSnapshot = (row = sessionRef.current): LocalRuntimeSnapshot | null => {
     if (!row) return null
@@ -175,7 +183,7 @@ export function useTeachingSession({
       ventilator: ventilatorRef.current,
       alarmLimits: alarmLimitsRef.current,
       patientTransitionMs: Math.max(0, Math.round(patientTransitionSecondsRef.current * 1000)),
-      simulationPaused,
+      simulationPaused: simulationPausedRef.current,
       policy: {
         syncPatient: Boolean(row.sync_patient),
         syncVentilator: Boolean(row.sync_ventilator),
@@ -429,7 +437,7 @@ export function useTeachingSession({
       alarmRevisionRef.current = Number(row.alarm_revision ?? 0)
       pauseRevisionRef.current = Number(row.pause_revision ?? 0)
 
-      const localPaused = simulationPaused
+      const localPaused = simulationPausedRef.current
       if (localPaused !== Boolean(row.simulation_paused)) {
         pauseRevisionRef.current += 1
         row = await updateTeachingSession(created.sessionId, {

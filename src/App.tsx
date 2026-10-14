@@ -529,7 +529,8 @@ export default function App() {
   const [alarmSilenced, setAlarmSilenced] = useState(false)
   const [alarmClock, setAlarmClock] = useState(() => Date.now())
   const [alarmLifecycle, setAlarmLifecycle] = useState<Record<string, { activeSince: number | null; resolvedAt: number | null; acknowledged: boolean }>>({})
-  const [frozen, setFrozen] = useState(false)
+  const [waveformFrozen, setWaveformFrozen] = useState(false)
+  const [simulationPaused, setSimulationPaused] = useState(false)
   const [frozenSamples, setFrozenSamples] = useState<Sample[] | null>(null)
   const [traceCursor, setTraceCursor] = useState(Math.floor(WINDOW_SAMPLES * 0.7))
   const [inspiratoryHoldRequestTime, setInspiratoryHoldRequestTime] = useState<number | null>(null)
@@ -576,8 +577,8 @@ export default function App() {
     setAlarmLimits,
     setPatientTransitionSeconds,
     candidateAlarmLevel: candidateAlarmLevelForSession,
-    simulationPaused: frozen,
-    setSimulationPaused: setFrozen,
+    simulationPaused,
+    setSimulationPaused,
   })
 
   const candidateWaveformOptions = useMemo(
@@ -600,6 +601,9 @@ export default function App() {
   }
 
   const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {
+    if (teachingSession.role === 'instructor') setSimulationPaused(true)
+    setWaveformFrozen(false)
+    setFrozenSamples(null)
     scenarioClockOriginRef.current = simulationTimeRef.current
     setVentilator({ ...scenario.ventilator })
     setPatient({ ...scenario.patient })
@@ -730,7 +734,7 @@ export default function App() {
   }), [inspiratoryHoldRequestTime, inspiratoryHoldReleaseTime, expiratoryHoldRequestTime, expiratoryHoldReleaseTime, alarmLimits.pressureLimit])
 
   useEffect(() => {
-    if (frozen) return
+    if (simulationPaused) return
     const timer = window.setInterval(() => {
       const startTime = simulationTimeRef.current
       const transition = patientTransitionRef.current
@@ -763,10 +767,10 @@ export default function App() {
       })
     }, 100)
     return () => window.clearInterval(timer)
-  }, [effectiveVentilator, patient, frozen, holdOptions])
+  }, [effectiveVentilator, patient, simulationPaused, holdOptions])
 
   const movingSamples = useMemo(() => timeline.slice(-WINDOW_SAMPLES), [timeline])
-  const samples = frozen && frozenSamples ? frozenSamples : movingSamples
+  const samples = waveformFrozen && frozenSamples ? frozenSamples : movingSamples
   const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
   const physiologyMeasurements = useMemo(() => calculatePhysiologicalMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
@@ -1015,7 +1019,7 @@ export default function App() {
   ].filter((value): value is string => value != null)
 
   useEffect(() => {
-    if (!audibleAlarmLevel || alarmSilenced || frozen || teachingSession.candidateAlarmsSilent) return
+    if (!audibleAlarmLevel || alarmSilenced || simulationPaused || teachingSession.candidateAlarmsSilent) return
     const beep = () => {
       try {
         const AudioContextConstructor = window.AudioContext
@@ -1041,7 +1045,7 @@ export default function App() {
     beep()
     const interval = window.setInterval(beep, audibleAlarmLevel === 'red' ? 700 : 1300)
     return () => window.clearInterval(interval)
-  }, [audibleAlarmLevel, alarmSilenced, frozen, teachingSession.candidateAlarmsSilent])
+  }, [audibleAlarmLevel, alarmSilenced, simulationPaused, teachingSession.candidateAlarmsSilent])
 
   useEffect(() => () => {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
@@ -1049,7 +1053,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!frozen) return
+    if (!waveformFrozen) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
       event.preventDefault()
@@ -1058,31 +1062,31 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [frozen, samples.length])
+  }, [waveformFrozen, samples.length])
 
   useEffect(() => {
-    if (!frozen) {
+    if (!waveformFrozen) {
       if (frozenSamples) setFrozenSamples(null)
       return
     }
     if (frozenSamples) return
     setFrozenSamples(movingSamples)
     setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
-  }, [frozen, frozenSamples, movingSamples])
+  }, [waveformFrozen, frozenSamples, movingSamples])
 
   const toggleFreeze = () => {
-    if (!frozen) {
+    if (!waveformFrozen) {
       setFrozenSamples(movingSamples)
       setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
-      setFrozen(true)
+      setWaveformFrozen(true)
     } else {
-      setFrozen(false)
+      setWaveformFrozen(false)
       setFrozenSamples(null)
     }
   }
 
   const beginInspiratoryHold = () => {
-    if (frozen || !manualHoldAvailable || inspiratoryHoldPressed) return
+    if (waveformFrozen || simulationPaused || !manualHoldAvailable || inspiratoryHoldPressed) return
     setExpiratoryHoldRequestTime(null)
     setExpiratoryHoldReleaseTime(null)
     setInspiratoryHoldRequestTime(currentSimulationTime)
@@ -1094,11 +1098,11 @@ export default function App() {
     setInspiratoryHoldReleaseTime(currentSimulationTime)
     setFrozenSamples(movingSamples)
     setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
-    setFrozen(true)
+    setWaveformFrozen(true)
   }
 
   const beginExpiratoryHold = () => {
-    if (frozen || activeMode === 'APRV' || expiratoryHoldPressed) return
+    if (waveformFrozen || simulationPaused || activeMode === 'APRV' || expiratoryHoldPressed) return
     setInspiratoryHoldRequestTime(null)
     setInspiratoryHoldReleaseTime(null)
     setExpiratoryHoldRequestTime(currentSimulationTime)
@@ -1110,7 +1114,7 @@ export default function App() {
     setExpiratoryHoldReleaseTime(currentSimulationTime)
     setFrozenSamples(movingSamples)
     setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
-    setFrozen(true)
+    setWaveformFrozen(true)
   }
 
   const silenceAlarm = () => {
@@ -1145,7 +1149,7 @@ export default function App() {
     ]
     const copied = await copyDiagnosticSnapshot({
       appVersion: APP_VERSION,
-      simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
+      simulation: { time: currentSimulationTime, paused: simulationPaused, waveformFrozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
         effectiveVentilator,
@@ -1192,7 +1196,7 @@ export default function App() {
         tidalVolumeAlarmLimitsMl: { low: alarmLimits.tidalVolumeMin, high: alarmLimits.tidalVolumeMax },
       },
       cursor: { index: traceCursor, selectedSample: selectedSample ?? null },
-    }, samples, frozen && frozenSamples ? 'frozen' : 'live', DT)
+    }, samples, waveformFrozen && frozenSamples ? 'frozen' : 'live', DT)
     setDiagnosticCopied(copied)
     if (copied) window.setTimeout(() => setDiagnosticCopied(false), 1800)
   }
@@ -1244,24 +1248,24 @@ export default function App() {
         <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
         <div className="top-simulation-controls">
           <button
-            className={`top-simulation-pause ${frozen ? 'paused' : ''}`}
+            className={`top-simulation-pause ${simulationPaused ? 'paused' : ''}`}
             type="button"
-            onClick={toggleFreeze}
-            disabled={teachingSession.candidatePauseLocked}
-            aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume whole simulation' : 'Pause whole simulation')}
-            title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume whole simulation' : 'Pause whole simulation')}
+            onClick={() => setSimulationPaused((paused) => !paused)}
+            disabled={teachingSession.role === 'candidate'}
+            aria-label={teachingSession.role === 'candidate' ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor') : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
+            title={teachingSession.role === 'candidate' ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor') : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
           >
-            <PauseIcon paused={frozen} />
-            <span>{frozen ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
+            <PauseIcon paused={simulationPaused} />
+            <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
           </button>
-          <div className={`simulation-clock ${frozen ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(scenarioElapsedTime)}`}>
+          <div className={`simulation-clock ${simulationPaused ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(scenarioElapsedTime)}`}>
             <span>TIME</span>
             <strong>{formatSimulationClock(scenarioElapsedTime)}</strong>
           </div>
         </div>
         <div className="status-cluster">
-          <span className={`status-dot ${frozen ? 'paused' : ''}`} />
-          <span>{frozen ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>
+          <span className={`status-dot ${simulationPaused ? 'paused' : ''}`} />
+          <span>{simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>
           <InstructorAccountControls
             role={teachingSession.role}
             currentScenario={currentInstructorScenario}
@@ -1314,10 +1318,10 @@ export default function App() {
               {oxygenBoost && <span className="oxygen-enrichment-timer" aria-live="polite">{oxygenBoostTimer}</span>}
             </div>
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
-            <button className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} disabled={teachingSession.candidatePauseLocked} title={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Freeze waveforms')} aria-label={teachingSession.candidatePauseLocked ? 'Simulation paused by instructor' : (frozen ? 'Resume simulation' : 'Freeze waveforms')}><FreezeWaveformIcon /></button>
+            <button className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''}`} onClick={toggleFreeze} title={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'} aria-label={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'}><FreezeWaveformIcon /></button>
             <button
               className={`hardware-button hold-button ${inspiratoryHoldPressed ? 'active' : ''}`}
-              disabled={frozen || !manualHoldAvailable}
+              disabled={waveformFrozen || simulationPaused || !manualHoldAvailable}
               title={!manualHoldAvailable ? 'Inspiratory hold is unavailable in this mode' : 'Press and hold for an inspiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginInspiratoryHold() }}
               onPointerUp={releaseInspiratoryHold}
@@ -1327,7 +1331,7 @@ export default function App() {
             ><span className="hold-label-desktop">Insp Hold</span><span className="hold-label-mobile">Insp <PauseIcon paused={false} /></span></button>
             <button
               className={`hardware-button hold-button ${expiratoryHoldPressed ? 'active' : ''}`}
-              disabled={frozen || activeMode === 'APRV' || activeMode === 'BIPAP'}
+              disabled={waveformFrozen || simulationPaused || activeMode === 'APRV' || activeMode === 'BIPAP'}
               title={(activeMode === 'APRV' || activeMode === 'BIPAP') ? 'Expiratory hold is unavailable in two-level pressure modes' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
               onPointerUp={releaseExpiratoryHold}
@@ -1401,8 +1405,8 @@ export default function App() {
             )}
 
             <div className={`waveforms ${waveformDisplay.fourth ? 'four-traces' : ''}`}>
-              <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime showSimvSyncWindow={ventilator.showSimvSyncWindow} showPatientEffortMarkers={patientEffortVisible} />
-              <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
+              <Waveform samples={samples} signal="pressure" label="Paw" unit="cmH₂O" min={0} max={45} accent="#f6df63" frozen={waveformFrozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} showTime showSimvSyncWindow={ventilator.showSimvSyncWindow} showPatientEffortMarkers={patientEffortVisible} />
+              <Waveform samples={samples} signal="flow" label="Flow" unit="L/min" min={-80} max={80} accent="#69d8f1" frozen={waveformFrozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
 
               <div className="waveform-options-bar">
                 <label>
@@ -1428,11 +1432,11 @@ export default function App() {
 
               {(() => {
                 const config = waveformConfig[waveformDisplay.third]
-                return <Waveform samples={samples} signal={waveformDisplay.third} label={config.label} unit={config.unit} min={config.min} max={config.max} accent={config.accent} frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
+                return <Waveform samples={samples} signal={waveformDisplay.third} label={config.label} unit={config.unit} min={config.min} max={config.max} accent={config.accent} frozen={waveformFrozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
               })()}
               {waveformDisplay.fourth && (() => {
                 const config = waveformConfig[waveformDisplay.fourth]
-                return <Waveform samples={samples} signal={waveformDisplay.fourth} label={config.label} unit={config.unit} min={config.min} max={config.max} accent={config.accent} frozen={frozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
+                return <Waveform samples={samples} signal={waveformDisplay.fourth} label={config.label} unit={config.unit} min={config.min} max={config.max} accent={config.accent} frozen={waveformFrozen} cursorIndex={traceCursor} onCursorChange={setTraceCursor} />
               })()}
             </div>
 
@@ -1453,7 +1457,7 @@ export default function App() {
                 spo2={latestSample?.spo2 == null ? '—' : latestSample.spo2.toFixed(0)}
                 spo2AlarmLevel={spo2MetricAlarm}
               />
-              {frozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
+              {waveformFrozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
           </div>
 
@@ -1491,6 +1495,8 @@ export default function App() {
                   localRuntimeUrl={teachingSession.localRuntimeUrl}
                   runtimeTransportKind={teachingSession.runtimeTransportKind}
                   session={teachingSession.session}
+                  simulationPaused={simulationPaused}
+                  onSimulationPausedChange={setSimulationPaused}
                   members={teachingSession.members}
                   error={teachingSession.error}
                   recoverableInstructor={teachingSession.recoverableInstructor}
