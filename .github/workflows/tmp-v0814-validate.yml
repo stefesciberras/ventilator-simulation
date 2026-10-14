@@ -1,0 +1,34 @@
+name: Temporary v0.81.4 patient and physio validation
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.81.4-physio-patient-presets
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.81.4-physio-patient-presets
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply v0.81.4 patches
+        run: |
+          python .github/tmp_v0814_patch.py
+          npm ci
+          npm run build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/Controls.tsx src/styles.css
+          git commit -m "Implement v0.81.4 patient and physiology presets"
+          git push
+      - name: Validate committed tree
+        run: npm run build
