@@ -23,6 +23,8 @@ interface SessionPanelProps {
   localRuntimeUrl: string | null
   runtimeTransportKind: RuntimeTransportKind
   session: TeachingSessionRow | null
+  simulationPaused: boolean
+  onSimulationPausedChange: (paused: boolean) => void
   members: SessionMemberRow[]
   error: string | null
   recoverableInstructor?: { sessionId: string; sessionKey: string } | null
@@ -168,6 +170,8 @@ export function SessionPanel({
   localRuntimeUrl,
   runtimeTransportKind,
   session,
+  simulationPaused,
+  onSimulationPausedChange,
   members,
   error,
   recoverableInstructor,
@@ -443,7 +447,7 @@ export function SessionPanel({
           </div>
         </div>
 
-        {session?.simulation_paused && <div className="instructor-pause-banner">All candidate simulations are paused by the instructor.</div>}
+        {simulationPaused && <div className="instructor-pause-banner">All candidate simulations are paused by the instructor.</div>}
 
         <div className="instructor-session-controls">
           <button
@@ -517,6 +521,7 @@ export function SessionPanel({
         </div>
 
         <div className="session-action-row">
+          <button type="button" className={simulationPaused ? 'session-primary-button' : 'session-secondary-button'} aria-pressed={simulationPaused} onClick={() => onSimulationPausedChange(!simulationPaused)}>{simulationPaused ? 'Resume all simulations' : 'Pause all simulations'}</button>
           <button type="button" className="session-secondary-button" onClick={() => void onBroadcastNow()}>Push current settings</button>
           <button type="button" className="session-danger-button" onClick={() => void onEndInstructorSession()}>End session</button>
         </div>
@@ -562,7 +567,7 @@ export function SessionPanel({
             </span>
           </div>
         </div>
-        {session?.simulation_paused && <div className="session-warning">Simulation paused by instructor. The instructor controls when it resumes.</div>}
+        {simulationPaused && <div className="session-warning">Simulation paused by instructor. The instructor controls when it resumes.</div>}
         {connection === 'reconnecting' && <div className="session-warning">Connection lost. Simulation continues with the last received settings while EDUVENT reconnects.</div>}
         {error && <div className="session-error" role="alert">{error}</div>}
         <button type="button" className="session-secondary-button" onClick={() => void onLeaveSession()}>Leave session</button>
