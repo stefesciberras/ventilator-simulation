@@ -545,7 +545,16 @@ export default function App() {
   const [diagnosticCopied, setDiagnosticCopied] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const [instructorSimulatorExpanded, setInstructorSimulatorExpanded] = useState(false)
+  const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1101px)').matches)
   const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1101px)')
+    const update = () => setWideInstructorLayout(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   const previousApneaAlarmActiveRef = useRef(false)
 
   const teachingSession = useTeachingSession({
@@ -1472,11 +1481,11 @@ export default function App() {
           />
           <fieldset className={`session-lock-fieldset ventilator-settings-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
             {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-            <VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />
+            <VentilatorControls collapsible={teachingSession.role !== 'instructor' || instructorSimulatorExpanded || !wideInstructorLayout} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />
           </fieldset>
           <fieldset className={`session-lock-fieldset patient-settings-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
             {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-            <PatientControls settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />
+            <PatientControls collapsible={teachingSession.role !== 'instructor' || instructorSimulatorExpanded || !wideInstructorLayout} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />
           </fieldset>
           <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
