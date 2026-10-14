@@ -1,0 +1,18 @@
+Applied v0.81.5 Vd/Vt physiology model
+PATCH_STATUS=0
+Added total dead-space argument to airway CO2 model
+FIX_STATUS=0
+
+added 75 packages, and audited 76 packages in 3s
+
+18 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+NPM_CI_STATUS=0
+
+> ventilator-simulation@0.1.0 build
+> tsc -b && vite build
+
+src/simulation/engine.ts(1058,5): error TS2304: Cannot find name 'totalDeadSpaceVolumeMl'.
+BUILD_STATUS=1
