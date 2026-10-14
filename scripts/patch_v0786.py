@@ -35,16 +35,15 @@ replace_once(
 
 replace_once('src/App.tsx', "  const [instructorSimulatorExpanded, setInstructorSimulatorExpanded] = useState(false)", "  const [instructorSimulatorExpanded, setInstructorSimulatorExpanded] = useState(false)\n  const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1101px)').matches)")
 replace_once('src/App.tsx', "  const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)", "  const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)\n\n  useEffect(() => {\n    const media = window.matchMedia('(min-width: 1101px)')\n    const update = () => setWideInstructorLayout(media.matches)\n    update()\n    media.addEventListener('change', update)\n    return () => media.removeEventListener('change', update)\n  }, [])")
-
-text = Path('src/App.tsx').read_text()
-vent_anchor = '<VentilatorControls\n'
-if vent_anchor not in text:
-    raise SystemExit('VentilatorControls usage not found')
-text = text.replace(vent_anchor, '<VentilatorControls\n              collapsible={teachingSession.role !== \'instructor\' || instructorSimulatorExpanded || !wideInstructorLayout}\n', 1)
-patient_anchor = '<PatientControls\n'
-if patient_anchor not in text:
-    raise SystemExit('PatientControls usage not found')
-text = text.replace(patient_anchor, '<PatientControls\n              collapsible={teachingSession.role !== \'instructor\' || instructorSimulatorExpanded || !wideInstructorLayout}\n', 1)
-Path('src/App.tsx').write_text(text)
+replace_once(
+    'src/App.tsx',
+    '<VentilatorControls settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />',
+    '<VentilatorControls collapsible={teachingSession.role !== \'instructor\' || instructorSimulatorExpanded || !wideInstructorLayout} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />',
+)
+replace_once(
+    'src/App.tsx',
+    '<PatientControls settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === \'candidate\' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === \'candidate\'} showSpO2Ceiling={teachingSession.role !== \'candidate\'} />',
+    '<PatientControls collapsible={teachingSession.role !== \'instructor\' || instructorSimulatorExpanded || !wideInstructorLayout} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === \'candidate\' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === \'candidate\'} showSpO2Ceiling={teachingSession.role !== \'candidate\'} />',
+)
 
 replace_once('src/appVersion.ts', "export const APP_VERSION = '0.78.5'", "export const APP_VERSION = '0.78.6'")
