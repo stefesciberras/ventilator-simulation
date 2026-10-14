@@ -6,6 +6,7 @@ type MonitorTab = 'general' | 'spo2' | 'co2' | 'oesophageal'
 interface Props {
   open: boolean
   measurements: PhysiologicalMeasurements
+  oesophagealEnabled: boolean
   onClose: () => void
 }
 
@@ -20,15 +21,8 @@ function MonitorMetric({ value, label, unit, digits = 1, empty = '—' }: { valu
   )
 }
 
-function oesophagealTraceIsInUse() {
-  if (typeof document === 'undefined') return false
-  return Array.from(document.querySelectorAll<HTMLSelectElement>('.waveform-options-bar select'))
-    .some((select) => select.value === 'oesophagealPressure')
-}
-
-export function PhysiologyMeasurementsDialog({ open, measurements, onClose }: Props) {
+export function PhysiologyMeasurementsDialog({ open, measurements, oesophagealEnabled, onClose }: Props) {
   const [tab, setTab] = useState<MonitorTab>('general')
-  const oesophagealEnabled = open ? oesophagealTraceIsInUse() : false
   const spontaneousMinuteVentilation = measurements.totalRespiratoryRate > 0
     ? measurements.actualMinuteVentilation * Math.min(1, measurements.triggeredRespiratoryRate / measurements.totalRespiratoryRate)
     : 0

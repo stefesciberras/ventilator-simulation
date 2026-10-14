@@ -14,6 +14,7 @@ import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
 import type { InstructorScenarioSnapshot } from './instructorAccount'
 import { calculatePhysiologicalMeasurements } from './physiologyMeasurements'
+import { APP_VERSION } from './appVersion'
 import './session.css'
 import './physiology.css'
 
@@ -562,6 +563,9 @@ export default function App() {
       : waveformOptions.filter((option) => option.value !== 'oesophagealPressure'),
     [teachingSession.candidateOesophagealPressureAllowed],
   )
+  const oesophagealMonitoringEnabled = teachingSession.candidateOesophagealPressureAllowed && (
+    waveformDisplay.third === 'oesophagealPressure' || waveformDisplay.fourth === 'oesophagealPressure'
+  )
 
   const currentInstructorScenario: InstructorScenarioSnapshot = {
     ventilator,
@@ -1100,7 +1104,7 @@ export default function App() {
       { key: 'apnea', label: 'Apnoea', priority: 'critical', value: latestBreathStart == null ? currentSimulationTime : currentSimulationTime - latestBreathStart, unit: 's since breath', limits: { high: alarmLimits.apneaTime }, active: apneaAlarmActive, history: historyFor('apnea') },
     ]
     const copied = await copyDiagnosticSnapshot({
-      appVersion: '0.77.3',
+      appVersion: APP_VERSION,
       simulation: { time: currentSimulationTime, paused: frozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
       settings: {
         ventilator,
@@ -1195,7 +1199,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={physiologyMeasurements} onClose={() => setMeasurementsOpen(false)} />
+      <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={physiologyMeasurements} oesophagealEnabled={oesophagealMonitoringEnabled} onClose={() => setMeasurementsOpen(false)} />
       <header className="topbar">
         <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
         <div className="top-simulation-controls">
@@ -1235,7 +1239,7 @@ export default function App() {
             title={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy settings and visible waveform as diagnostic JSON'}
             aria-label={diagnosticCopied ? 'Diagnostic JSON copied' : 'Copy diagnostic JSON'}
           ><DiagnosticIcon copied={diagnosticCopied} /></button>
-          <span className="version">v0.77.3</span>
+          <span className="version">v{APP_VERSION}</span>
         </div>
       </header>
 
