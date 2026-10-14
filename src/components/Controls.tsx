@@ -120,7 +120,7 @@ function SyncWindowIcon() {
   )
 }
 
-export function VentilatorControls({ settings, onChange, onReset, fio2Override, fio2BoostActive = false }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void; onReset: () => void; fio2Override?: number; fio2BoostActive?: boolean }) {
+export function VentilatorControls({ settings, onChange, onReset, fio2Override, fio2BoostActive = false, collapsible = true }: { settings: VentilatorSettings; onChange: (next: VentilatorSettings) => void; onReset: () => void; fio2Override?: number; fio2BoostActive?: boolean; collapsible?: boolean }) {
   const patch = (value: Partial<VentilatorSettings>) => onChange({ ...settings, ...value })
   const currentIeRatio = ieRatioFrom(settings)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
@@ -193,12 +193,12 @@ export function VentilatorControls({ settings, onChange, onReset, fio2Override, 
   )
 
   return (
-    <section className={`control-section ventilator-settings-section ${collapsed ? 'panel-collapsed' : ''}`}>
+    <section className={`control-section ventilator-settings-section ${collapsible && collapsed ? 'panel-collapsed' : ''}`}>
       <div className="control-section-title">
         <h2>Ventilator settings</h2>
         <div className="control-section-title-actions">
           <button className="reset-settings-button" type="button" onClick={onReset}>Reset vent</button>
-          <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand ventilator settings' : 'Collapse ventilator settings'} title={collapsed ? 'Expand ventilator settings' : 'Collapse ventilator settings'}>{collapsed ? '▾' : '▴'}</button>
+          {collapsible && <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand ventilator settings' : 'Collapse ventilator settings'} title={collapsed ? 'Expand ventilator settings' : 'Collapse ventilator settings'}>{collapsed ? '▾' : '▴'}</button>}
         </div>
       </div>
       <div className="mode-selector">
@@ -283,7 +283,7 @@ export function VentilatorControls({ settings, onChange, onReset, fio2Override, 
   )
 }
 
-export function PatientControls({ settings, onChange, onReset, onResetPhysiology, transitionSeconds, onTransitionSecondsChange, showPatientEffort, onShowPatientEffortChange, patientEffortLocked = false, showSpO2Ceiling = true }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; onResetPhysiology: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void; showPatientEffort: boolean; onShowPatientEffortChange: (value: boolean) => void; patientEffortLocked?: boolean; showSpO2Ceiling?: boolean }) {
+export function PatientControls({ settings, onChange, onReset, onResetPhysiology, transitionSeconds, onTransitionSecondsChange, showPatientEffort, onShowPatientEffortChange, patientEffortLocked = false, showSpO2Ceiling = true, collapsible = true }: { settings: PatientSettings; onChange: (next: PatientSettings) => void; onReset: () => void; onResetPhysiology: () => void; transitionSeconds: number; onTransitionSecondsChange: (seconds: number) => void; showPatientEffort: boolean; onShowPatientEffortChange: (value: boolean) => void; patientEffortLocked?: boolean; showSpO2Ceiling?: boolean; collapsible?: boolean }) {
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
   const predictedBodyWeight = calculatePredictedBodyWeight(settings.sex ?? 'male', settings.heightCm ?? 170)
@@ -313,12 +313,12 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
   }
 
   return (
-    <section className={`control-section patient-section ${collapsed ? 'panel-collapsed' : ''}`}>
+    <section className={`control-section patient-section ${collapsible && collapsed ? 'panel-collapsed' : ''}`}>
       <div className="control-section-title">
         <h2>Patient settings</h2>
         <div className="control-section-title-actions">
           <button className="reset-settings-button patient-reset-button" type="button" onClick={onReset}>Reset respiratory</button>
-          <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand patient settings' : 'Collapse patient settings'} title={collapsed ? 'Expand patient settings' : 'Collapse patient settings'}>{collapsed ? '▾' : '▴'}</button>
+          {collapsible && <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand patient settings' : 'Collapse patient settings'} title={collapsed ? 'Expand patient settings' : 'Collapse patient settings'}>{collapsed ? '▾' : '▴'}</button>}
         </div>
       </div>
       <div className="patient-respiratory-controls">
