@@ -21,6 +21,7 @@ import {
   getSupabaseLocalOverride,
   saveSupabaseLocalOverride,
 } from '../session/supabase'
+import { APP_VERSION } from '../appVersion'
 import '../account.css'
 
 interface InstructorAccountControlsProps {
@@ -62,6 +63,24 @@ function CloseIcon() {
 
 function accountLabel(user: User | null) {
   return user?.email ?? 'Instructor cloud account'
+}
+
+const INSTRUCTOR_DETAILS_STORAGE_KEY = 'eduvent.instructor-details'
+
+interface InstructorDetails { name: string; email: string; centre: string }
+
+function loadInstructorDetails(): InstructorDetails {
+  if (typeof window === 'undefined') return { name: '', email: '', centre: '' }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(INSTRUCTOR_DETAILS_STORAGE_KEY) ?? '{}') as Partial<InstructorDetails>
+    return {
+      name: typeof parsed.name === 'string' ? parsed.name : '',
+      email: typeof parsed.email === 'string' ? parsed.email : '',
+      centre: typeof parsed.centre === 'string' ? parsed.centre : '',
+    }
+  } catch {
+    return { name: '', email: '', centre: '' }
+  }
 }
 
 function summaryItems(scenario: InstructorScenarioSnapshot) {
@@ -117,6 +136,11 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const [supabasePublishableKey, setSupabasePublishableKey] = useState(initialSupabaseConfig?.publishableKey ?? activeSupabaseConfig.publishableKey)
   const [supabaseConfigMessage, setSupabaseConfigMessage] = useState<string | null>(null)
   const [supabaseConfigError, setSupabaseConfigError] = useState<string | null>(null)
+  const initialInstructorDetails = loadInstructorDetails()
+  const [instructorName, setInstructorName] = useState(initialInstructorDetails.name)
+  const [instructorEmail, setInstructorEmail] = useState(initialInstructorDetails.email)
+  const [instructorCentre, setInstructorCentre] = useState(initialInstructorDetails.centre)
+  const [instructorDetailsMessage, setInstructorDetailsMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!settingsOpen) return
@@ -126,7 +150,25 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     setSupabasePublishableKey(local?.publishableKey ?? active.publishableKey)
     setSupabaseConfigMessage(null)
     setSupabaseConfigError(null)
-  }, [settingsOpen])
+    const details = loadInstructorDetails()
+    setInstructorName(details.name)
+    setInstructorEmail(details.email || account?.email || '')
+    setInstructorCentre(details.centre)
+    setInstructorDetailsMessage(null)
+  }, [settingsOpen, account?.email])
+
+  const saveInstructorDetails = () => {
+    const details = { name: instructorName.trim(), email: instructorEmail.trim(), centre: instructorCentre.trim() }
+    try {
+      window.localStorage.setItem(INSTRUCTOR_DETAILS_STORAGE_KEY, JSON.stringify(details))
+      setInstructorName(details.name)
+      setInstructorEmail(details.email)
+      setInstructorCentre(details.centre)
+      setInstructorDetailsMessage('Instructor details saved.')
+    } catch {
+      setInstructorDetailsMessage('Unable to save instructor details in this browser.')
+    }
+  }
 
   const saveCentreSupabase = () => {
     if (role !== 'standalone') { setSupabaseConfigError('End or leave the teaching session before changing centre configuration.'); return }
@@ -433,8 +475,6 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
               <button type="button" className="selected" role="tab" aria-selected="true">Static presets</button>
               <button type="button" role="tab" aria-selected="false" disabled>Dynamic scenarios <small>later</small></button>
             </div>
-            <p className="scenario-intro">A static preset captures the complete patient, ventilator, alarm, transition and waveform setup at one point in time. Load it before or during an instructor session. Dynamic timelines will build on the same base state later.</p>
-
             {account ? (
               <>
                 <section className="scenario-create-card">
@@ -483,10 +523,12 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
                             </div>
                           </div>
                         ) : (
-                          <>
-                            {preset.scenario.description ? <p className="scenario-description">{preset.scenario.description}</p> : <p className="scenario-description empty">No instructor notes.</p>}
-                            <div className="scenario-summary-chips">
-                              {summaryItems(preset.scenario).map((item) => <span key={item}>{item}</span>)}
+                          <div className="scenario-card-view">
+                            <div className="scenario-card-main">
+                              {preset.scenario.description ? <p className="scenario-description">{preset.scenario.description}</p> : <p className="scenario-description empty">No instructor notes.</p>}
+                              <div className="scenario-summary-chips">
+                                {summaryItems(preset.scenario).map((item) => <span key={item}>{item}</span>)}
+                              </div>
                             </div>
                             <div className="scenario-card-actions">
                               <button type="button" className="scenario-load-button" disabled={presetBusy} onClick={() => loadScenario(preset)}>Load</button>
@@ -495,7 +537,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
                               <button type="button" disabled={presetBusy} onClick={() => void duplicateScenario(preset)}>Duplicate</button>
                               <button type="button" className="scenario-delete-button" disabled={presetBusy} onClick={() => void removeScenario(preset)}>Delete</button>
                             </div>
-                          </>
+                          </div>
                         )}
                       </article>
                     )
@@ -523,17 +565,29 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
             </div>
 
             <div className="settings-summary-grid">
-              <div><span>Version</span><strong>v0.72</strong></div>
+              <div><span>Version</span><strong>v{APP_VERSION}</strong></div>
               <div><span>Teaching room</span><strong>2-hour lifetime</strong></div>
               <div><span>Cloud</span><strong>{account ? 'Connected' : 'Not signed in'}</strong></div>
             </div>
+
+            <section className="instructor-details-section">
+              <div className="scenario-settings-heading">
+                <div><span>Instructor</span><h3>Instructor details</h3></div>
+              </div>
+              <div className="instructor-details-fields">
+                <label><span>Name</span><input value={instructorName} onChange={(event) => setInstructorName(event.target.value)} placeholder="Instructor name" /></label>
+                <label><span>Email</span><input type="email" value={instructorEmail} onChange={(event) => setInstructorEmail(event.target.value)} placeholder="name@example.com" /></label>
+                <label><span>Centre</span><input value={instructorCentre} onChange={(event) => setInstructorCentre(event.target.value)} placeholder="Hospital / simulation centre" /></label>
+              </div>
+              <button type="button" className="account-primary-button instructor-details-save" onClick={saveInstructorDetails}>Save instructor details</button>
+              {instructorDetailsMessage && <div className="account-message">{instructorDetailsMessage}</div>}
+            </section>
 
             <section className="supabase-settings-section">
               <div className="scenario-settings-heading">
                 <div><span>Centre configuration</span><h3>Supabase</h3></div>
                 <small>{getSupabaseConfiguration().source === 'local' ? 'Local override' : getSupabaseConfiguration().source === 'environment' ? 'Deployment environment' : 'Built-in default'}</small>
               </div>
-              <p>Each centre can connect this EDUVENT installation to its own Supabase project. The configuration is stored only in this browser and overrides deployment environment variables.</p>
               <div className="supabase-settings-fields">
                 <label><span>Project URL or project reference</span><input value={supabaseProject} disabled={role !== 'standalone'} onChange={(event) => setSupabaseProject(event.target.value)} placeholder="e.g. abcdefghijklmnop or https://abcdefgh.supabase.co" autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label>
                 <label><span>Publishable key</span><input value={supabasePublishableKey} disabled={role !== 'standalone'} onChange={(event) => setSupabasePublishableKey(event.target.value)} placeholder="sb_publishable_…" autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label>
@@ -547,17 +601,6 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
               {supabaseConfigMessage && <div className="account-message">{supabaseConfigMessage}</div>}
               {supabaseConfigError && <div className="account-error">{supabaseConfigError}</div>}
             </section>
-
-            {role !== 'candidate' && (
-              <section className="scenario-settings-section">
-                <div className="scenario-settings-heading">
-                  <div><span>Instructor tools</span><h3>Scenarios</h3></div>
-                  {account && <small>{staticPresets.length} saved</small>}
-                </div>
-                <p>Prepare and manage reusable static teaching states. Dynamic scenario timelines will be added later.</p>
-                <button type="button" className="account-secondary-button" onClick={() => { setSettingsOpen(false); openScenarios() }}>Manage scenarios</button>
-              </section>
-            )}
           </section>
         </div>
       )}

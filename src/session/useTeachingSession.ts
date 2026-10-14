@@ -28,6 +28,7 @@ import {
   type LocalRuntimeSnapshot,
 } from './localRuntimeTransport'
 import { WebRtcRuntimeTransport } from './webRtcRuntimeTransport'
+import { appendScenarioLog } from '../diagnostics'
 
 export type SessionRole = 'standalone' | 'instructor' | 'candidate'
 export type SessionConnection = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
@@ -291,6 +292,7 @@ export function useTeachingSession({
       onConnection: (state: LocalRuntimeConnection) => {
         localRuntimeConnectionRef.current = state
         setLocalRuntimeConnection(state)
+        appendScenarioLog('runtime.connection', { role: nextRole, sessionId: row.id, sessionKey: row.session_key, state, transport: url ? getLocalRuntimeProfile() : 'webrtc' })
         if (state === 'connected') {
           if (roleRef.current !== 'standalone') setConnection('connected')
           if (nextRole === 'instructor') window.setTimeout(() => publishLocalRuntimeSnapshot(), 0)
@@ -309,6 +311,7 @@ export function useTeachingSession({
 
   const broadcastRuntimeEvent = (eventType: string, payload: unknown, scenarioTimeMs: number) => {
     if (roleRef.current !== 'instructor') return false
+    appendScenarioLog('scenario.runtime_event.broadcast', { sessionId: sessionRef.current?.id ?? null, eventType, scenarioTimeMs: Math.max(0, scenarioTimeMs) })
     return Boolean(localTransportRef.current?.publish({
       type: 'scenario-event',
       event: {
@@ -430,6 +433,7 @@ export function useTeachingSession({
   const startInstructor = async (initial?: InstructorSessionInitialState) => {
     setConnection('connecting')
     setError(null)
+    appendScenarioLog('session.instructor.start_requested', { hasInitialState: Boolean(initial), simulationPaused: simulationPausedRef.current })
     const startingPatient = initial?.patient ?? patientRef.current
     const startingVentilator = initial?.ventilator ?? ventilatorRef.current
     const startingAlarmLimits = initial?.alarmLimits ?? alarmLimitsRef.current
@@ -468,7 +472,9 @@ export function useTeachingSession({
       attachInstructorLease(created.sessionId, clientId)
       attachLocalRuntime('instructor', row)
       setRecoverableInstructor(null)
+      appendScenarioLog('session.instructor.started', { sessionId: row.id, sessionKey: row.session_key, status: row.status, simulationPaused: Boolean(row.simulation_paused) })
     } catch (cause) {
+      appendScenarioLog('session.instructor.start_failed', { message: cause instanceof Error ? cause.message : String(cause) })
       setConnection('error')
       setError(cause instanceof Error ? cause.message : 'Unable to create instructor session.')
       roleRef.current = 'standalone'
@@ -479,6 +485,7 @@ export function useTeachingSession({
   const joinCandidate = async (sessionKey: string, displayName: string, recoveryAttempt = false) => {
     setConnection('connecting')
     setError(null)
+    appendScenarioLog('session.candidate.join_requested', { sessionKey: sessionKey.trim().toUpperCase(), displayName: displayName.trim(), recoveryAttempt })
     try {
       const joined = await joinTeachingSession(sessionKey, displayName)
       roleRef.current = 'candidate'
@@ -500,8 +507,10 @@ export function useTeachingSession({
       await touchSessionMember(joined.sessionId, patientRef.current, ventilatorRef.current, alarmLevelRef.current)
       await attachSubscription(joined.sessionId)
       attachLocalRuntime('candidate', row)
+      appendScenarioLog('session.candidate.joined', { sessionId: row.id, sessionKey: row.session_key, displayName: displayName.trim(), status: row.status, recoveryAttempt })
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Unable to join teaching session.'
+      appendScenarioLog('session.candidate.join_failed', { sessionKey: sessionKey.trim().toUpperCase(), recoveryAttempt, message })
       if (recoveryAttempt && /expired|not found|ended/i.test(message)) {
         removeCandidateRecovery()
         setRecoverableCandidate(null)
@@ -552,6 +561,7 @@ export function useTeachingSession({
   const resumeInstructor = async (sessionId?: string) => {
     setConnection('connecting')
     setError(null)
+    appendScenarioLog('session.instructor.resume_requested', { sessionId: sessionId ?? null })
     try {
       await ensureAnonymousSession()
       const found = sessionId ? { sessionId, sessionKey: '' } : await findActiveInstructorSession()
@@ -579,7 +589,9 @@ export function useTeachingSession({
       await attachMemberSubscription(found.sessionId)
       attachInstructorLease(found.sessionId, clientId)
       attachLocalRuntime('instructor', row)
+      appendScenarioLog('session.instructor.resumed', { sessionId: row.id, sessionKey: row.session_key, status: row.status })
     } catch (cause) {
+      appendScenarioLog('session.instructor.resume_failed', { sessionId: sessionId ?? null, message: cause instanceof Error ? cause.message : String(cause) })
       setConnection('error')
       setError(cause instanceof Error ? cause.message : 'Unable to rejoin instructor session.')
     }
@@ -630,6 +642,7 @@ export function useTeachingSession({
 
   const leaveSession = async () => {
     const leavingRole = roleRef.current
+    appendScenarioLog('session.leave', { role: leavingRole, sessionId: sessionRef.current?.id ?? null, sessionKey: sessionRef.current?.session_key ?? null })
     if (patientBroadcastTimerRef.current != null) window.clearTimeout(patientBroadcastTimerRef.current)
     if (ventilatorBroadcastTimerRef.current != null) window.clearTimeout(ventilatorBroadcastTimerRef.current)
     if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
@@ -660,6 +673,7 @@ export function useTeachingSession({
 
   const endInstructorSession = async () => {
     const current = sessionRef.current
+    appendScenarioLog('session.instructor.end_requested', { sessionId: current?.id ?? null, sessionKey: current?.session_key ?? null })
     if (roleRef.current === 'instructor' && current) {
       publishLocalRuntimeSnapshot({ ...current, status: 'ended' })
       try {
@@ -677,6 +691,7 @@ export function useTeachingSession({
   const updatePolicy = async (patch: PolicyPatch) => {
     const current = sessionRef.current
     if (roleRef.current !== 'instructor' || !current) return
+    appendScenarioLog('session.policy.update_requested', { sessionId: current.id, patch })
 
     const databasePatch: Partial<TeachingSessionRow> = {}
     if (patch.syncPatient != null) databasePatch.sync_patient = patch.syncPatient
@@ -722,6 +737,7 @@ export function useTeachingSession({
   const broadcastNow = async () => {
     const current = sessionRef.current
     if (roleRef.current !== 'instructor' || !current) return
+    appendScenarioLog('session.settings.push_requested', { sessionId: current.id, syncPatient: current.sync_patient, syncVentilator: current.sync_ventilator, syncAlarms: current.sync_alarms })
     publishLocalRuntimeSnapshot(current)
     const patch: Partial<TeachingSessionRow> = {}
     if (current.sync_patient) {
@@ -835,6 +851,7 @@ export function useTeachingSession({
         })
         storeSession(next)
         setError(null)
+        appendScenarioLog('session.pause_changed', { sessionId: latest.id, paused: simulationPaused, pauseRevision: pauseRevisionRef.current })
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Unable to broadcast simulation pause state.')
       }
