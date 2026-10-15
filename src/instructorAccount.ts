@@ -6,9 +6,21 @@ import { supabase } from './session/supabase'
 export type ScenarioWaveform = 'volume' | 'co2' | 'oesophagealPressure'
 export type InstructorScenarioKind = 'static' | 'dynamic'
 
+export interface DynamicScenarioApplyMask {
+  ventilator: Array<keyof VentilatorSettings>
+  patient: Array<keyof PatientSettings>
+  alarmLimits: Array<keyof AlarmLimits>
+  patientTransitionSeconds: boolean
+  waveformDisplay: boolean
+  mediaIds: boolean
+}
+
 export interface DynamicScenarioStage {
   name: string
   snapshot: InstructorScenarioSnapshot
+  /** Missing on v0.82.0 stages; absence means apply the complete snapshot. */
+  apply?: DynamicScenarioApplyMask
+  sourceName?: string
 }
 
 export interface InstructorScenarioSnapshot {
@@ -37,9 +49,47 @@ export interface InstructorPresetRow {
   updated_at: string
 }
 
+export function createFullDynamicStageApplyMask(snapshot: InstructorScenarioSnapshot): DynamicScenarioApplyMask {
+  return {
+    ventilator: Object.keys(snapshot.ventilator) as Array<keyof VentilatorSettings>,
+    patient: Object.keys(snapshot.patient) as Array<keyof PatientSettings>,
+    alarmLimits: Object.keys(snapshot.alarmLimits) as Array<keyof AlarmLimits>,
+    patientTransitionSeconds: true,
+    waveformDisplay: true,
+    mediaIds: true,
+  }
+}
+
+function mergeSelected<T extends object>(current: T, source: T, keys: Array<keyof T> | undefined): T {
+  if (keys === undefined) return { ...source }
+  const next = { ...current } as Record<string, unknown>
+  const sourceRecord = source as Record<string, unknown>
+  for (const key of keys) next[String(key)] = sourceRecord[String(key)]
+  return next as T
+}
+
+export function applyDynamicStage(current: InstructorScenarioSnapshot, stage: DynamicScenarioStage): InstructorScenarioSnapshot {
+  const mask = stage.apply
+  return {
+    ...current,
+    schemaVersion: 2,
+    kind: 'static',
+    description: '',
+    stages: undefined,
+    ventilator: mergeSelected(current.ventilator, stage.snapshot.ventilator, mask ? mask.ventilator : undefined),
+    patient: mergeSelected(current.patient, stage.snapshot.patient, mask ? mask.patient : undefined),
+    alarmLimits: mergeSelected(current.alarmLimits, stage.snapshot.alarmLimits, mask ? mask.alarmLimits : undefined),
+    patientTransitionSeconds: mask ? (mask.patientTransitionSeconds ? stage.snapshot.patientTransitionSeconds : current.patientTransitionSeconds) : stage.snapshot.patientTransitionSeconds,
+    waveformDisplay: mask ? (mask.waveformDisplay ? { ...stage.snapshot.waveformDisplay } : { ...current.waveformDisplay }) : { ...stage.snapshot.waveformDisplay },
+    mediaIds: mask ? (mask.mediaIds ? [...(stage.snapshot.mediaIds ?? [])] : [...(current.mediaIds ?? [])]) : [...(stage.snapshot.mediaIds ?? [])],
+  }
+}
+
 export function asDynamicScenario(
   current: InstructorScenarioSnapshot,
   description = current.description ?? '',
+  apply = createFullDynamicStageApplyMask(current),
+  sourceName = 'Current simulator state',
 ): InstructorScenarioSnapshot {
   const firstStageSnapshot = asStaticScenario(current, '')
   return {
@@ -47,7 +97,7 @@ export function asDynamicScenario(
     schemaVersion: 3,
     kind: 'dynamic',
     description: description.trim(),
-    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot }],
+    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName }],
   }
 }
 
@@ -71,7 +121,12 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
     kind: scenario.kind ?? 'static',
     description: scenario.description ?? '',
     mediaIds: [...new Set((scenario.mediaIds ?? []).filter((id) => typeof id === 'string' && id.length > 0))],
-    stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => ({ name: stage.name || `Stage ${index + 1}`, snapshot: { ...stage.snapshot, kind: 'static', stages: undefined } })) : undefined,
+    stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => ({
+      name: stage.name || `Stage ${index + 1}`,
+      snapshot: { ...stage.snapshot, kind: 'static', stages: undefined },
+      apply: stage.apply,
+      sourceName: stage.sourceName,
+    })) : undefined,
   }
 }
 
