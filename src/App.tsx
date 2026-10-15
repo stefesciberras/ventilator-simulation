@@ -1394,6 +1394,8 @@ export default function App() {
             role={teachingSession.role}
             currentScenario={currentInstructorScenario}
             onLoadScenario={loadInstructorScenario}
+            simulationPaused={simulationPaused}
+            onSimulationPausedChange={setSimulationPaused}
           />
           <CaseMediaPanel
             role={teachingSession.role}
