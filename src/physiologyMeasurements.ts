@@ -23,6 +23,7 @@ export interface PhysiologicalMeasurements {
   autoPeep: number | null
   inspiratoryFlow: number | null
   expiratoryFlow: number | null
+  expiratoryFlowLimited: boolean
   inspiredTidalVolume: number | null
   expiredTidalVolume: number | null
   alveolarTidalVolume: number | null
@@ -302,6 +303,7 @@ function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings
     autoPeep,
     inspiratoryFlow: positiveFlows.length ? Math.max(...positiveFlows) : null,
     expiratoryFlow: negativeFlows.length ? Math.max(...negativeFlows) : null,
+    expiratoryFlowLimited: recent.slice(-500).some((sample) => sample.expiratoryFlowLimited),
     inspiredTidalVolume: latestCompletedInspiratoryVolume(recent),
     expiredTidalVolume,
     endTidalCO2,
@@ -341,17 +343,12 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
   const totalDeadSpaceVolume = effectiveDeadSpace.deadSpaceMl
   const alveolarTidalVolume = monitor.expiredTidalVolume == null ? null : Math.max(0, monitor.expiredTidalVolume - totalDeadSpaceVolume)
 
-  // Match the simulation engine's gas-exchange model: only the fraction of the
-  // alveolar tidal volume that can empty during Te contributes to effective
-  // alveolar ventilation. This makes dynamic hyperinflation visible in EXTRA.
-  const modelExpiratoryTimeConstant = Math.max(patient.expiratoryResistance * patient.compliance / 1000, 0.05)
-  const measuredExpiratoryTime = timing.expiratoryTime
-  const expiratoryEmptyingFraction = measuredExpiratoryTime == null
-    ? 1
-    : clamp(1 - Math.exp(-measuredExpiratoryTime / modelExpiratoryTimeConstant), 0.03, 1)
+  // Expired VT already contains the mechanical consequence of interrupted
+  // expiration/flow limitation. Applying an additional RC emptying fraction
+  // here would count the same loss twice.
   const alveolarMinuteVentilation = alveolarTidalVolume == null
     ? 0
-    : Math.max(0, (alveolarTidalVolume / 1000) * rates.totalRate * expiratoryEmptyingFraction)
+    : Math.max(0, (alveolarTidalVolume / 1000) * rates.totalRate)
 
   return {
     setMinuteVentilation,
@@ -375,6 +372,7 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
     autoPeep: monitor.autoPeep,
     inspiratoryFlow: monitor.inspiratoryFlow,
     expiratoryFlow: monitor.expiratoryFlow,
+    expiratoryFlowLimited: monitor.expiratoryFlowLimited,
     inspiredTidalVolume: monitor.inspiredTidalVolume,
     expiredTidalVolume: monitor.expiredTidalVolume,
     alveolarTidalVolume,
