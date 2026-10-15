@@ -1,4 +1,6 @@
 name: Temporary v0.82.0 validation
+permissions:
+  contents: write
 on:
   push:
     branches: [chatgpt/v0.82.0-dynamic-scenarios]
