@@ -107,6 +107,10 @@ export function PhysiologyMeasurementsDialog({ open, measurements, oesophagealEn
                 <MonitorMetric value={measurements.alveolarMinuteVentilation} label="Alveolar MinVol" unit="L/min" digits={2} />
                 <MonitorMetric value={measurements.vdVt} label="Vd/Vt" unit="" digits={2} />
                 <MonitorMetric value={measurements.totalDeadSpaceVolume} label="Total dead space" unit="mL" digits={0} />
+                <div className="monitor-metric">
+                  <strong>{measurements.expiratoryFlowLimited ? 'ACTIVE' : 'No'}</strong>
+                  <div><span>Exp flow limitation</span><small></small></div>
+                </div>
               </div>
             </div>
           )}

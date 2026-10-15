@@ -1,5 +1,6 @@
 import type { Measurements, PatientSettings, Sample, VentilatorMode, VentilatorSettings } from './types'
 import { calculateEffectiveDeadSpace } from '../patientMetrics'
+import { applyExpiratoryFlowLimitation } from '../expiratoryFlowLimitation'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -153,17 +154,14 @@ function calculateEffectiveAlveolarVentilation(
   ventilator: VentilatorSettings,
   patient: PatientSettings,
   t: number,
-  complianceL: number,
+  _complianceL: number,
 ): number {
   const fallbackVt = Math.max(ventilator.tidalVolume / 1000, 0.3)
   const tidalVolumeL = state.lastExpiredTidalVolume > 0.02 ? state.lastExpiredTidalVolume : fallbackVt
   const deadSpaceL = calculateEffectiveDeadSpace(patient, tidalVolumeL * 1000).deadSpaceMl / 1000
   const alveolarVolumeL = Math.max(0, tidalVolumeL - deadSpaceL)
   const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
-  const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
-  const expiratoryTime = Math.max(state.lastExpiratoryDuration, 0.05)
-  const emptyingFraction = clamp(1 - Math.exp(-expiratoryTime / tau), 0.03, 1)
-  return alveolarVolumeL * respiratoryRate * emptyingFraction
+  return alveolarVolumeL * respiratoryRate
 }
 
 function updateAlveolarCo2(
@@ -270,17 +268,14 @@ function updateOxygenation(
   patient: PatientSettings,
   t: number,
   dt: number,
-  complianceL: number,
+  _complianceL: number,
 ) {
   const fallbackVt = Math.max(ventilator.tidalVolume / 1000, 0.3)
   const tidalVolumeL = state.lastExpiredTidalVolume > 0.02 ? state.lastExpiredTidalVolume : fallbackVt
   const deadSpaceL = calculateEffectiveDeadSpace(patient, tidalVolumeL * 1000).deadSpaceMl / 1000
   const alveolarVolumeL = Math.max(0, tidalVolumeL - deadSpaceL)
   const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
-  const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
-  const expiratoryTime = Math.max(state.lastExpiratoryDuration, 0.05)
-  const emptyingFraction = clamp(1 - Math.exp(-expiratoryTime / tau), 0.03, 1)
-  const alveolarVentilationLmin = alveolarVolumeL * respiratoryRate * emptyingFraction
+  const alveolarVentilationLmin = alveolarVolumeL * respiratoryRate
 
   const frcL = clamp(Math.max(patient.frc ?? 2500, 500) / 1000, 0.5, 8)
   const inspiredOxygenFraction = clamp(ventilator.fio2, 0.21, 1)
@@ -979,9 +974,13 @@ export function stepSimulation(
     }
   }
 
+  let expiratoryFlowLimited = false
   if (!inspiration && !state.expiratoryHoldActive) {
     const tau = Math.max(patient.expiratoryResistance * complianceL, 0.05)
-    const passiveExpiratoryFlow = state.volume > 0 ? -state.volume / tau : 0
+    const requestedPassiveExpiratoryFlow = state.volume > 0 ? -state.volume / tau : 0
+    const passiveLimit = applyExpiratoryFlowLimitation(requestedPassiveExpiratoryFlow, state.volume, patient)
+    const passiveExpiratoryFlow = passiveLimit.flowLs
+    expiratoryFlowLimited = passiveLimit.limited
     const passiveExpiratoryMagnitude = Math.max(0, -passiveExpiratoryFlow)
 
     if (mandatoryMode) {
@@ -1008,7 +1007,10 @@ export function stepSimulation(
       // expiration. Once it is overcome, flow reverses and Paw falls below
       // set PEEP. Those actual simulated signals are what the selected trigger
       // detector sees.
-      flowLs = netPatientDrivingPressure / effortResistance
+      const requestedFlow = netPatientDrivingPressure / effortResistance
+      const effortLimitedFlow = applyExpiratoryFlowLimitation(requestedFlow, state.volume, patient)
+      flowLs = effortLimitedFlow.flowLs
+      expiratoryFlowLimited = expiratoryFlowLimited || effortLimitedFlow.limited
       pressure = ventilator.peep - Math.max(0, netPatientDrivingPressure)
     } else {
       flowLs = passiveExpiratoryFlow
@@ -1078,6 +1080,7 @@ export function stepSimulation(
     expiratoryHold: state.expiratoryHoldActive,
     simvSyncWindow: simvSyncWindowActive,
     pressureLimitHit,
+    expiratoryFlowLimited,
   }
 
   state.previousPmus = pmus

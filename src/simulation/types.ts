@@ -10,6 +10,8 @@ export interface PatientSettings {
   compliance: number
   resistance: number
   expiratoryResistance: number
+  /** 0 = linear RC emptying; 1 = severe expiratory flow limitation. */
+  expiratoryFlowLimitation: number
   spontaneousRate: number
   effort: number
   neuralInspiratoryTime: number
@@ -64,6 +66,7 @@ export interface Sample {
   expiratoryHold?: boolean
   simvSyncWindow?: boolean
   pressureLimitHit?: boolean
+  expiratoryFlowLimited?: boolean
 }
 
 export interface Measurements {
