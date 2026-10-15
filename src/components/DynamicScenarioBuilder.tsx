@@ -34,6 +34,7 @@ interface FieldSpec {
   unit?: string
   options?: Array<{ value: string; label: string }>
   format?: (value: unknown) => string
+  defaultValue?: unknown
 }
 
 const MODES: VentilatorMode[] = ['VC-AC', 'SIMV-VC', 'PC-AC', 'SIMV-PC', 'BIPAP', 'VG-PC', 'APRV', 'PSV']
@@ -81,9 +82,9 @@ const PHYSIO_FIELDS: FieldSpec[] = [
   { key: 'oxygenConsumption', label: 'Oxygen consumption (VO₂)', step: 10, min: 100, max: 600, unit: ' mL/min' },
   { key: 'frc', label: 'FRC', step: 10, min: 500, max: 5000, unit: ' mL' },
   { key: 'shuntFraction', label: 'Shunt', step: .01, min: 0, max: .5, format: (v) => `${Math.round(Number(v) * 100)}%` },
-  { key: 'maxSpO2', label: 'Maximum SpO₂', min: 80, max: 100, unit: '%' },
+  { key: 'maxSpO2', label: 'Maximum SpO₂', min: 80, max: 100, unit: '%', defaultValue: 100 },
   { key: 'co2Production', label: 'VCO₂ production', step: 10, min: 100, max: 500, unit: ' mL/min' },
-  { key: 'vdVt', label: 'Vd/Vt', step: .05, min: .1, max: .9, format: (v) => Number(v).toFixed(2) },
+  { key: 'vdVt', label: 'Vd/Vt', step: .05, min: .1, max: .9, format: (v) => Number(v).toFixed(2), defaultValue: .4 },
 ]
 
 const FIELD_BY_KEY = new Map(VENT_FIELDS.map((field) => [field.key, field]))
@@ -117,6 +118,20 @@ function cloneScenario<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
+function normalisePhysiologyDefaults(snapshot: InstructorScenarioSnapshot): InstructorScenarioSnapshot {
+  const patient = { ...snapshot.patient }
+  if (!Number.isFinite(patient.maxSpO2 ?? Number.NaN)) patient.maxSpO2 = 100
+  if (!Number.isFinite(patient.vdVt ?? Number.NaN)) patient.vdVt = 0.4
+  return { ...snapshot, patient }
+}
+
+function resolvedFieldValue(field: FieldSpec, value: unknown): unknown {
+  if (field.type === 'select' || field.type === 'boolean') return value ?? field.defaultValue
+  const numeric = Number(value)
+  if (Number.isFinite(numeric)) return numeric
+  return field.defaultValue ?? field.min ?? 0
+}
+
 function defaultMask(snapshot: InstructorScenarioSnapshot): DynamicScenarioApplyMask {
   return {
     ventilator: ventKeysFor(snapshot.ventilator),
@@ -129,7 +144,7 @@ function defaultMask(snapshot: InstructorScenarioSnapshot): DynamicScenarioApply
 }
 
 function normaliseStage(stage: DynamicScenarioStage, index: number): StageDraft {
-  const snapshot = cloneScenario(stage.snapshot)
+  const snapshot = normalisePhysiologyDefaults(cloneScenario(stage.snapshot))
   const relevant = new Set(ventKeysFor(snapshot.ventilator).map(String))
   const supplied = stage.apply?.ventilator?.map(String)
   const ventilator = supplied
@@ -148,7 +163,7 @@ function normaliseStage(stage: DynamicScenarioStage, index: number): StageDraft 
 }
 
 function newStage(base: InstructorScenarioSnapshot, index: number): StageDraft {
-  const snapshot = asStaticScenario(cloneScenario(base), '')
+  const snapshot = normalisePhysiologyDefaults(asStaticScenario(cloneScenario(base), ''))
   return {
     name: `Stage ${index + 1}`,
     snapshot,
@@ -175,9 +190,10 @@ function serialise(draft: ScenarioDraft) {
 }
 
 function displayValue(field: FieldSpec, value: unknown) {
-  if (field.format) return field.format(value)
-  if (field.type === 'boolean') return Boolean(value) ? 'On' : 'Off'
-  return `${Number(value)}${field.unit ?? ''}`
+  const resolved = resolvedFieldValue(field, value)
+  if (field.format) return field.format(resolved)
+  if (field.type === 'boolean') return Boolean(resolved) ? 'On' : 'Off'
+  return `${Number(resolved)}${field.unit ?? ''}`
 }
 
 function useWideScreen(minWidth = 1000) {
@@ -269,7 +285,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     }
     const preset = staticPresets.find((item) => item.id === presetId)
     if (!preset) return
-    const snapshot = asStaticScenario(cloneScenario(preset.scenario), '')
+    const snapshot = normalisePhysiologyDefaults(asStaticScenario(cloneScenario(preset.scenario), ''))
     updateStage(index, (stage) => ({
       ...stage,
       snapshot,
@@ -382,7 +398,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
         <input
           className="dynamic-control-slider"
           type="range"
-          value={Number(value ?? 0)}
+          value={Number(resolvedFieldValue(field, value))}
           disabled={!enabled}
           step={field.step ?? 1}
           min={field.min}

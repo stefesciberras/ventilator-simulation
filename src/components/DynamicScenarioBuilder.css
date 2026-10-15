@@ -125,8 +125,22 @@
 .dynamic-control-slider {
   width: 100%;
   margin: 0;
-  accent-color: #df8a32;
 }
+
+.dynamic-control-column.vent .dynamic-control-slider { accent-color: #75cbe7 !important; }
+.dynamic-control-column.patient .dynamic-control-slider { accent-color: #8dd5a0 !important; }
+.dynamic-control-column.physio .dynamic-control-slider { accent-color: #c0a5e5 !important; }
+
+.dynamic-control-column.vent .dynamic-control-slider::-webkit-slider-thumb { background: #75cbe7; border-color: #75cbe7; }
+.dynamic-control-column.patient .dynamic-control-slider::-webkit-slider-thumb { background: #8dd5a0; border-color: #8dd5a0; }
+.dynamic-control-column.physio .dynamic-control-slider::-webkit-slider-thumb { background: #c0a5e5; border-color: #c0a5e5; }
+.dynamic-control-column.vent .dynamic-control-slider::-moz-range-thumb { background: #75cbe7; border-color: #75cbe7; }
+.dynamic-control-column.patient .dynamic-control-slider::-moz-range-thumb { background: #8dd5a0; border-color: #8dd5a0; }
+.dynamic-control-column.physio .dynamic-control-slider::-moz-range-thumb { background: #c0a5e5; border-color: #c0a5e5; }
+
+.dynamic-control-column.vent .dynamic-control-slider::-moz-range-progress { background: #75cbe7; }
+.dynamic-control-column.patient .dynamic-control-slider::-moz-range-progress { background: #8dd5a0; }
+.dynamic-control-column.physio .dynamic-control-slider::-moz-range-progress { background: #c0a5e5; }
 
 .dynamic-control-slider:disabled {
   cursor: not-allowed;
