@@ -28,12 +28,15 @@ import {
   saveSupabaseLocalOverride,
 } from '../session/supabase'
 import { APP_VERSION } from '../appVersion'
+import { DynamicScenarioBuilder } from './DynamicScenarioBuilder'
 import '../account.css'
 
 interface InstructorAccountControlsProps {
   role: SessionRole
   currentScenario: InstructorScenarioSnapshot
   onLoadScenario: (scenario: InstructorScenarioSnapshot) => void
+  simulationPaused: boolean
+  onSimulationPausedChange: (paused: boolean) => void
 }
 
 function CloudIcon({ connected }: { connected: boolean }) {
@@ -165,7 +168,7 @@ function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
   return candidate
 }
 
-export function InstructorAccountControls({ role, currentScenario, onLoadScenario }: InstructorAccountControlsProps) {
+export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange }: InstructorAccountControlsProps) {
   const [account, setAccount] = useState<User | null>(null)
   const [accountOpen, setAccountOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -576,7 +579,17 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
               <button type="button" className={scenarioType === 'static' ? 'selected' : ''} role="tab" aria-selected={scenarioType === 'static'} onClick={() => setScenarioType('static')}>Static presets</button>
               <button type="button" className={scenarioType === 'dynamic' ? 'selected' : ''} role="tab" aria-selected={scenarioType === 'dynamic'} onClick={() => setScenarioType('dynamic')}>Dynamic scenarios</button>
             </div>
-            {account ? (
+            {scenarioType === 'dynamic' && account ? (
+              <DynamicScenarioBuilder
+                currentScenario={currentScenario}
+                dynamicPresets={dynamicPresets}
+                staticPresets={staticPresets}
+                simulationPaused={simulationPaused}
+                onSimulationPausedChange={onSimulationPausedChange}
+                onRefresh={() => refreshPresets(account)}
+                onClose={() => setScenarioOpen(false)}
+              />
+            ) : account ? (
               <>
                 <section className="scenario-create-card">
                   <div className="scenario-settings-heading">
