@@ -1,0 +1,50 @@
+name: Temporary v0.82.1 oesophageal mechanics fix
+on:
+  push:
+    branches: [chatgpt/v0.82.1-oesophageal-mechanics]
+permissions:
+  contents: write
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.1-oesophageal-mechanics
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Implement passive oesophageal pressure response
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/simulation/engine.ts')
+          text = path.read_text()
+          old = '''function oesophagealPressureValue(t: number, pmus: number, patient: PatientSettings): number {\n  const heartRate = 80\n  const cardiacPhase = 2 * Math.PI * (heartRate / 60) * t\n  const cardiacOscillation = 0.45 * Math.sin(cardiacPhase) + 0.18 * Math.sin(2 * cardiacPhase + 0.7)\n  const baseline = patient.endExpiratoryOesophagealPressure ?? -5\n  return baseline - pmus + cardiacOscillation\n}'''
+          new = '''function oesophagealPressureValue(\n  t: number,\n  pmus: number,\n  patient: PatientSettings,\n  lungVolumeL: number,\n): number {\n  const heartRate = 80\n  const cardiacPhase = 2 * Math.PI * (heartRate / 60) * t\n  const cardiacOscillation = 0.45 * Math.sin(cardiacPhase) + 0.18 * Math.sin(2 * cardiacPhase + 0.7)\n  const baseline = patient.endExpiratoryOesophagealPressure ?? -5\n\n  // Pes approximates pleural pressure. Positive-pressure ventilation raises Pes\n  // as the chest wall is displaced even when the patient makes no inspiratory\n  // effort. Keep that passive component separate from Pmus: active inspiratory\n  // effort lowers Pes, whereas tidal inflation raises it.\n  //\n  // A normal adult chest-wall compliance is roughly 200 mL/cmH2O. Scale the\n  // teaching approximation to predicted body weight so paediatric patients do\n  // not receive an adult-sized chest wall. The current simulation volume is the\n  // volume above the end-expiratory reference, so intrinsic trapping naturally\n  // leaves Pes above baseline at end expiration.\n  const heightCm = patient.heightCm ?? 170\n  const predictedBodyWeightKg = Math.max(\n    20,\n    (patient.sex === 'female' ? 45.5 : 50) + 0.91 * (heightCm - 152.4),\n  )\n  const chestWallComplianceMlPerCmH2O = clamp(predictedBodyWeightKg * 3, 40, 250)\n  const passiveChestWallPressure = Math.max(0, lungVolumeL * 1000) / chestWallComplianceMlPerCmH2O\n\n  return baseline + passiveChestWallPressure - pmus + cardiacOscillation\n}'''
+          if old not in text:
+              raise SystemExit('oesophagealPressureValue block not found')
+          text = text.replace(old, new)
+          text = text.replace('oesophagealPressure: oesophagealPressureValue(t, pmus, patient),', 'oesophagealPressure: oesophagealPressureValue(t, pmus, patient, state.volume),')
+          path.write_text(text)
+
+          version = Path('src/appVersion.ts')
+          vtext = version.read_text()
+          if "export const APP_VERSION = '0.82.0'" not in vtext:
+              raise SystemExit('expected 0.82.0 version not found')
+          version.write_text(vtext.replace("export const APP_VERSION = '0.82.0'", "export const APP_VERSION = '0.82.1'"))
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit implementation and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/tmp-v0821-pes.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src/simulation/engine.ts src/appVersion.ts .github/workflows/tmp-v0821-pes.yml
+          git commit -m "v0.82.1 make oesophageal pressure respond to passive inflation"
+          git push origin HEAD:chatgpt/v0.82.1-oesophageal-mechanics
