@@ -1,0 +1,141 @@
+name: Temporary v0.82 trigger engine implementation
+permissions:
+  contents: write
+on:
+  push:
+    branches: [chatgpt/v0.82-trigger-engine]
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Implement trigger engine
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def rep(path, old, new):
+              p=Path(path); s=p.read_text()
+              if old not in s: raise SystemExit(f'pattern not found in {path}: {old[:100]}')
+              p.write_text(s.replace(old,new,1))
+
+          # 1. Scenario schema
+          p=Path('src/instructorAccount.ts'); s=p.read_text()
+          s=s.replace("export type InstructorScenarioKind = 'static' | 'dynamic'\n", "export type InstructorScenarioKind = 'static' | 'dynamic'\n\nexport type DynamicScenarioMetric =\n  | 'peakPressure' | 'plateauPressure' | 'meanPressure' | 'totalPeep' | 'autoPeep'\n  | 'expiredTidalVolume' | 'totalRespiratoryRate' | 'actualMinuteVentilation'\n  | 'alveolarMinuteVentilation' | 'endTidalCO2' | 'oxygenSaturation' | 'drivingPressure'\n\nexport type DynamicScenarioTrigger =\n  | { type: 'manual' }\n  | { type: 'time'; seconds: number }\n  | { type: 'condition'; metric: DynamicScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }\n  | { type: 'action'; parameter: keyof VentilatorSettings; actor: 'candidate' | 'instructor' | 'either' }\n")
+          s=s.replace("  sourceName?: string\n}\n", "  sourceName?: string\n  /** Rule used to progress from this stage to the next. Missing means manual. */\n  advanceTrigger?: DynamicScenarioTrigger\n}\n",1)
+          s=s.replace("    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName }],", "    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' } }],")
+          s=s.replace("      sourceName: stage.sourceName,\n    })) : undefined,", "      sourceName: stage.sourceName,\n      advanceTrigger: stage.advanceTrigger ?? { type: 'manual' },\n    })) : undefined,")
+          p.write_text(s)
+
+          # 2. Dynamic builder trigger editor
+          p=Path('src/components/DynamicScenarioBuilder.tsx'); s=p.read_text()
+          s=s.replace("  type DynamicScenarioApplyMask,\n  type DynamicScenarioStage,", "  type DynamicScenarioApplyMask,\n  type DynamicScenarioMetric,\n  type DynamicScenarioStage,\n  type DynamicScenarioTrigger,")
+          marker="const MODES: VentilatorMode[] = ['VC-AC', 'SIMV-VC', 'PC-AC', 'SIMV-PC', 'BIPAP', 'VG-PC', 'APRV', 'PSV']\n"
+          insert=marker+"\nconst CONDITION_METRICS: Array<{ value: DynamicScenarioMetric; label: string; unit: string }> = [\n  { value: 'peakPressure', label: 'Peak pressure', unit: 'cmH₂O' },\n  { value: 'plateauPressure', label: 'Plateau pressure', unit: 'cmH₂O' },\n  { value: 'meanPressure', label: 'Mean airway pressure', unit: 'cmH₂O' },\n  { value: 'totalPeep', label: 'Total PEEP', unit: 'cmH₂O' },\n  { value: 'autoPeep', label: 'AutoPEEP', unit: 'cmH₂O' },\n  { value: 'drivingPressure', label: 'Driving pressure', unit: 'cmH₂O' },\n  { value: 'expiredTidalVolume', label: 'Expired tidal volume', unit: 'mL' },\n  { value: 'totalRespiratoryRate', label: 'Respiratory rate', unit: '/min' },\n  { value: 'actualMinuteVentilation', label: 'Minute ventilation', unit: 'L/min' },\n  { value: 'alveolarMinuteVentilation', label: 'Alveolar minute ventilation', unit: 'L/min' },\n  { value: 'endTidalCO2', label: 'EtCO₂', unit: 'mmHg' },\n  { value: 'oxygenSaturation', label: 'SpO₂', unit: '%' },\n]\n\nconst defaultAdvanceTrigger = (): DynamicScenarioTrigger => ({ type: 'manual' })\n\nfunction triggerSummary(trigger: DynamicScenarioTrigger | undefined) {\n  const value = trigger ?? defaultAdvanceTrigger()\n  if (value.type === 'manual') return 'Manual · instructor proceeds'\n  if (value.type === 'time') return `After ${value.seconds}s in stage`\n  if (value.type === 'condition') {\n    const metric = CONDITION_METRICS.find((item) => item.value === value.metric)\n    const operator = value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='\n    return `${metric?.label ?? value.metric} ${operator} ${value.value}${metric?.unit ? ` ${metric.unit}` : ''}`\n  }\n  const field = VENT_FIELDS.find((item) => item.key === value.parameter)\n  const actor = value.actor === 'either' ? 'candidate or instructor' : value.actor\n  return `${field?.label ?? String(value.parameter)} changed by ${actor}`\n}\n"
+          if marker not in s: raise SystemExit('builder modes marker missing')
+          s=s.replace(marker,insert,1)
+          s=s.replace("    sourceName: 'Manual settings',\n  }", "    sourceName: 'Manual settings',\n    advanceTrigger: defaultAdvanceTrigger(),\n  }",1)
+          s=s.replace("    name: stage.name || `Stage ${index + 1}`,\n    apply:", "    name: stage.name || `Stage ${index + 1}`,\n    advanceTrigger: stage.advanceTrigger ?? defaultAdvanceTrigger(),\n    apply:",1)
+          s=s.replace("  const [message, setMessage] = useState<string | null>(null)\n", "  const [message, setMessage] = useState<string | null>(null)\n  const [triggerMenuIndex, setTriggerMenuIndex] = useState<number | null>(null)\n")
+          old="""  const insertStage = (index: number) => {\n    setDraft((current) => {\n      const stages = [...current.stages]\n      stages.splice(index + 1, 0, newStage(currentScenario, index + 1))\n      return { ...current, stages }\n    })\n  }\n"""
+          new="""  const insertStage = (index: number) => {\n    setDraft((current) => {\n      const stages = [...current.stages]\n      stages.splice(index + 1, 0, newStage(currentScenario, index + 1))\n      return { ...current, stages }\n    })\n    setTriggerMenuIndex(null)\n  }\n\n  const setAdvanceTrigger = (index: number, advanceTrigger: DynamicScenarioTrigger) => {\n    updateStage(index, (stage) => ({ ...stage, advanceTrigger }))\n  }\n\n  const chooseTriggerType = (index: number, type: DynamicScenarioTrigger['type']) => {\n    const current = draft.stages[index]?.advanceTrigger\n    if (current?.type === type) return\n    if (type === 'manual') setAdvanceTrigger(index, { type: 'manual' })\n    if (type === 'time') setAdvanceTrigger(index, { type: 'time', seconds: 30 })\n    if (type === 'condition') setAdvanceTrigger(index, { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 })\n    if (type === 'action') setAdvanceTrigger(index, { type: 'action', parameter: 'fio2', actor: 'either' })\n  }\n"""
+          if old not in s: raise SystemExit('insertStage block missing')
+          s=s.replace(old,new,1)
+          oldbtn="""                <button\n                  type=\"button\"\n                  className=\"dynamic-add-stage\"\n                  onClick={() => insertStage(index)}\n                  aria-label={`Add stage after Stage ${index + 1}`}\n                >\n                  ＋\n                </button>\n"""
+          newbtn="""                <div className=\"dynamic-transition-builder\">\n                  <button\n                    type=\"button\"\n                    className=\"dynamic-add-stage\"\n                    onClick={() => setTriggerMenuIndex((current) => current === index ? null : index)}\n                    aria-label={`Configure transition after Stage ${index + 1}`}\n                    title=\"Configure transition and add the next stage\"\n                  >\n                    ＋\n                  </button>\n                  <span className=\"dynamic-trigger-summary\">{triggerSummary(stage.advanceTrigger)}</span>\n                  {triggerMenuIndex === index && (() => {\n                    const trigger = stage.advanceTrigger ?? defaultAdvanceTrigger()\n                    return <div className=\"dynamic-trigger-menu\">\n                      <div className=\"dynamic-trigger-types\">\n                        {(['manual', 'time', 'condition', 'action'] as const).map((type) => (\n                          <button type=\"button\" key={type} className={trigger.type === type ? 'selected' : ''} onClick={() => chooseTriggerType(index, type)}>\n                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : 'Action'}\n                          </button>\n                        ))}\n                      </div>\n                      {trigger.type === 'manual' && <p>Instructor advances using Proceed to Next. Back remains available during the scenario.</p>}\n                      {trigger.type === 'time' && <label className=\"dynamic-trigger-field\"><span>Time in stage</span><div><input type=\"number\" min={1} max={3600} step={1} value={trigger.seconds} onChange={(event) => setAdvanceTrigger(index, { ...trigger, seconds: Math.max(1, Number(event.target.value) || 1) })} /><em>seconds</em></div></label>}\n                      {trigger.type === 'condition' && <div className=\"dynamic-trigger-condition\">\n                        <label><span>Measured value</span><select value={trigger.metric} onChange={(event) => setAdvanceTrigger(index, { ...trigger, metric: event.target.value as DynamicScenarioMetric })}>{CONDITION_METRICS.map((metric) => <option key={metric.value} value={metric.value}>{metric.label}</option>)}</select></label>\n                        <label><span>Comparison</span><select value={trigger.operator} onChange={(event) => setAdvanceTrigger(index, { ...trigger, operator: event.target.value as 'lt' | 'eq' | 'gt' })}><option value=\"lt\">Less than (&lt;)</option><option value=\"eq\">Equal to (=)</option><option value=\"gt\">Greater than (&gt;)</option></select></label>\n                        <label><span>Value</span><input type=\"number\" step=\"0.1\" value={trigger.value} onChange={(event) => setAdvanceTrigger(index, { ...trigger, value: Number(event.target.value) || 0 })} /></label>\n                      </div>}\n                      {trigger.type === 'action' && <div className=\"dynamic-trigger-condition\">\n                        <label><span>Ventilator parameter</span><select value={String(trigger.parameter)} onChange={(event) => setAdvanceTrigger(index, { ...trigger, parameter: event.target.value as keyof VentilatorSettings })}>{VENT_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>\n                        <label><span>Changed by</span><select value={trigger.actor} onChange={(event) => setAdvanceTrigger(index, { ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value=\"either\">Candidate or instructor</option><option value=\"candidate\">Candidate</option><option value=\"instructor\">Instructor</option></select></label>\n                      </div>}\n                      <div className=\"dynamic-trigger-actions\"><button type=\"button\" onClick={() => setTriggerMenuIndex(null)}>Close</button><button type=\"button\" className=\"account-primary-button\" onClick={() => insertStage(index)}>Add next stage</button></div>\n                    </div>\n                  })()}\n                </div>\n"""
+          if oldbtn not in s: raise SystemExit('add stage button missing')
+          s=s.replace(oldbtn,newbtn,1)
+          p.write_text(s)
+
+          # 3. Builder CSS
+          p=Path('src/components/DynamicScenarioBuilder.css'); s=p.read_text()
+          s += """\n\n/* Dynamic transition trigger editor */\n.dynamic-transition-builder { position: relative; display: grid; justify-items: center; gap: 5px; }\n.dynamic-trigger-summary { color: #81949d; font-size: 9px; line-height: 1.3; }\n.dynamic-trigger-menu { width: min(680px, 92%); margin: 4px auto 12px; padding: 12px; border: 1px solid #40545e; background: #091216; box-shadow: 0 12px 28px rgba(0,0,0,.28); }\n.dynamic-trigger-types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }\n.dynamic-trigger-types button { border-radius: 0; min-height: 34px; }\n.dynamic-trigger-types button.selected { border-color: #70c7df; color: #e9f8fb; background: #12303b; }\n.dynamic-trigger-menu p { margin: 5px 0 12px; color: #94a7af; font-size: 10px; }\n.dynamic-trigger-field, .dynamic-trigger-condition label { display: grid; gap: 5px; color: #96a9b1; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }\n.dynamic-trigger-field > div { display: flex; align-items: center; gap: 8px; }\n.dynamic-trigger-field input, .dynamic-trigger-condition input, .dynamic-trigger-condition select { width: 100%; min-height: 34px; border: 1px solid #3c5059; border-radius: 0; background: #081015; color: #e5eff2; padding: 6px 8px; }\n.dynamic-trigger-field input { max-width: 160px; }\n.dynamic-trigger-field em { color: #83959d; font-style: normal; text-transform: none; }\n.dynamic-trigger-condition { display: grid; grid-template-columns: 2fr 1.2fr 1fr; gap: 8px; margin-bottom: 10px; }\n.dynamic-trigger-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }\n.dynamic-trigger-actions button { border-radius: 0; }\n"""
+          p.write_text(s)
+
+          # 4. Runtime trigger engine in InstructorAccountControls
+          p=Path('src/components/InstructorAccountControls.tsx'); s=p.read_text()
+          s=s.replace("import { useEffect, useMemo, useState } from 'react'", "import { useEffect, useMemo, useRef, useState } from 'react'")
+          s=s.replace("import type { PatientSettings, VentilatorSettings } from '../simulation/types'", "import type { PatientSettings, VentilatorSettings } from '../simulation/types'\nimport type { PhysiologicalMeasurements } from '../physiologyMeasurements'\nimport type { SessionMemberRow } from '../session/supabase'")
+          s=s.replace("  type DynamicScenarioApplyMask,\n  type InstructorPresetRow,", "  type DynamicScenarioApplyMask,\n  type DynamicScenarioMetric,\n  type DynamicScenarioTrigger,\n  type InstructorPresetRow,")
+          oldprops="""  simulationPaused: boolean\n  onSimulationPausedChange: (paused: boolean) => void\n}\n"""
+          newprops="""  simulationPaused: boolean\n  onSimulationPausedChange: (paused: boolean) => void\n  physiologyMeasurements: PhysiologicalMeasurements\n  scenarioElapsedSeconds: number\n  sessionMembers: SessionMemberRow[]\n}\n"""
+          if oldprops not in s: raise SystemExit('props marker missing')
+          s=s.replace(oldprops,newprops,1)
+          oldsig="export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange }: InstructorAccountControlsProps) {"
+          newsig="export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers }: InstructorAccountControlsProps) {"
+          if oldsig not in s: raise SystemExit('signature missing')
+          s=s.replace(oldsig,newsig,1)
+          state_marker="  const [activeDynamicStage, setActiveDynamicStage] = useState(0)\n"
+          state_insert=state_marker+"  const [activeDynamicStageStartedAt, setActiveDynamicStageStartedAt] = useState(0)\n  const actionBaselineInstructorRef = useRef<VentilatorSettings | null>(null)\n  const actionBaselineCandidatesRef = useRef(new Map<string, VentilatorSettings>())\n  const triggerArmedAfterRef = useRef(0)\n  const automaticAdvanceLockRef = useRef(false)\n"
+          if state_marker not in s: raise SystemExit('state marker missing')
+          s=s.replace(state_marker,state_insert,1)
+          dyn_marker="  const dynamicPresets = useMemo(() => presets.filter((preset) => preset.scenario.kind === 'dynamic'), [presets])\n"
+          dyn_insert=dyn_marker+"  const activeDynamicPreset = useMemo(() => dynamicPresets.find((preset) => preset.id === activeDynamicId) ?? null, [dynamicPresets, activeDynamicId])\n"
+          if dyn_marker not in s: raise SystemExit('dynamic presets marker missing')
+          s=s.replace(dyn_marker,dyn_insert,1)
+
+          helper_marker="function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {"
+          helpers="""function conditionMetricValue(measurements: PhysiologicalMeasurements, metric: DynamicScenarioMetric): number | null {\n  const mapping: Record<DynamicScenarioMetric, number | null> = {\n    peakPressure: measurements.peakPressure, plateauPressure: measurements.plateauPressure, meanPressure: measurements.meanPressure,\n    totalPeep: measurements.measuredPeep, autoPeep: measurements.autoPeep, expiredTidalVolume: measurements.expiredTidalVolume,\n    totalRespiratoryRate: measurements.totalRespiratoryRate, actualMinuteVentilation: measurements.actualMinuteVentilation,\n    alveolarMinuteVentilation: measurements.alveolarMinuteVentilation, endTidalCO2: measurements.endTidalCO2,\n    oxygenSaturation: measurements.oxygenSaturation, drivingPressure: measurements.drivingPressure,\n  }\n  const value = mapping[metric]\n  return value != null && Number.isFinite(value) ? value : null\n}\n\nfunction conditionMatches(actual: number, operator: 'lt' | 'eq' | 'gt', target: number) {\n  if (operator === 'lt') return actual < target\n  if (operator === 'gt') return actual > target\n  const tolerance = Math.max(0.1, Math.abs(target) * 0.005)\n  return Math.abs(actual - target) <= tolerance\n}\n\nfunction settingChanged(a: unknown, b: unknown) {\n  if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) > 1e-6\n  return a !== b\n}\n\nfunction triggerRuntimeLabel(trigger: DynamicScenarioTrigger | undefined) {\n  const value = trigger ?? { type: 'manual' as const }\n  if (value.type === 'manual') return 'Manual'\n  if (value.type === 'time') return `After ${value.seconds}s`\n  if (value.type === 'condition') return `${value.metric} ${value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='} ${value.value}`\n  return `${String(value.parameter)} changed · ${value.actor}`\n}\n\n"""+helper_marker
+          if helper_marker not in s: raise SystemExit('helper marker missing')
+          s=s.replace(helper_marker,helpers,1)
+
+          oldload="""  const loadDynamicStage = (preset: InstructorPresetRow, index: number) => {\n    const stages = preset.scenario.stages ?? []\n    if (!stages.length) return\n    const nextIndex = Math.max(0, Math.min(stages.length - 1, index))\n    onLoadScenario(applyDynamicStage(currentScenario, stages[nextIndex]))\n    setActiveDynamicId(preset.id)\n    setActiveDynamicStage(nextIndex)\n    setPresetMessage(`“${preset.name}” · ${stages[nextIndex].name} (${nextIndex + 1}/${stages.length})`)\n  }\n"""
+          newload="""  const loadDynamicStage = (preset: InstructorPresetRow, index: number, reason: 'manual' | 'automatic' = 'manual') => {\n    const stages = preset.scenario.stages ?? []\n    if (!stages.length) return\n    const nextIndex = Math.max(0, Math.min(stages.length - 1, index))\n    const nextScenario = applyDynamicStage(currentScenario, stages[nextIndex])\n    onLoadScenario(nextScenario)\n    setActiveDynamicId(preset.id)\n    setActiveDynamicStage(nextIndex)\n    setActiveDynamicStageStartedAt(scenarioElapsedSeconds)\n    actionBaselineInstructorRef.current = { ...nextScenario.ventilator }\n    actionBaselineCandidatesRef.current = new Map(sessionMembers.filter((member) => member.role === 'candidate').flatMap((member) => {\n      const settings = member.ventilator_settings as Partial<VentilatorSettings>\n      return settings && Object.keys(settings).length ? [[member.id, { ...settings } as VentilatorSettings] as const] : []\n    }))\n    triggerArmedAfterRef.current = Date.now() + 750\n    automaticAdvanceLockRef.current = false\n    setPresetMessage(`“${preset.name}” · ${stages[nextIndex].name} (${nextIndex + 1}/${stages.length})${reason === 'automatic' ? ' · auto advanced' : ''}`)\n  }\n\n  useEffect(() => {\n    if (role === 'candidate' || !activeDynamicPreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return\n    const stages = activeDynamicPreset.scenario.stages ?? []\n    if (activeDynamicStage < 0 || activeDynamicStage >= stages.length - 1) return\n    const stage = stages[activeDynamicStage]\n    const trigger = stage.advanceTrigger ?? { type: 'manual' as const }\n    if (trigger.type === 'manual') return\n\n    let shouldAdvance = false\n    if (trigger.type === 'time') {\n      shouldAdvance = scenarioElapsedSeconds - activeDynamicStageStartedAt >= Math.max(1, trigger.seconds)\n    } else if (trigger.type === 'condition') {\n      const actual = conditionMetricValue(physiologyMeasurements, trigger.metric)\n      shouldAdvance = actual != null && conditionMatches(actual, trigger.operator, trigger.value)\n    } else if (trigger.type === 'action') {\n      if (trigger.actor === 'instructor' || trigger.actor === 'either') {\n        const baseline = actionBaselineInstructorRef.current\n        if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter], baseline[trigger.parameter])) shouldAdvance = true\n      }\n      if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {\n        for (const member of sessionMembers) {\n          if (member.role !== 'candidate') continue\n          const baseline = actionBaselineCandidatesRef.current.get(member.id)\n          const settings = member.ventilator_settings as Partial<VentilatorSettings>\n          if (!baseline || !settings || !(trigger.parameter in settings)) continue\n          if (settingChanged(settings[trigger.parameter], baseline[trigger.parameter])) { shouldAdvance = true; break }\n        }\n      }\n    }\n\n    if (!shouldAdvance) return\n    automaticAdvanceLockRef.current = true\n    loadDynamicStage(activeDynamicPreset, activeDynamicStage + 1, 'automatic')\n  }, [role, activeDynamicPreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers])\n"""
+          if oldload not in s: raise SystemExit('load dynamic stage block missing')
+          s=s.replace(oldload,newload,1)
+
+          # pass start callback into builder
+          oldbuilder="""                onRefresh={() => refreshPresets(account)}\n                onClose={() => setScenarioOpen(false)}\n              />"""
+          newbuilder="""                onRefresh={() => refreshPresets(account)}\n                onStartScenario={(preset) => loadDynamicStage(preset, 0)}\n                onClose={() => setScenarioOpen(false)}\n              />"""
+          if oldbuilder not in s: raise SystemExit('builder props block missing')
+          s=s.replace(oldbuilder,newbuilder,1)
+
+          # persistent runtime controls next to scenario button
+          needle="""      {role !== 'candidate' && (\n        <button\n          type=\"button\"\n          className=\"top-account-button scenario-top-button\"\n          title=\"Instructor scenarios\"\n          aria-label=\"Open instructor scenarios\"\n          onClick={openScenarios}\n        >\n          <ScenarioIcon />\n        </button>\n      )}\n"""
+          replacement=needle+"""      {role !== 'candidate' && activeDynamicPreset && (() => {\n        const stages = activeDynamicPreset.scenario.stages ?? []\n        const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))\n        const trigger = stages[index]?.advanceTrigger\n        return <div className=\"dynamic-runtime-toolbar\">\n          <button type=\"button\" className=\"dynamic-runtime-status\" onClick={openScenarios} title=\"Open dynamic scenario builder\">\n            <span>{activeDynamicPreset.name}</span><strong>{stages[index]?.name ?? `Stage ${index + 1}`}</strong><small>{triggerRuntimeLabel(trigger)}</small>\n          </button>\n          <button type=\"button\" disabled={index <= 0} onClick={() => loadDynamicStage(activeDynamicPreset, index - 1)}>Back</button>\n          <button type=\"button\" disabled={index >= stages.length - 1} onClick={() => loadDynamicStage(activeDynamicPreset, index + 1)}>Proceed</button>\n          <button type=\"button\" onClick={() => { setActiveDynamicId(null); setActiveDynamicStage(0); setPresetMessage('Dynamic scenario stopped.') }}>Stop</button>\n        </div>\n      })()}\n"""
+          if needle not in s: raise SystemExit('scenario top button block missing')
+          s=s.replace(needle,replacement,1)
+          p.write_text(s)
+
+          # 5. Builder start button and prop
+          p=Path('src/components/DynamicScenarioBuilder.tsx'); s=p.read_text()
+          s=s.replace("  onRefresh: () => Promise<void>\n  onClose: () => void", "  onRefresh: () => Promise<void>\n  onStartScenario: (preset: InstructorPresetRow) => void\n  onClose: () => void")
+          s=s.replace("    onRefresh,\n    onClose,", "    onRefresh,\n    onStartScenario,\n    onClose,")
+          foot="""          <span />\n          <button type=\"button\" disabled={busy} onClick={onClose}>Cancel</button>"""
+          footnew="""          <span />\n          {selectedPreset && <button type=\"button\" disabled={busy || dirty} onClick={() => { onStartScenario(selectedPreset); onClose() }}>Start scenario</button>}\n          <button type=\"button\" disabled={busy} onClick={onClose}>Cancel</button>"""
+          if foot not in s: raise SystemExit('builder footer marker missing')
+          s=s.replace(foot,footnew,1)
+          p.write_text(s)
+
+          # 6. App passes measurements/time/member telemetry
+          p=Path('src/App.tsx'); s=p.read_text()
+          old="""            simulationPaused={simulationPaused}\n            onSimulationPausedChange={setSimulationPaused}\n"""
+          new="""            simulationPaused={simulationPaused}\n            onSimulationPausedChange={setSimulationPaused}\n            physiologyMeasurements={physiologyMeasurements}\n            scenarioElapsedSeconds={displayedScenarioElapsedTime}\n            sessionMembers={teachingSession.members}\n"""
+          if old not in s: raise SystemExit('App instructor controls marker missing')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          # 7. Runtime toolbar CSS in account.css
+          p=Path('src/account.css'); s=p.read_text()
+          s += """\n\n/* v0.82 dynamic scenario runtime */\n.dynamic-runtime-toolbar { display: flex; align-items: stretch; gap: 3px; max-width: 520px; height: 34px; }\n.dynamic-runtime-toolbar > button { border-radius: 0; border: 1px solid #344851; background: #0b151a; color: #c8d5da; padding: 4px 8px; font-size: 9px; }\n.dynamic-runtime-toolbar > button:disabled { opacity: .35; }\n.dynamic-runtime-status { display: grid; grid-template-columns: auto auto; column-gap: 6px; align-content: center; min-width: 165px; text-align: left; }\n.dynamic-runtime-status span { color: #84979f; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n.dynamic-runtime-status strong { color: #eff7f9; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n.dynamic-runtime-status small { grid-column: 1 / -1; color: #72c8df; font-size: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n@media (max-width: 999px) { .dynamic-runtime-toolbar { display: none; } }\n"""
+          p.write_text(s)
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit implementation and remove temporary workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/tmp-v082-trigger-engine.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src/instructorAccount.ts src/components/DynamicScenarioBuilder.tsx src/components/DynamicScenarioBuilder.css src/components/InstructorAccountControls.tsx src/App.tsx src/account.css .github/workflows/tmp-v082-trigger-engine.yml
+          git commit -m "Add dynamic scenario transition triggers"
+          git push origin HEAD:chatgpt/v0.82-trigger-engine
