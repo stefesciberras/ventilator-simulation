@@ -15,6 +15,8 @@ import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
 import type { InstructorScenarioSnapshot } from './instructorAccount'
 import { calculatePhysiologicalMeasurements } from './physiologyMeasurements'
+import { PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type PatientProfileName } from './patientProfiles'
+import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import './session.css'
 import './physiology.css'
@@ -26,10 +28,7 @@ const initialVentilator: VentilatorSettings = {
   pHigh: 24, pLow: 5, tHigh: 4, tLow: 0.5,
 }
 
-const initialPatient: PatientSettings = {
-  sex: 'male', heightCm: 170, oxygenConsumption: 250, frc: 1980, shuntFraction: 0.03, maxSpO2: 100,
-  compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5, co2Production: 250, vdVt: 0.4,
-}
+const initialPatient: PatientSettings = { ...PATIENT_PROFILES.Normal }
 
 interface EventMeasurements {
   peakPressure: number
@@ -78,6 +77,7 @@ const WAVEFORM_STORAGE_KEY = 'eduvent.waveform-display'
 const PATIENT_TRANSITION_STORAGE_KEY = 'eduvent.patient-transition-seconds'
 const SHOW_PATIENT_EFFORT_STORAGE_KEY = 'eduvent.show-patient-effort'
 const SCENARIO_MEDIA_STORAGE_KEY = 'eduvent.scenario-media-ids'
+const PATIENT_PROFILE_STORAGE_KEY = 'eduvent.patient-preset'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
@@ -472,6 +472,11 @@ export default function App() {
     }
     return stored
   })
+  const [selectedPatientProfile, setSelectedPatientProfile] = useState<PatientProfileName | null>(() => {
+    if (typeof window === 'undefined') return null
+    const stored = window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY)
+    return PATIENT_PROFILE_NAMES.includes(stored as PatientProfileName) ? stored as PatientProfileName : null
+  })
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
     const stored = Number(window.localStorage.getItem(PATIENT_TRANSITION_STORAGE_KEY) ?? 0)
@@ -532,6 +537,7 @@ export default function App() {
   const [alarmLifecycle, setAlarmLifecycle] = useState<Record<string, { activeSince: number | null; resolvedAt: number | null; acknowledged: boolean }>>({})
   const [waveformFrozen, setWaveformFrozen] = useState(false)
   const [simulationPaused, setSimulationPaused] = useState(false)
+  const [simulationSpeed, setSimulationSpeed] = useState<SimulationSpeed>(1)
   const [frozenSamples, setFrozenSamples] = useState<Sample[] | null>(null)
   const [traceCursor, setTraceCursor] = useState(Math.floor(WINDOW_SAMPLES * 0.7))
   const [inspiratoryHoldRequestTime, setInspiratoryHoldRequestTime] = useState<number | null>(null)
@@ -582,6 +588,8 @@ export default function App() {
     candidateAlarmLevel: candidateAlarmLevelForSession,
     simulationPaused,
     setSimulationPaused,
+    simulationSpeed,
+    setSimulationSpeed,
   })
 
   const candidateWaveformOptions = useMemo(
@@ -763,29 +771,55 @@ export default function App() {
       } else {
         effectivePatientRef.current = { ...patient }
       }
+      const tickSteps = Math.max(1, Math.round(TICK_STEPS * simulationSpeed))
       const nextSamples = advanceSimulation(
         simulationStateRef.current,
         effectiveVentilator,
         simulationPatient,
         startTime,
-        TICK_STEPS,
+        tickSteps,
         DT,
         holdOptions,
       )
-      simulationTimeRef.current = startTime + TICK_STEPS * DT
+      simulationTimeRef.current = startTime + tickSteps * DT
       setTimeline((current) => {
         const combined = [...current, ...nextSamples]
         return combined.length > HISTORY_SAMPLES ? combined.slice(-HISTORY_SAMPLES) : combined
       })
     }, 100)
     return () => window.clearInterval(timer)
-  }, [effectiveVentilator, patient, simulationPaused, holdOptions])
+  }, [effectiveVentilator, patient, simulationPaused, holdOptions, simulationSpeed])
 
   const movingSamples = useMemo(() => timeline.slice(-WINDOW_SAMPLES), [timeline])
   const samples = waveformFrozen && frozenSamples ? frozenSamples : movingSamples
   const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
   const physiologyMeasurements = useMemo(() => calculatePhysiologicalMeasurements(measurementSamples, effectiveVentilator, effectivePatientRef.current), [measurementSamples, effectiveVentilator, patient])
+  const latestSlowMeasurementsRef = useRef({
+    meanPressure: physiologyMeasurements.meanPressure,
+    alveolarMinuteVentilation: physiologyMeasurements.alveolarMinuteVentilation,
+  })
+  const [slowDisplayMeasurements, setSlowDisplayMeasurements] = useState(() => ({
+    meanPressure: physiologyMeasurements.meanPressure,
+    alveolarMinuteVentilation: physiologyMeasurements.alveolarMinuteVentilation,
+  }))
+  useEffect(() => {
+    latestSlowMeasurementsRef.current = {
+      meanPressure: physiologyMeasurements.meanPressure,
+      alveolarMinuteVentilation: physiologyMeasurements.alveolarMinuteVentilation,
+    }
+  }, [physiologyMeasurements.meanPressure, physiologyMeasurements.alveolarMinuteVentilation])
+  useEffect(() => {
+    const update = () => setSlowDisplayMeasurements({ ...latestSlowMeasurementsRef.current })
+    update()
+    const timer = window.setInterval(update, 10_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const displayedPhysiologyMeasurements = useMemo(() => ({
+    ...physiologyMeasurements,
+    meanPressure: slowDisplayMeasurements.meanPressure,
+    alveolarMinuteVentilation: slowDisplayMeasurements.alveolarMinuteVentilation,
+  }), [physiologyMeasurements, slowDisplayMeasurements])
   const measuredIERatio = useMemo(() => calculateMeasuredIERatio(measurementSamples), [measurementSamples])
   const endTidalCO2 = useMemo(() => calculateEndTidalCO2(measurementSamples), [measurementSamples])
   const selectedSample = samples[Math.min(traceCursor, Math.max(0, samples.length - 1))]
@@ -796,7 +830,7 @@ export default function App() {
   const scenarioElapsedTime = Math.max(0, currentSimulationTime - scenarioClockOriginRef.current)
   const scenarioClockSync = teachingSession.scenarioClockSync
   const displayedScenarioElapsedTime = teachingSession.role === 'candidate' && scenarioClockSync
-    ? Math.max(0, scenarioClockSync.elapsedMs / 1000 + (scenarioClockSync.paused ? 0 : (Date.now() - scenarioClockSync.receivedAt) / 1000))
+    ? Math.max(0, scenarioClockSync.elapsedMs / 1000 + (scenarioClockSync.paused ? 0 : ((Date.now() - scenarioClockSync.receivedAt) / 1000) * scenarioClockSync.speed))
     : scenarioElapsedTime
 
   useEffect(() => {
@@ -1239,6 +1273,7 @@ export default function App() {
       runtimeConnection: teachingSession.localRuntimeConnection,
       scenarioElapsedSeconds: displayedScenarioElapsedTime,
       simulationPaused,
+      simulationSpeed,
       candidateCount: teachingSession.members.filter((member) => member.role === 'candidate').length,
     })
     setDiagnosticMenuOpen(false)
@@ -1260,6 +1295,14 @@ export default function App() {
   }
 
   const oxygenBoostTimer = `0:${String(oxygenBoostSecondsRemaining).padStart(2, '0')}`
+  const selectedPatientProfileModified = selectedPatientProfile != null
+    ? !patientMatchesProfile(patient, PATIENT_PROFILES[selectedPatientProfile])
+    : false
+  const applyPatientProfile = (profile: PatientProfileName) => {
+    setSelectedPatientProfile(profile)
+    try { window.localStorage.setItem(PATIENT_PROFILE_STORAGE_KEY, profile) } catch { /* optional UI preference */ }
+    setPatient({ ...PATIENT_PROFILES[profile] })
+  }
   const resetVentilator = () => setVentilator({ ...initialVentilator })
   const resetPatientRespiratory = () => setPatient((current) => ({
     ...current,
@@ -1310,7 +1353,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={physiologyMeasurements} oesophagealEnabled={oesophagealMonitoringEnabled} onClose={() => setMeasurementsOpen(false)} />
+      <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={displayedPhysiologyMeasurements} oesophagealEnabled={oesophagealMonitoringEnabled} onClose={() => setMeasurementsOpen(false)} />
       <header className="topbar">
         <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
         <div className="top-simulation-controls">
@@ -1329,6 +1372,18 @@ export default function App() {
             <span>TIME</span>
             <strong>{formatSimulationClock(displayedScenarioElapsedTime)}</strong>
           </div>
+          <label className={`simulation-speed-control ${simulationPaused ? 'paused' : ''}`}>
+            <span>SPEED</span>
+            <select
+              value={simulationSpeed}
+              disabled={teachingSession.role === 'candidate'}
+              onChange={(event) => setSimulationSpeed(Number(event.target.value) as SimulationSpeed)}
+              aria-label="Simulation speed"
+              title={teachingSession.role === 'candidate' ? 'Simulation speed controlled by instructor' : 'Simulation speed'}
+            >
+              {SIMULATION_SPEEDS.map((speed) => <option key={speed} value={speed}>×{speed}</option>)}
+            </select>
+          </label>
         </div>
         <div className="status-cluster">
           <span className={`status-dot ${simulationPaused ? 'paused' : ''}`} />
@@ -1528,7 +1583,7 @@ export default function App() {
               <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" alarmLevel={respiratoryRateMetricAlarm} />
               <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" alarmLevel={minuteVentilationMetricAlarm} />
               <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
-              <Metric label="Pmean" value={measures.meanPressure.toFixed(1)} unit="cmH₂O" />
+              <Metric label="Pmean" value={slowDisplayMeasurements.meanPressure == null ? '—' : slowDisplayMeasurements.meanPressure.toFixed(1)} unit="cmH₂O" />
               <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
               <div className="metrics-spacer" aria-hidden="true" />
               <GasMetric
@@ -1550,18 +1605,37 @@ export default function App() {
         </section>
 
         <aside className="control-panel tabbed-control-panel">
-          <nav className="control-tabs" role="tablist" aria-label="Simulator controls">
-            {(['vent', 'patient', 'physio', 'teaching'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={controlTab === tab}
-                className={controlTab === tab ? 'active' : ''}
-                onClick={() => setControlTab(tab)}
-              >{tab === 'teaching' ? 'Teaching' : tab === 'vent' ? 'Vent' : tab === 'patient' ? 'Patient' : 'Physio'}</button>
-            ))}
-          </nav>
+          <div className="control-navigation-stack">
+            <nav className="control-tabs" role="tablist" aria-label="Simulator controls">
+              {(['vent', 'patient', 'physio', 'teaching'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={controlTab === tab}
+                  className={controlTab === tab ? 'active' : ''}
+                  onClick={() => setControlTab(tab)}
+                >{tab === 'teaching' ? 'Teaching' : tab === 'vent' ? 'Vent' : tab === 'patient' ? 'Patient' : 'Physio'}</button>
+              ))}
+            </nav>
+            <div className="patient-profile-strip" role="group" aria-label="Patient profiles">
+              {PATIENT_PROFILE_NAMES.map((profile) => {
+                const selected = selectedPatientProfile === profile
+                const stateClass = selected ? (selectedPatientProfileModified ? 'profile-modified' : 'profile-selected') : ''
+                return (
+                  <button
+                    key={profile}
+                    type="button"
+                    className={stateClass}
+                    disabled={teachingSession.candidatePatientLocked}
+                    aria-pressed={selected}
+                    title={selected && selectedPatientProfileModified ? `${profile} selected · settings modified` : `Apply ${profile} profile`}
+                    onClick={() => applyPatientProfile(profile)}
+                  >{profile}</button>
+                )
+              })}
+            </div>
+          </div>
           <div className="control-tab-content">
             {controlTab === 'teaching' && (
               <div className="control-tab-pane teaching-tab-pane" role="tabpanel">

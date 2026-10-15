@@ -300,10 +300,6 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
   const predictedBodyWeight = calculatePredictedBodyWeight(settings.sex ?? 'male', settings.heightCm ?? 170)
-  const [selectedPreset, setSelectedPreset] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    return window.localStorage.getItem('eduvent.patient-preset')
-  })
   const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed('patient-settings'))
   const toggleCollapsed = () => setCollapsed((current) => {
     const next = !current
@@ -319,24 +315,6 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
     } else {
       patch({ spontaneousRate: Math.max(1, previousSpontaneousRate.current) })
     }
-  }
-
-  const normalAdultFrc = Math.round(calculatePredictedBodyWeight('male', 170) * 30)
-  const normalPhysiology = { sex: 'male' as const, heightCm: 170, oxygenConsumption: 250, frc: normalAdultFrc, maxSpO2: 100, co2Production: 250, vdVt: 0.4 }
-  const presets: Record<string, PatientSettings> = {
-    Normal: { ...normalPhysiology, shuntFraction: 0.03, compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5 },
-    ARDS: { ...normalPhysiology, vdVt: 0.6, shuntFraction: 0.25, compliance: 25, resistance: 8, expiratoryResistance: 10, spontaneousRate: 0, effort: 10, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 25, endExpiratoryOesophagealPressure: -5 },
-    COPD: { ...normalPhysiology, vdVt: 0.5, shuntFraction: 0.05, compliance: 80, resistance: 16, expiratoryResistance: 28, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -5 },
-    Asthma: { ...normalPhysiology, vdVt: 0.5, shuntFraction: 0.04, compliance: 70, resistance: 25, expiratoryResistance: 40, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30, endExpiratoryOesophagealPressure: -5 },
-    Paed: { sex: 'male', heightCm: 110, oxygenConsumption: 120, frc: 500, shuntFraction: 0.03, maxSpO2: 100, co2Production: 100, vdVt: 0.4, compliance: 20, resistance: 8, expiratoryResistance: 10, spontaneousRate: 22, effort: 5, neuralInspiratoryTime: 0.7, effortRisePercent: 40, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -4 },
-  }
-
-  const applyPreset = (name: string) => {
-    const preset = presets[name]
-    if (!preset) return
-    setSelectedPreset(name)
-    try { window.localStorage.setItem('eduvent.patient-preset', name) } catch { /* optional UI preference */ }
-    onChange({ ...preset })
   }
 
   return (
@@ -368,7 +346,6 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
             </select>
           </label>
         </div>
-        <div className="preset-row">{Object.keys(presets).map((name) => <button type="button" key={name} className={selectedPreset === name ? 'selected-preset' : ''} onClick={() => applyPreset(name)}>{name}</button>)}</div>
       </div>
       {view !== 'physiology' && <div className="patient-respiratory-controls">
       <div className="patient-rr-control">

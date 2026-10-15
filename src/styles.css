@@ -41,6 +41,11 @@ h1 { margin: 2px 0 0; font-size: clamp(20px, 2vw, 30px); font-weight: 650; lette
 .simulation-clock strong { margin-top: 5px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 17px; line-height: 1; letter-spacing: .03em; color: #d8eef5; }
 .simulation-clock.paused { border-color: #806a37; background: #211c12; }
 .simulation-clock.paused strong { color: #ffe39b; }
+.simulation-speed-control { min-width: 72px; min-height: 56px; padding: 7px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border: 1px solid #3b505c; border-radius: 10px; background: #111a20; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+.simulation-speed-control > span { font-size: 8px; line-height: 1; letter-spacing: .14em; color: #718791; font-weight: 800; }
+.simulation-speed-control select { width: 58px; padding: 2px 3px; border: 0; border-radius: 5px; background: #1b2931; color: #d8eef5; font-size: 13px; font-weight: 750; text-align: center; cursor: pointer; }
+.simulation-speed-control select:disabled { opacity: .65; cursor: default; }
+.simulation-speed-control.paused { border-color: #806a37; background: #211c12; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 14px; }
 .ventilator-console, .control-panel { border: 1px solid #283741; border-radius: 15px; background: rgba(14, 20, 25, .94); box-shadow: 0 22px 70px rgba(0,0,0,.26); }
 .ventilator-console { overflow: hidden; }
@@ -139,9 +144,6 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .patient-section h2 { color: #93d5a0; }
 .patient-section .control-heading span { color: #aac9b0; }
 .patient-section input[type="range"] { accent-color: #70c584; }
-.patient-section .preset-row button { border-color: #3d5f46; color: #cfe9d4; background: #16251a; }
-.patient-section .preset-row button:hover:not(:disabled) { border-color: #6ba87a; background: #1c3021; }
-.patient-section .preset-row button.selected-preset { color: #f0fff3; border-color: #82cb91; background: #24442b; box-shadow: inset 0 0 0 1px rgba(130,203,145,.18); }
 .patient-reset-button { border-color: #45634c; color: #9bcaa4; background: #142118; }
 .patient-reset-button:hover:not(:disabled) { color: #d8efdd; border-color: #6ca77a; background: #1a2c1e; }
 .patient-shared-profile-controls { margin: 6px 0 14px; }
@@ -251,10 +253,16 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 }
 
 
-/* v0.80.3 tabbed settings navigation */
-.control-tabs { position: sticky; top: -15px; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 4px; margin: -15px -15px 12px; padding: 10px 10px 8px; background: rgba(14,20,25,.98); border-bottom: 1px solid #2d3d46; }
+/* v0.80.3 tabbed settings navigation; v0.81.7 keeps profiles with the sticky navigation */
+.control-navigation-stack { position: sticky; top: -15px; z-index: 20; margin: -15px -15px 12px; padding: 10px 10px 8px; background: rgba(14,20,25,.98); border-bottom: 1px solid #2d3d46; }
+.control-tabs { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 4px; margin: 0; padding: 0; background: transparent; border-bottom: 0; }
 .control-tabs button { min-width: 0; padding: 8px 5px; border-radius: 7px; color: #91a8b2; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
 .control-tabs button.active { color: #dff7ff; border-color: #69c8e8; background: #18313c; }
+.patient-profile-strip { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 5px; margin-top: 7px; }
+.patient-profile-strip button { min-width: 0; padding: 6px 3px; border-color: #4d585e; background: #242a2e; color: #aeb8bd; font-size: 9px; font-weight: 750; }
+.patient-profile-strip button:hover:not(:disabled) { border-color: #748188; background: #30383d; }
+.patient-profile-strip button.profile-selected { border-color: #8fd29a; background: #bce8c3; color: #18301d; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
+.patient-profile-strip button.profile-modified { border-color: #d4a74e; background: #e2b861; color: #352607; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
 .control-tab-content { min-width: 0; }
 .control-tab-pane > .session-lock-fieldset { margin: 0; }
 .control-tab-pane .control-section { border-bottom: 0; padding-bottom: 4px; }
@@ -263,7 +271,8 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .alarm-row { width: 100%; }
 @media (max-width: 680px) {
   .control-panel { padding-top: 15px; }
-  .control-tabs { top: -15px; }
+  .control-navigation-stack { top: -15px; }
+  .patient-profile-strip button { padding: 6px 2px; font-size: 8px; }
 }
 
 
@@ -319,7 +328,4 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .patient-section.physiology-view .patient-reset-button:hover:not(:disabled) { color: #efdfff; border-color: #a875c5; background: #2a1b38; }
 .patient-section.physiology-view .patient-transition-control label { color: #c2a2d4; }
 .patient-section.physiology-view .patient-transition-control select { border-color: #705087; color: #f1e7f7; background: #19121f; }
-.patient-section.physiology-view .preset-row button { border-color: #604476; color: #dbc4e8; background: #1d1525; }
-.patient-section.physiology-view .preset-row button:hover:not(:disabled) { border-color: #986ab5; background: #291d34; }
-.patient-section.physiology-view .preset-row button.selected-preset { color: #fff4ff; border-color: #bd86e0; background: #482b5d; box-shadow: inset 0 0 0 1px rgba(189,134,224,.2); }
 .patient-section.physiology-view .patient-sex-selector button.selected { color: #f5eaff; border-color: #ad79ce; background: #422953; }
