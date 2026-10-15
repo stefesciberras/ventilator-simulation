@@ -1608,18 +1608,6 @@ export default function App() {
 
         <aside className="control-panel tabbed-control-panel">
           <div className="control-navigation-stack">
-            <nav className="control-tabs" role="tablist" aria-label="Simulator controls">
-              {(['vent', 'patient', 'physio', 'teaching'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={controlTab === tab}
-                  className={controlTab === tab ? 'active' : ''}
-                  onClick={() => setControlTab(tab)}
-                >{tab === 'teaching' ? 'Teaching' : tab === 'vent' ? 'Vent' : tab === 'patient' ? 'Patient' : 'Physio'}</button>
-              ))}
-            </nav>
             <div className="patient-profile-strip" role="group" aria-label="Patient profiles">
               {PATIENT_PROFILE_NAMES.map((profile) => {
                 const selected = selectedPatientProfile === profile
@@ -1637,6 +1625,18 @@ export default function App() {
                 )
               })}
             </div>
+            <nav className="control-tabs" role="tablist" aria-label="Simulator controls">
+              {(['vent', 'patient', 'physio', 'teaching'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={controlTab === tab}
+                  className={controlTab === tab ? 'active' : ''}
+                  onClick={() => setControlTab(tab)}
+                >{tab === 'teaching' ? 'Teaching' : tab === 'vent' ? 'Vent' : tab === 'patient' ? 'Patient' : 'Physio'}</button>
+              ))}
+            </nav>
           </div>
           <div className="control-tab-content">
             {controlTab === 'teaching' && (

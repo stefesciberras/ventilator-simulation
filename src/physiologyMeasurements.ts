@@ -263,14 +263,20 @@ function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings
   const recent = recentWindow(samples, 20)
   const passiveEndExpiration = recent
     .filter((sample) => sample.phase === 'expiration' && Math.abs(sample.flow) < 2 && sample.musclePressure < 0.5)
-  const endExpiratoryVolume = latestEndExpiratoryVolume(recent)
-  // state.volume is volume above the relaxed volume at set PEEP. Any residual
-  // volume carried into the next inspiration therefore represents dynamic
-  // hyperinflation. Converting that volume through compliance gives intrinsic
-  // PEEP continuously, without depending on a potentially stale prior hold.
-  const autoPeep = endExpiratoryVolume == null
+  const lastCompletedEndExpiratoryVolume = latestEndExpiratoryVolume(recent)
+  const latestSample = recent[recent.length - 1]
+  // During passive expiration, use the *current* residual volume above the
+  // set-PEEP relaxation volume. This is the intrinsic pressure an occlusion at
+  // that instant would reveal, and lets the displayed AutoPEEP fall immediately
+  // when RR is reduced and the longer Te permits further deflation. During
+  // inspiration retain the last completed end-expiratory value.
+  const currentPassiveExpiratoryVolume = latestSample?.phase === 'expiration' && latestSample.musclePressure < 0.5
+    ? Math.max(0, latestSample.volume)
+    : null
+  const autoPeepReferenceVolume = currentPassiveExpiratoryVolume ?? lastCompletedEndExpiratoryVolume
+  const autoPeep = autoPeepReferenceVolume == null
     ? null
-    : Math.max(0, endExpiratoryVolume / Math.max(patient.compliance, 1))
+    : Math.max(0, autoPeepReferenceVolume / Math.max(patient.compliance, 1))
   const totalPeep = autoPeep == null ? ventilator.peep : ventilator.peep + autoPeep
   const plateauPressure = median(recent
     .filter((sample) => sample.phase === 'inspiration' && Math.abs(sample.flow) < 1 && sample.musclePressure < 0.5)

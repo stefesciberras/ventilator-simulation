@@ -329,3 +329,9 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .patient-section.physiology-view .patient-transition-control label { color: #c2a2d4; }
 .patient-section.physiology-view .patient-transition-control select { border-color: #705087; color: #f1e7f7; background: #19121f; }
 .patient-section.physiology-view .patient-sex-selector button.selected { color: #f5eaff; border-color: #ad79ce; background: #422953; }
+
+
+/* v0.81.9 profile strip geometry */
+.patient-profile-strip button {
+  border-radius: 0 !important;
+}
