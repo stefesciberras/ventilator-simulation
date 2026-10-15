@@ -374,12 +374,36 @@ function updateVentilationTracking(state: SimulationState, sample: Sample, t: nu
   state.previousPhase = sample.phase
 }
 
-function oesophagealPressureValue(t: number, pmus: number, patient: PatientSettings): number {
+function oesophagealPressureValue(
+  t: number,
+  pmus: number,
+  patient: PatientSettings,
+  lungVolumeL: number,
+): number {
   const heartRate = 80
   const cardiacPhase = 2 * Math.PI * (heartRate / 60) * t
   const cardiacOscillation = 0.45 * Math.sin(cardiacPhase) + 0.18 * Math.sin(2 * cardiacPhase + 0.7)
   const baseline = patient.endExpiratoryOesophagealPressure ?? -5
-  return baseline - pmus + cardiacOscillation
+
+  // Pes approximates pleural pressure. Positive-pressure ventilation raises Pes
+  // as the chest wall is displaced even when the patient makes no inspiratory
+  // effort. Keep that passive component separate from Pmus: active inspiratory
+  // effort lowers Pes, whereas tidal inflation raises it.
+  //
+  // A normal adult chest-wall compliance is roughly 200 mL/cmH2O. Scale the
+  // teaching approximation to predicted body weight so paediatric patients do
+  // not receive an adult-sized chest wall. The current simulation volume is the
+  // volume above the end-expiratory reference, so intrinsic trapping naturally
+  // leaves Pes above baseline at end expiration.
+  const heightCm = patient.heightCm ?? 170
+  const predictedBodyWeightKg = Math.max(
+    20,
+    (patient.sex === 'female' ? 45.5 : 50) + 0.91 * (heightCm - 152.4),
+  )
+  const chestWallComplianceMlPerCmH2O = clamp(predictedBodyWeightKg * 3, 40, 250)
+  const passiveChestWallPressure = Math.max(0, lungVolumeL * 1000) / chestWallComplianceMlPerCmH2O
+
+  return baseline + passiveChestWallPressure - pmus + cardiacOscillation
 }
 
 function isRequestHeld(t: number, requestTime?: number | null, releaseTime?: number | null): boolean {
@@ -584,7 +608,7 @@ function twoLevelSample(
     musclePressure: pmus,
     co2: airwayCo2,
     spo2: state.spo2,
-    oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
+    oesophagealPressure: oesophagealPressureValue(t, pmus, patient, state.volume),
     phase: high ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,
@@ -1070,7 +1094,7 @@ export function stepSimulation(
     musclePressure: pmus,
     co2: airwayCo2,
     spo2: state.spo2,
-    oesophagealPressure: oesophagealPressureValue(t, pmus, patient),
+    oesophagealPressure: oesophagealPressureValue(t, pmus, patient, state.volume),
     phase: sampleInspiration ? 'inspiration' : 'expiration',
     mode,
     breathTrigger,
