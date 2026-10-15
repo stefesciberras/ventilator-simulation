@@ -6,6 +6,17 @@ import { supabase } from './session/supabase'
 export type ScenarioWaveform = 'volume' | 'co2' | 'oesophagealPressure'
 export type InstructorScenarioKind = 'static' | 'dynamic'
 
+export type DynamicScenarioMetric =
+  | 'peakPressure' | 'plateauPressure' | 'meanPressure' | 'totalPeep' | 'autoPeep'
+  | 'expiredTidalVolume' | 'totalRespiratoryRate' | 'actualMinuteVentilation'
+  | 'alveolarMinuteVentilation' | 'endTidalCO2' | 'oxygenSaturation' | 'drivingPressure'
+
+export type DynamicScenarioTrigger =
+  | { type: 'manual' }
+  | { type: 'time'; seconds: number }
+  | { type: 'condition'; metric: DynamicScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
+  | { type: 'action'; parameter: keyof VentilatorSettings; actor: 'candidate' | 'instructor' | 'either' }
+
 export interface DynamicScenarioApplyMask {
   ventilator: Array<keyof VentilatorSettings>
   patient: Array<keyof PatientSettings>
@@ -21,6 +32,8 @@ export interface DynamicScenarioStage {
   /** Missing on v0.82.0 stages; absence means apply the complete snapshot. */
   apply?: DynamicScenarioApplyMask
   sourceName?: string
+  /** Rule used to progress from this stage to the next. Missing means manual. */
+  advanceTrigger?: DynamicScenarioTrigger
 }
 
 export interface InstructorScenarioSnapshot {
@@ -97,7 +110,7 @@ export function asDynamicScenario(
     schemaVersion: 3,
     kind: 'dynamic',
     description: description.trim(),
-    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName }],
+    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' } }],
   }
 }
 
@@ -126,6 +139,7 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
       snapshot: { ...stage.snapshot, kind: 'static', stages: undefined },
       apply: stage.apply,
       sourceName: stage.sourceName,
+      advanceTrigger: stage.advanceTrigger ?? { type: 'manual' },
     })) : undefined,
   }
 }

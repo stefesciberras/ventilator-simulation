@@ -304,3 +304,14 @@
 .dynamic-builder-footer button { border-radius:0; }
 @media (max-width:900px) { .dynamic-file-manager { grid-template-columns:180px minmax(0,1fr); } .dynamic-setting-grid { grid-template-columns:1fr; } .dynamic-scenario-header-block { grid-template-columns:1fr; } }
 @media (max-width:650px) { .dynamic-file-manager { grid-template-columns:1fr; } .dynamic-scenario-sidebar { border-right:0; border-bottom:1px solid #30434d; } .dynamic-scenario-list { grid-template-columns:repeat(2,minmax(0,1fr)); } .dynamic-builder-footer { grid-template-columns:1fr 1fr; } .dynamic-builder-footer span { display:none; } }
+
+
+/* v0.82 dynamic scenario runtime */
+.dynamic-runtime-toolbar { display: flex; align-items: stretch; gap: 3px; max-width: 520px; height: 34px; }
+.dynamic-runtime-toolbar > button { border-radius: 0; border: 1px solid #344851; background: #0b151a; color: #c8d5da; padding: 4px 8px; font-size: 9px; }
+.dynamic-runtime-toolbar > button:disabled { opacity: .35; }
+.dynamic-runtime-status { display: grid; grid-template-columns: auto auto; column-gap: 6px; align-content: center; min-width: 165px; text-align: left; }
+.dynamic-runtime-status span { color: #84979f; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dynamic-runtime-status strong { color: #eff7f9; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dynamic-runtime-status small { grid-column: 1 / -1; color: #72c8df; font-size: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 999px) { .dynamic-runtime-toolbar { display: none; } }

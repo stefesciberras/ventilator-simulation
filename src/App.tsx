@@ -1396,6 +1396,9 @@ export default function App() {
             onLoadScenario={loadInstructorScenario}
             simulationPaused={simulationPaused}
             onSimulationPausedChange={setSimulationPaused}
+            physiologyMeasurements={physiologyMeasurements}
+            scenarioElapsedSeconds={displayedScenarioElapsedTime}
+            sessionMembers={teachingSession.members}
           />
           <CaseMediaPanel
             role={teachingSession.role}
