@@ -624,7 +624,7 @@ export function stepSimulation(
 
   if (mode === 'VG-PC') {
     const pressureLimit = ventilator.volumeGuaranteePressureLimit ?? 40
-    const maximumDrivingPressure = Math.max(0.1, pressureLimit - 5 - ventilator.peep)
+    const maximumDrivingPressure = Math.max(0.1, pressureLimit - ventilator.peep)
     const minimumDrivingPressure = Math.min(5, maximumDrivingPressure)
     // Re-clamp continuously so a PEEP or Pmax change cannot transiently push
     // AutoFlow above its pressure ceiling during the current breath.
@@ -876,7 +876,7 @@ export function stepSimulation(
   } else if (state.breathActive && state.activeBreathType === 'vg-pc') {
     const targetVolume = Math.max(ventilator.tidalVolume / 1000, 0.05)
     const pressureLimit = ventilator.volumeGuaranteePressureLimit ?? 40
-    const maximumDrivingPressure = Math.max(0.1, pressureLimit - 5 - ventilator.peep)
+    const maximumDrivingPressure = Math.max(0.1, pressureLimit - ventilator.peep)
     const minimumDrivingPressure = Math.min(5, maximumDrivingPressure)
 
     if (state.vgBreathNumber === 0) {

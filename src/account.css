@@ -226,3 +226,10 @@
   .scenario-card { grid-template-columns: minmax(0,1fr) 108px; column-gap: 8px; }
   .scenario-card-actions { min-width: 108px; width: 108px; }
 }
+
+
+/* v0.82.0 linear dynamic scenarios */
+.dynamic-stage-status { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; padding:7px 9px; border:1px solid #3d5360; background:#101b20; }
+.dynamic-stage-status strong { color:#e8f2f5; font-size:11px; }
+.dynamic-stage-status span { color:#8ea4ae; font-size:10px; }
+.dynamic-actions .account-primary-button { color:#ddf7e5; border-color:#4d9562; background:#173821; }

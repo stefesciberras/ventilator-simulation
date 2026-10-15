@@ -58,9 +58,9 @@ const waveformConfig: Record<OptionalWaveform, { label: string; unit: string; mi
 const initialWaveformDisplay: WaveformDisplaySettings = { third: 'volume', fourth: null }
 
 const initialAlarmLimits: AlarmLimits = {
-  pressureLimit: 60,
+  pressureLimit: 40,
   apneaTime: 30,
-  peakPressure: 40,
+  peakPressure: 35,
   co2Min: 30,
   co2Max: 50,
   minuteVentilationMin: 3,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { SessionRole } from '../session/useTeachingSession'
 import {
+  asDynamicScenario,
   asStaticScenario,
   createInstructorAccount,
   createInstructorPreset,
@@ -125,6 +126,9 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const [presets, setPresets] = useState<InstructorPresetRow[]>([])
   const [presetName, setPresetName] = useState('')
   const [presetDescription, setPresetDescription] = useState('')
+  const [scenarioType, setScenarioType] = useState<'static' | 'dynamic'>('static')
+  const [activeDynamicId, setActiveDynamicId] = useState<string | null>(null)
+  const [activeDynamicStage, setActiveDynamicStage] = useState(0)
   const [presetBusy, setPresetBusy] = useState(false)
   const [presetMessage, setPresetMessage] = useState<string | null>(null)
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
@@ -188,10 +192,8 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     window.setTimeout(() => window.location.reload(), 250)
   }
 
-  const staticPresets = useMemo(
-    () => presets.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'),
-    [presets],
-  )
+  const staticPresets = useMemo(() => presets.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'), [presets])
+  const dynamicPresets = useMemo(() => presets.filter((preset) => preset.scenario.kind === 'dynamic'), [presets])
 
   const refreshPresets = async (nextAccount: User | null = account) => {
     if (!nextAccount) {
@@ -302,17 +304,43 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     try {
       const created = await createInstructorPreset(
         presetName,
-        asStaticScenario(currentScenario, presetDescription),
+        scenarioType === 'dynamic' ? asDynamicScenario(currentScenario, presetDescription) : asStaticScenario(currentScenario, presetDescription),
       )
       setPresetName('')
       setPresetDescription('')
       setPresetMessage(`Saved “${created.name}”.`)
+      if (scenarioType === 'dynamic') { setActiveDynamicId(created.id); setActiveDynamicStage(0) }
       await refreshPresets(account)
     } catch (cause) {
       setPresetMessage(cause instanceof Error ? cause.message : 'Unable to save scenario.')
     } finally {
       setPresetBusy(false)
     }
+  }
+
+  const loadDynamicStage = (preset: InstructorPresetRow, index: number) => {
+    const stages = preset.scenario.stages ?? []
+    if (!stages.length) return
+    const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
+    onLoadScenario(stages[nextIndex].snapshot)
+    setActiveDynamicId(preset.id)
+    setActiveDynamicStage(nextIndex)
+    setPresetMessage(`“${preset.name}” · ${stages[nextIndex].name} (${nextIndex + 1}/${stages.length})`)
+  }
+
+  const addDynamicStageFromCurrent = async (preset: InstructorPresetRow) => {
+    if (!account) return
+    const stages = [...(preset.scenario.stages ?? [])]
+    const stageNumber = stages.length + 1
+    stages.push({ name: `Stage ${stageNumber}`, snapshot: asStaticScenario(currentScenario, '') })
+    setPresetBusy(true)
+    try {
+      await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 3, kind: 'dynamic', stages } })
+      setPresetMessage(`Added Stage ${stageNumber} to “${preset.name}”.`)
+      await refreshPresets(account)
+    } catch (cause) {
+      setPresetMessage(cause instanceof Error ? cause.message : 'Unable to add stage.')
+    } finally { setPresetBusy(false) }
   }
 
   const loadScenario = (preset: InstructorPresetRow) => {
@@ -472,14 +500,14 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
             </div>
 
             <div className="scenario-type-tabs" role="tablist" aria-label="Scenario type">
-              <button type="button" className="selected" role="tab" aria-selected="true">Static presets</button>
-              <button type="button" role="tab" aria-selected="false" disabled>Dynamic scenarios <small>later</small></button>
+              <button type="button" className={scenarioType === 'static' ? 'selected' : ''} role="tab" aria-selected={scenarioType === 'static'} onClick={() => setScenarioType('static')}>Static presets</button>
+              <button type="button" className={scenarioType === 'dynamic' ? 'selected' : ''} role="tab" aria-selected={scenarioType === 'dynamic'} onClick={() => setScenarioType('dynamic')}>Dynamic scenarios</button>
             </div>
             {account ? (
               <>
                 <section className="scenario-create-card">
                   <div className="scenario-settings-heading">
-                    <div><span>New static preset</span><h3>Capture current simulator state</h3></div>
+                    <div><span>{scenarioType === 'dynamic' ? 'New dynamic scenario' : 'New static preset'}</span><h3>{scenarioType === 'dynamic' ? 'Stage 1 uses the current simulator state' : 'Capture current simulator state'}</h3></div>
                     <small>{account.email}</small>
                   </div>
                   <div className="scenario-create-fields">
@@ -492,16 +520,16 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
                       <textarea value={presetDescription} onChange={(event) => setPresetDescription(event.target.value)} maxLength={500} rows={3} placeholder="Optional teaching notes, expected problem or objective…" />
                     </label>
                   </div>
-                  <button type="button" className="account-primary-button scenario-save-current" disabled={presetBusy || !presetName.trim()} onClick={() => void saveScenario()}>Save current state as preset</button>
+                  <button type="button" className="account-primary-button scenario-save-current" disabled={presetBusy || !presetName.trim()} onClick={() => void saveScenario()}>{scenarioType === 'dynamic' ? 'Create dynamic scenario' : 'Save current state as preset'}</button>
                 </section>
 
                 <div className="scenario-library-heading">
-                  <div><span>Library</span><strong>{staticPresets.length} static {staticPresets.length === 1 ? 'preset' : 'presets'}</strong></div>
+                  <div><span>Library</span><strong>{scenarioType === 'static' ? `${staticPresets.length} static ${staticPresets.length === 1 ? 'preset' : 'presets'}` : `${dynamicPresets.length} dynamic ${dynamicPresets.length === 1 ? 'scenario' : 'scenarios'}`}</strong></div>
                   <small>Most recently updated first</small>
                 </div>
 
                 <div className="scenario-card-list">
-                  {staticPresets.length ? staticPresets.map((preset) => {
+                  {scenarioType === 'static' && (staticPresets.length ? staticPresets.map((preset) => {
                     const editing = editingPresetId === preset.id
                     return (
                       <article className="scenario-card" key={preset.id}>
@@ -541,7 +569,26 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
                         )}
                       </article>
                     )
-                  }) : <div className="scenario-empty">No static scenarios saved yet. Configure the patient and ventilator, then capture the current state above.</div>}
+                  }) : <div className="scenario-empty">No static scenarios saved yet. Configure the patient and ventilator, then capture the current state above.</div>)}
+                  {scenarioType === 'dynamic' && (dynamicPresets.length ? dynamicPresets.map((preset) => {
+                    const stages = preset.scenario.stages ?? []
+                    const active = activeDynamicId === preset.id
+                    const stageIndex = active ? Math.min(activeDynamicStage, Math.max(0, stages.length - 1)) : 0
+                    return <article className="scenario-card dynamic-scenario-card" key={preset.id}>
+                      <div className="scenario-card-heading"><div><span className="scenario-kind-badge">Dynamic</span><strong>{preset.name}</strong><small>{stages.length} {stages.length === 1 ? 'stage' : 'stages'}</small></div></div>
+                      <div className="scenario-card-main">
+                        {preset.scenario.description ? <p className="scenario-description">{preset.scenario.description}</p> : <p className="scenario-description empty">No instructor notes.</p>}
+                        {active && stages.length > 0 && <div className="dynamic-stage-status"><strong>{stages[stageIndex].name}</strong><span>{stageIndex + 1} / {stages.length}</span></div>}
+                      </div>
+                      <div className="scenario-card-actions dynamic-actions">
+                        <button type="button" className="scenario-load-button" disabled={presetBusy || !stages.length} onClick={() => loadDynamicStage(preset, active ? stageIndex : 0)}>{active ? 'Reload stage' : 'Start'}</button>
+                        <button type="button" disabled={presetBusy || !active || stageIndex <= 0} onClick={() => loadDynamicStage(preset, stageIndex - 1)}>Back</button>
+                        <button type="button" className="account-primary-button" disabled={presetBusy || !active || stageIndex >= stages.length - 1} onClick={() => loadDynamicStage(preset, stageIndex + 1)}>Proceed to Next</button>
+                        <button type="button" disabled={presetBusy} onClick={() => void addDynamicStageFromCurrent(preset)}>Add current as stage</button>
+                        <button type="button" className="scenario-delete-button" disabled={presetBusy} onClick={() => void removeScenario(preset)}>Delete</button>
+                      </div>
+                    </article>
+                  }) : <div className="scenario-empty">No dynamic scenarios saved yet. Create one from the current simulator state, then add further stages from the states you want to teach.</div>)}
                 </div>
               </>
             ) : (
