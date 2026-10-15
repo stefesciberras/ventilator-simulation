@@ -106,6 +106,12 @@ if old not in text:
 text = text.replace(old, new, 1)
 
 text = text.replace(
+"    transpulmonaryExpiratory: measuredPeep != null && endExpPes != null ? measuredPeep - endExpPes : null,\n",
+"    transpulmonaryExpiratory: endExpPes != null ? totalPeep - endExpPes : null,\n",
+1,
+)
+
+text = text.replace(
 "  const monitor = waveformMonitorValues(window, ventilator)\n",
 "  const monitor = waveformMonitorValues(window, ventilator, patient)\n",
 1,
@@ -123,11 +129,11 @@ new = """  const totalDeadSpaceVolume = effectiveDeadSpace.deadSpaceMl
   // Match the simulation engine's gas-exchange model: only the fraction of the
   // alveolar tidal volume that can empty during Te contributes to effective
   // alveolar ventilation. This makes dynamic hyperinflation visible in EXTRA.
-  const expiratoryTimeConstant = Math.max(patient.expiratoryResistance * patient.compliance / 1000, 0.05)
+  const modelExpiratoryTimeConstant = Math.max(patient.expiratoryResistance * patient.compliance / 1000, 0.05)
   const measuredExpiratoryTime = timing.expiratoryTime
   const expiratoryEmptyingFraction = measuredExpiratoryTime == null
     ? 1
-    : clamp(1 - Math.exp(-measuredExpiratoryTime / expiratoryTimeConstant), 0.03, 1)
+    : clamp(1 - Math.exp(-measuredExpiratoryTime / modelExpiratoryTimeConstant), 0.03, 1)
   const alveolarMinuteVentilation = alveolarTidalVolume == null
     ? 0
     : Math.max(0, (alveolarTidalVolume / 1000) * rates.totalRate * expiratoryEmptyingFraction)
