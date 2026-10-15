@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PatientSettings, VentilatorMode, VentilatorSettings } from '../simulation/types'
+import { calculatePredictedBodyWeight } from '../patientMetrics'
 import {
   asStaticScenario,
   createInstructorPreset,
@@ -100,6 +101,7 @@ const VENT_FIELDS: FieldSpec[] = [
 const PATIENT_FIELDS: FieldSpec[] = [
   { key: 'spontaneousRate', label: 'Spontaneous RR', min: 0, max: 35, unit: '/min' },
   { key: 'compliance', label: 'Compliance', min: 15, max: 100, unit: ' mL/cmH₂O' },
+  { key: 'chestWallCompliance', label: 'Chest wall compliance', step: 5, min: 40, max: 400, unit: ' mL/cmH₂O' },
   { key: 'resistance', label: 'Airway resistance', min: 3, max: 40, unit: ' cmH₂O/L/s' },
   { key: 'expiratoryResistance', label: 'Expiratory resistance', min: 3, max: 50, unit: ' cmH₂O/L/s' },
   { key: 'expiratoryFlowLimitation', label: 'Expiratory flow limitation', step: .05, min: 0, max: 1, format: (v) => `${Math.round(Number(v) * 100)}%` },
@@ -156,6 +158,9 @@ function normalisePhysiologyDefaults(snapshot: InstructorScenarioSnapshot): Inst
   const patient = { ...snapshot.patient }
   if (!Number.isFinite(patient.maxSpO2 ?? Number.NaN)) patient.maxSpO2 = 100
   if (!Number.isFinite(patient.vdVt ?? Number.NaN)) patient.vdVt = 0.4
+  if (!Number.isFinite(patient.chestWallCompliance ?? Number.NaN)) {
+    patient.chestWallCompliance = Math.round(calculatePredictedBodyWeight(patient.sex ?? 'male', patient.heightCm ?? 170) * 3)
+  }
   return { ...snapshot, patient }
 }
 

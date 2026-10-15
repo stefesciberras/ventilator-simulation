@@ -15,7 +15,7 @@ import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
 import type { InstructorScenarioSnapshot } from './instructorAccount'
 import { calculatePhysiologicalMeasurements } from './physiologyMeasurements'
-import { PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type PatientProfileName } from './patientProfiles'
+import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type ArdsSeverity, type PatientProfileName } from './patientProfiles'
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import './session.css'
@@ -78,6 +78,7 @@ const PATIENT_TRANSITION_STORAGE_KEY = 'eduvent.patient-transition-seconds'
 const SHOW_PATIENT_EFFORT_STORAGE_KEY = 'eduvent.show-patient-effort'
 const SCENARIO_MEDIA_STORAGE_KEY = 'eduvent.scenario-media-ids'
 const PATIENT_PROFILE_STORAGE_KEY = 'eduvent.patient-preset'
+const ARDS_SEVERITY_STORAGE_KEY = 'eduvent.ards-severity'
 const WINDOW_SAMPLES = 1200
 const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
@@ -209,6 +210,7 @@ function interpolatePatientSettings(from: PatientSettings, to: PatientSettings, 
     shuntFraction: lerp(from.shuntFraction ?? 0.03, to.shuntFraction ?? 0.03),
     maxSpO2: lerp(from.maxSpO2 ?? 100, to.maxSpO2 ?? 100),
     compliance: lerp(from.compliance, to.compliance),
+    chestWallCompliance: lerp(from.chestWallCompliance ?? 200, to.chestWallCompliance ?? 200),
     resistance: lerp(from.resistance, to.resistance),
     expiratoryResistance: lerp(from.expiratoryResistance, to.expiratoryResistance),
     expiratoryFlowLimitation: lerp(from.expiratoryFlowLimitation ?? 0, to.expiratoryFlowLimitation ?? 0),
@@ -477,6 +479,12 @@ export default function App() {
     if (typeof window === 'undefined') return null
     const stored = window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY)
     return PATIENT_PROFILE_NAMES.includes(stored as PatientProfileName) ? stored as PatientProfileName : null
+  })
+  const [ardsSeverity, setArdsSeverity] = useState<ArdsSeverity | 'off'>(() => {
+    if (typeof window === 'undefined') return 'off'
+    const stored = window.localStorage.getItem(ARDS_SEVERITY_STORAGE_KEY)
+    if (stored && ARDS_SEVERITIES.includes(stored as ArdsSeverity)) return stored as ArdsSeverity
+    return window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY) === 'ARDS' ? 'moderate' : 'off'
   })
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
@@ -1296,12 +1304,37 @@ export default function App() {
   }
 
   const oxygenBoostTimer = `0:${String(oxygenBoostSecondsRemaining).padStart(2, '0')}`
-  const selectedPatientProfileModified = selectedPatientProfile != null
-    ? !patientMatchesProfile(patient, PATIENT_PROFILES[selectedPatientProfile])
+  const selectedProfileSettings = selectedPatientProfile === 'ARDS' && ardsSeverity !== 'off'
+    ? ARDS_PROFILES[ardsSeverity]
+    : selectedPatientProfile != null ? PATIENT_PROFILES[selectedPatientProfile] : null
+  const selectedPatientProfileModified = selectedProfileSettings != null
+    ? !patientMatchesProfile(patient, selectedProfileSettings)
     : false
-  const applyPatientProfile = (profile: PatientProfileName) => {
+  const persistPatientProfile = (profile: PatientProfileName) => {
     setSelectedPatientProfile(profile)
     try { window.localStorage.setItem(PATIENT_PROFILE_STORAGE_KEY, profile) } catch { /* optional UI preference */ }
+  }
+  const setArdsSeverityAndPersist = (severity: ArdsSeverity | 'off') => {
+    setArdsSeverity(severity)
+    try { window.localStorage.setItem(ARDS_SEVERITY_STORAGE_KEY, severity) } catch { /* optional UI preference */ }
+  }
+  const applyPatientProfile = (profile: PatientProfileName) => {
+    if (profile === 'ARDS') {
+      const cycle: Array<ArdsSeverity | 'off'> = ['off', 'mild', 'moderate', 'severe']
+      const currentIndex = Math.max(0, cycle.indexOf(ardsSeverity))
+      const next = cycle[(currentIndex + 1) % cycle.length]
+      setArdsSeverityAndPersist(next)
+      if (next === 'off') {
+        persistPatientProfile('Normal')
+        setPatient({ ...PATIENT_PROFILES.Normal })
+      } else {
+        persistPatientProfile('ARDS')
+        setPatient({ ...ARDS_PROFILES[next] })
+      }
+      return
+    }
+    setArdsSeverityAndPersist('off')
+    persistPatientProfile(profile)
     setPatient({ ...PATIENT_PROFILES[profile] })
   }
   const resetVentilator = () => setVentilator({ ...initialVentilator })
@@ -1624,9 +1657,11 @@ export default function App() {
                     className={stateClass}
                     disabled={teachingSession.candidatePatientLocked}
                     aria-pressed={selected}
-                    title={selected && selectedPatientProfileModified ? `${profile} selected · settings modified` : `Apply ${profile} profile`}
+                    title={profile === 'ARDS'
+                      ? `ARDS ${ardsSeverity === 'off' ? 'off' : ardsSeverity} · click for ${ardsSeverity === 'off' ? 'mild' : ardsSeverity === 'mild' ? 'moderate' : ardsSeverity === 'moderate' ? 'severe' : 'off'}`
+                      : selected && selectedPatientProfileModified ? `${profile} selected · settings modified` : `Apply ${profile} profile`}
                     onClick={() => applyPatientProfile(profile)}
-                  >{profile}</button>
+                  >{profile === 'ARDS' ? `ARDS · ${ardsSeverity === 'off' ? 'Off' : ardsSeverity[0].toUpperCase() + ardsSeverity.slice(1)}` : profile}</button>
                 )
               })}
             </div>
