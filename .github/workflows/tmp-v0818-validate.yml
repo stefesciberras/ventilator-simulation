@@ -18,7 +18,41 @@ jobs:
           cache: npm
       - name: Apply v0.81.8 changes
         run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/tmp_v0818_patch.py')
+          text = p.read_text()
+          obsolete = '''# Default patient
+          replace_once(
+              'src/App.tsx',
+              'compliance: 60, resistance: 6, expiratoryResistance: 8, spontaneousRate: 12',
+              'compliance: 60, resistance: 6, expiratoryResistance: 8, expiratoryFlowLimitation: 0, spontaneousRate: 12',
+          )
+          '''
+          if obsolete not in text:
+              raise SystemExit('Could not remove obsolete initialPatient patch')
+          p.write_text(text.replace(obsolete, '', 1))
+          PY
           python .github/tmp_v0818_patch.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.tsx')
+          text = p.read_text()
+          old = '    expiratoryResistance: lerp(from.expiratoryResistance, to.expiratoryResistance),\n    spontaneousRate:'
+          new = '    expiratoryResistance: lerp(from.expiratoryResistance, to.expiratoryResistance),\n    expiratoryFlowLimitation: lerp(from.expiratoryFlowLimitation ?? 0, to.expiratoryFlowLimitation ?? 0),\n    spontaneousRate:'
+          if old not in text:
+              raise SystemExit('Patient interpolation pattern not found')
+          p.write_text(text.replace(old, new, 1))
+
+          p = Path('src/simulation/engine.ts')
+          text = p.read_text()
+          text = text.replace('  complianceL: number,\n): number {\n  const fallbackVt', '  _complianceL: number,\n): number {\n  const fallbackVt', 1)
+          marker = 'function updateOxygenation(\n  state: SimulationState,\n  ventilator: VentilatorSettings,\n  patient: PatientSettings,\n  t: number,\n  dt: number,\n  complianceL: number,\n) {'
+          replacement = marker.replace('  complianceL: number,', '  _complianceL: number,')
+          if marker not in text:
+              raise SystemExit('updateOxygenation signature not found')
+          p.write_text(text.replace(marker, replacement, 1))
+          PY
           rm .github/tmp_v0818_patch.py .github/workflows/tmp-v0818-validate.yml
           git config user.name "stefesciberras"
           git config user.email "43134239+stefesciberras@users.noreply.github.com"
