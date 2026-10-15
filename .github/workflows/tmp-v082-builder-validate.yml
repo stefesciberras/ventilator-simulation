@@ -1,0 +1,31 @@
+name: Temporary v0.82 dynamic builder validation
+permissions:
+  contents: write
+on:
+  push:
+    branches: [chatgpt/v0.82-dynamic-builder]
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82-dynamic-builder
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply builder changes
+        run: |
+          python .github/tmp_v082_builder_patch.py
+          rm .github/tmp_v082_builder_patch.py
+          rm .github/workflows/tmp-v082-builder-validate.yml
+          git config user.name stefesciberras
+          git config user.email 43134239+stefesciberras@users.noreply.github.com
+          git add src .github
+          git commit -m "v0.82 extend dynamic scenario builder with selective stage application"
+          git push origin HEAD:chatgpt/v0.82-dynamic-builder
+      - name: Validate committed tree
+        run: |
+          npm ci
+          npm run build
