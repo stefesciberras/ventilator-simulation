@@ -1,5 +1,6 @@
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import type { AlarmLimits } from '../alarmTypes'
+import type { SimulationSpeed } from '../simulationSpeed'
 
 export type LocalRuntimeConnection = 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
@@ -22,6 +23,7 @@ export interface LocalRuntimeSnapshot {
   status: 'active' | 'paused' | 'ended'
   sentAt: number
   scenarioElapsedMs?: number
+  simulationSpeed?: SimulationSpeed
   patient: PatientSettings
   ventilator: VentilatorSettings
   alarmLimits: AlarmLimits

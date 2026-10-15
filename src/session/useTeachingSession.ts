@@ -29,6 +29,7 @@ import {
 } from './localRuntimeTransport'
 import { WebRtcRuntimeTransport } from './webRtcRuntimeTransport'
 import { appendScenarioLog } from '../diagnostics'
+import { isSimulationSpeed, type SimulationSpeed } from '../simulationSpeed'
 
 export type SessionRole = 'standalone' | 'instructor' | 'candidate'
 export type SessionConnection = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
@@ -87,6 +88,8 @@ interface UseTeachingSessionArgs {
   candidateAlarmLevel: CandidateAlarmLevel
   simulationPaused: boolean
   setSimulationPaused: (paused: boolean) => void
+  simulationSpeed: SimulationSpeed
+  setSimulationSpeed: (speed: SimulationSpeed) => void
 }
 
 interface PolicyPatch {
@@ -114,6 +117,8 @@ export function useTeachingSession({
   candidateAlarmLevel,
   simulationPaused,
   setSimulationPaused,
+  simulationSpeed,
+  setSimulationSpeed,
 }: UseTeachingSessionArgs) {
   const [role, setRole] = useState<SessionRole>('standalone')
   const [connection, setConnection] = useState<SessionConnection>('idle')
@@ -125,7 +130,7 @@ export function useTeachingSession({
   const [localRuntimeConnection, setLocalRuntimeConnection] = useState<LocalRuntimeConnection>('disabled')
   const [localRuntimeUrl, setLocalRuntimeUrl] = useState<string | null>(() => getDefaultLocalRuntimeUrl())
   const [runtimeTransportKind, setRuntimeTransportKind] = useState<RuntimeTransportKind>(() => getDefaultLocalRuntimeUrl() ? getLocalRuntimeProfile() : 'webrtc')
-  const [scenarioClockSync, setScenarioClockSync] = useState<{ elapsedMs: number; receivedAt: number; paused: boolean } | null>(null)
+  const [scenarioClockSync, setScenarioClockSync] = useState<{ elapsedMs: number; receivedAt: number; paused: boolean; speed: SimulationSpeed } | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const membersChannelRef = useRef<RealtimeChannel | null>(null)
   const roleRef = useRef<SessionRole>('standalone')
@@ -137,6 +142,7 @@ export function useTeachingSession({
   const alarmLevelRef = useRef<CandidateAlarmLevel>(candidateAlarmLevel)
   const simulationPausedRef = useRef(simulationPaused)
   const scenarioElapsedMsRef = useRef(0)
+  const simulationSpeedRef = useRef<SimulationSpeed>(simulationSpeed)
   const patientRevisionRef = useRef(0)
   const ventilatorRevisionRef = useRef(0)
   const alarmRevisionRef = useRef(0)
@@ -167,12 +173,14 @@ export function useTeachingSession({
   useEffect(() => { patientTransitionSecondsRef.current = patientTransitionSeconds }, [patientTransitionSeconds])
   useEffect(() => { alarmLevelRef.current = candidateAlarmLevel }, [candidateAlarmLevel])
   useEffect(() => { simulationPausedRef.current = simulationPaused }, [simulationPaused])
+  useEffect(() => { simulationSpeedRef.current = simulationSpeed }, [simulationSpeed])
   useEffect(() => { localRuntimeConnectionRef.current = localRuntimeConnection }, [localRuntimeConnection])
 
   useEffect(() => {
     if (role !== 'standalone') return
     simulationPausedRef.current = false
     setSimulationPaused(false)
+    setSimulationSpeed(1)
     setScenarioClockSync(null)
   }, [role])
 
@@ -184,6 +192,7 @@ export function useTeachingSession({
       status: row.status,
       sentAt: Date.now(),
       scenarioElapsedMs: Math.max(0, Math.round(scenarioElapsedMsRef.current)),
+      simulationSpeed: simulationSpeedRef.current,
       patient: patientRef.current,
       ventilator: ventilatorRef.current,
       alarmLimits: alarmLimitsRef.current,
@@ -261,11 +270,14 @@ export function useTeachingSession({
     }
     if (snapshot.policy.syncAlarms) setAlarmLimits(snapshot.alarmLimits)
     setSimulationPaused(snapshot.simulationPaused)
+    const runtimeSpeed = isSimulationSpeed(snapshot.simulationSpeed) ? snapshot.simulationSpeed : 1
+    setSimulationSpeed(runtimeSpeed)
     if (typeof snapshot.scenarioElapsedMs === 'number' && Number.isFinite(snapshot.scenarioElapsedMs)) {
       setScenarioClockSync({
         elapsedMs: Math.max(0, snapshot.scenarioElapsedMs),
         receivedAt: Date.now(),
         paused: snapshot.simulationPaused,
+        speed: runtimeSpeed,
       })
     }
   }
@@ -885,6 +897,7 @@ export function useTeachingSession({
     alarmLimits,
     patientTransitionSeconds,
     simulationPaused,
+    simulationSpeed,
     localRuntimeConnection,
   ])
 
