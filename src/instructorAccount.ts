@@ -6,12 +6,18 @@ import { supabase } from './session/supabase'
 export type ScenarioWaveform = 'volume' | 'co2' | 'oesophagealPressure'
 export type InstructorScenarioKind = 'static' | 'dynamic'
 
+export interface DynamicScenarioStage {
+  name: string
+  snapshot: InstructorScenarioSnapshot
+}
+
 export interface InstructorScenarioSnapshot {
   /** Optional on older presets; missing values are treated as v1 static scenarios. */
   schemaVersion?: number
   kind?: InstructorScenarioKind
   description?: string
   mediaIds?: string[]
+  stages?: DynamicScenarioStage[]
   ventilator: VentilatorSettings
   patient: PatientSettings
   alarmLimits: AlarmLimits
@@ -29,6 +35,20 @@ export interface InstructorPresetRow {
   scenario: InstructorScenarioSnapshot
   created_at: string
   updated_at: string
+}
+
+export function asDynamicScenario(
+  current: InstructorScenarioSnapshot,
+  description = current.description ?? '',
+): InstructorScenarioSnapshot {
+  const firstStageSnapshot = asStaticScenario(current, '')
+  return {
+    ...firstStageSnapshot,
+    schemaVersion: 3,
+    kind: 'dynamic',
+    description: description.trim(),
+    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot }],
+  }
 }
 
 export function asStaticScenario(
@@ -51,6 +71,7 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
     kind: scenario.kind ?? 'static',
     description: scenario.description ?? '',
     mediaIds: [...new Set((scenario.mediaIds ?? []).filter((id) => typeof id === 'string' && id.length > 0))],
+    stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => ({ name: stage.name || `Stage ${index + 1}`, snapshot: { ...stage.snapshot, kind: 'static', stages: undefined } })) : undefined,
   }
 }
 
