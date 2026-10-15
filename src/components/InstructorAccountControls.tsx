@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { SessionRole } from '../session/useTeachingSession'
+import type { AlarmLimits } from '../alarmTypes'
+import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import {
+  applyDynamicStage,
   asDynamicScenario,
   asStaticScenario,
+  createFullDynamicStageApplyMask,
   createInstructorAccount,
   createInstructorPreset,
   deleteInstructorPreset,
@@ -13,6 +17,7 @@ import {
   signOutInstructor,
   subscribeToInstructorAccount,
   updateInstructorPreset,
+  type DynamicScenarioApplyMask,
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
@@ -101,6 +106,54 @@ function summaryItems(scenario: InstructorScenarioSnapshot) {
   ]
 }
 
+const VENTILATOR_STAGE_FIELDS: Array<{ key: keyof VentilatorSettings; label: string }> = [
+  { key: 'mode', label: 'Mode' }, { key: 'fio2', label: 'FiO₂' }, { key: 'peep', label: 'PEEP' },
+  { key: 'rate', label: 'Set RR' }, { key: 'tidalVolume', label: 'Tidal volume' }, { key: 'inspiratoryTime', label: 'Tinsp' },
+  { key: 'inspiratoryFlow', label: 'Inspiratory flow' }, { key: 'plateauPercent', label: 'Plateau %' },
+  { key: 'pressureControl', label: 'Pressure control' }, { key: 'volumeGuaranteePressureLimit', label: 'VG pressure limit' },
+  { key: 'pressureSupport', label: 'Pressure support' }, { key: 'triggerType', label: 'Trigger type' },
+  { key: 'triggerSensitivity', label: 'Pressure trigger' }, { key: 'flowTriggerSensitivity', label: 'Flow trigger' },
+  { key: 'terminationSensitivity', label: 'Termination sensitivity' }, { key: 'simvSyncWindowPercent', label: 'SIMV sync window' },
+  { key: 'showSimvSyncWindow', label: 'Show SIMV sync window' }, { key: 'pHigh', label: 'P high' }, { key: 'pLow', label: 'P low' },
+  { key: 'tHigh', label: 'T high' }, { key: 'tLow', label: 'T low' },
+]
+
+const PATIENT_STAGE_FIELDS: Array<{ key: keyof PatientSettings; label: string }> = [
+  { key: 'sex', label: 'Sex' }, { key: 'heightCm', label: 'Height' }, { key: 'compliance', label: 'Compliance' },
+  { key: 'resistance', label: 'Inspiratory resistance' }, { key: 'expiratoryResistance', label: 'Expiratory resistance' },
+  { key: 'expiratoryFlowLimitation', label: 'Expiratory flow limitation' }, { key: 'spontaneousRate', label: 'Patient respiratory rate' },
+  { key: 'effort', label: 'Effort' }, { key: 'neuralInspiratoryTime', label: 'Neural Tinsp' },
+  { key: 'effortRisePercent', label: 'Effort rise' }, { key: 'effortRelaxationPercent', label: 'Effort relaxation' },
+  { key: 'endExpiratoryOesophagealPressure', label: 'End-expiratory Pes' }, { key: 'oxygenConsumption', label: 'O₂ consumption' },
+  { key: 'frc', label: 'FRC' }, { key: 'shuntFraction', label: 'Shunt' }, { key: 'maxSpO2', label: 'Maximum SpO₂' },
+  { key: 'co2Production', label: 'CO₂ production' }, { key: 'vdVt', label: 'Vd/Vt' },
+]
+
+const ALARM_STAGE_FIELDS: Array<{ key: keyof AlarmLimits; label: string }> = [
+  { key: 'pressureLimit', label: 'Pressure limitation' }, { key: 'peakPressure', label: 'Peak pressure alarm' },
+  { key: 'apneaTime', label: 'Apnoea time' }, { key: 'co2Min', label: 'CO₂ minimum' }, { key: 'co2Max', label: 'CO₂ maximum' },
+  { key: 'minuteVentilationMin', label: 'Min ventilation minimum' }, { key: 'minuteVentilationMax', label: 'Min ventilation maximum' },
+  { key: 'tidalVolumeMin', label: 'VT minimum' }, { key: 'tidalVolumeMax', label: 'VT maximum' },
+  { key: 'respiratoryRateMin', label: 'RR minimum' }, { key: 'respiratoryRateMax', label: 'RR maximum' },
+]
+
+function DynamicStageSourceSelect({ value, staticPresets, onChange }: { value: string; staticPresets: InstructorPresetRow[]; onChange: (value: string) => void }) {
+  return <label className="dynamic-stage-source"><span>Stage source</span><select value={value} onChange={(event) => onChange(event.target.value)}><option value="current">Current simulator state</option>{staticPresets.length > 0 && <optgroup label="Static presets">{staticPresets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}</optgroup>}</select></label>
+}
+
+function DynamicStageApplyEditor({ mask, onChange }: { mask: DynamicScenarioApplyMask; onChange: (mask: DynamicScenarioApplyMask) => void }) {
+  const toggle = (group: 'ventilator' | 'patient' | 'alarmLimits', key: string, checked: boolean) => {
+    const selected = new Set((mask[group] ?? []).map(String))
+    if (checked) selected.add(key); else selected.delete(key)
+    onChange({ ...mask, [group]: [...selected] } as DynamicScenarioApplyMask)
+  }
+  const setAll = (selected: boolean) => onChange(selected ? {
+    ventilator: VENTILATOR_STAGE_FIELDS.map((item) => item.key), patient: PATIENT_STAGE_FIELDS.map((item) => item.key), alarmLimits: ALARM_STAGE_FIELDS.map((item) => item.key), patientTransitionSeconds: true, waveformDisplay: true, mediaIds: true,
+  } : { ventilator: [], patient: [], alarmLimits: [], patientTransitionSeconds: false, waveformDisplay: false, mediaIds: false })
+  const group = <K extends 'ventilator' | 'patient' | 'alarmLimits'>(title: string, name: K, options: Array<{ key: string; label: string }>) => <details className="dynamic-mask-group"><summary>{title}<small>{mask[name].length}/{options.length}</small></summary><div className="dynamic-mask-grid">{options.map((item) => <label key={item.key}><input type="checkbox" checked={(mask[name] as string[]).includes(item.key)} onChange={(event) => toggle(name, item.key, event.target.checked)} /><span>{item.label}</span></label>)}</div></details>
+  return <div className="dynamic-stage-mask"><div className="dynamic-mask-heading"><strong>Parameters pushed at this stage</strong><div><button type="button" onClick={() => setAll(true)}>Select all</button><button type="button" onClick={() => setAll(false)}>Clear all</button></div></div>{group('Ventilator', 'ventilator', VENTILATOR_STAGE_FIELDS as Array<{ key: string; label: string }>)}{group('Patient / physiology', 'patient', PATIENT_STAGE_FIELDS as Array<{ key: string; label: string }>)}{group('Alarms', 'alarmLimits', ALARM_STAGE_FIELDS as Array<{ key: string; label: string }>)}<details className="dynamic-mask-group"><summary>Other</summary><div className="dynamic-mask-grid"><label><input type="checkbox" checked={mask.patientTransitionSeconds} onChange={(event) => onChange({ ...mask, patientTransitionSeconds: event.target.checked })} /><span>Transition time</span></label><label><input type="checkbox" checked={mask.waveformDisplay} onChange={(event) => onChange({ ...mask, waveformDisplay: event.target.checked })} /><span>Waveform display</span></label><label><input type="checkbox" checked={mask.mediaIds} onChange={(event) => onChange({ ...mask, mediaIds: event.target.checked })} /><span>Scenario media</span></label></div></details></div>
+}
+
 function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
   const names = new Set(presets.map((preset) => preset.name.toLocaleLowerCase()))
   let candidate = `${baseName} copy`
@@ -129,6 +182,11 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const [scenarioType, setScenarioType] = useState<'static' | 'dynamic'>('static')
   const [activeDynamicId, setActiveDynamicId] = useState<string | null>(null)
   const [activeDynamicStage, setActiveDynamicStage] = useState(0)
+  const [dynamicCreateSourceId, setDynamicCreateSourceId] = useState('current')
+  const [dynamicCreateMask, setDynamicCreateMask] = useState<DynamicScenarioApplyMask>(() => createFullDynamicStageApplyMask(currentScenario))
+  const [stageBuilderPresetId, setStageBuilderPresetId] = useState<string | null>(null)
+  const [stageBuilderSourceId, setStageBuilderSourceId] = useState('current')
+  const [stageBuilderMask, setStageBuilderMask] = useState<DynamicScenarioApplyMask>(() => createFullDynamicStageApplyMask(currentScenario))
   const [presetBusy, setPresetBusy] = useState(false)
   const [presetMessage, setPresetMessage] = useState<string | null>(null)
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
@@ -194,6 +252,9 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
 
   const staticPresets = useMemo(() => presets.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'), [presets])
   const dynamicPresets = useMemo(() => presets.filter((preset) => preset.scenario.kind === 'dynamic'), [presets])
+  const scenarioForStageSource = (sourceId: string) => sourceId === 'current' ? currentScenario : (staticPresets.find((preset) => preset.id === sourceId)?.scenario ?? currentScenario)
+  const nameForStageSource = (sourceId: string) => sourceId === 'current' ? 'Current simulator state' : (staticPresets.find((preset) => preset.id === sourceId)?.name ?? 'Current simulator state')
+  const resetMaskForSource = (sourceId: string, setter: (mask: DynamicScenarioApplyMask) => void) => setter(createFullDynamicStageApplyMask(scenarioForStageSource(sourceId)))
 
   const refreshPresets = async (nextAccount: User | null = account) => {
     if (!nextAccount) {
@@ -302,9 +363,12 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     setPresetBusy(true)
     setPresetMessage(null)
     try {
+      const dynamicSource = scenarioForStageSource(dynamicCreateSourceId)
       const created = await createInstructorPreset(
         presetName,
-        scenarioType === 'dynamic' ? asDynamicScenario(currentScenario, presetDescription) : asStaticScenario(currentScenario, presetDescription),
+        scenarioType === 'dynamic'
+          ? asDynamicScenario(dynamicSource, presetDescription, dynamicCreateMask, nameForStageSource(dynamicCreateSourceId))
+          : asStaticScenario(currentScenario, presetDescription),
       )
       setPresetName('')
       setPresetDescription('')
@@ -322,21 +386,30 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     const stages = preset.scenario.stages ?? []
     if (!stages.length) return
     const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
-    onLoadScenario(stages[nextIndex].snapshot)
+    onLoadScenario(applyDynamicStage(currentScenario, stages[nextIndex]))
     setActiveDynamicId(preset.id)
     setActiveDynamicStage(nextIndex)
     setPresetMessage(`“${preset.name}” · ${stages[nextIndex].name} (${nextIndex + 1}/${stages.length})`)
   }
 
-  const addDynamicStageFromCurrent = async (preset: InstructorPresetRow) => {
+  const addDynamicStage = async (preset: InstructorPresetRow) => {
     if (!account) return
     const stages = [...(preset.scenario.stages ?? [])]
     const stageNumber = stages.length + 1
-    stages.push({ name: `Stage ${stageNumber}`, snapshot: asStaticScenario(currentScenario, '') })
+    const source = scenarioForStageSource(stageBuilderSourceId)
+    stages.push({
+      name: `Stage ${stageNumber}`,
+      snapshot: asStaticScenario(source, ''),
+      apply: { ...stageBuilderMask, ventilator: [...stageBuilderMask.ventilator], patient: [...stageBuilderMask.patient], alarmLimits: [...stageBuilderMask.alarmLimits] },
+      sourceName: nameForStageSource(stageBuilderSourceId),
+    })
     setPresetBusy(true)
     try {
       await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 3, kind: 'dynamic', stages } })
       setPresetMessage(`Added Stage ${stageNumber} to “${preset.name}”.`)
+      setStageBuilderPresetId(null)
+      setStageBuilderSourceId('current')
+      setStageBuilderMask(createFullDynamicStageApplyMask(currentScenario))
       await refreshPresets(account)
     } catch (cause) {
       setPresetMessage(cause instanceof Error ? cause.message : 'Unable to add stage.')
@@ -507,7 +580,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
               <>
                 <section className="scenario-create-card">
                   <div className="scenario-settings-heading">
-                    <div><span>{scenarioType === 'dynamic' ? 'New dynamic scenario' : 'New static preset'}</span><h3>{scenarioType === 'dynamic' ? 'Stage 1 uses the current simulator state' : 'Capture current simulator state'}</h3></div>
+                    <div><span>{scenarioType === 'dynamic' ? 'New dynamic scenario' : 'New static preset'}</span><h3>{scenarioType === 'dynamic' ? 'Configure Stage 1 source and applied parameters' : 'Capture current simulator state'}</h3></div>
                     <small>{account.email}</small>
                   </div>
                   <div className="scenario-create-fields">
@@ -520,6 +593,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
                       <textarea value={presetDescription} onChange={(event) => setPresetDescription(event.target.value)} maxLength={500} rows={3} placeholder="Optional teaching notes, expected problem or objective…" />
                     </label>
                   </div>
+                  {scenarioType === 'dynamic' && <div className="dynamic-stage-builder create"><DynamicStageSourceSelect value={dynamicCreateSourceId} staticPresets={staticPresets} onChange={(value) => { setDynamicCreateSourceId(value); resetMaskForSource(value, setDynamicCreateMask) }} /><DynamicStageApplyEditor mask={dynamicCreateMask} onChange={setDynamicCreateMask} /></div>}
                   <button type="button" className="account-primary-button scenario-save-current" disabled={presetBusy || !presetName.trim()} onClick={() => void saveScenario()}>{scenarioType === 'dynamic' ? 'Create dynamic scenario' : 'Save current state as preset'}</button>
                 </section>
 
@@ -578,13 +652,14 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
                       <div className="scenario-card-heading"><div><span className="scenario-kind-badge">Dynamic</span><strong>{preset.name}</strong><small>{stages.length} {stages.length === 1 ? 'stage' : 'stages'}</small></div></div>
                       <div className="scenario-card-main">
                         {preset.scenario.description ? <p className="scenario-description">{preset.scenario.description}</p> : <p className="scenario-description empty">No instructor notes.</p>}
-                        {active && stages.length > 0 && <div className="dynamic-stage-status"><strong>{stages[stageIndex].name}</strong><span>{stageIndex + 1} / {stages.length}</span></div>}
+                        {active && stages.length > 0 && <div className="dynamic-stage-status"><div><strong>{stages[stageIndex].name}</strong><small>{stages[stageIndex].sourceName ?? 'Full snapshot'}</small></div><span>{stageIndex + 1} / {stages.length}</span></div>}
+                        {stageBuilderPresetId === preset.id && <div className="dynamic-stage-builder inline"><DynamicStageSourceSelect value={stageBuilderSourceId} staticPresets={staticPresets} onChange={(value) => { setStageBuilderSourceId(value); resetMaskForSource(value, setStageBuilderMask) }} /><DynamicStageApplyEditor mask={stageBuilderMask} onChange={setStageBuilderMask} /><div className="dynamic-stage-builder-actions"><button type="button" className="account-primary-button" disabled={presetBusy} onClick={() => void addDynamicStage(preset)}>Add Stage {stages.length + 1}</button><button type="button" disabled={presetBusy} onClick={() => setStageBuilderPresetId(null)}>Cancel</button></div></div>}
                       </div>
                       <div className="scenario-card-actions dynamic-actions">
                         <button type="button" className="scenario-load-button" disabled={presetBusy || !stages.length} onClick={() => loadDynamicStage(preset, active ? stageIndex : 0)}>{active ? 'Reload stage' : 'Start'}</button>
                         <button type="button" disabled={presetBusy || !active || stageIndex <= 0} onClick={() => loadDynamicStage(preset, stageIndex - 1)}>Back</button>
                         <button type="button" className="account-primary-button" disabled={presetBusy || !active || stageIndex >= stages.length - 1} onClick={() => loadDynamicStage(preset, stageIndex + 1)}>Proceed to Next</button>
-                        <button type="button" disabled={presetBusy} onClick={() => void addDynamicStageFromCurrent(preset)}>Add current as stage</button>
+                        <button type="button" disabled={presetBusy} onClick={() => { const opening = stageBuilderPresetId !== preset.id; setStageBuilderPresetId(opening ? preset.id : null); if (opening) { setStageBuilderSourceId('current'); setStageBuilderMask(createFullDynamicStageApplyMask(currentScenario)) } }}>{stageBuilderPresetId === preset.id ? 'Close stage builder' : 'Add stage'}</button>
                         <button type="button" className="scenario-delete-button" disabled={presetBusy} onClick={() => void removeScenario(preset)}>Delete</button>
                       </div>
                     </article>
