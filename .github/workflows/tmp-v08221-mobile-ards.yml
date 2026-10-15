@@ -1,0 +1,40 @@
+name: Temporary v0.82.2.1 mobile ARDS colour
+on:
+  push:
+    branches: [chatgpt/v0.82.2.1-mobile-ards-colour]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.2.1-mobile-ards-colour
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply cosmetic fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/styles.css')
+          s = p.read_text()
+          old = ".patient-profile-strip button:hover:not(:disabled) { border-color: #748188; background: #30383d; }\n.patient-profile-strip button.profile-selected { border-color: #8fd29a; background: #bce8c3; color: #18301d; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }\n.patient-profile-strip button.profile-modified { border-color: #d4a74e; background: #e2b861; color: #352607; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }"
+          new = ".patient-profile-strip button:hover:not(:disabled) { border-color: #748188; background: #30383d; }\n.patient-profile-strip button.profile-selected,\n.patient-profile-strip button.profile-selected:hover:not(:disabled),\n.patient-profile-strip button.profile-selected:focus,\n.patient-profile-strip button.profile-selected:active { border-color: #8fd29a; background: #bce8c3; color: #18301d; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }\n.patient-profile-strip button.profile-modified,\n.patient-profile-strip button.profile-modified:hover:not(:disabled),\n.patient-profile-strip button.profile-modified:focus,\n.patient-profile-strip button.profile-modified:active { border-color: #d4a74e; background: #e2b861; color: #352607; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }"
+          if old not in s:
+              raise SystemExit('Expected profile CSS block not found')
+          p.write_text(s.replace(old, new, 1))
+          Path('src/appVersion.ts').write_text("export const APP_VERSION = '0.82.2.1'\n")
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit and remove temporary workflow
+        run: |
+          git config user.name 'stefesciberras'
+          git config user.email '43134239+stefesciberras@users.noreply.github.com'
+          git checkout -- tsconfig.app.tsbuildinfo 2>/dev/null || true
+          rm .github/workflows/tmp-v08221-mobile-ards.yml
+          git add src/styles.css src/appVersion.ts .github/workflows/tmp-v08221-mobile-ards.yml
+          git commit -m 'v0.82.2.1 fix mobile ARDS profile colour'
+          git push origin HEAD:chatgpt/v0.82.2.1-mobile-ards-colour
