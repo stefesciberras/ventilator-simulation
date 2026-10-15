@@ -40,6 +40,7 @@ export interface PhysiologicalMeasurements {
 }
 
 const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 const median = (values: number[]) => {
   if (!values.length) return null
@@ -184,6 +185,18 @@ function expiratoryComplianceFromHold(samples: Sample[], baselinePressure: numbe
   return median(estimates)
 }
 
+function latestEndExpiratoryVolume(samples: Sample[]): number | null {
+  let latest: number | null = null
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1]
+    const current = samples[index]
+    if (previous.phase === 'expiration' && current.phase === 'inspiration') {
+      latest = Math.max(0, previous.volume)
+    }
+  }
+  return latest
+}
+
 function latestCompletedInspiratoryVolume(samples: Sample[]) {
   let startVolume: number | null = null
   let latest: number | null = null
@@ -245,11 +258,19 @@ function measuredEndTidalCO2(samples: Sample[]): number | null {
   return lastCompleted
 }
 
-function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings) {
+function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings, patient: PatientSettings) {
   const recent = recentWindow(samples, 20)
   const passiveEndExpiration = recent
     .filter((sample) => sample.phase === 'expiration' && Math.abs(sample.flow) < 2 && sample.musclePressure < 0.5)
-  const measuredPeep = median(passiveEndExpiration.map((sample) => sample.pressure))
+  const endExpiratoryVolume = latestEndExpiratoryVolume(recent)
+  // state.volume is volume above the relaxed volume at set PEEP. Any residual
+  // volume carried into the next inspiration therefore represents dynamic
+  // hyperinflation. Converting that volume through compliance gives intrinsic
+  // PEEP continuously, without depending on a potentially stale prior hold.
+  const autoPeep = endExpiratoryVolume == null
+    ? null
+    : Math.max(0, endExpiratoryVolume / Math.max(patient.compliance, 1))
+  const totalPeep = autoPeep == null ? ventilator.peep : ventilator.peep + autoPeep
   const plateauPressure = median(recent
     .filter((sample) => sample.phase === 'inspiration' && Math.abs(sample.flow) < 1 && sample.musclePressure < 0.5)
     .slice(-80)
@@ -260,6 +281,7 @@ function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings
     .map((sample) => sample.oesophagealPressure))
   const endExpPes = median(passiveEndExpiration.map((sample) => sample.oesophagealPressure))
   const endTidalCO2 = measuredEndTidalCO2(samples)
+  const expiredTidalVolume = latestCompletedExpiredVolume(recent)
   const pesValues = recent.map((sample) => sample.oesophagealPressure)
   const positiveFlows = recent.map((sample) => sample.flow).filter((flow) => flow > 0)
   const negativeFlows = recent.map((sample) => Math.abs(Math.min(0, sample.flow))).filter((flow) => flow > 0)
@@ -267,20 +289,27 @@ function waveformMonitorValues(samples: Sample[], ventilator: VentilatorSettings
   return {
     peakPressure: recent.length ? Math.max(...recent.map((sample) => sample.pressure)) : null,
     plateauPressure,
-    drivingPressure: plateauPressure != null && measuredPeep != null ? plateauPressure - measuredPeep : null,
+    // Prefer an actual zero-flow plateau when available. Pressure-controlled
+    // breaths often have no plateau, so fall back to the elastic VT/C term.
+    // In both cases driving pressure is referenced to current total PEEP.
+    drivingPressure: plateauPressure != null
+      ? plateauPressure - totalPeep
+      : expiredTidalVolume != null
+        ? expiredTidalVolume / Math.max(patient.compliance, 1)
+        : null,
     meanPressure: mean(recent.map((sample) => sample.pressure)),
-    measuredPeep,
-    autoPeep: measuredPeep == null ? null : Math.max(0, measuredPeep - ventilator.peep),
+    measuredPeep: totalPeep,
+    autoPeep,
     inspiratoryFlow: positiveFlows.length ? Math.max(...positiveFlows) : null,
     expiratoryFlow: negativeFlows.length ? Math.max(...negativeFlows) : null,
     inspiredTidalVolume: latestCompletedInspiratoryVolume(recent),
-    expiredTidalVolume: latestCompletedExpiredVolume(recent),
+    expiredTidalVolume,
     endTidalCO2,
     pesMax: pesValues.length ? Math.max(...pesValues) : null,
     pesPlateau,
     pesMin: pesValues.length ? Math.min(...pesValues) : null,
     transpulmonaryInspiratory: plateauPressure != null && pesPlateau != null ? plateauPressure - pesPlateau : null,
-    transpulmonaryExpiratory: measuredPeep != null && endExpPes != null ? measuredPeep - endExpPes : null,
+    transpulmonaryExpiratory: endExpPes != null ? totalPeep - endExpPes : null,
   }
 }
 
@@ -293,7 +322,7 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
   const baselinePressure = median(window
     .filter((sample) => sample.phase === 'expiration' && sample.musclePressure < 0.1 && Math.abs(sample.flow) < 5)
     .map((sample) => sample.pressure))
-  const monitor = waveformMonitorValues(window, ventilator)
+  const monitor = waveformMonitorValues(window, ventilator, patient)
 
   const holdCompliance = expiratoryComplianceFromHold(window, baselinePressure)
   const expiratoryCompliance = holdCompliance ?? inspiratoryMechanics.compliance
@@ -311,7 +340,18 @@ export function calculatePhysiologicalMeasurements(samples: Sample[], ventilator
   const effectiveDeadSpace = calculateEffectiveDeadSpace(patient, deadSpaceReferenceVt)
   const totalDeadSpaceVolume = effectiveDeadSpace.deadSpaceMl
   const alveolarTidalVolume = monitor.expiredTidalVolume == null ? null : Math.max(0, monitor.expiredTidalVolume - totalDeadSpaceVolume)
-  const alveolarMinuteVentilation = Math.max(0, rates.minuteVentilation - (totalDeadSpaceVolume / 1000) * rates.totalRate)
+
+  // Match the simulation engine's gas-exchange model: only the fraction of the
+  // alveolar tidal volume that can empty during Te contributes to effective
+  // alveolar ventilation. This makes dynamic hyperinflation visible in EXTRA.
+  const modelExpiratoryTimeConstant = Math.max(patient.expiratoryResistance * patient.compliance / 1000, 0.05)
+  const measuredExpiratoryTime = timing.expiratoryTime
+  const expiratoryEmptyingFraction = measuredExpiratoryTime == null
+    ? 1
+    : clamp(1 - Math.exp(-measuredExpiratoryTime / modelExpiratoryTimeConstant), 0.03, 1)
+  const alveolarMinuteVentilation = alveolarTidalVolume == null
+    ? 0
+    : Math.max(0, (alveolarTidalVolume / 1000) * rates.totalRate * expiratoryEmptyingFraction)
 
   return {
     setMinuteVentilation,

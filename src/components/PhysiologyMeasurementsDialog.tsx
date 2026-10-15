@@ -56,7 +56,7 @@ export function PhysiologyMeasurementsDialog({ open, measurements, oesophagealEn
                 <MonitorMetric value={measurements.plateauPressure} label="Pplateau" unit="cmH₂O" digits={0} />
                 <MonitorMetric value={measurements.drivingPressure} label="ΔP" unit="cmH₂O" digits={0} />
                 <MonitorMetric value={measurements.meanPressure} label="Pmean" unit="cmH₂O" digits={1} />
-                <MonitorMetric value={measurements.measuredPeep} label="PEEP/CPAP" unit="cmH₂O" digits={1} />
+                <MonitorMetric value={measurements.measuredPeep} label="Total PEEP" unit="cmH₂O" digits={1} />
                 <MonitorMetric value={measurements.autoPeep} label="AutoPEEP" unit="cmH₂O" digits={1} />
               </div>
 
