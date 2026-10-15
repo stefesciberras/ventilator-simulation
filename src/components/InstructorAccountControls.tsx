@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { SessionRole } from '../session/useTeachingSession'
 import type { AlarmLimits } from '../alarmTypes'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
+import type { PhysiologicalMeasurements } from '../physiologyMeasurements'
+import type { SessionMemberRow } from '../session/supabase'
 import {
   applyDynamicStage,
   asDynamicScenario,
@@ -18,6 +20,8 @@ import {
   subscribeToInstructorAccount,
   updateInstructorPreset,
   type DynamicScenarioApplyMask,
+  type DynamicScenarioMetric,
+  type DynamicScenarioTrigger,
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
@@ -37,6 +41,9 @@ interface InstructorAccountControlsProps {
   onLoadScenario: (scenario: InstructorScenarioSnapshot) => void
   simulationPaused: boolean
   onSimulationPausedChange: (paused: boolean) => void
+  physiologyMeasurements: PhysiologicalMeasurements
+  scenarioElapsedSeconds: number
+  sessionMembers: SessionMemberRow[]
 }
 
 function CloudIcon({ connected }: { connected: boolean }) {
@@ -157,6 +164,38 @@ function DynamicStageApplyEditor({ mask, onChange }: { mask: DynamicScenarioAppl
   return <div className="dynamic-stage-mask"><div className="dynamic-mask-heading"><strong>Parameters pushed at this stage</strong><div><button type="button" onClick={() => setAll(true)}>Select all</button><button type="button" onClick={() => setAll(false)}>Clear all</button></div></div>{group('Ventilator', 'ventilator', VENTILATOR_STAGE_FIELDS as Array<{ key: string; label: string }>)}{group('Patient / physiology', 'patient', PATIENT_STAGE_FIELDS as Array<{ key: string; label: string }>)}{group('Alarms', 'alarmLimits', ALARM_STAGE_FIELDS as Array<{ key: string; label: string }>)}<details className="dynamic-mask-group"><summary>Other</summary><div className="dynamic-mask-grid"><label><input type="checkbox" checked={mask.patientTransitionSeconds} onChange={(event) => onChange({ ...mask, patientTransitionSeconds: event.target.checked })} /><span>Transition time</span></label><label><input type="checkbox" checked={mask.waveformDisplay} onChange={(event) => onChange({ ...mask, waveformDisplay: event.target.checked })} /><span>Waveform display</span></label><label><input type="checkbox" checked={mask.mediaIds} onChange={(event) => onChange({ ...mask, mediaIds: event.target.checked })} /><span>Scenario media</span></label></div></details></div>
 }
 
+function conditionMetricValue(measurements: PhysiologicalMeasurements, metric: DynamicScenarioMetric): number | null {
+  const mapping: Record<DynamicScenarioMetric, number | null> = {
+    peakPressure: measurements.peakPressure, plateauPressure: measurements.plateauPressure, meanPressure: measurements.meanPressure,
+    totalPeep: measurements.measuredPeep, autoPeep: measurements.autoPeep, expiredTidalVolume: measurements.expiredTidalVolume,
+    totalRespiratoryRate: measurements.totalRespiratoryRate, actualMinuteVentilation: measurements.actualMinuteVentilation,
+    alveolarMinuteVentilation: measurements.alveolarMinuteVentilation, endTidalCO2: measurements.endTidalCO2,
+    oxygenSaturation: measurements.oxygenSaturation, drivingPressure: measurements.drivingPressure,
+  }
+  const value = mapping[metric]
+  return value != null && Number.isFinite(value) ? value : null
+}
+
+function conditionMatches(actual: number, operator: 'lt' | 'eq' | 'gt', target: number) {
+  if (operator === 'lt') return actual < target
+  if (operator === 'gt') return actual > target
+  const tolerance = Math.max(0.1, Math.abs(target) * 0.005)
+  return Math.abs(actual - target) <= tolerance
+}
+
+function settingChanged(a: unknown, b: unknown) {
+  if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) > 1e-6
+  return a !== b
+}
+
+function triggerRuntimeLabel(trigger: DynamicScenarioTrigger | undefined) {
+  const value = trigger ?? { type: 'manual' as const }
+  if (value.type === 'manual') return 'Manual'
+  if (value.type === 'time') return `After ${value.seconds}s`
+  if (value.type === 'condition') return `${value.metric} ${value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='} ${value.value}`
+  return `${String(value.parameter)} changed · ${value.actor}`
+}
+
 function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
   const names = new Set(presets.map((preset) => preset.name.toLocaleLowerCase()))
   let candidate = `${baseName} copy`
@@ -168,7 +207,7 @@ function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
   return candidate
 }
 
-export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange }: InstructorAccountControlsProps) {
+export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers }: InstructorAccountControlsProps) {
   const [account, setAccount] = useState<User | null>(null)
   const [accountOpen, setAccountOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -185,6 +224,11 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const [scenarioType, setScenarioType] = useState<'static' | 'dynamic'>('static')
   const [activeDynamicId, setActiveDynamicId] = useState<string | null>(null)
   const [activeDynamicStage, setActiveDynamicStage] = useState(0)
+  const [activeDynamicStageStartedAt, setActiveDynamicStageStartedAt] = useState(0)
+  const actionBaselineInstructorRef = useRef<VentilatorSettings | null>(null)
+  const actionBaselineCandidatesRef = useRef(new Map<string, VentilatorSettings>())
+  const triggerArmedAfterRef = useRef(0)
+  const automaticAdvanceLockRef = useRef(false)
   const [dynamicCreateSourceId, setDynamicCreateSourceId] = useState('current')
   const [dynamicCreateMask, setDynamicCreateMask] = useState<DynamicScenarioApplyMask>(() => createFullDynamicStageApplyMask(currentScenario))
   const [stageBuilderPresetId, setStageBuilderPresetId] = useState<string | null>(null)
@@ -255,6 +299,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
 
   const staticPresets = useMemo(() => presets.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'), [presets])
   const dynamicPresets = useMemo(() => presets.filter((preset) => preset.scenario.kind === 'dynamic'), [presets])
+  const activeDynamicPreset = useMemo(() => dynamicPresets.find((preset) => preset.id === activeDynamicId) ?? null, [dynamicPresets, activeDynamicId])
   const scenarioForStageSource = (sourceId: string) => sourceId === 'current' ? currentScenario : (staticPresets.find((preset) => preset.id === sourceId)?.scenario ?? currentScenario)
   const nameForStageSource = (sourceId: string) => sourceId === 'current' ? 'Current simulator state' : (staticPresets.find((preset) => preset.id === sourceId)?.name ?? 'Current simulator state')
   const resetMaskForSource = (sourceId: string, setter: (mask: DynamicScenarioApplyMask) => void) => setter(createFullDynamicStageApplyMask(scenarioForStageSource(sourceId)))
@@ -385,15 +430,59 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     }
   }
 
-  const loadDynamicStage = (preset: InstructorPresetRow, index: number) => {
+  const loadDynamicStage = (preset: InstructorPresetRow, index: number, reason: 'manual' | 'automatic' = 'manual') => {
     const stages = preset.scenario.stages ?? []
     if (!stages.length) return
     const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
-    onLoadScenario(applyDynamicStage(currentScenario, stages[nextIndex]))
+    const nextScenario = applyDynamicStage(currentScenario, stages[nextIndex])
+    onLoadScenario(nextScenario)
     setActiveDynamicId(preset.id)
     setActiveDynamicStage(nextIndex)
-    setPresetMessage(`“${preset.name}” · ${stages[nextIndex].name} (${nextIndex + 1}/${stages.length})`)
+    setActiveDynamicStageStartedAt(scenarioElapsedSeconds)
+    actionBaselineInstructorRef.current = { ...nextScenario.ventilator }
+    actionBaselineCandidatesRef.current = new Map(sessionMembers.filter((member) => member.role === 'candidate').flatMap((member) => {
+      const settings = member.ventilator_settings as Partial<VentilatorSettings>
+      return settings && Object.keys(settings).length ? [[member.id, { ...settings } as VentilatorSettings] as const] : []
+    }))
+    triggerArmedAfterRef.current = Date.now() + 750
+    automaticAdvanceLockRef.current = false
+    setPresetMessage(`“${preset.name}” · ${stages[nextIndex].name} (${nextIndex + 1}/${stages.length})${reason === 'automatic' ? ' · auto advanced' : ''}`)
   }
+
+  useEffect(() => {
+    if (role === 'candidate' || !activeDynamicPreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return
+    const stages = activeDynamicPreset.scenario.stages ?? []
+    if (activeDynamicStage < 0 || activeDynamicStage >= stages.length - 1) return
+    const stage = stages[activeDynamicStage]
+    const trigger = stage.advanceTrigger ?? { type: 'manual' as const }
+    if (trigger.type === 'manual') return
+
+    let shouldAdvance = false
+    if (trigger.type === 'time') {
+      shouldAdvance = scenarioElapsedSeconds - activeDynamicStageStartedAt >= Math.max(1, trigger.seconds)
+    } else if (trigger.type === 'condition') {
+      const actual = conditionMetricValue(physiologyMeasurements, trigger.metric)
+      shouldAdvance = actual != null && conditionMatches(actual, trigger.operator, trigger.value)
+    } else if (trigger.type === 'action') {
+      if (trigger.actor === 'instructor' || trigger.actor === 'either') {
+        const baseline = actionBaselineInstructorRef.current
+        if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter], baseline[trigger.parameter])) shouldAdvance = true
+      }
+      if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {
+        for (const member of sessionMembers) {
+          if (member.role !== 'candidate') continue
+          const baseline = actionBaselineCandidatesRef.current.get(member.id)
+          const settings = member.ventilator_settings as Partial<VentilatorSettings>
+          if (!baseline || !settings || !(trigger.parameter in settings)) continue
+          if (settingChanged(settings[trigger.parameter], baseline[trigger.parameter])) { shouldAdvance = true; break }
+        }
+      }
+    }
+
+    if (!shouldAdvance) return
+    automaticAdvanceLockRef.current = true
+    loadDynamicStage(activeDynamicPreset, activeDynamicStage + 1, 'automatic')
+  }, [role, activeDynamicPreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers])
 
   const addDynamicStage = async (preset: InstructorPresetRow) => {
     if (!account) return
@@ -521,6 +610,19 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
           <ScenarioIcon />
         </button>
       )}
+      {role !== 'candidate' && activeDynamicPreset && (() => {
+        const stages = activeDynamicPreset.scenario.stages ?? []
+        const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))
+        const trigger = stages[index]?.advanceTrigger
+        return <div className="dynamic-runtime-toolbar">
+          <button type="button" className="dynamic-runtime-status" onClick={openScenarios} title="Open dynamic scenario builder">
+            <span>{activeDynamicPreset.name}</span><strong>{stages[index]?.name ?? `Stage ${index + 1}`}</strong><small>{triggerRuntimeLabel(trigger)}</small>
+          </button>
+          <button type="button" disabled={index <= 0} onClick={() => loadDynamicStage(activeDynamicPreset, index - 1)}>Back</button>
+          <button type="button" disabled={index >= stages.length - 1} onClick={() => loadDynamicStage(activeDynamicPreset, index + 1)}>Proceed</button>
+          <button type="button" onClick={() => { setActiveDynamicId(null); setActiveDynamicStage(0); setPresetMessage('Dynamic scenario stopped.') }}>Stop</button>
+        </div>
+      })()}
       <button
         type="button"
         className="top-account-button"
@@ -587,6 +689,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
                 simulationPaused={simulationPaused}
                 onSimulationPausedChange={onSimulationPausedChange}
                 onRefresh={() => refreshPresets(account)}
+                onStartScenario={(preset) => loadDynamicStage(preset, 0)}
                 onClose={() => setScenarioOpen(false)}
               />
             ) : account ? (
