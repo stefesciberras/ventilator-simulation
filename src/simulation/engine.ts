@@ -390,17 +390,19 @@ function oesophagealPressureValue(
   // effort. Keep that passive component separate from Pmus: active inspiratory
   // effort lowers Pes, whereas tidal inflation raises it.
   //
-  // A normal adult chest-wall compliance is roughly 200 mL/cmH2O. Scale the
-  // teaching approximation to predicted body weight so paediatric patients do
-  // not receive an adult-sized chest wall. The current simulation volume is the
-  // volume above the end-expiratory reference, so intrinsic trapping naturally
-  // leaves Pes above baseline at end expiration.
+  // Chest-wall compliance is now an explicit patient/scenario property. Keep
+  // a PBW-scaled fallback so older saved patients and scenarios remain valid.
   const heightCm = patient.heightCm ?? 170
   const predictedBodyWeightKg = Math.max(
     20,
     (patient.sex === 'female' ? 45.5 : 50) + 0.91 * (heightCm - 152.4),
   )
-  const chestWallComplianceMlPerCmH2O = clamp(predictedBodyWeightKg * 3, 40, 250)
+  const fallbackChestWallCompliance = clamp(predictedBodyWeightKg * 3, 40, 250)
+  const chestWallComplianceMlPerCmH2O = clamp(
+    patient.chestWallCompliance ?? fallbackChestWallCompliance,
+    40,
+    400,
+  )
   const passiveChestWallPressure = Math.max(0, lungVolumeL * 1000) / chestWallComplianceMlPerCmH2O
 
   return baseline + passiveChestWallPressure - pmus + cardiacOscillation

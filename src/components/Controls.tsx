@@ -372,6 +372,7 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
         />
       </label>
       <Slider label="Compliance" value={settings.compliance} unit=" mL/cmH₂O" min={15} max={100} onChange={(v) => patch({ compliance: v })} />
+      <Slider label="Chest wall compliance" value={settings.chestWallCompliance ?? Math.round(predictedBodyWeight * 3)} unit=" mL/cmH₂O" min={40} max={400} step={5} onChange={(v) => patch({ chestWallCompliance: v })} />
       <Slider label="Airway resistance" value={settings.resistance} unit=" cmH₂O/L/s" min={3} max={40} onChange={(v) => patch({ resistance: v })} />
       <Slider label="Expiratory resistance" value={settings.expiratoryResistance} unit=" cmH₂O/L/s" min={3} max={50} onChange={(v) => patch({ expiratoryResistance: v })} />
       <Slider label="Expiratory flow limitation" value={Math.round((settings.expiratoryFlowLimitation ?? 0) * 100)} unit="%" min={0} max={100} step={5} onChange={(v) => patch({ expiratoryFlowLimitation: v / 100 })} />

@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js'
 import type { AlarmLimits } from './alarmTypes'
 import type { PatientSettings, VentilatorSettings } from './simulation/types'
+import { calculatePredictedBodyWeight } from './patientMetrics'
 import { supabase } from './session/supabase'
 
 export type ScenarioWaveform = 'volume' | 'co2' | 'oesophagealPressure'
@@ -127,6 +128,13 @@ export function asStaticScenario(
   }
 }
 
+function normalisePatientSettings(patient: PatientSettings): PatientSettings {
+  const chestWallCompliance = Number.isFinite(patient.chestWallCompliance ?? Number.NaN)
+    ? patient.chestWallCompliance
+    : Math.round(calculatePredictedBodyWeight(patient.sex ?? 'male', patient.heightCm ?? 170) * 3)
+  return { ...patient, chestWallCompliance }
+}
+
 function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScenarioSnapshot {
   return {
     ...scenario,
@@ -134,9 +142,10 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
     kind: scenario.kind ?? 'static',
     description: scenario.description ?? '',
     mediaIds: [...new Set((scenario.mediaIds ?? []).filter((id) => typeof id === 'string' && id.length > 0))],
+    patient: normalisePatientSettings(scenario.patient),
     stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => ({
       name: stage.name || `Stage ${index + 1}`,
-      snapshot: { ...stage.snapshot, kind: 'static', stages: undefined },
+      snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },
       apply: stage.apply,
       sourceName: stage.sourceName,
       advanceTrigger: stage.advanceTrigger ?? { type: 'manual' },

@@ -8,6 +8,8 @@ export interface PatientSettings {
   shuntFraction: number
   maxSpO2: number
   compliance: number
+  /** Chest-wall compliance used to translate tidal displacement into pleural/Pes change. */
+  chestWallCompliance: number
   resistance: number
   expiratoryResistance: number
   /** 0 = linear RC emptying; 1 = severe expiratory flow limitation. */
