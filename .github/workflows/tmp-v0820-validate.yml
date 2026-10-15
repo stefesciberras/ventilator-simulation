@@ -1,0 +1,29 @@
+name: Temporary v0.82.0 validation
+on:
+  push:
+    branches: [chatgpt/v0.82.0-dynamic-scenarios]
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.0-dynamic-scenarios
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply v0.82.0 changes
+        run: |
+          python .github/tmp_v0820_patch.py
+          rm .github/tmp_v0820_patch.py
+          rm .github/workflows/tmp-v0820-validate.yml
+          git config user.name stefesciberras
+          git config user.email 43134239+stefesciberras@users.noreply.github.com
+          git add src .github
+          git commit -m "v0.82.0 add linear dynamic scenarios and correct VG pressure ceiling"
+          git push origin HEAD:chatgpt/v0.82.0-dynamic-scenarios
+      - name: Validate committed tree
+        run: |
+          npm ci
+          npm run build
