@@ -1,0 +1,29 @@
+name: Temporary fix builder css
+permissions:
+  contents: write
+on:
+  push:
+    branches: [chatgpt/v0.82-dynamic-builder-v2]
+jobs:
+  fix-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82-dynamic-builder-v2
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fix CSS and validate
+        run: |
+          python .github/tmp_fix_builder_css.py
+          rm .github/tmp_fix_builder_css.py
+          rm .github/workflows/tmp-fix-builder-css.yml
+          git config user.name stefesciberras
+          git config user.email 43134239+stefesciberras@users.noreply.github.com
+          git add src .github
+          git commit -m "Fix v0.82 dynamic builder styling"
+          git push origin HEAD:chatgpt/v0.82-dynamic-builder-v2
+          npm ci
+          npm run build
