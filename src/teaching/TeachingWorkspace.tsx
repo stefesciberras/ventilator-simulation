@@ -55,9 +55,6 @@ export function TeachingInstructorWorkspace({
   libraryAvailable,
   libraryBusy,
   libraryError,
-  laserEnabled = false,
-  laserAvailable = false,
-  onLaserEnabledChange,
   onPresent,
   onClose,
   onSaveLibrary,
@@ -73,9 +70,6 @@ export function TeachingInstructorWorkspace({
   libraryAvailable: boolean
   libraryBusy: boolean
   libraryError: string | null
-  laserEnabled?: boolean
-  laserAvailable?: boolean
-  onLaserEnabledChange?: (enabled: boolean) => void
   onPresent: (input: TeachingPromptDraft) => Promise<void>
   onClose: () => Promise<void>
   onSaveLibrary: (draft: TeachingLibraryDraft, existingId?: string | null) => Promise<TeachingLibraryItem>
@@ -172,19 +166,6 @@ export function TeachingInstructorWorkspace({
         <div><span className="session-kicker">Reusable teaching module</span><h3>Teaching workspace</h3><small>{host.appName}</small></div>
         {activePrompt && <span className="teaching-prompt-live-badge">LIVE</span>}
       </div>
-
-      {onLaserEnabledChange && (
-        <div className="teaching-laser-control-row">
-          <button
-            type="button"
-            className={`teaching-laser-toggle ${laserEnabled ? 'active' : ''}`}
-            disabled={!laserAvailable}
-            aria-pressed={laserEnabled}
-            onClick={() => onLaserEnabledChange(!laserEnabled)}
-          ><span className="teaching-laser-button-dot" />{laserEnabled ? 'Laser pointer on' : 'Laser pointer'}</button>
-          <small>{laserAvailable ? (laserEnabled ? 'Move over the simulator display to point. Use Exit on the display or press here again to stop.' : 'Show a live pointer on candidate simulator displays.') : 'Start an instructor session to use the laser pointer.'}</small>
-        </div>
-      )}
 
       {activePrompt && role === 'instructor' ? (
         <>
@@ -291,19 +272,32 @@ export function TeachingCandidateOverlay({
 }) {
   const [selectedOptionId, setSelectedOptionId] = useState('')
   const [dismissedPromptId, setDismissedPromptId] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     setSelectedOptionId('')
     setDismissedPromptId(null)
+    setCollapsed(false)
   }, [prompt?.id])
 
   if (role !== 'candidate' || !prompt || dismissedPromptId === prompt.id) return null
   const hasSubmitted = Boolean(myResponse)
 
+  if (collapsed) {
+    return (
+      <button type="button" className="teaching-prompt-reopen" onClick={() => setCollapsed(false)} aria-label="Show current teaching question">
+        <span>{prompt.kind === 'message' ? 'Teaching point' : prompt.kind === 'poll' ? 'Poll' : 'Question'}</span><strong>Show</strong>
+      </button>
+    )
+  }
+
   return (
     <div className="teaching-prompt-overlay" role="presentation">
-      <section className="teaching-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="teaching-prompt-title">
-        <span className="teaching-prompt-kind">{prompt.kind === 'message' ? 'Instructor information' : prompt.kind === 'mcq' ? 'Question' : 'Poll'}</span>
+      <section className="teaching-prompt-modal" role="dialog" aria-modal="false" aria-labelledby="teaching-prompt-title">
+        <div className="teaching-prompt-dock-header">
+          <span className="teaching-prompt-kind">{prompt.kind === 'message' ? 'Instructor information' : prompt.kind === 'mcq' ? 'Question' : 'Poll'}</span>
+          <button type="button" onClick={() => setCollapsed(true)} aria-label="Temporarily hide question">Hide</button>
+        </div>
         <h2 id="teaching-prompt-title">{prompt.title || (prompt.kind === 'message' ? 'Teaching point' : 'Your response')}</h2>
         <p className="teaching-prompt-body">{prompt.body}</p>
         {prompt.kind !== 'message' && (

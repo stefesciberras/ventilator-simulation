@@ -31,6 +31,42 @@ function clamp01(value: number) {
   return Math.max(0, Math.min(1, value))
 }
 
+export function TeachingLaserControl({
+  role,
+  enabled,
+  sessionActive,
+  onEnabledChange,
+}: {
+  role: TeachingRole
+  enabled: boolean
+  sessionActive: boolean
+  onEnabledChange: (enabled: boolean) => void
+}) {
+  if (role === 'candidate') return null
+  const shared = role === 'instructor' && sessionActive
+  return (
+    <section className="teaching-laser-panel" aria-label="Teaching laser pointer">
+      <div className="teaching-laser-panel-heading">
+        <div><span className="session-kicker">Teaching tool</span><h3>Laser pointer</h3></div>
+        <span className={`teaching-laser-mode ${shared ? 'shared' : 'local'}`}>{shared ? 'Shared' : 'Local'}</span>
+      </div>
+      <div className="teaching-laser-control-row">
+        <button
+          type="button"
+          className={`teaching-laser-toggle ${enabled ? 'active' : ''}`}
+          aria-pressed={enabled}
+          onClick={() => onEnabledChange(!enabled)}
+        ><span className="teaching-laser-button-dot" />{enabled ? 'Laser pointer on' : 'Laser pointer'}</button>
+        <small>
+          {shared
+            ? (enabled ? 'Move over the simulator display to point for all candidates.' : 'Show a live pointer on candidate simulator displays.')
+            : (enabled ? 'Move over the simulator display to point locally.' : 'Use the pointer locally even without starting a teaching session.')}
+        </small>
+      </div>
+    </section>
+  )
+}
+
 export function TeachingLaserPointerSurface({
   role,
   sessionId,
@@ -48,12 +84,13 @@ export function TeachingLaserPointerSurface({
   const localPointerRef = useRef<TeachingLaserPointerState | null>(null)
   const lastSentAtRef = useRef(0)
   const lastReceivedAtRef = useRef(0)
+  const isController = role !== 'candidate'
 
   useEffect(() => { localPointerRef.current = localPointer }, [localPointer])
 
   const sendPointer = (next: TeachingLaserPointerState, force = false) => {
     const channel = channelRef.current
-    if (!channel || role !== 'instructor') return
+    if (!channel || role !== 'instructor' || !sessionId) return
     const now = Date.now()
     if (!force && now - lastSentAtRef.current < MIN_SEND_INTERVAL_MS) return
     lastSentAtRef.current = now
@@ -94,18 +131,19 @@ export function TeachingLaserPointerSurface({
   }, [role, sessionId])
 
   useEffect(() => {
-    if (role !== 'instructor' || !sessionId) return
+    if (!isController) return
     if (!enabled) {
       setLocalPointer(null)
       sendPointer({ x: 0.5, y: 0.5, active: false, sentAt: Date.now() }, true)
       return
     }
+    if (role !== 'instructor' || !sessionId) return
     const heartbeat = window.setInterval(() => {
       const pointer = localPointerRef.current
       if (pointer?.active) sendPointer({ ...pointer, sentAt: Date.now() }, true)
     }, HEARTBEAT_MS)
     return () => window.clearInterval(heartbeat)
-  }, [enabled, role, sessionId])
+  }, [enabled, role, sessionId, isController])
 
   useEffect(() => {
     if (role !== 'candidate' || !sessionId) return
@@ -116,7 +154,7 @@ export function TeachingLaserPointerSurface({
   }, [remotePointer, role, sessionId])
 
   const updateFromPointerEvent = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (role !== 'instructor' || !enabled) return
+    if (!isController || !enabled) return
     const rect = event.currentTarget.getBoundingClientRect()
     if (!rect.width || !rect.height) return
     const next: TeachingLaserPointerState = {
@@ -130,20 +168,20 @@ export function TeachingLaserPointerSurface({
   }
 
   const hideLocalPointer = () => {
-    if (role !== 'instructor' || !enabled) return
+    if (!isController || !enabled) return
     setLocalPointer(null)
     sendPointer({ x: 0.5, y: 0.5, active: false, sentAt: Date.now() }, true)
   }
 
-  const displayed = role === 'instructor' ? localPointer : remotePointer
+  const displayed = isController ? localPointer : remotePointer
   const visible = Boolean(displayed?.active) && (role === 'candidate' || enabled)
 
   return (
     <div
-      className={`teaching-laser-layer ${role === 'instructor' && enabled ? 'teaching-laser-layer-active' : ''}`}
-      aria-hidden={role !== 'instructor'}
+      className={`teaching-laser-layer ${isController && enabled ? 'teaching-laser-layer-active' : ''}`}
+      aria-hidden={!isController}
       onPointerDown={(event) => {
-        if (role !== 'instructor' || !enabled) return
+        if (!isController || !enabled) return
         event.preventDefault()
         event.currentTarget.setPointerCapture?.(event.pointerId)
         updateFromPointerEvent(event)
@@ -151,7 +189,7 @@ export function TeachingLaserPointerSurface({
       onPointerMove={updateFromPointerEvent}
       onPointerLeave={hideLocalPointer}
     >
-      {role === 'instructor' && enabled && onEnabledChange && (
+      {isController && enabled && onEnabledChange && (
         <button
           type="button"
           className="teaching-laser-exit"

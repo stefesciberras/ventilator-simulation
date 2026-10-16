@@ -195,3 +195,23 @@
   .teaching-laser-toggle { justify-content: center; min-height: 44px; }
   .teaching-laser-dot { width: 14px; height: 14px; }
 }
+
+
+.teaching-laser-panel { margin-top:12px; padding:14px; border:1px solid #334650; border-radius:10px; background:rgba(18,28,34,.96); }
+.teaching-laser-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+.teaching-laser-panel-heading h3 { margin:2px 0 0; }
+.teaching-laser-mode { padding:3px 7px; border-radius:999px; font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+.teaching-laser-mode.local { background:#24343c; color:#b9d1dc; }
+.teaching-laser-mode.shared { background:#492522; color:#ffb0aa; }
+.teaching-laser-panel .teaching-laser-control-row { margin:0; }
+
+.teaching-prompt-overlay { inset:0; display:flex; align-items:flex-start; justify-content:flex-end; padding:84px 18px 18px; background:transparent; backdrop-filter:none; pointer-events:none; }
+.teaching-prompt-modal { width:min(430px,38vw); max-height:calc(100dvh - 102px); border-radius:14px; padding:18px; box-shadow:0 18px 48px rgba(0,0,0,.48); pointer-events:auto; }
+.teaching-prompt-dock-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:4px; }
+.teaching-prompt-dock-header .teaching-prompt-kind { margin-bottom:0; }
+.teaching-prompt-dock-header button { border:1px solid #4a5d66; border-radius:999px; background:#1b2a31; color:#dfeaec; padding:5px 10px; cursor:pointer; }
+.teaching-prompt-reopen { position:fixed; z-index:5001; top:92px; right:12px; display:flex; align-items:center; gap:9px; border:1px solid #ef8a27; border-radius:999px; background:#18242a; color:#eef5f7; padding:8px 11px 8px 13px; box-shadow:0 8px 24px rgba(0,0,0,.35); cursor:pointer; }
+.teaching-prompt-reopen span { color:#f0b06e; font-size:.75rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+.teaching-prompt-reopen strong { font-size:.8rem; }
+@media (max-width:900px) { .teaching-prompt-overlay { padding:74px 10px 10px; } .teaching-prompt-modal { width:min(390px,48vw); } }
+@media (max-width:640px) { .teaching-prompt-overlay { align-items:end; justify-content:stretch; padding:0; } .teaching-prompt-modal { width:100%; max-height:72dvh; border-radius:18px 18px 0 0; border-left:0; border-right:0; border-bottom:0; padding:18px 16px calc(18px + env(safe-area-inset-bottom)); } .teaching-prompt-reopen { top:auto; right:10px; bottom:calc(12px + env(safe-area-inset-bottom)); } }
