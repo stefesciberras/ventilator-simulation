@@ -39,7 +39,7 @@ import '../account.css'
 interface InstructorAccountControlsProps {
   role: SessionRole
   currentScenario: InstructorScenarioSnapshot
-  onLoadScenario: (scenario: InstructorScenarioSnapshot) => void
+  onLoadScenario: (scenario: InstructorScenarioSnapshot, options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean }) => void
   simulationPaused: boolean
   onSimulationPausedChange: (paused: boolean) => void
   physiologyMeasurements: PhysiologicalMeasurements
@@ -462,7 +462,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     if (!stages.length) return
     const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
     const nextScenario = applyDynamicStage(currentScenario, stages[nextIndex])
-    onLoadScenario(nextScenario)
+    onLoadScenario(nextScenario, { pauseSimulation: false, resetScenarioClock: false })
     activateDynamicStage(preset, nextIndex, nextScenario, reason)
   }
 
@@ -475,8 +475,8 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
       await onStartInstructorSession(firstScenario)
       activateDynamicStage(preset, 0, firstScenario, 'manual', 0)
     } else {
-      onLoadScenario(firstScenario)
-      activateDynamicStage(preset, 0, firstScenario)
+      onLoadScenario(firstScenario, { pauseSimulation: false, resetScenarioClock: true })
+      activateDynamicStage(preset, 0, firstScenario, 'manual', 0)
     }
     setScenarioOpen(false)
     onDynamicScenarioStarted?.()
