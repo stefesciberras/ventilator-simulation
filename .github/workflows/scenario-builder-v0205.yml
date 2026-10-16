@@ -1,0 +1,39 @@
+name: Scenario Builder v0.2.0.5
+
+on:
+  push:
+    branches: [chatgpt/scenario-builder-v0.2.0.5-stage-ui]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.2.0.5-stage-ui
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply v0.2.0.5 patches
+        run: |
+          python scripts/patch_v0205_model.py
+          python scripts/patch_v0205_builder_logic.py
+          python scripts/patch_v0205_builder_render.py
+          python scripts/patch_v0205_runtime_css.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit validated changes
+        run: |
+          git checkout origin/main -- tsconfig.app.tsbuildinfo || true
+          rm -f scripts/patch_v0205_model.py scripts/patch_v0205_builder_logic.py scripts/patch_v0205_builder_render.py scripts/patch_v0205_runtime_css.py
+          rm -f .github/workflows/scenario-builder-v0205.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          git commit -m "Scenario Builder v0.2.0.5 stage authoring refinements"
+          git push origin HEAD:chatgpt/scenario-builder-v0.2.0.5-stage-ui
