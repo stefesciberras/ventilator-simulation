@@ -382,3 +382,8 @@
     min-width: 0;
   }
 }
+
+/* Keep patient profile presets visually distinct from the main control tabs. */
+.patient-profile-strip + .control-tabs {
+  margin-top: 6px;
+}
