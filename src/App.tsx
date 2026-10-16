@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { TeachingPromptInstructorPanel, TeachingPromptOverlay, useTeachingPrompts } from './components/TeachingPrompts'
+import { TeachingCandidateOverlay, TeachingInstructorWorkspace, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -604,7 +604,8 @@ export default function App() {
     setSimulationSpeed,
   })
 
-  const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null)
+  const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, eduventTeachingHost)
+  const teachingLibrary = useTeachingQuestionLibrary(eduventTeachingHost)
 
   const candidateWaveformOptions = useMemo(
     () => teachingSession.candidateOesophagealPressureAllowed
@@ -1452,7 +1453,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <TeachingPromptOverlay
+      <TeachingCandidateOverlay
         role={teachingSession.role}
         prompt={teachingPrompts.activePrompt}
         myResponse={teachingPrompts.myResponse}
@@ -1795,16 +1796,22 @@ export default function App() {
                   onUpdatePolicy={teachingSession.updatePolicy}
                   onBroadcastNow={teachingSession.broadcastNow}
                 />
-                <TeachingPromptInstructorPanel
-                  role={teachingSession.role}
-                  activePrompt={teachingPrompts.activePrompt}
-                  responses={teachingPrompts.responses}
-                  candidateCount={teachingSession.members.filter((member) => member.role === 'candidate').length}
-                  busy={teachingPrompts.busy}
-                  error={teachingPrompts.error}
-                  onPresent={teachingPrompts.presentPrompt}
-                  onClose={teachingPrompts.closePrompt}
-                />
+      <TeachingInstructorWorkspace
+        role={teachingSession.role}
+        host={eduventTeachingHost}
+        activePrompt={teachingPrompts.activePrompt}
+        responses={teachingPrompts.responses}
+        candidateCount={teachingSession.members.filter((member) => member.role === 'candidate').length}
+        promptBusy={teachingPrompts.busy}
+        promptError={teachingPrompts.error}
+        libraryItems={teachingLibrary.items}
+        libraryAvailable={Boolean(teachingLibrary.author)}
+        libraryBusy={teachingLibrary.busy}
+        libraryError={teachingLibrary.error}
+        onPresent={teachingPrompts.presentPrompt}
+        onClose={teachingPrompts.closePrompt}
+        onSaveLibrary={teachingLibrary.save}
+      />
                 <div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />
                 <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
               </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type {
   TeachingHostAdapter,
   TeachingLibraryDraft,
@@ -272,6 +272,11 @@ export function TeachingCandidateOverlay({
 }) {
   const [selectedOptionId, setSelectedOptionId] = useState('')
   const [dismissedPromptId, setDismissedPromptId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setSelectedOptionId('')
+    setDismissedPromptId(null)
+  }, [prompt?.id])
 
   if (role !== 'candidate' || !prompt || dismissedPromptId === prompt.id) return null
   const hasSubmitted = Boolean(myResponse)
