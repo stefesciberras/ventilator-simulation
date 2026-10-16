@@ -238,7 +238,7 @@ export function TeachingInstructorWorkspace({
                           {item.tags.length > 0 && <div className="teaching-library-tags">{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                           <div className="teaching-library-card-actions">
                             <button type="button" onClick={() => loadLibraryItem(item)}>Edit / use</button>
-                            {role === 'instructor' && <button type="button" className="primary" disabled={promptBusy} onClick={() => void onPresent({ kind: item.kind, title: item.title ?? '', body: item.body, options: item.options })}>Present</button>}
+                            {role === 'instructor' && <button type="button" className="primary" disabled={promptBusy} onClick={() => { void onPresent({ kind: item.kind, title: item.title ?? '', body: item.body, options: item.options }).catch(() => undefined) }}>Present</button>}
                           </div>
                         </article>
                       ))}
