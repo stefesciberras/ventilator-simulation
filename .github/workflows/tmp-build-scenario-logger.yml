@@ -1,0 +1,16 @@
+name: Temporary Scenario Logger build
+on:
+  push:
+    branches: [chatgpt/scenario-logger-v0.1.1]
+    paths: [.github/workflows/tmp-build-scenario-logger.yml]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
