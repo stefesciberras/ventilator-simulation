@@ -1,18 +1,13 @@
 import type { Sample } from './simulation/types'
 import { APP_VERSION } from './appVersion'
+import {
+  appendStructuredScenarioLog,
+  readScenarioLogs,
+  type ScenarioLogEntry,
+} from './scenario-logger'
 
 export type DiagnosticWaveformSource = 'live' | 'frozen'
-
-export interface ScenarioLogEntry {
-  id: string
-  at: string
-  appVersion: string
-  event: string
-  details: Record<string, unknown>
-}
-
-const SCENARIO_LOG_STORAGE_KEY = 'eduvent.scenario-diagnostic-log'
-const SCENARIO_LOG_LIMIT = 500
+export type { ScenarioLogEntry } from './scenario-logger'
 
 async function copyJsonPayload(payload: Record<string, unknown>, promptTitle: string): Promise<boolean> {
   const text = JSON.stringify(payload)
@@ -38,40 +33,22 @@ async function copyJsonPayload(payload: Record<string, unknown>, promptTitle: st
   }
 }
 
-export function readScenarioLogs(): ScenarioLogEntry[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(SCENARIO_LOG_STORAGE_KEY) ?? '[]')
-    return Array.isArray(parsed) ? parsed.slice(-SCENARIO_LOG_LIMIT) as ScenarioLogEntry[] : []
-  } catch {
-    return []
-  }
+/** Backwards-compatible diagnostic helper. New scenario runtime code should use appendStructuredScenarioLog directly. */
+export function appendScenarioLog(event: string, details: Record<string, unknown> = {}) {
+  appendStructuredScenarioLog(event, { category: 'diagnostic', actor: 'simulator', details })
 }
 
-export function appendScenarioLog(event: string, details: Record<string, unknown> = {}) {
-  if (typeof window === 'undefined') return
-  try {
-    const entry: ScenarioLogEntry = {
-      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      at: new Date().toISOString(),
-      appVersion: APP_VERSION,
-      event,
-      details,
-    }
-    const next = [...readScenarioLogs(), entry].slice(-SCENARIO_LOG_LIMIT)
-    window.localStorage.setItem(SCENARIO_LOG_STORAGE_KEY, JSON.stringify(next))
-  } catch {
-    // Diagnostics must never affect the simulator or a teaching session.
-  }
-}
+export { readScenarioLogs }
 
 export async function copyScenarioLogs(context: Record<string, unknown> = {}): Promise<boolean> {
+  const entries: ScenarioLogEntry[] = readScenarioLogs()
   return copyJsonPayload({
-    schema: 'eduvent-scenario-log-v1',
+    schema: 'eduvent-scenario-log-v2',
+    loggerVersion: 2,
     capturedAt: new Date().toISOString(),
     appVersion: APP_VERSION,
     context,
-    entries: readScenarioLogs(),
+    entries,
   }, 'Copy scenario log JSON')
 }
 
