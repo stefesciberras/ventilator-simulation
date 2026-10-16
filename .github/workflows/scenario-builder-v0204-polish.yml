@@ -20,47 +20,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Polish import export handling
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('src/components/DynamicScenarioBuilder.tsx')
-          s = p.read_text()
-          def r(old, new):
-              global s
-              if old not in s:
-                  raise SystemExit('missing: ' + old[:100])
-              s = s.replace(old, new, 1)
-          r('''            ...stage,
-            advanceTrigger: triggers[0],
-            advanceTriggers: triggers,
-            snapshot,
-''', '''            ...stage,
-            sourcePresetId: undefined,
-            advanceTrigger: triggers[0],
-            advanceTriggers: triggers,
-            snapshot,
-''')
-          r('''  const importScenario = async (file: File) => {
-    setBusy(true); setMessage(null)
-''', '''  const importScenario = async (file: File) => {
-    if (!canDiscard()) { if (scenarioImportInputRef.current) scenarioImportInputRef.current.value = ''; return }
-    setBusy(true); setMessage(null)
-''')
-          r('''return { ...stage, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
-''', '''return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
-''')
-          r('''{selectedPreset && <button type="button" disabled={busy} onClick={() => downloadScenario(selectedPreset)}>Download scenario</button>}
-''', '''{selectedPreset && <button type="button" disabled={busy || dirty} title={dirty ? 'Save changes before downloading the scenario file' : 'Download portable scenario file'} onClick={() => downloadScenario(selectedPreset)}>Download scenario</button>}
-''')
-          p.write_text(s)
-          PY
+      - run: python scripts/patch_v0204_polish.py
       - run: npm ci
       - run: npm run build
       - name: Commit polish
         run: |
           git checkout origin/main -- tsconfig.app.tsbuildinfo || true
           rm .github/workflows/scenario-builder-v0204-polish.yml
+          rm scripts/patch_v0204_polish.py
           git config user.name "stefesciberras"
           git config user.email "43134239+stefesciberras@users.noreply.github.com"
           git add -A
