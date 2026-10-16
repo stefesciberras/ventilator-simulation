@@ -33,8 +33,23 @@ export interface DynamicScenarioStage {
   /** Missing on v0.82.0 stages; absence means apply the complete snapshot. */
   apply?: DynamicScenarioApplyMask
   sourceName?: string
-  /** Rule used to progress from this stage to the next. Missing means manual. */
+  /** Legacy single trigger, retained for backwards compatibility. */
   advanceTrigger?: DynamicScenarioTrigger
+  /** v4 trigger list. Any configured trigger may advance the stage (OR semantics). */
+  advanceTriggers?: DynamicScenarioTrigger[]
+}
+
+export function dynamicStageTriggers(stage: DynamicScenarioStage): DynamicScenarioTrigger[] {
+  const configured = stage.advanceTriggers?.length
+    ? stage.advanceTriggers
+    : [stage.advanceTrigger ?? { type: 'manual' as const }]
+  const seen = new Set<DynamicScenarioTrigger['type']>()
+  const deduplicated = configured.filter((trigger) => {
+    if (seen.has(trigger.type)) return false
+    seen.add(trigger.type)
+    return true
+  })
+  return deduplicated.length ? deduplicated : [{ type: 'manual' }]
 }
 
 export interface InstructorScenarioSnapshot {
@@ -108,10 +123,10 @@ export function asDynamicScenario(
   const firstStageSnapshot = asStaticScenario(current, '')
   return {
     ...firstStageSnapshot,
-    schemaVersion: 3,
+    schemaVersion: 4,
     kind: 'dynamic',
     description: description.trim(),
-    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' } }],
+    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
   }
 }
 
@@ -143,13 +158,17 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
     description: scenario.description ?? '',
     mediaIds: [...new Set((scenario.mediaIds ?? []).filter((id) => typeof id === 'string' && id.length > 0))],
     patient: normalisePatientSettings(scenario.patient),
-    stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => ({
-      name: stage.name || `Stage ${index + 1}`,
-      snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },
-      apply: stage.apply,
-      sourceName: stage.sourceName,
-      advanceTrigger: stage.advanceTrigger ?? { type: 'manual' },
-    })) : undefined,
+    stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => {
+      const triggers = dynamicStageTriggers(stage)
+      return {
+        name: stage.name || `Stage ${index + 1}`,
+        snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },
+        apply: stage.apply,
+        sourceName: stage.sourceName,
+        advanceTrigger: triggers[0],
+        advanceTriggers: triggers,
+      }
+    }) : undefined,
   }
 }
 

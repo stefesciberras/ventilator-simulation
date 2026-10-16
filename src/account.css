@@ -344,7 +344,7 @@
 .dynamic-runtime-panel-heading span,.dynamic-runtime-stage-card span { display: block; color: #78909a; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
 .dynamic-runtime-panel-heading strong { display: block; margin-top: 3px; color: #eff7f9; font-size: 13px; overflow-wrap: anywhere; }
 .dynamic-runtime-panel-heading button { flex: 0 0 auto; border-radius: 0; }
-.dynamic-runtime-stage-card { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(70px,.45fr) minmax(0,1fr); gap: 1px; background: #263a43; border: 1px solid #263a43; }
+.dynamic-runtime-stage-card { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(70px,.45fr) minmax(82px,.5fr) minmax(0,1.25fr); gap: 1px; background: #263a43; border: 1px solid #263a43; }
 .dynamic-runtime-stage-card > div { min-width: 0; padding: 9px 10px; background: #0d1a20; }
 .dynamic-runtime-stage-card strong { display: block; margin-top: 3px; color: #dce8ec; font-size: 10px; overflow-wrap: anywhere; }
 .dynamic-runtime-panel-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }

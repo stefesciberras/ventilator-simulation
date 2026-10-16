@@ -6,6 +6,7 @@ import {
   asStaticScenario,
   createInstructorPreset,
   deleteInstructorPreset,
+  dynamicStageTriggers,
   updateInstructorPreset,
   type DynamicScenarioApplyMask,
   type DynamicScenarioMetric,
@@ -14,6 +15,7 @@ import {
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
+import { SCENARIO_BUILDER_VERSION } from '../scenario-builder/version'
 import './DynamicScenarioBuilder.css'
 
 interface DynamicScenarioBuilderProps {
@@ -60,10 +62,25 @@ const CONDITION_METRICS: Array<{ value: DynamicScenarioMetric; label: string; un
 ]
 
 const defaultAdvanceTrigger = (): DynamicScenarioTrigger => ({ type: 'manual' })
+const SCENARIO_FILE_SCHEMA = 'eduvent-scenario-file-v1'
 
-function triggerSummary(trigger: DynamicScenarioTrigger | undefined) {
-  const value = trigger ?? defaultAdvanceTrigger()
-  if (value.type === 'manual') return 'Manual · instructor proceeds'
+interface PortableScenarioFile {
+  fileSchema: typeof SCENARIO_FILE_SCHEMA
+  exportedAt: string
+  scenarioBuilderVersion: string
+  name: string
+  scenario: InstructorScenarioSnapshot
+}
+
+function defaultTriggerForType(type: DynamicScenarioTrigger['type']): DynamicScenarioTrigger {
+  if (type === 'manual') return { type: 'manual' }
+  if (type === 'time') return { type: 'time', seconds: 30 }
+  if (type === 'condition') return { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 }
+  return { type: 'action', parameter: 'fio2', actor: 'either' }
+}
+
+function singleTriggerSummary(value: DynamicScenarioTrigger) {
+  if (value.type === 'manual') return 'Manual'
   if (value.type === 'time') return `After ${value.seconds}s in stage`
   if (value.type === 'condition') {
     const metric = CONDITION_METRICS.find((item) => item.value === value.metric)
@@ -73,6 +90,21 @@ function triggerSummary(trigger: DynamicScenarioTrigger | undefined) {
   const field = VENT_FIELDS.find((item) => item.key === value.parameter)
   const actor = value.actor === 'either' ? 'candidate or instructor' : value.actor
   return `${field?.label ?? String(value.parameter)} changed by ${actor}`
+}
+
+function triggerSummary(triggers: DynamicScenarioTrigger[]) { return triggers.map(singleTriggerSummary).join(' OR ') }
+function safeScenarioFilename(name: string) {
+  const safe = name.trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'scenario'
+  return `${safe}.eduvent-scenario.json`
+}
+function uniqueImportedName(name: string, presets: InstructorPresetRow[]) {
+  const base = name.trim() || 'Imported scenario'
+  const names = new Set(presets.map((preset) => preset.name.toLocaleLowerCase()))
+  if (!names.has(base.toLocaleLowerCase())) return base
+  let suffix = 1
+  let candidate = `${base} (imported)`
+  while (names.has(candidate.toLocaleLowerCase())) { suffix += 1; candidate = `${base} (imported ${suffix})` }
+  return candidate
 }
 
 const VENT_FIELDS: FieldSpec[] = [
@@ -214,7 +246,8 @@ function normaliseStage(stage: DynamicScenarioStage, index: number): StageDraft 
     name: stage.name || `Stage ${index + 1}`,
     patientProfile: cloned.patientProfile ?? inferredTemplate?.profile,
     ardsSeverity: cloned.ardsSeverity ?? inferredTemplate?.ardsSeverity,
-    advanceTrigger: stage.advanceTrigger ?? defaultAdvanceTrigger(),
+    advanceTrigger: dynamicStageTriggers(stage)[0],
+    advanceTriggers: dynamicStageTriggers(stage),
     apply: {
       ...(stage.apply ?? defaultMask(snapshot)),
       ventilator,
@@ -234,6 +267,7 @@ function newStage(base: InstructorScenarioSnapshot, index: number): StageDraft {
     apply: defaultMask(snapshot),
     sourceName: 'Manual settings',
     advanceTrigger: defaultAdvanceTrigger(),
+    advanceTriggers: [defaultAdvanceTrigger()],
   }
 }
 
@@ -293,6 +327,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [triggerMenuIndex, setTriggerMenuIndex] = useState<number | null>(null)
+  const scenarioImportInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (!wideScreen) return
@@ -338,17 +373,23 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     setTriggerMenuIndex(null)
   }
 
-  const setAdvanceTrigger = (index: number, advanceTrigger: DynamicScenarioTrigger) => {
-    updateStage(index, (stage) => ({ ...stage, advanceTrigger }))
+  const setAdvanceTriggers = (index: number, advanceTriggers: DynamicScenarioTrigger[]) => {
+    const next = advanceTriggers.length ? advanceTriggers : [defaultAdvanceTrigger()]
+    updateStage(index, (stage) => ({ ...stage, advanceTrigger: next[0], advanceTriggers: next }))
   }
-
-  const chooseTriggerType = (index: number, type: DynamicScenarioTrigger['type']) => {
-    const current = draft.stages[index]?.advanceTrigger
-    if (current?.type === type) return
-    if (type === 'manual') setAdvanceTrigger(index, { type: 'manual' })
-    if (type === 'time') setAdvanceTrigger(index, { type: 'time', seconds: 30 })
-    if (type === 'condition') setAdvanceTrigger(index, { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 })
-    if (type === 'action') setAdvanceTrigger(index, { type: 'action', parameter: 'fio2', actor: 'either' })
+  const updateAdvanceTrigger = (index: number, nextTrigger: DynamicScenarioTrigger) => {
+    const stage = draft.stages[index]; if (!stage) return
+    setAdvanceTriggers(index, dynamicStageTriggers(stage).map((trigger) => trigger.type === nextTrigger.type ? nextTrigger : trigger))
+  }
+  const toggleTriggerType = (index: number, type: DynamicScenarioTrigger['type']) => {
+    const stage = draft.stages[index]; if (!stage) return
+    const triggers = dynamicStageTriggers(stage)
+    const selected = triggers.some((trigger) => trigger.type === type)
+    if (selected) {
+      if (triggers.length === 1) return
+      setAdvanceTriggers(index, triggers.filter((trigger) => trigger.type !== type)); return
+    }
+    setAdvanceTriggers(index, [...triggers, defaultTriggerForType(type)])
   }
 
   const removeStage = (index: number) => {
@@ -570,14 +611,18 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       const base = asStaticScenario(cloneScenario(draft.stages[0]?.snapshot ?? currentScenario), '')
       const scenario: InstructorScenarioSnapshot = {
         ...base,
-        schemaVersion: 3,
+        schemaVersion: 4,
         kind: 'dynamic',
         description: draft.description.trim(),
         stages: draft.stages.map((stage) => {
           const snapshot = asStaticScenario(cloneScenario(stage.snapshot), '')
           const relevant = new Set(ventKeysFor(snapshot.ventilator).map(String))
+          const triggers = dynamicStageTriggers(stage)
           return {
             ...stage,
+            sourcePresetId: undefined,
+            advanceTrigger: triggers[0],
+            advanceTriggers: triggers,
             snapshot,
             apply: {
               ...(stage.apply ?? defaultMask(snapshot)),
@@ -600,6 +645,31 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     } finally {
       setBusy(false)
     }
+  }
+
+  const downloadScenario = (preset: InstructorPresetRow) => {
+    const payload: PortableScenarioFile = { fileSchema: SCENARIO_FILE_SCHEMA, exportedAt: new Date().toISOString(), scenarioBuilderVersion: SCENARIO_BUILDER_VERSION, name: preset.name, scenario: cloneScenario(preset.scenario) }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = safeScenarioFilename(preset.name)
+    document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
+    setMessage(`Downloaded “${preset.name}”.`)
+  }
+
+  const importScenario = async (file: File) => {
+    if (!canDiscard()) { if (scenarioImportInputRef.current) scenarioImportInputRef.current.value = ''; return }
+    setBusy(true); setMessage(null)
+    try {
+      const parsed = JSON.parse(await file.text()) as Partial<PortableScenarioFile>
+      if (parsed.fileSchema !== SCENARIO_FILE_SCHEMA) throw new Error('This is not an EDUVENT scenario file.')
+      if (!parsed.scenario || parsed.scenario.kind !== 'dynamic') throw new Error('Only dynamic Scenario Builder files can be imported here.')
+      if (!Array.isArray(parsed.scenario.stages) || parsed.scenario.stages.length === 0) throw new Error('The imported scenario has no stages.')
+      const importedStages = parsed.scenario.stages.map((stage, index) => normaliseStage(stage, index))
+      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 4, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
+      const saved = await createInstructorPreset(uniqueImportedName(parsed.name ?? 'Imported scenario', [...dynamicPresets, ...staticPresets]), scenario)
+      await onRefresh(); replaceDraft(fromPreset(saved)); setMessage(`Imported “${saved.name}”.`)
+    } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Unable to import scenario file.') }
+    finally { setBusy(false); if (scenarioImportInputRef.current) scenarioImportInputRef.current.value = '' }
   }
 
   const remove = async () => {
@@ -657,8 +727,17 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       </aside>
 
       <section className="dynamic-builder-pane">
-        {selectedPreset && (
-          <div className="dynamic-builder-top-actions">
+        <div className="dynamic-builder-top-actions">
+          <input
+            ref={scenarioImportInputRef}
+            type="file"
+            accept=".json,.eduvent-scenario.json,application/json"
+            style={{ display: 'none' }}
+            onChange={(event) => { const file = event.target.files?.[0]; if (file) void importScenario(file) }}
+          />
+          <button type="button" disabled={busy} onClick={() => scenarioImportInputRef.current?.click()}>Import scenario</button>
+          {selectedPreset && <button type="button" disabled={busy || dirty} title={dirty ? 'Save changes before downloading the scenario file' : 'Download portable scenario file'} onClick={() => downloadScenario(selectedPreset)}>Download scenario</button>}
+          {selectedPreset && (
             <button
               type="button"
               className="account-primary-button"
@@ -667,8 +746,8 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
             >
               Start scenario
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="dynamic-scenario-header-block">
           <label>
@@ -827,33 +906,38 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                     className="dynamic-add-stage"
                     onClick={() => setTriggerMenuIndex((current) => current === index ? null : index)}
                     aria-label={`Configure transition after Stage ${index + 1}`}
-                    title="Configure transition and add the next stage"
+                    title="Configure transition after this stage"
                   >
                     ＋
                   </button>
-                  <span className="dynamic-trigger-summary">{triggerSummary(stage.advanceTrigger)}</span>
+                  <span className="dynamic-trigger-summary">{triggerSummary(dynamicStageTriggers(stage))}</span>
                   {triggerMenuIndex === index && (() => {
-                    const trigger = stage.advanceTrigger ?? defaultAdvanceTrigger()
+                    const triggers = dynamicStageTriggers(stage)
+                    const manualTrigger = triggers.find((trigger) => trigger.type === 'manual')
+                    const timeTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'time' }> => trigger.type === 'time')
+                    const conditionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'condition' }> => trigger.type === 'condition')
+                    const actionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'action' }> => trigger.type === 'action')
                     return <div className="dynamic-trigger-menu">
                       <div className="dynamic-trigger-types">
                         {(['manual', 'time', 'condition', 'action'] as const).map((type) => (
-                          <button type="button" key={type} className={trigger.type === type ? 'selected' : ''} onClick={() => chooseTriggerType(index, type)}>
+                          <button type="button" key={type} className={triggers.some((trigger) => trigger.type === type) ? 'selected' : ''} onClick={() => toggleTriggerType(index, type)}>
                             {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : 'Action'}
                           </button>
                         ))}
                       </div>
-                      {trigger.type === 'manual' && <p>Instructor advances using Proceed to Next. Back remains available during the scenario.</p>}
-                      {trigger.type === 'time' && <label className="dynamic-trigger-field"><span>Time in stage</span><div><input type="number" min={1} max={3600} step={1} value={trigger.seconds} onChange={(event) => setAdvanceTrigger(index, { ...trigger, seconds: Math.max(1, Number(event.target.value) || 1) })} /><em>seconds</em></div></label>}
-                      {trigger.type === 'condition' && <div className="dynamic-trigger-condition">
-                        <label><span>Measured value</span><select value={trigger.metric} onChange={(event) => setAdvanceTrigger(index, { ...trigger, metric: event.target.value as DynamicScenarioMetric })}>{CONDITION_METRICS.map((metric) => <option key={metric.value} value={metric.value}>{metric.label}</option>)}</select></label>
-                        <label><span>Comparison</span><select value={trigger.operator} onChange={(event) => setAdvanceTrigger(index, { ...trigger, operator: event.target.value as 'lt' | 'eq' | 'gt' })}><option value="lt">Less than (&lt;)</option><option value="eq">Equal to (=)</option><option value="gt">Greater than (&gt;)</option></select></label>
-                        <label><span>Value</span><input type="number" step="0.1" value={trigger.value} onChange={(event) => setAdvanceTrigger(index, { ...trigger, value: Number(event.target.value) || 0 })} /></label>
+                      <p>Any selected trigger can advance to the next stage (OR). Manual keeps the instructor trigger available while automatic triggers remain armed.</p>
+                      {manualTrigger && <p>Manual: instructor advances from the Teaching tab. Back remains available during the scenario.</p>}
+                      {timeTrigger && <label className="dynamic-trigger-field"><span>Time in stage</span><div><input type="number" min={1} max={3600} step={1} value={timeTrigger.seconds} onChange={(event) => updateAdvanceTrigger(index, { ...timeTrigger, seconds: Math.max(1, Number(event.target.value) || 1) })} /><em>seconds</em></div></label>}
+                      {conditionTrigger && <div className="dynamic-trigger-condition">
+                        <label><span>Measured value</span><select value={conditionTrigger.metric} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, metric: event.target.value as DynamicScenarioMetric })}>{CONDITION_METRICS.map((metric) => <option key={metric.value} value={metric.value}>{metric.label}</option>)}</select></label>
+                        <label><span>Comparison</span><select value={conditionTrigger.operator} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, operator: event.target.value as 'lt' | 'eq' | 'gt' })}><option value="lt">Less than (&lt;)</option><option value="eq">Equal to (=)</option><option value="gt">Greater than (&gt;)</option></select></label>
+                        <label><span>Value</span><input type="number" step="0.1" value={conditionTrigger.value} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, value: Number(event.target.value) || 0 })} /></label>
                       </div>}
-                      {trigger.type === 'action' && <div className="dynamic-trigger-condition">
-                        <label><span>Ventilator parameter</span><select value={String(trigger.parameter)} onChange={(event) => setAdvanceTrigger(index, { ...trigger, parameter: event.target.value as keyof VentilatorSettings })}>{VENT_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
-                        <label><span>Changed by</span><select value={trigger.actor} onChange={(event) => setAdvanceTrigger(index, { ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Candidate or instructor</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label>
+                      {actionTrigger && <div className="dynamic-trigger-condition">
+                        <label><span>Ventilator parameter</span><select value={String(actionTrigger.parameter)} onChange={(event) => updateAdvanceTrigger(index, { ...actionTrigger, parameter: event.target.value as keyof VentilatorSettings })}>{VENT_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
+                        <label><span>Changed by</span><select value={actionTrigger.actor} onChange={(event) => updateAdvanceTrigger(index, { ...actionTrigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Candidate or instructor</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label>
                       </div>}
-                      <div className="dynamic-trigger-actions"><button type="button" onClick={() => setTriggerMenuIndex(null)}>Close</button><button type="button" className="account-primary-button" onClick={() => insertStage(index)}>Add next stage</button></div>
+                      <div className="dynamic-trigger-actions"><button type="button" onClick={() => setTriggerMenuIndex(null)}>Close</button>{index === draft.stages.length - 1 && <button type="button" className="account-primary-button" onClick={() => insertStage(index)}>Add next stage</button>}</div>
                     </div>
                   })()}
                 </div>
