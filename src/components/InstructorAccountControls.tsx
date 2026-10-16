@@ -537,7 +537,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
       setPresetMessage(`Updated “${preset.name}” from the current simulator state.`)
       await refreshPresets(account)
     } catch (cause) {
-      setPresetMessage(cause instanceof Error ? cause.message : 'Unable to update scenario.')
+      setPresetMessage(cause instanceof Error ? cause.message : 'Unable to update scenario details.')
     } finally {
       setPresetBusy(false)
     }
@@ -626,12 +626,20 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
         const stages = activeDynamicPreset.scenario.stages ?? []
         const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))
         const trigger = stages[index]?.advanceTrigger
+        const manualTrigger = (trigger ?? { type: 'manual' as const }).type === 'manual'
         return <div className="dynamic-runtime-toolbar">
           <button type="button" className="dynamic-runtime-status" onClick={openScenarios} title="Open dynamic scenario builder">
             <span>{activeDynamicPreset.name}</span><strong>{stages[index]?.name ?? `Stage ${index + 1}`}</strong><small>{triggerRuntimeLabel(trigger)}</small>
           </button>
           <button type="button" disabled={index <= 0} onClick={() => loadDynamicStage(activeDynamicPreset, index - 1)}>Back</button>
-          <button type="button" disabled={index >= stages.length - 1} onClick={() => loadDynamicStage(activeDynamicPreset, index + 1)}>Proceed</button>
+          <button
+            type="button"
+            disabled={index >= stages.length - 1}
+            title={manualTrigger ? 'Fire the manual trigger and load the next stage' : 'Advance to the next stage now'}
+            onClick={() => loadDynamicStage(activeDynamicPreset, index + 1)}
+          >
+            {manualTrigger ? 'Manual trigger' : 'Advance now'}
+          </button>
           <button type="button" onClick={() => { setActiveDynamicId(null); setActiveDynamicStage(0); setPresetMessage('Dynamic scenario stopped.') }}>Stop</button>
         </div>
       })()}
