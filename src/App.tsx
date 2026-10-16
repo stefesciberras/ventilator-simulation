@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { TeachingCandidateOverlay, TeachingInstructorWorkspace, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
+import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -572,6 +572,7 @@ export default function App() {
   const [diagnosticMenuOpen, setDiagnosticMenuOpen] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')
+  const [teachingLaserEnabled, setTeachingLaserEnabled] = useState(false)
   const [dynamicScenarioRuntimeHost, setDynamicScenarioRuntimeHost] = useState<HTMLDivElement | null>(null)
   const [dynamicScenarioDiagnostic, setDynamicScenarioDiagnostic] = useState<DynamicScenarioDiagnosticContext | null>(null)
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
@@ -606,6 +607,10 @@ export default function App() {
 
   const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, eduventTeachingHost)
   const teachingLibrary = useTeachingQuestionLibrary(eduventTeachingHost)
+
+  useEffect(() => {
+    if (teachingSession.role !== 'instructor') setTeachingLaserEnabled(false)
+  }, [teachingSession.role])
 
   const candidateWaveformOptions = useMemo(
     () => teachingSession.candidateOesophagealPressureAllowed
@@ -1619,7 +1624,13 @@ export default function App() {
             <button className="mobile-alarm-limits-button" type="button" disabled={teachingSession.candidateAlarmsLocked} onClick={() => setAlarmDialogOpen(true)}>Alarm limits</button>
           </div>
 
-          <div className="screen-body">
+          <div className="screen-body teaching-laser-target">
+            <TeachingLaserPointerSurface
+              role={teachingSession.role}
+              sessionId={teachingSession.session?.id ?? null}
+              enabled={teachingLaserEnabled}
+              onEnabledChange={setTeachingLaserEnabled}
+            />
             {alarmDialogOpen && (
               <div className="alarm-dialog-backdrop" onClick={() => setAlarmDialogOpen(false)}>
                 <section className="alarm-dialog" role="dialog" aria-modal="true" aria-label="Alarm limits" onClick={(event) => event.stopPropagation()}>
@@ -1808,6 +1819,12 @@ export default function App() {
         libraryAvailable={Boolean(teachingLibrary.author)}
         libraryBusy={teachingLibrary.busy}
         libraryError={teachingLibrary.error}
+        laserEnabled={teachingLaserEnabled}
+        laserAvailable={teachingSession.role === 'instructor' && Boolean(teachingSession.session)}
+        onLaserEnabledChange={(enabled) => {
+          setTeachingLaserEnabled(enabled)
+          if (enabled) setMobileWorkspacePage('ventilator')
+        }}
         onPresent={teachingPrompts.presentPrompt}
         onClose={teachingPrompts.closePrompt}
         onSaveLibrary={teachingLibrary.save}

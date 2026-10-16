@@ -105,3 +105,93 @@
   .teaching-prompt-body { font-size:.96rem; }
   .teaching-prompt-candidate-options button { min-height:58px; }
 }
+
+
+/* Reusable instructor laser pointer */
+.teaching-laser-control-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  border: 1px solid #344751;
+  border-radius: 9px;
+  background: #0d171c;
+}
+.teaching-laser-control-row small { color: #aebdc4; line-height: 1.3; }
+.teaching-laser-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #53636a;
+  border-radius: 8px;
+  background: #24343c;
+  color: #eef5f7;
+  padding: 9px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.teaching-laser-toggle.active { border-color: #ff5a4f; background: #482421; color: #fff; }
+.teaching-laser-toggle:disabled { opacity: .45; cursor: not-allowed; }
+.teaching-laser-button-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 7px rgba(255, 59, 48, .9);
+}
+.teaching-laser-target { position: relative; }
+.teaching-laser-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.teaching-laser-layer-active {
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+.teaching-laser-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #ff2d20;
+  border: 2px solid rgba(255,255,255,.9);
+  box-shadow: 0 0 5px #fff, 0 0 12px #ff3b30, 0 0 24px rgba(255, 59, 48, .95);
+  pointer-events: none;
+}
+.teaching-laser-dot::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 70, 60, .45);
+  box-shadow: 0 0 18px rgba(255, 45, 32, .45);
+}
+.teaching-laser-exit {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 999px;
+  background: rgba(78, 22, 20, .92);
+  color: #fff;
+  padding: 7px 11px;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .teaching-laser-control-row { grid-template-columns: 1fr; }
+  .teaching-laser-toggle { justify-content: center; min-height: 44px; }
+  .teaching-laser-dot { width: 14px; height: 14px; }
+}

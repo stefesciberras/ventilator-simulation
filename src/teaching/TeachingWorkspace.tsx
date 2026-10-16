@@ -55,6 +55,9 @@ export function TeachingInstructorWorkspace({
   libraryAvailable,
   libraryBusy,
   libraryError,
+  laserEnabled = false,
+  laserAvailable = false,
+  onLaserEnabledChange,
   onPresent,
   onClose,
   onSaveLibrary,
@@ -70,6 +73,9 @@ export function TeachingInstructorWorkspace({
   libraryAvailable: boolean
   libraryBusy: boolean
   libraryError: string | null
+  laserEnabled?: boolean
+  laserAvailable?: boolean
+  onLaserEnabledChange?: (enabled: boolean) => void
   onPresent: (input: TeachingPromptDraft) => Promise<void>
   onClose: () => Promise<void>
   onSaveLibrary: (draft: TeachingLibraryDraft, existingId?: string | null) => Promise<TeachingLibraryItem>
@@ -166,6 +172,19 @@ export function TeachingInstructorWorkspace({
         <div><span className="session-kicker">Reusable teaching module</span><h3>Teaching workspace</h3><small>{host.appName}</small></div>
         {activePrompt && <span className="teaching-prompt-live-badge">LIVE</span>}
       </div>
+
+      {onLaserEnabledChange && (
+        <div className="teaching-laser-control-row">
+          <button
+            type="button"
+            className={`teaching-laser-toggle ${laserEnabled ? 'active' : ''}`}
+            disabled={!laserAvailable}
+            aria-pressed={laserEnabled}
+            onClick={() => onLaserEnabledChange(!laserEnabled)}
+          ><span className="teaching-laser-button-dot" />{laserEnabled ? 'Laser pointer on' : 'Laser pointer'}</button>
+          <small>{laserAvailable ? (laserEnabled ? 'Move over the simulator display to point. Use Exit on the display or press here again to stop.' : 'Show a live pointer on candidate simulator displays.') : 'Start an instructor session to use the laser pointer.'}</small>
+        </div>
+      )}
 
       {activePrompt && role === 'instructor' ? (
         <>
