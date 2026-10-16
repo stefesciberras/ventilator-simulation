@@ -1,0 +1,64 @@
+name: Temporary v0.82.2.4 start scenario position
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.2.4-start-scenario-top
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.2.4-start-scenario-top
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Move Start scenario to top
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/components/DynamicScenarioBuilder.tsx')
+          text = path.read_text()
+
+          anchor = '''      <section className="dynamic-builder-pane">\n        <div className="dynamic-scenario-header-block">'''
+          replacement = '''      <section className="dynamic-builder-pane">\n        {selectedPreset && (\n          <div className="dynamic-builder-top-actions">\n            <button\n              type="button"\n              className="account-primary-button"\n              disabled={busy || dirty}\n              onClick={() => { onStartScenario(selectedPreset); onClose() }}\n            >\n              Start scenario\n            </button>\n          </div>\n        )}\n\n        <div className="dynamic-scenario-header-block">'''
+          if anchor not in text:
+              raise SystemExit('top section anchor not found')
+          text = text.replace(anchor, replacement, 1)
+
+          footer_button = '''          {selectedPreset && <button type="button" disabled={busy || dirty} onClick={() => { onStartScenario(selectedPreset); onClose() }}>Start scenario</button>}\n'''
+          if footer_button not in text:
+              raise SystemExit('footer Start scenario button not found')
+          text = text.replace(footer_button, '', 1)
+          path.write_text(text)
+
+          css = Path('src/components/DynamicScenarioBuilder.css')
+          css_text = css.read_text()
+          css_text += '''\n\n/* v0.82.2.4 scenario launch action */\n.dynamic-builder-top-actions {\n  display: flex;\n  justify-content: flex-end;\n  margin: 0 0 10px;\n}\n\n.dynamic-builder-top-actions button {\n  min-width: 132px;\n  min-height: 36px;\n  border-radius: 0;\n}\n'''
+          css.write_text(css_text)
+
+          version = Path('src/appVersion.ts')
+          version_text = version.read_text()
+          if "0.82.2.3" not in version_text:
+              raise SystemExit('expected app version 0.82.2.3 not found')
+          version.write_text(version_text.replace('0.82.2.3', '0.82.2.4', 1))
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit product changes and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src/components/DynamicScenarioBuilder.tsx src/components/DynamicScenarioBuilder.css src/appVersion.ts
+          git rm .github/workflows/tmp-v08224-start-top.yml
+          git commit -m "v0.82.2.4 move scenario start action to top"
+          git push origin HEAD:chatgpt/v0.82.2.4-start-scenario-top
