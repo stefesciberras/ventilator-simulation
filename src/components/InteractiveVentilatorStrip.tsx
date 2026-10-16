@@ -207,6 +207,12 @@ export function InteractiveVentilatorStrip({ settings, onChange, disabled = fals
 
   const selectControl = (key: SettingKey) => {
     if (disabled || (fio2BoostActive && key === 'fio2')) return
+    if (activeKey === key) {
+      if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
+      settleTimerRef.current = null
+      setActiveKey(null)
+      return
+    }
     setActiveKey(key)
     armSettleTimer()
   }
