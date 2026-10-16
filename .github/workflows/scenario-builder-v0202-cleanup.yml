@@ -20,34 +20,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Fix runtime role cleanup
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('src/components/InstructorAccountControls.tsx')
-          text = p.read_text()
-          old = """  useEffect(() => {
-    if (role === 'instructor' || !activeDynamicId) return
-    setActiveDynamicId(null)
-    setActiveDynamicStage(0)
-  }, [role, activeDynamicId])
-"""
-          new = """  useEffect(() => {
-    if (role !== 'candidate' || !activeDynamicId) return
-    setActiveDynamicId(null)
-    setActiveDynamicStage(0)
-  }, [role, activeDynamicId])
-"""
-          if old not in text:
-              raise SystemExit('Expected runtime cleanup block not found')
-          p.write_text(text.replace(old, new, 1))
-          PY
+      - run: python scripts/scenario_builder_v0202_cleanup.py
       - run: npm ci
       - run: npm run build
       - name: Commit clean source
         run: |
           git checkout origin/main -- tsconfig.app.tsbuildinfo
           rm .github/workflows/scenario-builder-v0202-cleanup.yml
+          rm scripts/scenario_builder_v0202_cleanup.py
           git config user.name "stefesciberras"
           git config user.email "43134239+stefesciberras@users.noreply.github.com"
           git add -A
