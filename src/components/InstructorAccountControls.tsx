@@ -32,7 +32,7 @@ import {
   saveSupabaseLocalOverride,
 } from '../session/supabase'
 import { APP_VERSION } from '../appVersion'
-import { DynamicScenarioBuilder } from './DynamicScenarioBuilder'
+import { DynamicScenarioRuntimeLibrary } from './DynamicScenarioRuntimeLibrary'
 import '../account.css'
 
 interface InstructorAccountControlsProps {
@@ -450,6 +450,18 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   }
 
   useEffect(() => {
+    if (!account || role === 'candidate') return
+    const url = new URL(window.location.href)
+    const requestedScenarioId = url.searchParams.get('scenario')
+    if (!requestedScenarioId) return
+    const preset = dynamicPresets.find((item) => item.id === requestedScenarioId)
+    if (!preset) return
+    loadDynamicStage(preset, 0)
+    url.searchParams.delete('scenario')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [account, role, dynamicPresets])
+
+  useEffect(() => {
     if (role === 'candidate' || !activeDynamicPreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return
     const stages = activeDynamicPreset.scenario.stages ?? []
     if (activeDynamicStage < 0 || activeDynamicStage >= stages.length - 1) return
@@ -682,15 +694,10 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
               <button type="button" className={scenarioType === 'dynamic' ? 'selected' : ''} role="tab" aria-selected={scenarioType === 'dynamic'} onClick={() => setScenarioType('dynamic')}>Dynamic scenarios</button>
             </div>
             {scenarioType === 'dynamic' && account ? (
-              <DynamicScenarioBuilder
-                currentScenario={currentScenario}
-                dynamicPresets={dynamicPresets}
-                staticPresets={staticPresets}
-                simulationPaused={simulationPaused}
-                onSimulationPausedChange={onSimulationPausedChange}
-                onRefresh={() => refreshPresets(account)}
-                onStartScenario={(preset) => loadDynamicStage(preset, 0)}
-                onClose={() => setScenarioOpen(false)}
+              <DynamicScenarioRuntimeLibrary
+                presets={dynamicPresets}
+                busy={presetBusy}
+                onStart={(preset) => { loadDynamicStage(preset, 0); setScenarioOpen(false) }}
               />
             ) : account ? (
               <>
