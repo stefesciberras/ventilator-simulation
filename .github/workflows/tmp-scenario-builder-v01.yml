@@ -1,0 +1,50 @@
+name: Temporary Scenario Builder v0.1 integration
+on:
+  push:
+    branches: [chatgpt/scenario-builder-v0.1]
+    paths: [.github/workflows/tmp-scenario-builder-v01.yml]
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Patch simulator scenario runtime handoff
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/InstructorAccountControls.tsx')
+          text = path.read_text()
+          text = text.replace("import { DynamicScenarioBuilder } from './DynamicScenarioBuilder'", "import { DynamicScenarioRuntimeLibrary } from './DynamicScenarioRuntimeLibrary'")
+          old = '''            {scenarioType === 'dynamic' && account ? (\n              <DynamicScenarioBuilder\n                currentScenario={currentScenario}\n                dynamicPresets={dynamicPresets}\n                staticPresets={staticPresets}\n                simulationPaused={simulationPaused}\n                onSimulationPausedChange={onSimulationPausedChange}\n                onRefresh={() => refreshPresets(account)}\n                onStartScenario={(preset) => loadDynamicStage(preset, 0)}\n                onClose={() => setScenarioOpen(false)}\n              />\n            ) : account ? ('''
+          new = '''            {scenarioType === 'dynamic' && account ? (\n              <DynamicScenarioRuntimeLibrary\n                presets={dynamicPresets}\n                busy={presetBusy}\n                onStart={(preset) => { loadDynamicStage(preset, 0); setScenarioOpen(false) }}\n              />\n            ) : account ? ('''
+          if old not in text:
+              raise SystemExit('dynamic builder block not found')
+          text = text.replace(old, new)
+          anchor = '''  useEffect(() => {\n    if (role === 'candidate' || !activeDynamicPreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return\n'''
+          launch = '''  useEffect(() => {\n    if (!account || role === 'candidate') return\n    const url = new URL(window.location.href)\n    const requestedScenarioId = url.searchParams.get('scenario')\n    if (!requestedScenarioId) return\n    const preset = dynamicPresets.find((item) => item.id === requestedScenarioId)\n    if (!preset) return\n    loadDynamicStage(preset, 0)\n    url.searchParams.delete('scenario')\n    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)\n  }, [account, role, dynamicPresets])\n\n'''
+          if anchor not in text:
+              raise SystemExit('runtime trigger effect anchor not found')
+          text = text.replace(anchor, launch + anchor, 1)
+          path.write_text(text)
+
+          css = Path('src/account.css')
+          css.write_text(css.read_text() + '''\n\n/* Scenario Builder v0.1 runtime handoff */\n.dynamic-runtime-library { display: grid; gap: 14px; }\n.scenario-builder-handoff { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px; border: 1px solid #365461; background: #0a171d; }\n.scenario-builder-handoff span { color: #75cbe7; font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }\n.scenario-builder-handoff h3 { margin: 3px 0 5px; color: #eef8fb; }\n.scenario-builder-handoff p { max-width: 680px; margin: 0; color: #91a4ac; font-size: 11px; line-height: 1.45; }\n.scenario-builder-handoff button { flex: 0 0 auto; }\n@media (max-width: 680px) { .scenario-builder-handoff { align-items: stretch; flex-direction: column; } }\n''')
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit integration and remove temporary workflow
+        run: |
+          rm .github/workflows/tmp-scenario-builder-v01.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src/components/InstructorAccountControls.tsx src/account.css .github/workflows/tmp-scenario-builder-v01.yml
+          git commit -m "Integrate standalone Scenario Builder runtime handoff"
+          git push origin HEAD:chatgpt/scenario-builder-v0.1
