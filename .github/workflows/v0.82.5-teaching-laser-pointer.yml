@@ -239,3 +239,5 @@ jobs:
           git add -A
           git commit -m "feat: add reusable live teaching laser pointer"
           git push origin HEAD:chatgpt/v0.82.5-teaching-laser-pointer
+
+# trigger
