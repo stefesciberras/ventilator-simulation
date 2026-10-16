@@ -2,36 +2,36 @@ name: Temporary Scenario Logger v0.1.1 integration
 on:
   push:
     branches: [chatgpt/scenario-logger-v0.1.1]
-permissions:
-  contents: write
+    paths: [.github/workflows/tmp-scenario-logger-v011.yml]
 jobs:
   patch:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: chatgpt/scenario-logger-v0.1.1
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - name: Integrate structured scenario runtime logging
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
           p = Path('src/components/InstructorAccountControls.tsx')
           s = p.read_text()
           old = "import { APP_VERSION } from '../appVersion'\n"
           new = old + "import { appendStructuredScenarioLog, beginScenarioRun, clearScenarioRuntimeContext, setScenarioRuntimeContext } from '../scenario-logger'\n"
-          assert old in s
+          if old not in s: raise SystemExit('APP_VERSION import not found')
           s = s.replace(old, new, 1)
 
-          old = """    const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
+          old = '''    const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
     const nextScenario = applyDynamicStage(currentScenario, stages[nextIndex])
     onLoadScenario(nextScenario)
-"""
-          new = """    const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
+'''
+          new = '''    const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
     const stage = stages[nextIndex]
     const stageId = (stage as { id?: string }).id ?? `${preset.id}:stage:${nextIndex + 1}`
     const startingNewRun = activeDynamicId !== preset.id && nextIndex === 0
@@ -59,28 +59,28 @@ jobs:
         advanceTrigger: stage.advanceTrigger ?? { type: 'manual' },
       },
     })
-"""
-          assert old in s
+'''
+          if old not in s: raise SystemExit('loadDynamicStage block not found')
           s = s.replace(old, new, 1)
 
-          old = """    if (!shouldAdvance) return
+          old = '''    if (!shouldAdvance) return
     automaticAdvanceLockRef.current = true
     loadDynamicStage(activeDynamicPreset, activeDynamicStage + 1, 'automatic')
-"""
-          new = """    if (!shouldAdvance) return
+'''
+          new = '''    if (!shouldAdvance) return
     appendStructuredScenarioLog('scenario.trigger.fired', {
       category: 'trigger', actor: 'system', simulationTimeSeconds: scenarioElapsedSeconds,
       details: { trigger, fromStageIndex: activeDynamicStage, targetStageIndex: activeDynamicStage + 1 },
     })
     automaticAdvanceLockRef.current = true
     loadDynamicStage(activeDynamicPreset, activeDynamicStage + 1, 'automatic')
-"""
-          assert old in s
+'''
+          if old not in s: raise SystemExit('automatic trigger block not found')
           s = s.replace(old, new, 1)
 
-          marker = """  const addDynamicStage = async (preset: InstructorPresetRow) => {
-"""
-          insert = """  const stopDynamicScenario = () => {
+          marker = '''  const addDynamicStage = async (preset: InstructorPresetRow) => {
+'''
+          insert = '''  const stopDynamicScenario = () => {
     if (activeDynamicPreset) {
       appendStructuredScenarioLog('scenario.stopped', {
         category: 'scenario', actor: 'instructor', simulationTimeSeconds: scenarioElapsedSeconds,
@@ -93,21 +93,21 @@ jobs:
     setPresetMessage('Dynamic scenario stopped.')
   }
 
-"""
-          assert marker in s
+'''
+          if marker not in s: raise SystemExit('addDynamicStage marker not found')
           s = s.replace(marker, insert + marker, 1)
 
-          old = """          <button type=\"button\" onClick={() => { setActiveDynamicId(null); setActiveDynamicStage(0); setPresetMessage('Dynamic scenario stopped.') }}>Stop</button>
-"""
-          new = """          <button type=\"button\" onClick={stopDynamicScenario}>Stop</button>
-"""
-          assert old in s
+          old = '''          <button type="button" onClick={() => { setActiveDynamicId(null); setActiveDynamicStage(0); setPresetMessage('Dynamic scenario stopped.') }}>Stop</button>
+'''
+          new = '''          <button type="button" onClick={stopDynamicScenario}>Stop</button>
+'''
+          if old not in s: raise SystemExit('runtime stop button not found')
           s = s.replace(old, new, 1)
           p.write_text(s)
 
           v = Path('src/scenario-builder/version.ts')
           text = v.read_text()
-          assert "SCENARIO_BUILDER_VERSION = '0.1'" in text
+          if "SCENARIO_BUILDER_VERSION = '0.1'" not in text: raise SystemExit('builder version not found')
           v.write_text(text.replace("SCENARIO_BUILDER_VERSION = '0.1'", "SCENARIO_BUILDER_VERSION = '0.1.1'"))
           PY
       - run: npm ci
@@ -117,6 +117,6 @@ jobs:
           rm .github/workflows/tmp-scenario-logger-v011.yml
           git config user.name "stefesciberras"
           git config user.email "43134239+stefesciberras@users.noreply.github.com"
-          git add -A
+          git add src/components/InstructorAccountControls.tsx src/scenario-builder/version.ts .github/workflows/tmp-scenario-logger-v011.yml
           git commit -m "Integrate structured scenario runtime logger"
           git push origin HEAD:chatgpt/scenario-logger-v0.1.1
