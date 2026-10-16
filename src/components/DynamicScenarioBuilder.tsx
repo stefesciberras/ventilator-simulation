@@ -657,6 +657,19 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       </aside>
 
       <section className="dynamic-builder-pane">
+        {selectedPreset && (
+          <div className="dynamic-builder-top-actions">
+            <button
+              type="button"
+              className="account-primary-button"
+              disabled={busy || dirty}
+              onClick={() => { onStartScenario(selectedPreset); onClose() }}
+            >
+              Start scenario
+            </button>
+          </div>
+        )}
+
         <div className="dynamic-scenario-header-block">
           <label>
             <span>Dynamic scenario name</span>
@@ -862,7 +875,6 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
           </button>
           <button type="button" disabled={busy || !dirty} onClick={reset}>Reset scenario</button>
           <span />
-          {selectedPreset && <button type="button" disabled={busy || dirty} onClick={() => { onStartScenario(selectedPreset); onClose() }}>Start scenario</button>}
           <button type="button" disabled={busy} onClick={onClose}>Cancel</button>
           <button
             type="button"

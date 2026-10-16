@@ -269,3 +269,17 @@
   background: #5a3d18;
   color: #ffe8c6;
 }
+
+
+/* v0.82.2.4 scenario launch action */
+.dynamic-builder-top-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 10px;
+}
+
+.dynamic-builder-top-actions button {
+  min-width: 132px;
+  min-height: 36px;
+  border-radius: 0;
+}
