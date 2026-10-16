@@ -34,3 +34,4 @@ jobs:
           git add -A
           git commit -m "refactor: preserve EDUVENT session fallback behavior"
           git push origin HEAD:chatgpt/v0.82.6-shared-teaching-session
+# rerun after LocalRuntimePayload import fix
