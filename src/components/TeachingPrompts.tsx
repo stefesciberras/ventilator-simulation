@@ -105,8 +105,8 @@ export function useTeachingPrompts(role: SessionRole, sessionId: string | null) 
   }
 
   useEffect(() => {
-    void supabase.removeChannel(promptChannelRef.current as RealtimeChannel).catch(() => undefined)
-    void supabase.removeChannel(responseChannelRef.current as RealtimeChannel).catch(() => undefined)
+    if (promptChannelRef.current) void supabase.removeChannel(promptChannelRef.current)
+    if (responseChannelRef.current) void supabase.removeChannel(responseChannelRef.current)
     promptChannelRef.current = null
     responseChannelRef.current = null
 
@@ -253,13 +253,14 @@ export function TeachingPromptInstructorPanel({
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [options, setOptions] = useState(['', '', '', ''])
-  if (role !== 'instructor') return null
 
   const counts = useMemo(() => {
     const result = new Map<string, number>()
     for (const response of responses) result.set(response.option_id, (result.get(response.option_id) ?? 0) + 1)
     return result
   }, [responses])
+
+  if (role !== 'instructor') return null
 
   const submit = async () => {
     const trimmedBody = body.trim()
