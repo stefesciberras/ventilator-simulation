@@ -571,6 +571,7 @@ export default function App() {
   const [diagnosticMenuOpen, setDiagnosticMenuOpen] = useState(false)
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')
+  const [dynamicScenarioRuntimeHost, setDynamicScenarioRuntimeHost] = useState<HTMLDivElement | null>(null)
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
   const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
   const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1101px)').matches)
@@ -1460,6 +1461,9 @@ export default function App() {
             physiologyMeasurements={physiologyMeasurements}
             scenarioElapsedSeconds={displayedScenarioElapsedTime}
             sessionMembers={teachingSession.members}
+            runtimeHost={dynamicScenarioRuntimeHost}
+            onStartInstructorSession={startInstructorSession}
+            onDynamicScenarioStarted={() => { setControlTab('teaching'); setMobileWorkspacePage('settings') }}
           />
           <CaseMediaPanel
             role={teachingSession.role}
@@ -1744,6 +1748,7 @@ export default function App() {
                   onUpdatePolicy={teachingSession.updatePolicy}
                   onBroadcastNow={teachingSession.broadcastNow}
                 />
+                <div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />
                 <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
               </div>
             )}

@@ -334,3 +334,21 @@
 .scenario-builder-handoff p { max-width: 680px; margin: 0; color: #91a4ac; font-size: 11px; line-height: 1.45; }
 .scenario-builder-handoff button { flex: 0 0 auto; }
 @media (max-width: 680px) { .scenario-builder-handoff { align-items: stretch; flex-direction: column; } }
+
+
+/* Scenario Builder v0.2.0.2 teaching-tab runtime */
+.teaching-scenario-runtime-host:empty { display: none; }
+.dynamic-runtime-panel { display: grid; gap: 10px; margin: 10px 0; padding: 12px; border: 1px solid #3a535f; background: #0a171d; }
+.dynamic-runtime-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dynamic-runtime-panel-heading > div { min-width: 0; }
+.dynamic-runtime-panel-heading span,.dynamic-runtime-stage-card span { display: block; color: #78909a; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.dynamic-runtime-panel-heading strong { display: block; margin-top: 3px; color: #eff7f9; font-size: 13px; overflow-wrap: anywhere; }
+.dynamic-runtime-panel-heading button { flex: 0 0 auto; border-radius: 0; }
+.dynamic-runtime-stage-card { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(70px,.45fr) minmax(0,1fr); gap: 1px; background: #263a43; border: 1px solid #263a43; }
+.dynamic-runtime-stage-card > div { min-width: 0; padding: 9px 10px; background: #0d1a20; }
+.dynamic-runtime-stage-card strong { display: block; margin-top: 3px; color: #dce8ec; font-size: 10px; overflow-wrap: anywhere; }
+.dynamic-runtime-panel-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.dynamic-runtime-panel-actions button { min-height: 38px; border-radius: 0; }
+.dynamic-runtime-panel-actions .dynamic-runtime-primary { color: #dff8e6; border-color: #4e9764; background: #173821; }
+.dynamic-runtime-panel-actions .dynamic-runtime-stop { color: #efb9b9; border-color: #754646; background: #291717; }
+@media (max-width: 560px) { .dynamic-runtime-stage-card { grid-template-columns: 1fr; } .dynamic-runtime-panel-actions { grid-template-columns: 1fr; } }
