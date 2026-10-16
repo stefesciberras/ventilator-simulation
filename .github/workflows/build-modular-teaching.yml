@@ -26,6 +26,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           app = Path('src/App.tsx')
           text = app.read_text()
@@ -38,20 +39,10 @@ jobs:
           new = "const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, eduventTeachingHost)\n  const teachingLibrary = useTeachingQuestionLibrary(eduventTeachingHost)"
           assert old in text
           text = text.replace(old, new, 1)
-
           text = text.replace('<TeachingPromptOverlay\n', '<TeachingCandidateOverlay\n', 1)
 
-          old = '''                <TeachingPromptInstructorPanel
-                  role={teachingSession.role}
-                  activePrompt={teachingPrompts.activePrompt}
-                  responses={teachingPrompts.responses}
-                  candidateCount={teachingSession.members.filter((member) => member.role === 'candidate').length}
-                  busy={teachingPrompts.busy}
-                  error={teachingPrompts.error}
-                  onPresent={teachingPrompts.presentPrompt}
-                  onClose={teachingPrompts.closePrompt}
-                />'''
-          new = '''                <TeachingInstructorWorkspace
+          replacement = '''
+                <TeachingInstructorWorkspace
                   role={teachingSession.role}
                   host={eduventTeachingHost}
                   activePrompt={teachingPrompts.activePrompt}
@@ -67,8 +58,8 @@ jobs:
                   onClose={teachingPrompts.closePrompt}
                   onSaveLibrary={teachingLibrary.save}
                 />'''
-          assert old in text
-          text = text.replace(old, new, 1)
+          text, count = re.subn(r'\n\s*<TeachingPromptInstructorPanel\n.*?\n\s*/>', replacement, text, count=1, flags=re.S)
+          assert count == 1
           app.write_text(text)
 
           workspace = Path('src/teaching/TeachingWorkspace.tsx')
@@ -148,4 +139,4 @@ jobs:
           git commit -m "feat: modular teaching workspace and saved question library"
           git push origin HEAD:chatgpt/v0.82.4-modular-teaching-library
 
-# trigger 2
+# trigger 3
