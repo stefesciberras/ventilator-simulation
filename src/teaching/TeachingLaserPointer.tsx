@@ -35,10 +35,12 @@ export function TeachingLaserPointerSurface({
   role,
   sessionId,
   enabled,
+  onEnabledChange,
 }: {
   role: TeachingRole
   sessionId: string | null
   enabled: boolean
+  onEnabledChange?: (enabled: boolean) => void
 }) {
   const [remotePointer, setRemotePointer] = useState<TeachingLaserPointerState | null>(null)
   const [localPointer, setLocalPointer] = useState<TeachingLaserPointerState | null>(null)
@@ -139,7 +141,7 @@ export function TeachingLaserPointerSurface({
   return (
     <div
       className={`teaching-laser-layer ${role === 'instructor' && enabled ? 'teaching-laser-layer-active' : ''}`}
-      aria-hidden="true"
+      aria-hidden={role !== 'instructor'}
       onPointerDown={(event) => {
         if (role !== 'instructor' || !enabled) return
         event.preventDefault()
@@ -149,6 +151,15 @@ export function TeachingLaserPointerSurface({
       onPointerMove={updateFromPointerEvent}
       onPointerLeave={hideLocalPointer}
     >
+      {role === 'instructor' && enabled && onEnabledChange && (
+        <button
+          type="button"
+          className="teaching-laser-exit"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerMove={(event) => event.stopPropagation()}
+          onClick={(event) => { event.stopPropagation(); onEnabledChange(false) }}
+        >Laser on · Exit</button>
+      )}
       {visible && displayed && (
         <span
           className="teaching-laser-dot"
