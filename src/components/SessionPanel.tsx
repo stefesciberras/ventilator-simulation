@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
 import { CandidateInvitation } from './CandidateInvitation'
 import type { RuntimeTransportKind, SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { LocalRuntimeConnection } from '../session/localRuntimeTransport'
@@ -434,11 +433,6 @@ export function SessionPanel({
                 <CandidateInvitation sessionId={session.id} sessionKey={session.session_key} joinUrl={candidateJoinUrl} />
               )}
             </div>
-            {candidateJoinUrl && !simulatorExpanded && (
-              <div className="session-qr-code" title={candidateJoinUrl} aria-label={`QR code to join session ${session?.session_key ?? ''}`}>
-                <QRCodeSVG value={candidateJoinUrl} size={124} level="M" bgColor="#ffffff" fgColor="#071a24" marginSize={1} />
-              </div>
-            )}
           </div>
           <div className="candidate-count-card">
             <span>Candidates</span>

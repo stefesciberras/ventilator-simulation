@@ -84,7 +84,7 @@
 .teaching-prompt-error { margin-top:10px; color:#ff9b9b; font-size:.8rem; }
 
 .teaching-prompt-overlay { position:fixed; inset:0; z-index:5000; display:grid; place-items:center; padding:18px; background:rgba(3,8,11,.74); backdrop-filter:blur(5px); }
-.teaching-prompt-modal { width:min(620px,100%); max-height:min(82vh,760px); overflow:auto; box-sizing:border-box; border:1px solid #516670; border-radius:16px; background:#101b21; color:#eef5f7; padding:24px; box-shadow:0 24px 70px rgba(0,0,0,.5); }
+.teaching-prompt-modal { width:min(620px,100%); max-height:min(82vh,760px); overflow:auto; box-sizing:border-box; border:2px solid #ef8a27; border-radius:16px; background:#101b21; color:#eef5f7; padding:24px; box-shadow:0 24px 70px rgba(0,0,0,.5); }
 .teaching-prompt-modal h2 { margin:0 0 10px; font-size:clamp(1.35rem,3vw,2rem); }
 .teaching-prompt-body { margin:0 0 18px; white-space:pre-wrap; line-height:1.55; font-size:1rem; }
 .teaching-prompt-candidate-options { display:grid; gap:9px; margin-bottom:16px; }
@@ -215,3 +215,22 @@
 .teaching-prompt-reopen strong { font-size:.8rem; }
 @media (max-width:900px) { .teaching-prompt-overlay { padding:74px 10px 10px; } .teaching-prompt-modal { width:min(390px,48vw); } }
 @media (max-width:640px) { .teaching-prompt-overlay { align-items:end; justify-content:stretch; padding:0; } .teaching-prompt-modal { width:100%; max-height:72dvh; border-radius:18px 18px 0 0; border-left:0; border-right:0; border-bottom:0; padding:18px 16px calc(18px + env(safe-area-inset-bottom)); } .teaching-prompt-reopen { top:auto; right:10px; bottom:calc(12px + env(safe-area-inset-bottom)); } }
+
+/* EDUVENT console laser trigger */
+.teaching-laser-console-button { color: #ff766d; }
+.teaching-laser-console-button.active {
+  color: #fff;
+  border-color: #ff5a4f;
+  background: #5b2723;
+  box-shadow: 0 0 0 1px rgba(255,90,79,.2), 0 0 14px rgba(255,59,48,.35);
+}
+.teaching-laser-console-button svg { width: 21px; height: 21px; }
+
+@media (min-width: 900px) {
+  .teaching-prompt-dock-header { cursor: grab; user-select: none; touch-action: none; }
+  .teaching-prompt-dock-header:active { cursor: grabbing; }
+}
+
+@media (max-width: 899px) {
+  .teaching-prompt-modal { transform: none !important; }
+}

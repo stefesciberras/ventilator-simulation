@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '../session/supabase'
 import '../candidate-invitation.css'
 
@@ -137,9 +138,15 @@ export function CandidateInvitation({ sessionId, sessionKey, joinUrl }: Candidat
               <button type="button" aria-label="Close invitation" onClick={() => setOpen(false)}>×</button>
             </div>
 
-            <div className="candidate-invite-link-card">
-              <span>Direct join link</span>
-              <strong>{joinUrl}</strong>
+            <div className="candidate-invite-share-card">
+              <div className="candidate-invite-qr" title={joinUrl} aria-label={`QR code to join session ${sessionKey}`}>
+                <QRCodeSVG value={joinUrl} size={156} level="M" bgColor="#ffffff" fgColor="#071a24" marginSize={1} />
+              </div>
+              <div className="candidate-invite-link-card">
+                <span>Direct join link</span>
+                <strong>{joinUrl}</strong>
+                <small>Candidates can scan the QR code or open this direct link.</small>
+              </div>
             </div>
 
             <textarea readOnly value={invitationText} aria-label="Invitation text" rows={7} />
