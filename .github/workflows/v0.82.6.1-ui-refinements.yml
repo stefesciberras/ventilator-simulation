@@ -23,11 +23,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: python scripts/refine_teaching_controls.py
+      - run: python scripts/fix_laser_control_removal.py
       - run: npm ci
       - run: npm run build
       - name: Commit verified refinements
         run: |
           rm scripts/refine_teaching_controls.py
+          rm scripts/fix_laser_control_removal.py
           rm .github/workflows/v0.82.6.1-ui-refinements.yml
           git checkout -- tsconfig.app.tsbuildinfo || true
           git config user.name "stefesciberras"
