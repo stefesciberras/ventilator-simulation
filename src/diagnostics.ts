@@ -9,8 +9,8 @@ import {
 export type DiagnosticWaveformSource = 'live' | 'frozen'
 export type { ScenarioLogEntry } from './scenario-logger'
 
-async function copyJsonPayload(payload: Record<string, unknown>, promptTitle: string): Promise<boolean> {
-  const text = JSON.stringify(payload)
+async function copyJsonPayload(payload: Record<string, unknown>, promptTitle: string, pretty = false): Promise<boolean> {
+  const text = JSON.stringify(payload, null, pretty ? 2 : undefined)
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text)
@@ -50,6 +50,18 @@ export async function copyScenarioLogs(context: Record<string, unknown> = {}): P
     context,
     entries,
   }, 'Copy scenario log JSON')
+}
+
+export async function copyScenarioSnapshot(snapshot: Record<string, unknown>): Promise<boolean> {
+  const entries: ScenarioLogEntry[] = readScenarioLogs()
+  return copyJsonPayload({
+    schema: 'eduvent-scenario-diagnostic-v1',
+    capturedAt: new Date().toISOString(),
+    appVersion: APP_VERSION,
+    purpose: 'Paste this JSON into the EDUVENT development thread for scenario debugging.',
+    snapshot,
+    recentScenarioEvents: entries.slice(-100),
+  }, 'Copy scenario diagnostic JSON', true)
 }
 
 export async function copyDiagnosticSnapshot(

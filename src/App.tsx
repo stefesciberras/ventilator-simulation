@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { InstructorAccountControls } from './components/InstructorAccountControls'
+import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
 import { InteractiveVentilatorStrip, VentilatorModeControl } from './components/InteractiveVentilatorStrip'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
 import { advanceSimulation, calculateMeasurements, createSimulationState } from './simulation/engine'
-import { appendScenarioLog, copyDiagnosticSnapshot, copyScenarioLogs } from './diagnostics'
+import { appendScenarioLog, copyDiagnosticSnapshot, copyScenarioLogs, copyScenarioSnapshot } from './diagnostics'
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
 import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
@@ -572,6 +572,7 @@ export default function App() {
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')
   const [dynamicScenarioRuntimeHost, setDynamicScenarioRuntimeHost] = useState<HTMLDivElement | null>(null)
+  const [dynamicScenarioDiagnostic, setDynamicScenarioDiagnostic] = useState<DynamicScenarioDiagnosticContext | null>(null)
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
   const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
   const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1101px)').matches)
@@ -1328,6 +1329,32 @@ export default function App() {
     if (copied) window.setTimeout(() => setDiagnosticCopied(null), 1800)
   }
 
+  const copyScenarioSnapshotDiagnostics = async () => {
+    const active = dynamicScenarioDiagnostic
+    const copied = await copyScenarioSnapshot({
+      session: {
+        role: teachingSession.role,
+        status: teachingSession.session?.status ?? null,
+        connection: teachingSession.connection,
+        runtimeTransport: teachingSession.runtimeTransportKind,
+        runtimeConnection: teachingSession.localRuntimeConnection,
+        candidateCount: teachingSession.members.filter((member) => member.role === 'candidate').length,
+      },
+      runtime: {
+        scenarioElapsedSeconds: displayedScenarioElapsedTime,
+        simulationPaused,
+        simulationSpeed,
+        stageElapsedSeconds: active ? Math.max(0, displayedScenarioElapsedTime - active.stageStartedAtSeconds) : null,
+        activeScenario: active,
+      },
+      currentAppliedScenario: currentInstructorScenario,
+      physiologyMeasurements,
+    })
+    setDiagnosticMenuOpen(false)
+    setDiagnosticCopied(copied ? 'scenario' : null)
+    if (copied) window.setTimeout(() => setDiagnosticCopied(null), 1800)
+  }
+
   const toggleOxygenBoost = () => {
     if (oxygenBoost) {
       oxygenBoostDeadlineRef.current = null
@@ -1469,6 +1496,7 @@ export default function App() {
             runtimeHost={dynamicScenarioRuntimeHost}
             onStartInstructorSession={startInstructorSession}
             onDynamicScenarioStarted={() => { setControlTab('teaching'); setMobileWorkspacePage('settings') }}
+            onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
           />
           <CaseMediaPanel
             role={teachingSession.role}
@@ -1490,6 +1518,9 @@ export default function App() {
               <div className="top-diagnostic-dropdown" role="menu" aria-label="Copy diagnostics">
                 <button type="button" role="menuitem" onClick={() => void copyDiagnostics()}>
                   <strong>Simulation Logs</strong><small>Settings, alarms and visible waveform</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void copyScenarioSnapshotDiagnostics()}>
+                  <strong>Scenario Debug Snapshot</strong><small>Complete scenario, current stage/state and recent events</small>
                 </button>
                 <button type="button" role="menuitem" onClick={() => void copyScenarioDiagnostics()}>
                   <strong>Scenario Logs</strong><small>Teaching-session and scenario runtime events</small>
