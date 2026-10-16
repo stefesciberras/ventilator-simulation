@@ -1,4 +1,5 @@
 export * from './types'
 export * from './useTeachingInteractions'
 export * from './TeachingWorkspace'
+export * from './TeachingLaserPointer'
 export * from './hosts/eduvent'
