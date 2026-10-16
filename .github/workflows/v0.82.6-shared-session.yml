@@ -1,0 +1,36 @@
+name: Verify shared teaching session extraction
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.6-shared-teaching-session
+    paths:
+      - .github/workflows/v0.82.6-shared-session.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.6-shared-teaching-session
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python scripts/extract_shared_session.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit verified extraction
+        run: |
+          rm scripts/extract_shared_session.py
+          rm .github/workflows/v0.82.6-shared-session.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: extract reusable teaching session lifecycle"
+          git push origin HEAD:chatgpt/v0.82.6-shared-teaching-session
