@@ -58,6 +58,12 @@ s = s.replace('''  type LocalRuntimeConnection,
   type LocalRuntimePayload,
   type LocalRuntimeSnapshot,
 } from './localRuntimeTransport' ''',1)
+if 'type LocalRuntimePayload,' not in s:
+    s = s.replace('''  type LocalRuntimeEnvelope,
+  type LocalRuntimeSnapshot,''','''  type LocalRuntimeEnvelope,
+  type LocalRuntimePayload,
+  type LocalRuntimeSnapshot,''',1)
+assert 'type LocalRuntimePayload,' in s
 assert "const localTransportRef = useRef<LocalRuntimeTransport | WebRtcRuntimeTransport | null>(null)" in s
 s = s.replace("const localTransportRef = useRef<LocalRuntimeTransport | WebRtcRuntimeTransport | null>(null)", "const localTransportRef = useRef<SharedTeachingRuntimeTransport<LocalRuntimePayload> | null>(null)", 1)
 old = '''  const {
@@ -85,7 +91,6 @@ new = '''  const {
   const error = hostError ?? teachingCore.error
 '''
 s = s.replace(old,new,1)
-# Add candidate telemetry debounce before candidate lock calculations.
 marker = "  const candidateVentilatorLocked = role === 'candidate'"
 assert marker in s
 telemetry = '''  useEffect(() => {
