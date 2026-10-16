@@ -19,6 +19,7 @@ interface SharedTeachingSessionOptions<TSession extends SharedTeachingSessionRow
   getMemberTelemetry: () => TMemberTelemetry
   candidateHeartbeatMs?: number
   instructorHeartbeatMs?: number
+  candidateRefreshMs?: number
 }
 
 function candidateRecoveryKey(namespace: string) { return `${namespace}.candidate-session-recovery` }
@@ -48,6 +49,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
   getMemberTelemetry,
   candidateHeartbeatMs = 10000,
   instructorHeartbeatMs = 10000,
+  candidateRefreshMs = 1000,
 }: SharedTeachingSessionOptions<TSession, TMember, TCreateInput, TMemberTelemetry>) {
   const [role, setRole] = useState<SharedTeachingRole>('standalone')
   const [connection, setConnection] = useState<SharedTeachingConnection>('idle')
@@ -352,6 +354,31 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
       } catch { /* standalone is normal */ }
     })()
   }, [])
+
+  useEffect(() => {
+    if (role !== 'candidate' || !session?.id || candidateRefreshMs <= 0) return
+    let active = true
+    const sessionId = session.id
+    const refresh = async () => {
+      try {
+        const fresh = await repository.fetchSession(sessionId)
+        if (!active || roleRef.current !== 'candidate') return
+        if (fresh.status === 'ended') {
+          await terminateLocally('The instructor ended this teaching session.', true)
+          return
+        }
+        storeSession(fresh, 'refresh')
+      } catch {
+        // Realtime and the next durable refresh recover independently.
+      }
+    }
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), candidateRefreshMs)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [role, session?.id, candidateRefreshMs])
 
   useEffect(() => {
     if (!recoverableCandidate) return

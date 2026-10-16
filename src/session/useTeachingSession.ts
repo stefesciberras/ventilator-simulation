@@ -6,7 +6,7 @@ import {
   type TeachingSessionRow,
   updateTeachingSession,
 } from './supabase'
-import { useSharedTeachingSession, type SharedTeachingRole, type RecoverableTeachingCandidate } from '../teaching/session'
+import { useSharedTeachingSession, type SharedTeachingRole, type RecoverableTeachingCandidate, type SharedTeachingRuntimeTransport } from '../teaching/session'
 import { eduventTeachingSessionRepository, type EduventTeachingSessionCreateInput } from './eduventTeachingSessionAdapter'
 import {
   LocalRuntimeTransport,
@@ -14,6 +14,7 @@ import {
   getLocalRuntimeProfile,
   type LocalRuntimeConnection,
   type LocalRuntimeEnvelope,
+  type LocalRuntimePayload,
   type LocalRuntimeSnapshot,
 } from './localRuntimeTransport'
 import { WebRtcRuntimeTransport } from './webRtcRuntimeTransport'
@@ -102,7 +103,7 @@ export function useTeachingSession({
   const pauseBroadcastTimerRef = useRef<number | null>(null)
   const instructorClientIdRef = useRef<string | null>(null)
   const localRuntimeConnectionRef = useRef<LocalRuntimeConnection>('disabled')
-  const localTransportRef = useRef<LocalRuntimeTransport | WebRtcRuntimeTransport | null>(null)
+  const localTransportRef = useRef<SharedTeachingRuntimeTransport<LocalRuntimePayload> | null>(null)
   const localCheckpointTimerRef = useRef<number | null>(null)
   const runtimeEventListenersRef = useRef(new Set<(envelope: LocalRuntimeEnvelope) => void>())
 
@@ -161,12 +162,15 @@ export function useTeachingSession({
 
   const {
     role,
-    connection,
+    connection: coreConnection,
     session,
     members,
     recoverableInstructor,
     recoverableCandidate,
   } = teachingCore
+  const connection: SessionConnection = localRuntimeConnection === 'connected' && coreConnection !== 'error'
+    ? 'connected'
+    : coreConnection
   const error = hostError ?? teachingCore.error
 
   const storeSession = (next: TeachingSessionRow) => {
@@ -662,6 +666,14 @@ export function useTeachingSession({
     localTransportRef.current?.disconnect()
     if (localCheckpointTimerRef.current != null) window.clearInterval(localCheckpointTimerRef.current)
   }, [])
+
+  useEffect(() => {
+    if (role !== 'candidate' || !session?.id) return
+    const timer = window.setTimeout(() => {
+      void teachingCore.touchMemberNow().catch(() => undefined)
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [patient, ventilator, candidateAlarmLevel, role, session?.id])
 
   const candidateVentilatorLocked = role === 'candidate' && Boolean(session?.sync_ventilator) && !Boolean(session?.candidate_can_edit_ventilator)
   const candidatePatientLocked = role === 'candidate' && Boolean(session?.sync_patient) && !Boolean(session?.candidate_can_edit_patient)
