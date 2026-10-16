@@ -238,3 +238,34 @@
 .dynamic-trigger-condition { display: grid; grid-template-columns: 2fr 1.2fr 1fr; gap: 8px; margin-bottom: 10px; }
 .dynamic-trigger-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .dynamic-trigger-actions button { border-radius: 0; }
+
+/* v0.82.2.3 per-stage patient profile templates */
+.dynamic-stage-profile-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.dynamic-stage-profile-strip button {
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid #43535b;
+  border-radius: 0;
+  background: #252c30;
+  color: #b7c2c7;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.dynamic-stage-profile-strip button.profile-selected {
+  border-color: #73b986;
+  background: #1d4930;
+  color: #e3f7e9;
+}
+
+.dynamic-stage-profile-strip button.profile-modified {
+  border-color: #c28a42;
+  background: #5a3d18;
+  color: #ffe8c6;
+}

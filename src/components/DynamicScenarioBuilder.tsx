@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PatientSettings, VentilatorMode, VentilatorSettings } from '../simulation/types'
 import { calculatePredictedBodyWeight } from '../patientMetrics'
+import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type ArdsSeverity, type PatientProfileName } from '../patientProfiles'
 import {
   asStaticScenario,
   createInstructorPreset,
@@ -26,7 +27,7 @@ interface DynamicScenarioBuilderProps {
   onClose: () => void
 }
 
-type StageDraft = DynamicScenarioStage & { sourcePresetId?: string }
+type StageDraft = DynamicScenarioStage & { sourcePresetId?: string; patientProfile?: PatientProfileName; ardsSeverity?: ArdsSeverity }
 interface ScenarioDraft { id: string | null; name: string; description: string; stages: StageDraft[] }
 interface FieldSpec {
   key: string
@@ -171,6 +172,22 @@ function resolvedFieldValue(field: FieldSpec, value: unknown): unknown {
   return field.defaultValue ?? field.min ?? 0
 }
 
+function inferPatientTemplate(patient: PatientSettings): { profile: PatientProfileName; ardsSeverity?: ArdsSeverity } | null {
+  for (const severity of ARDS_SEVERITIES) {
+    if (patientMatchesProfile(patient, ARDS_PROFILES[severity])) return { profile: 'ARDS', ardsSeverity: severity }
+  }
+  for (const profile of PATIENT_PROFILE_NAMES) {
+    if (profile === 'ARDS') continue
+    if (patientMatchesProfile(patient, PATIENT_PROFILES[profile])) return { profile }
+  }
+  return null
+}
+
+function selectedPatientTemplate(stage: StageDraft): { profile: PatientProfileName; ardsSeverity?: ArdsSeverity } | null {
+  if (stage.patientProfile) return { profile: stage.patientProfile, ardsSeverity: stage.ardsSeverity }
+  return inferPatientTemplate(stage.snapshot.patient)
+}
+
 function defaultMask(snapshot: InstructorScenarioSnapshot): DynamicScenarioApplyMask {
   return {
     ventilator: ventKeysFor(snapshot.ventilator),
@@ -190,9 +207,13 @@ function normaliseStage(stage: DynamicScenarioStage, index: number): StageDraft 
     ? supplied.filter((key) => relevant.has(key)) as Array<keyof VentilatorSettings>
     : ventKeysFor(snapshot.ventilator)
 
+  const cloned = cloneScenario(stage) as StageDraft
+  const inferredTemplate = selectedPatientTemplate({ ...cloned, snapshot })
   return {
-    ...cloneScenario(stage),
+    ...cloned,
     name: stage.name || `Stage ${index + 1}`,
+    patientProfile: cloned.patientProfile ?? inferredTemplate?.profile,
+    ardsSeverity: cloned.ardsSeverity ?? inferredTemplate?.ardsSeverity,
     advanceTrigger: stage.advanceTrigger ?? defaultAdvanceTrigger(),
     apply: {
       ...(stage.apply ?? defaultMask(snapshot)),
@@ -204,9 +225,12 @@ function normaliseStage(stage: DynamicScenarioStage, index: number): StageDraft 
 
 function newStage(base: InstructorScenarioSnapshot, index: number): StageDraft {
   const snapshot = normalisePhysiologyDefaults(asStaticScenario(cloneScenario(base), ''))
+  const inferredTemplate = inferPatientTemplate(snapshot.patient)
   return {
     name: `Stage ${index + 1}`,
     snapshot,
+    patientProfile: inferredTemplate?.profile,
+    ardsSeverity: inferredTemplate?.ardsSeverity,
     apply: defaultMask(snapshot),
     sourceName: 'Manual settings',
     advanceTrigger: defaultAdvanceTrigger(),
@@ -343,13 +367,47 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     const preset = staticPresets.find((item) => item.id === presetId)
     if (!preset) return
     const snapshot = normalisePhysiologyDefaults(asStaticScenario(cloneScenario(preset.scenario), ''))
+    const inferredTemplate = inferPatientTemplate(snapshot.patient)
     updateStage(index, (stage) => ({
       ...stage,
       snapshot,
       apply: defaultMask(snapshot),
       sourcePresetId: preset.id,
       sourceName: preset.name,
+      patientProfile: inferredTemplate?.profile,
+      ardsSeverity: inferredTemplate?.ardsSeverity,
     }))
+  }
+
+  const applyStagePatientProfile = (index: number, profile: PatientProfileName) => {
+    updateStage(index, (stage) => {
+      let patient: PatientSettings
+      let ardsSeverity: ArdsSeverity | undefined
+
+      if (profile === 'ARDS') {
+        const selected = selectedPatientTemplate(stage)
+        if (selected?.profile === 'ARDS' && selected.ardsSeverity) {
+          const currentIndex = ARDS_SEVERITIES.indexOf(selected.ardsSeverity)
+          ardsSeverity = ARDS_SEVERITIES[(currentIndex + 1) % ARDS_SEVERITIES.length]
+        } else {
+          ardsSeverity = 'mild'
+        }
+        patient = { ...ARDS_PROFILES[ardsSeverity] }
+      } else {
+        patient = { ...PATIENT_PROFILES[profile] }
+      }
+
+      const apply = stage.apply ?? defaultMask(stage.snapshot)
+      return {
+        ...stage,
+        sourcePresetId: undefined,
+        sourceName: `Patient profile: ${profile}${ardsSeverity ? ` · ${ardsSeverity}` : ''}`,
+        patientProfile: profile,
+        ardsSeverity,
+        snapshot: { ...stage.snapshot, patient },
+        apply: { ...apply, patient: [...PATIENT_KEYS] },
+      }
+    })
   }
 
   const toggleField = (
@@ -668,6 +726,36 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                       )}
                     </select>
                   </label>
+
+                  <div className="dynamic-stage-profile-strip" role="group" aria-label={`Stage ${index + 1} patient profiles`}>
+                    {PATIENT_PROFILE_NAMES.map((profile) => {
+                      const selectedTemplate = selectedPatientTemplate(stage)
+                      const selected = selectedTemplate?.profile === profile
+                      const selectedProfile = profile === 'ARDS'
+                        ? (selectedTemplate?.ardsSeverity ? ARDS_PROFILES[selectedTemplate.ardsSeverity] : ARDS_PROFILES.mild)
+                        : PATIENT_PROFILES[profile]
+                      const modified = selected && !patientMatchesProfile(stage.snapshot.patient, selectedProfile)
+                      const label = profile === 'ARDS' && selected && selectedTemplate?.ardsSeverity
+                        ? `ARDS · ${selectedTemplate.ardsSeverity[0].toUpperCase() + selectedTemplate.ardsSeverity.slice(1)}`
+                        : profile
+                      return (
+                        <button
+                          type="button"
+                          key={profile}
+                          className={selected ? (modified ? 'profile-modified' : 'profile-selected') : ''}
+                          aria-pressed={selected}
+                          title={profile === 'ARDS'
+                            ? (selected && selectedTemplate?.ardsSeverity
+                              ? `ARDS ${selectedTemplate.ardsSeverity} · click for ${ARDS_SEVERITIES[(ARDS_SEVERITIES.indexOf(selectedTemplate.ardsSeverity) + 1) % ARDS_SEVERITIES.length]}`
+                              : 'Apply mild ARDS profile')
+                            : selected && modified ? `${profile} template selected · settings modified` : `Apply ${profile} profile template`}
+                          onClick={() => applyStagePatientProfile(index, profile)}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
 
                   <div className="dynamic-control-columns">
                     <section className="dynamic-control-column vent">
