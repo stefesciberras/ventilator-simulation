@@ -1,24 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import type { AlarmLimits, CandidateAlarmLevel } from '../alarmTypes'
 import {
-  claimInstructorSession,
-  closeTeachingSessionChannel,
-  createTeachingSession,
-  ensureAnonymousSession,
-  findActiveInstructorSession,
-  fetchSessionMembers,
-  fetchTeachingSession,
-  joinTeachingSession,
-  subscribeToSessionMembers,
-  subscribeToTeachingSession,
-  touchInstructorSession,
-  touchSessionMember,
   type SessionMemberRow,
   type TeachingSessionRow,
   updateTeachingSession,
 } from './supabase'
+import { useSharedTeachingSession, type SharedTeachingRole, type RecoverableTeachingCandidate } from '../teaching/session'
+import { eduventTeachingSessionRepository, type EduventTeachingSessionCreateInput } from './eduventTeachingSessionAdapter'
 import {
   LocalRuntimeTransport,
   getDefaultLocalRuntimeUrl,
@@ -31,43 +20,10 @@ import { WebRtcRuntimeTransport } from './webRtcRuntimeTransport'
 import { appendScenarioLog } from '../diagnostics'
 import { isSimulationSpeed, type SimulationSpeed } from '../simulationSpeed'
 
-export type SessionRole = 'standalone' | 'instructor' | 'candidate'
+export type SessionRole = SharedTeachingRole
 export type SessionConnection = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 export type RuntimeTransportKind = 'cloud' | 'webrtc' | 'local-server' | 'appliance'
-
-export interface RecoverableCandidateSession {
-  sessionKey: string
-  displayName: string
-  expiresAt: string
-}
-
-const CANDIDATE_RECOVERY_STORAGE_KEY = 'eduvent.candidate-session-recovery'
-
-function readCandidateRecovery(): RecoverableCandidateSession | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.localStorage.getItem(CANDIDATE_RECOVERY_STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<RecoverableCandidateSession>
-    if (typeof parsed.sessionKey !== 'string' || parsed.sessionKey.length !== 6 || typeof parsed.expiresAt !== 'string') return null
-    return { sessionKey: parsed.sessionKey, displayName: typeof parsed.displayName === 'string' ? parsed.displayName : '', expiresAt: parsed.expiresAt }
-  } catch {
-    return null
-  }
-}
-
-function persistCandidateRecovery(recovery: RecoverableCandidateSession) {
-  try { window.localStorage.setItem(CANDIDATE_RECOVERY_STORAGE_KEY, JSON.stringify(recovery)) } catch { /* local recovery is optional */ }
-}
-
-function removeCandidateRecovery() {
-  try { window.localStorage.removeItem(CANDIDATE_RECOVERY_STORAGE_KEY) } catch { /* local recovery is optional */ }
-}
-
-function candidateRecoveryIsExpired(recovery: RecoverableCandidateSession) {
-  const expiresAt = Date.parse(recovery.expiresAt)
-  return Number.isFinite(expiresAt) && expiresAt <= Date.now()
-}
+export type RecoverableCandidateSession = RecoverableTeachingCandidate
 
 export interface InstructorSessionInitialState {
   patient: PatientSettings
@@ -120,19 +76,11 @@ export function useTeachingSession({
   simulationSpeed,
   setSimulationSpeed,
 }: UseTeachingSessionArgs) {
-  const [role, setRole] = useState<SessionRole>('standalone')
-  const [connection, setConnection] = useState<SessionConnection>('idle')
-  const [session, setSession] = useState<TeachingSessionRow | null>(null)
-  const [members, setMembers] = useState<SessionMemberRow[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [recoverableInstructor, setRecoverableInstructor] = useState<{ sessionId: string; sessionKey: string } | null>(null)
-  const [recoverableCandidate, setRecoverableCandidate] = useState<RecoverableCandidateSession | null>(null)
+  const [hostError, setHostError] = useState<string | null>(null)
   const [localRuntimeConnection, setLocalRuntimeConnection] = useState<LocalRuntimeConnection>('disabled')
   const [localRuntimeUrl, setLocalRuntimeUrl] = useState<string | null>(() => getDefaultLocalRuntimeUrl())
   const [runtimeTransportKind, setRuntimeTransportKind] = useState<RuntimeTransportKind>(() => getDefaultLocalRuntimeUrl() ? getLocalRuntimeProfile() : 'webrtc')
   const [scenarioClockSync, setScenarioClockSync] = useState<{ elapsedMs: number; receivedAt: number; paused: boolean; speed: SimulationSpeed } | null>(null)
-  const channelRef = useRef<RealtimeChannel | null>(null)
-  const membersChannelRef = useRef<RealtimeChannel | null>(null)
   const roleRef = useRef<SessionRole>('standalone')
   const sessionRef = useRef<TeachingSessionRow | null>(null)
   const patientRef = useRef(patient)
@@ -152,17 +100,78 @@ export function useTeachingSession({
   const patientBroadcastTimerRef = useRef<number | null>(null)
   const ventilatorBroadcastTimerRef = useRef<number | null>(null)
   const pauseBroadcastTimerRef = useRef<number | null>(null)
-  const telemetryTimerRef = useRef<number | null>(null)
-  const instructorHeartbeatRef = useRef<number | null>(null)
   const instructorClientIdRef = useRef<string | null>(null)
   const localRuntimeConnectionRef = useRef<LocalRuntimeConnection>('disabled')
   const localTransportRef = useRef<LocalRuntimeTransport | WebRtcRuntimeTransport | null>(null)
   const localCheckpointTimerRef = useRef<number | null>(null)
   const runtimeEventListenersRef = useRef(new Set<(envelope: LocalRuntimeEnvelope) => void>())
 
-  const storeSession = (next: TeachingSessionRow | null) => {
+  const applyCandidateSessionRef = useRef<(row: TeachingSessionRow, force?: boolean) => void>(() => undefined)
+
+  const teachingCore = useSharedTeachingSession<
+    TeachingSessionRow,
+    SessionMemberRow,
+    EduventTeachingSessionCreateInput,
+    { patient: PatientSettings; ventilator: VentilatorSettings; alarmLevel: CandidateAlarmLevel }
+  >({
+    storageNamespace: 'eduvent',
+    repository: eduventTeachingSessionRepository,
+    getMemberTelemetry: () => ({
+      patient: patientRef.current,
+      ventilator: ventilatorRef.current,
+      alarmLevel: alarmLevelRef.current,
+    }),
+    host: {
+      prepareInstructorSession: async (row, input, phase) => {
+        patientRevisionRef.current = Number(row.patient_revision ?? 0)
+        ventilatorRevisionRef.current = Number(row.ventilator_revision ?? 0)
+        alarmRevisionRef.current = Number(row.alarm_revision ?? 0)
+        pauseRevisionRef.current = Number(row.pause_revision ?? 0)
+        if (phase === 'resume' || !input) {
+          setSimulationPaused(Boolean(row.simulation_paused))
+          return row
+        }
+        const patch: Partial<TeachingSessionRow> = {}
+        const transitionMs = Math.max(0, Math.round(input.patientTransitionSeconds * 1000))
+        if (Number(row.transition_ms ?? 0) !== transitionMs) patch.transition_ms = transitionMs
+        if (Boolean(row.simulation_paused) !== input.simulationPaused) {
+          pauseRevisionRef.current = Math.max(pauseRevisionRef.current, Number(row.pause_revision ?? 0)) + 1
+          patch.simulation_paused = input.simulationPaused
+          patch.pause_revision = pauseRevisionRef.current
+        }
+        return Object.keys(patch).length ? await updateTeachingSession(row.id, patch) : row
+      },
+      onSessionRow: (row, nextRole, _source, force) => {
+        sessionRef.current = row
+        if (nextRole === 'candidate' && localRuntimeConnectionRef.current !== 'connected') {
+          applyCandidateSessionRef.current(row, force)
+        }
+      },
+      onSessionCleared: () => {
+        localTransportRef.current?.disconnect()
+        localTransportRef.current = null
+        localRuntimeConnectionRef.current = 'disabled'
+        setLocalRuntimeConnection('disabled')
+        setScenarioClockSync(null)
+        setSimulationPaused(false)
+        setSimulationSpeed(1)
+      },
+    },
+  })
+
+  const {
+    role,
+    connection,
+    session,
+    members,
+    recoverableInstructor,
+    recoverableCandidate,
+  } = teachingCore
+  const error = hostError ?? teachingCore.error
+
+  const storeSession = (next: TeachingSessionRow) => {
     sessionRef.current = next
-    setSession(next)
+    teachingCore.replaceSession(next, 'host-update')
   }
 
   useEffect(() => { roleRef.current = role }, [role])
@@ -224,14 +233,7 @@ export function useTeachingSession({
     const current = sessionRef.current
     if (!current || snapshot.sessionId !== current.id || snapshot.sessionKey !== current.session_key) return
     if (snapshot.status === 'ended') {
-      removeCandidateRecovery()
-      setRecoverableCandidate(null)
-      setConnection('idle')
-      setError('The instructor ended this teaching session.')
-      roleRef.current = 'standalone'
-      setRole('standalone')
-      localTransportRef.current?.disconnect()
-      localTransportRef.current = null
+      void teachingCore.terminateRemote('The instructor ended this teaching session.')
       return
     }
 
@@ -306,7 +308,7 @@ export function useTeachingSession({
         setLocalRuntimeConnection(state)
         appendScenarioLog('runtime.connection', { role: nextRole, sessionId: row.id, sessionKey: row.session_key, state, transport: url ? getLocalRuntimeProfile() : 'webrtc' })
         if (state === 'connected') {
-          if (roleRef.current !== 'standalone') setConnection('connected')
+          if (roleRef.current !== 'standalone') teachingCore.setExternalConnection('connected')
           if (nextRole === 'instructor') window.setTimeout(() => publishLocalRuntimeSnapshot(), 0)
         }
       },
@@ -381,324 +383,68 @@ export function useTeachingSession({
     pauseRevisionRef.current = Math.max(pauseRevisionRef.current, nextPauseRevision)
   }
 
-  const refreshMembers = async (sessionId: string) => {
-    try {
-      const nextMembers = await fetchSessionMembers(sessionId)
-      if (sessionRef.current?.id === sessionId || roleRef.current === 'instructor') setMembers(nextMembers)
-    } catch {
-      // Session updates remain usable even if the dashboard member refresh fails transiently.
-    }
-  }
-
-  const attachMemberSubscription = async (sessionId: string) => {
-    await closeTeachingSessionChannel(membersChannelRef.current)
-    await refreshMembers(sessionId)
-    membersChannelRef.current = subscribeToSessionMembers(sessionId, () => {
-      void refreshMembers(sessionId)
-    })
-  }
-
-  const attachSubscription = async (sessionId: string) => {
-    await closeTeachingSessionChannel(channelRef.current)
-    channelRef.current = subscribeToTeachingSession(
-      sessionId,
-      (next) => {
-        if (roleRef.current === 'candidate') {
-          if (next.status === 'ended') {
-            removeCandidateRecovery()
-            setRecoverableCandidate(null)
-            setConnection('idle')
-            setError('The instructor ended this teaching session.')
-            void closeTeachingSessionChannel(channelRef.current)
-            roleRef.current = 'standalone'
-            setRole('standalone')
-            return
-          }
-          if (localRuntimeConnectionRef.current === 'connected') return
-          storeSession(next)
-          applyCandidateSession(next)
-          return
-        }
-        storeSession(next)
-      },
-      async (status) => {
-        if (status === 'SUBSCRIBED') {
-          setConnection('connected')
-          try {
-            const fresh = await fetchTeachingSession(sessionId)
-            if (roleRef.current !== 'candidate' || localRuntimeConnectionRef.current !== 'connected') {
-              storeSession(fresh)
-              if (roleRef.current === 'candidate') applyCandidateSession(fresh)
-            }
-          } catch {
-            // The realtime stream remains active; the next database update will resynchronise state.
-          }
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          setConnection(localRuntimeConnectionRef.current === 'connected' ? 'connected' : 'reconnecting')
-        } else if (status === 'CLOSED' && roleRef.current !== 'standalone') {
-          setConnection(localRuntimeConnectionRef.current === 'connected' ? 'connected' : 'reconnecting')
-        }
-      },
-    )
-  }
+  applyCandidateSessionRef.current = applyCandidateSession
 
   const startInstructor = async (initial?: InstructorSessionInitialState) => {
-    setConnection('connecting')
-    setError(null)
-    appendScenarioLog('session.instructor.start_requested', { hasInitialState: Boolean(initial), simulationPaused: simulationPausedRef.current })
-    const startingPatient = initial?.patient ?? patientRef.current
-    const startingVentilator = initial?.ventilator ?? ventilatorRef.current
-    const startingAlarmLimits = initial?.alarmLimits ?? alarmLimitsRef.current
-    const startingTransitionSeconds = initial?.patientTransitionSeconds ?? patientTransitionSecondsRef.current
-    try {
-      const created = await createTeachingSession(startingPatient, startingVentilator, startingAlarmLimits)
-      roleRef.current = 'instructor'
-      setRole('instructor')
-      let row = await fetchTeachingSession(created.sessionId)
-      const transitionMs = Math.max(0, Math.round(startingTransitionSeconds * 1000))
-      if (Number(row.transition_ms ?? 0) !== transitionMs) {
-        row = await updateTeachingSession(created.sessionId, { transition_ms: transitionMs })
-      }
-      const clientId = instructorClientIdRef.current ?? crypto.randomUUID()
-      instructorClientIdRef.current = clientId
-      sessionStorage.setItem('eduvent.instructor-session-id', created.sessionId)
-      sessionStorage.setItem('eduvent.instructor-client-id', clientId)
-      await claimInstructorSession(created.sessionId, clientId)
-      patientRevisionRef.current = Number(row.patient_revision ?? 0)
-      ventilatorRevisionRef.current = Number(row.ventilator_revision ?? 0)
-      alarmRevisionRef.current = Number(row.alarm_revision ?? 0)
-      pauseRevisionRef.current = Number(row.pause_revision ?? 0)
-
-      const localPaused = simulationPausedRef.current
-      if (localPaused !== Boolean(row.simulation_paused)) {
-        pauseRevisionRef.current += 1
-        row = await updateTeachingSession(created.sessionId, {
-          simulation_paused: localPaused,
-          pause_revision: pauseRevisionRef.current,
-        })
-      }
-
-      storeSession(row)
-      await attachSubscription(created.sessionId)
-      await attachMemberSubscription(created.sessionId)
-      attachInstructorLease(created.sessionId, clientId)
-      attachLocalRuntime('instructor', row)
-      setRecoverableInstructor(null)
-      appendScenarioLog('session.instructor.started', { sessionId: row.id, sessionKey: row.session_key, status: row.status, simulationPaused: Boolean(row.simulation_paused) })
-    } catch (cause) {
-      appendScenarioLog('session.instructor.start_failed', { message: cause instanceof Error ? cause.message : String(cause) })
-      setConnection('error')
-      setError(cause instanceof Error ? cause.message : 'Unable to create instructor session.')
-      roleRef.current = 'standalone'
-      setRole('standalone')
+    setHostError(null)
+    const input: EduventTeachingSessionCreateInput = {
+      patient: initial?.patient ?? patientRef.current,
+      ventilator: initial?.ventilator ?? ventilatorRef.current,
+      alarmLimits: initial?.alarmLimits ?? alarmLimitsRef.current,
+      patientTransitionSeconds: initial?.patientTransitionSeconds ?? patientTransitionSecondsRef.current,
+      simulationPaused: simulationPausedRef.current,
     }
-  }
-
-  const joinCandidate = async (sessionKey: string, displayName: string, recoveryAttempt = false) => {
-    setConnection('connecting')
-    setError(null)
-    appendScenarioLog('session.candidate.join_requested', { sessionKey: sessionKey.trim().toUpperCase(), displayName: displayName.trim(), recoveryAttempt })
-    try {
-      const joined = await joinTeachingSession(sessionKey, displayName)
-      roleRef.current = 'candidate'
-      setRole('candidate')
-      const row = await fetchTeachingSession(joined.sessionId)
-      const recovery: RecoverableCandidateSession = {
-        sessionKey: row.session_key,
-        displayName: displayName.trim(),
-        expiresAt: row.expires_at,
-      }
-      persistCandidateRecovery(recovery)
-      setRecoverableCandidate(recovery)
-      patientRevisionRef.current = 0
-      ventilatorRevisionRef.current = 0
-      alarmRevisionRef.current = 0
-      pauseRevisionRef.current = 0
-      storeSession(row)
-      applyCandidateSession(row, true)
-      await touchSessionMember(joined.sessionId, patientRef.current, ventilatorRef.current, alarmLevelRef.current)
-      await attachSubscription(joined.sessionId)
-      attachLocalRuntime('candidate', row)
-      appendScenarioLog('session.candidate.joined', { sessionId: row.id, sessionKey: row.session_key, displayName: displayName.trim(), status: row.status, recoveryAttempt })
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Unable to join teaching session.'
-      appendScenarioLog('session.candidate.join_failed', { sessionKey: sessionKey.trim().toUpperCase(), recoveryAttempt, message })
-      if (recoveryAttempt && /expired|not found|ended/i.test(message)) {
-        removeCandidateRecovery()
-        setRecoverableCandidate(null)
-      }
-      setConnection('error')
-      setError(message)
-      roleRef.current = 'standalone'
-      setRole('standalone')
-    }
-  }
-
-  const resumeCandidate = async () => {
-    const recovery = readCandidateRecovery()
-    if (!recovery) {
-      setRecoverableCandidate(null)
-      return
-    }
-    await joinCandidate(recovery.sessionKey, recovery.displayName, true)
-  }
-
-  const attachInstructorLease = (sessionId: string, clientId: string) => {
-    if (instructorHeartbeatRef.current != null) window.clearInterval(instructorHeartbeatRef.current)
-    const heartbeat = () => {
-      void touchInstructorSession(sessionId, clientId).catch((cause) => {
-        const message = cause instanceof Error ? cause.message : 'Instructor control lease was lost.'
-        if (/expired/i.test(message)) {
-          sessionStorage.removeItem('eduvent.instructor-session-id')
-          sessionStorage.removeItem('eduvent.instructor-client-id')
-          instructorClientIdRef.current = null
-          roleRef.current = 'standalone'
-          setRole('standalone')
-          storeSession(null)
-          setMembers([])
-          setConnection('idle')
-          setError('This teaching session expired 2 hours after it was created.')
-          void closeTeachingSessionChannel(channelRef.current)
-          void closeTeachingSessionChannel(membersChannelRef.current)
-          return
-        }
-        setConnection('error')
-        setError(message)
-      })
-    }
-    heartbeat()
-    instructorHeartbeatRef.current = window.setInterval(heartbeat, 10000)
+    appendScenarioLog('session.instructor.start_requested', { hasInitialState: Boolean(initial), simulationPaused: input.simulationPaused })
+    const row = await teachingCore.startInstructor(input)
+    if (row) appendScenarioLog('session.instructor.started', { sessionId: row.id, sessionKey: row.session_key, status: row.status, simulationPaused: Boolean(row.simulation_paused) })
   }
 
   const resumeInstructor = async (sessionId?: string) => {
-    setConnection('connecting')
-    setError(null)
+    setHostError(null)
     appendScenarioLog('session.instructor.resume_requested', { sessionId: sessionId ?? null })
-    try {
-      await ensureAnonymousSession()
-      const found = sessionId ? { sessionId, sessionKey: '' } : await findActiveInstructorSession()
-      if (!found) {
-        setRecoverableInstructor(null)
-        setConnection('idle')
-        return
-      }
-      const clientId = sessionStorage.getItem('eduvent.instructor-client-id') ?? crypto.randomUUID()
-      instructorClientIdRef.current = clientId
-      await claimInstructorSession(found.sessionId, clientId)
-      const row = await fetchTeachingSession(found.sessionId)
-      roleRef.current = 'instructor'
-      setRole('instructor')
-      patientRevisionRef.current = Number(row.patient_revision ?? 0)
-      ventilatorRevisionRef.current = Number(row.ventilator_revision ?? 0)
-      alarmRevisionRef.current = Number(row.alarm_revision ?? 0)
-      pauseRevisionRef.current = Number(row.pause_revision ?? 0)
-      setSimulationPaused(Boolean(row.simulation_paused))
-      sessionStorage.setItem('eduvent.instructor-session-id', found.sessionId)
-      sessionStorage.setItem('eduvent.instructor-client-id', clientId)
-      storeSession(row)
-      setRecoverableInstructor(null)
-      await attachSubscription(found.sessionId)
-      await attachMemberSubscription(found.sessionId)
-      attachInstructorLease(found.sessionId, clientId)
-      attachLocalRuntime('instructor', row)
-      appendScenarioLog('session.instructor.resumed', { sessionId: row.id, sessionKey: row.session_key, status: row.status })
-    } catch (cause) {
-      appendScenarioLog('session.instructor.resume_failed', { sessionId: sessionId ?? null, message: cause instanceof Error ? cause.message : String(cause) })
-      setConnection('error')
-      setError(cause instanceof Error ? cause.message : 'Unable to rejoin instructor session.')
-    }
+    const row = await teachingCore.resumeInstructor(sessionId)
+    if (row) appendScenarioLog('session.instructor.resumed', { sessionId: row.id, sessionKey: row.session_key, status: row.status })
   }
 
-  useEffect(() => {
-    const storedSessionId = sessionStorage.getItem('eduvent.instructor-session-id')
-    if (storedSessionId) {
-      void resumeInstructor(storedSessionId)
-      return
-    }
-    void (async () => {
-      try {
-        const found = await findActiveInstructorSession()
-        if (found && roleRef.current === 'standalone') setRecoverableInstructor(found)
-      } catch {
-        // No recoverable instructor session is a normal standalone state.
-      }
-    })()
-  }, [])
+  const joinCandidate = async (sessionKey: string, displayName: string) => {
+    setHostError(null)
+    appendScenarioLog('session.candidate.join_requested', { sessionKey: sessionKey.trim().toUpperCase(), displayName: displayName.trim() })
+    const row = await teachingCore.joinCandidate(sessionKey, displayName)
+    if (row) appendScenarioLog('session.candidate.joined', { sessionId: row.id, sessionKey: row.session_key, displayName: displayName.trim(), status: row.status })
+  }
 
-  useEffect(() => {
-    const recovery = readCandidateRecovery()
-    if (!recovery) return
-    if (candidateRecoveryIsExpired(recovery)) {
-      removeCandidateRecovery()
-      return
-    }
-    setRecoverableCandidate(recovery)
-  }, [])
-
-  useEffect(() => {
-    if (!recoverableCandidate) return
-    const expiresAt = Date.parse(recoverableCandidate.expiresAt)
-    if (!Number.isFinite(expiresAt)) return
-    const remainingMs = expiresAt - Date.now()
-    if (remainingMs <= 0) {
-      removeCandidateRecovery()
-      setRecoverableCandidate(null)
-      return
-    }
-    const timer = window.setTimeout(() => {
-      removeCandidateRecovery()
-      setRecoverableCandidate(null)
-    }, remainingMs)
-    return () => window.clearTimeout(timer)
-  }, [recoverableCandidate?.expiresAt])
+  const resumeCandidate = async () => {
+    setHostError(null)
+    await teachingCore.resumeCandidate()
+  }
 
   const leaveSession = async () => {
-    const leavingRole = roleRef.current
-    appendScenarioLog('session.leave', { role: leavingRole, sessionId: sessionRef.current?.id ?? null, sessionKey: sessionRef.current?.session_key ?? null })
-    if (patientBroadcastTimerRef.current != null) window.clearTimeout(patientBroadcastTimerRef.current)
-    if (ventilatorBroadcastTimerRef.current != null) window.clearTimeout(ventilatorBroadcastTimerRef.current)
-    if (pauseBroadcastTimerRef.current != null) window.clearTimeout(pauseBroadcastTimerRef.current)
-    if (telemetryTimerRef.current != null) window.clearTimeout(telemetryTimerRef.current)
-    if (instructorHeartbeatRef.current != null) window.clearInterval(instructorHeartbeatRef.current)
-    if (localCheckpointTimerRef.current != null) window.clearInterval(localCheckpointTimerRef.current)
+    appendScenarioLog('session.leave', { role: roleRef.current, sessionId: sessionRef.current?.id ?? null, sessionKey: sessionRef.current?.session_key ?? null })
     localTransportRef.current?.disconnect()
     localTransportRef.current = null
-    localRuntimeConnectionRef.current = 'disabled'
-    setLocalRuntimeConnection('disabled')
-    setRuntimeTransportKind('cloud')
-    await closeTeachingSessionChannel(channelRef.current)
-    await closeTeachingSessionChannel(membersChannelRef.current)
-    channelRef.current = null
-    membersChannelRef.current = null
-    roleRef.current = 'standalone'
-    setRole('standalone')
-    storeSession(null)
-    setMembers([])
-    setConnection('idle')
-    setError(null)
-    setScenarioClockSync(null)
-    if (leavingRole === 'candidate') {
-      removeCandidateRecovery()
-      setRecoverableCandidate(null)
-    }
+    if (localCheckpointTimerRef.current != null) window.clearInterval(localCheckpointTimerRef.current)
+    await teachingCore.leaveSession()
   }
 
   const endInstructorSession = async () => {
     const current = sessionRef.current
     appendScenarioLog('session.instructor.end_requested', { sessionId: current?.id ?? null, sessionKey: current?.session_key ?? null })
-    if (roleRef.current === 'instructor' && current) {
-      publishLocalRuntimeSnapshot({ ...current, status: 'ended' })
-      try {
-        await updateTeachingSession(current.id, { status: 'ended' })
-      } catch {
-        // Leaving locally is still preferable to trapping the instructor in a broken session.
-      }
-    }
-    sessionStorage.removeItem('eduvent.instructor-session-id')
-    sessionStorage.removeItem('eduvent.instructor-client-id')
-    instructorClientIdRef.current = null
-    await leaveSession()
+    if (roleRef.current === 'instructor' && current) publishLocalRuntimeSnapshot({ ...current, status: 'ended' })
+    await teachingCore.endInstructorSession()
   }
+
+  useEffect(() => {
+    if ((role !== 'instructor' && role !== 'candidate') || !session) {
+      localTransportRef.current?.disconnect()
+      localTransportRef.current = null
+      return
+    }
+    attachLocalRuntime(role, session)
+    return () => {
+      localTransportRef.current?.disconnect()
+      localTransportRef.current = null
+    }
+  }, [role, session?.id])
 
   const updatePolicy = async (patch: PolicyPatch) => {
     const current = sessionRef.current
@@ -740,9 +486,9 @@ export function useTeachingSession({
     try {
       const next = await updateTeachingSession(current.id, databasePatch)
       storeSession(next)
-      setError(null)
+      setHostError(null)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to update session permissions.')
+      setHostError(cause instanceof Error ? cause.message : 'Unable to update session permissions.')
     }
   }
 
@@ -772,9 +518,9 @@ export function useTeachingSession({
     try {
       const next = await updateTeachingSession(current.id, patch)
       storeSession(next)
-      setError(null)
+      setHostError(null)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to broadcast settings.')
+      setHostError(cause instanceof Error ? cause.message : 'Unable to broadcast settings.')
     }
   }
 
@@ -793,9 +539,9 @@ export function useTeachingSession({
           transition_ms: patientTransitionSeconds * 1000,
         })
         storeSession(next)
-        setError(null)
+        setHostError(null)
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Unable to broadcast patient settings.')
+        setHostError(cause instanceof Error ? cause.message : 'Unable to broadcast patient settings.')
       }
     }, 180)
     return () => {
@@ -817,9 +563,9 @@ export function useTeachingSession({
           ventilator_revision: ventilatorRevisionRef.current,
         })
         storeSession(next)
-        setError(null)
+        setHostError(null)
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Unable to broadcast ventilator settings.')
+        setHostError(cause instanceof Error ? cause.message : 'Unable to broadcast ventilator settings.')
       }
     }, 180)
     return () => {
@@ -840,9 +586,9 @@ export function useTeachingSession({
           alarm_revision: alarmRevisionRef.current,
         })
         storeSession(next)
-        setError(null)
+        setHostError(null)
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Unable to broadcast alarm settings.')
+        setHostError(cause instanceof Error ? cause.message : 'Unable to broadcast alarm settings.')
       }
     }, 180)
     return () => window.clearTimeout(timer)
@@ -862,10 +608,10 @@ export function useTeachingSession({
           pause_revision: pauseRevisionRef.current,
         })
         storeSession(next)
-        setError(null)
+        setHostError(null)
         appendScenarioLog('session.pause_changed', { sessionId: latest.id, paused: simulationPaused, pauseRevision: pauseRevisionRef.current })
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Unable to broadcast simulation pause state.')
+        setHostError(cause instanceof Error ? cause.message : 'Unable to broadcast simulation pause state.')
       }
     }, 40)
     return () => {
@@ -912,84 +658,9 @@ export function useTeachingSession({
     }
   }, [role, session?.id, localRuntimeConnection])
 
-  // Realtime remains the fast path, but the teaching session row is authoritative.
-  // Refreshing it once per second makes instructor pause/resume resilient to a
-  // dropped postgres_changes notification without affecting candidate-local pause.
-  useEffect(() => {
-    if (role !== 'candidate' || !session?.id) return
-    let active = true
-    const sessionId = session.id
-
-    const refreshAuthoritativeSession = async () => {
-      try {
-        const fresh = await fetchTeachingSession(sessionId)
-        if (!active || roleRef.current !== 'candidate') return
-        if (fresh.status === 'ended') {
-          removeCandidateRecovery()
-          setRecoverableCandidate(null)
-          setConnection('idle')
-          setError('The instructor ended this teaching session.')
-          roleRef.current = 'standalone'
-          setRole('standalone')
-          return
-        }
-        if (localRuntimeConnectionRef.current !== 'connected') {
-          storeSession(fresh)
-          applyCandidateSession(fresh)
-        }
-      } catch {
-        // Realtime and the next refresh can recover independently.
-      }
-    }
-
-    void refreshAuthoritativeSession()
-    const timer = window.setInterval(() => void refreshAuthoritativeSession(), 1000)
-    return () => {
-      active = false
-      window.clearInterval(timer)
-    }
-  }, [role, session?.id])
-
-  useEffect(() => {
-    if (role !== 'candidate' || !session?.id) return
-    const sendHeartbeat = () => {
-      void touchSessionMember(session.id, patientRef.current, ventilatorRef.current, alarmLevelRef.current).catch((cause) => {
-        const message = cause instanceof Error ? cause.message : ''
-        if (/expired|ended/i.test(message)) {
-          removeCandidateRecovery()
-          setRecoverableCandidate(null)
-          roleRef.current = 'standalone'
-          setRole('standalone')
-          storeSession(null)
-          setConnection('idle')
-          setError('This teaching session expired 2 hours after it was created.')
-          void closeTeachingSessionChannel(channelRef.current)
-          return
-        }
-        // Realtime/session connectivity owns the visible connection state; telemetry may recover independently.
-      })
-    }
-    sendHeartbeat()
-    const timer = window.setInterval(sendHeartbeat, 10000)
-    return () => window.clearInterval(timer)
-  }, [role, session?.id])
-
-  useEffect(() => {
-    if (role !== 'candidate' || !session?.id) return
-    if (telemetryTimerRef.current != null) window.clearTimeout(telemetryTimerRef.current)
-    telemetryTimerRef.current = window.setTimeout(() => {
-      void touchSessionMember(session.id, patient, ventilator, candidateAlarmLevel).catch(() => undefined)
-    }, 500)
-    return () => {
-      if (telemetryTimerRef.current != null) window.clearTimeout(telemetryTimerRef.current)
-    }
-  }, [patient, ventilator, candidateAlarmLevel, role, session?.id])
-
   useEffect(() => () => {
     localTransportRef.current?.disconnect()
     if (localCheckpointTimerRef.current != null) window.clearInterval(localCheckpointTimerRef.current)
-    void closeTeachingSessionChannel(channelRef.current)
-    void closeTeachingSessionChannel(membersChannelRef.current)
   }, [])
 
   const candidateVentilatorLocked = role === 'candidate' && Boolean(session?.sync_ventilator) && !Boolean(session?.candidate_can_edit_ventilator)
