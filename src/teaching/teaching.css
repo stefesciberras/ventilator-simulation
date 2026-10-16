@@ -230,3 +230,7 @@
   .teaching-prompt-dock-header { cursor: grab; user-select: none; touch-action: none; }
   .teaching-prompt-dock-header:active { cursor: grabbing; }
 }
+
+@media (max-width: 899px) {
+  .teaching-prompt-modal { transform: none !important; }
+}
