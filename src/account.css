@@ -314,7 +314,16 @@
 .dynamic-runtime-status span { color: #84979f; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dynamic-runtime-status strong { color: #eff7f9; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dynamic-runtime-status small { grid-column: 1 / -1; color: #72c8df; font-size: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 999px) { .dynamic-runtime-toolbar { display: none; } }
+@media (max-width: 999px) {
+  .dynamic-runtime-toolbar { display: flex; max-width: min(360px, calc(100vw - 150px)); }
+  .dynamic-runtime-toolbar > button { padding: 4px 6px; font-size: 8px; }
+  .dynamic-runtime-status { min-width: 86px; flex: 1 1 auto; }
+  .dynamic-runtime-status span { display: none; }
+}
+@media (max-width: 650px) {
+  .dynamic-runtime-toolbar { max-width: none; }
+  .dynamic-runtime-status { display: none; }
+}
 
 
 /* Scenario Builder v0.1 runtime handoff */
