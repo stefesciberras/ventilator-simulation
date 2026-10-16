@@ -1,0 +1,61 @@
+name: Apply v0.82.2.5 alarm long-press patch
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.2.5-alarm-long-press
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply alarm silence long-press behaviour
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('src/App.tsx')
+          text = path.read_text()
+
+          old = """  const alarmSilenceTimeoutRef = useRef<number | null>(null)\n  const oxygenBoostDeadlineRef = useRef<number | null>(null)"""
+          new = """  const alarmSilenceTimeoutRef = useRef<number | null>(null)\n  const alarmSilenceLongPressTimeoutRef = useRef<number | null>(null)\n  const alarmSilenceLongPressTriggeredRef = useRef(false)\n  const oxygenBoostDeadlineRef = useRef<number | null>(null)"""
+          if text.count(old) != 1:
+              raise SystemExit(f'alarm silence refs match count: {text.count(old)}')
+          text = text.replace(old, new)
+
+          old = """  useEffect(() => () => {\n    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)\n    void audioContextRef.current?.close()\n  }, [])"""
+          new = """  useEffect(() => () => {\n    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)\n    if (alarmSilenceLongPressTimeoutRef.current != null) window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)\n    void audioContextRef.current?.close()\n  }, [])"""
+          if text.count(old) != 1:
+              raise SystemExit(f'alarm silence cleanup match count: {text.count(old)}')
+          text = text.replace(old, new)
+
+          old = """  const silenceAlarm = () => {\n    setAlarmLifecycle((current) => {\n      const next = { ...current }\n      for (const [key, entry] of Object.entries(current)) {\n        if (entry.resolvedAt != null) delete next[key]\n        else if (alarmConditions[key as keyof typeof alarmConditions]) next[key] = { ...entry, acknowledged: true }\n      }\n      return next\n    })\n    setAlarmSilenced(true)\n    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)\n    alarmSilenceTimeoutRef.current = window.setTimeout(() => {\n      setAlarmSilenced(false)\n      alarmSilenceTimeoutRef.current = null\n    }, 120000)\n  }"""
+          new = """  const silenceAlarm = (durationMs = 120000) => {\n    setAlarmLifecycle((current) => {\n      const next = { ...current }\n      for (const [key, entry] of Object.entries(current)) {\n        if (entry.resolvedAt != null) delete next[key]\n        else if (alarmConditions[key as keyof typeof alarmConditions]) next[key] = { ...entry, acknowledged: true }\n      }\n      return next\n    })\n    setAlarmSilenced(true)\n    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)\n    alarmSilenceTimeoutRef.current = window.setTimeout(() => {\n      setAlarmSilenced(false)\n      alarmSilenceTimeoutRef.current = null\n    }, durationMs)\n  }\n\n  const clearAlarmSilenceLongPress = () => {\n    if (alarmSilenceLongPressTimeoutRef.current != null) {\n      window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)\n      alarmSilenceLongPressTimeoutRef.current = null\n    }\n  }\n\n  const startAlarmSilenceLongPress = () => {\n    clearAlarmSilenceLongPress()\n    alarmSilenceLongPressTriggeredRef.current = false\n    alarmSilenceLongPressTimeoutRef.current = window.setTimeout(() => {\n      alarmSilenceLongPressTriggeredRef.current = true\n      alarmSilenceLongPressTimeoutRef.current = null\n      silenceAlarm(600000)\n    }, 800)\n  }\n\n  const finishAlarmSilencePress = () => {\n    clearAlarmSilenceLongPress()\n  }\n\n  const handleAlarmSilenceClick = () => {\n    if (alarmSilenceLongPressTriggeredRef.current) {\n      alarmSilenceLongPressTriggeredRef.current = false\n      return\n    }\n    silenceAlarm()\n  }"""
+          if text.count(old) != 1:
+              raise SystemExit(f'silenceAlarm function match count: {text.count(old)}')
+          text = text.replace(old, new)
+
+          old = """            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title=\"Silence alarm sound for 2 minutes\" aria-label=\"Silence alarm sound for 2 minutes\"><AlarmSilenceIcon /></button>"""
+          new = """            <button\n              className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`}\n              onClick={handleAlarmSilenceClick}\n              onPointerDown={startAlarmSilenceLongPress}\n              onPointerUp={finishAlarmSilencePress}\n              onPointerCancel={finishAlarmSilencePress}\n              onContextMenu={(event) => event.preventDefault()}\n              title=\"Press to silence alarms for 2 minutes; hold for 10 minutes\"\n              aria-label=\"Silence alarm sound: press for 2 minutes, hold for 10 minutes\"\n            ><AlarmSilenceIcon /></button>"""
+          if text.count(old) != 1:
+              raise SystemExit(f'alarm silence button match count: {text.count(old)}')
+          text = text.replace(old, new)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit patch and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx
+          git rm .github/workflows/v0.82.2.5-alarm-long-press.yml
+          git commit -m "Add 10-minute alarm silence long press"
+          git push
