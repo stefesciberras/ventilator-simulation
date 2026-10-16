@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { DynamicScenarioBuilder } from '../components/DynamicScenarioBuilder'
 import {
   getInstructorAccount,
   listInstructorPresets,
@@ -11,6 +10,7 @@ import {
 } from '../instructorAccount'
 import { APP_VERSION } from '../appVersion'
 import { createDefaultVentilatorScenario } from './modules/ventilator/defaultScenario'
+import { VentilatorScenarioEditor } from './modules/ventilator/VentilatorScenarioEditor'
 import { DEFAULT_SCENARIO_MODULE_ID, SCENARIO_MODULES } from './modules/registry'
 import { SCENARIO_BUILDER_VERSION } from './version'
 import './scenarioBuilder.css'
@@ -25,6 +25,7 @@ export function ScenarioBuilderApp() {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const defaultScenario = useMemo(() => createDefaultVentilatorScenario(), [])
+  const requestedScenarioId = useMemo(() => new URLSearchParams(window.location.search).get('scenario'), [])
 
   const refreshPresets = async () => {
     const next = await listInstructorPresets()
@@ -51,7 +52,11 @@ export function ScenarioBuilderApp() {
     return () => { active = false; unsubscribe() }
   }, [])
 
-  const dynamicPresets = useMemo(() => presets.filter((preset) => preset.scenario.kind === 'dynamic'), [presets])
+  const dynamicPresets = useMemo(() => {
+    const items = presets.filter((preset) => preset.scenario.kind === 'dynamic')
+    if (!requestedScenarioId) return items
+    return [...items].sort((a, b) => Number(b.id === requestedScenarioId) - Number(a.id === requestedScenarioId))
+  }, [presets, requestedScenarioId])
   const staticPresets = useMemo(() => presets.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'), [presets])
   const selectedModule = SCENARIO_MODULES.find((module) => module.id === moduleId) ?? SCENARIO_MODULES[0]
 
@@ -94,9 +99,9 @@ export function ScenarioBuilderApp() {
     <main className="scenario-builder-app">
       <header className="scenario-builder-appbar">
         <div>
-          <span className="scenario-builder-eyebrow">EDUVENT authoring workspace</span>
+          <span className="scenario-builder-eyebrow">Simulation authoring workspace</span>
           <h1>Scenario Builder</h1>
-          <small>Builder v{SCENARIO_BUILDER_VERSION} · Simulator v{APP_VERSION}</small>
+          <small>Builder v{SCENARIO_BUILDER_VERSION} · EDUVENT simulator v{APP_VERSION}</small>
         </div>
         <div className="scenario-builder-appbar-actions">
           {account && <span className="scenario-builder-account">{account.email}</span>}
@@ -119,7 +124,7 @@ export function ScenarioBuilderApp() {
         <aside>
           <span>Architecture</span>
           <strong>Module-based</strong>
-          <small>Future monitor and anaesthesia modules can plug into the same authoring shell.</small>
+          <small>The authoring shell is independent of the simulator engine; future monitor and anaesthesia modules can provide their own stage editors and runtime adapters.</small>
         </aside>
       </section>
 
@@ -141,12 +146,10 @@ export function ScenarioBuilderApp() {
         </section>
       ) : moduleId === 'ventilator' ? (
         <section className="scenario-builder-workspace">
-          <DynamicScenarioBuilder
-            currentScenario={defaultScenario}
+          <VentilatorScenarioEditor
+            seedScenario={defaultScenario}
             dynamicPresets={dynamicPresets}
             staticPresets={staticPresets}
-            simulationPaused
-            onSimulationPausedChange={() => undefined}
             onRefresh={refreshPresets}
             onStartScenario={startScenario}
             onClose={() => window.location.assign('/')}
