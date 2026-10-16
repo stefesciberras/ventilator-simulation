@@ -1,0 +1,458 @@
+name: Scenario Builder v0.2.0.4 refinements
+
+on:
+  push:
+    branches:
+      - chatgpt/scenario-builder-v0.2.0.4-trigger-refinements
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.2.0.4-trigger-refinements
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply scenario runtime refinements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'Expected block not found in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          # --- instructorAccount.ts: backwards-compatible OR trigger lists ---
+          path = 'src/instructorAccount.ts'
+          replace_once(path,
+          """  /** Rule used to progress from this stage to the next. Missing means manual. */
+  advanceTrigger?: DynamicScenarioTrigger
+}
+""",
+          """  /** Legacy single trigger, retained for backwards compatibility. */
+  advanceTrigger?: DynamicScenarioTrigger
+  /** v4 trigger list. Any configured trigger may advance the stage (OR semantics). */
+  advanceTriggers?: DynamicScenarioTrigger[]
+}
+
+export function dynamicStageTriggers(stage: DynamicScenarioStage): DynamicScenarioTrigger[] {
+  const configured = stage.advanceTriggers?.length
+    ? stage.advanceTriggers
+    : [stage.advanceTrigger ?? { type: 'manual' as const }]
+  const seen = new Set<DynamicScenarioTrigger['type']>()
+  const deduplicated = configured.filter((trigger) => {
+    if (seen.has(trigger.type)) return false
+    seen.add(trigger.type)
+    return true
+  })
+  return deduplicated.length ? deduplicated : [{ type: 'manual' }]
+}
+""")
+          replace_once(path,
+          """    schemaVersion: 3,
+    kind: 'dynamic',
+    description: description.trim(),
+    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' } }],
+""",
+          """    schemaVersion: 4,
+    kind: 'dynamic',
+    description: description.trim(),
+    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
+""")
+          replace_once(path,
+          """    stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => ({
+      name: stage.name || `Stage ${index + 1}`,
+      snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },
+      apply: stage.apply,
+      sourceName: stage.sourceName,
+      advanceTrigger: stage.advanceTrigger ?? { type: 'manual' },
+    })) : undefined,
+""",
+          """    stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => {
+      const triggers = dynamicStageTriggers(stage)
+      return {
+        name: stage.name || `Stage ${index + 1}`,
+        snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },
+        apply: stage.apply,
+        sourceName: stage.sourceName,
+        advanceTrigger: triggers[0],
+        advanceTriggers: triggers,
+      }
+    }) : undefined,
+""")
+
+          # --- DynamicScenarioBuilder.tsx: multi-select OR triggers + no duplicate next stage ---
+          path = 'src/components/DynamicScenarioBuilder.tsx'
+          replace_once(path,
+          """  asStaticScenario,
+  createInstructorPreset,
+""",
+          """  asStaticScenario,
+  createInstructorPreset,
+  dynamicStageTriggers,
+""")
+          replace_once(path,
+          """const defaultAdvanceTrigger = (): DynamicScenarioTrigger => ({ type: 'manual' })
+
+function triggerSummary(trigger: DynamicScenarioTrigger | undefined) {
+  const value = trigger ?? defaultAdvanceTrigger()
+  if (value.type === 'manual') return 'Manual · instructor proceeds'
+  if (value.type === 'time') return `After ${value.seconds}s in stage`
+  if (value.type === 'condition') {
+    const metric = CONDITION_METRICS.find((item) => item.value === value.metric)
+    const operator = value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='
+    return `${metric?.label ?? value.metric} ${operator} ${value.value}${metric?.unit ? ` ${metric.unit}` : ''}`
+  }
+  const field = VENT_FIELDS.find((item) => item.key === value.parameter)
+  const actor = value.actor === 'either' ? 'candidate or instructor' : value.actor
+  return `${field?.label ?? String(value.parameter)} changed by ${actor}`
+}
+""",
+          """const defaultAdvanceTrigger = (): DynamicScenarioTrigger => ({ type: 'manual' })
+
+function defaultTriggerForType(type: DynamicScenarioTrigger['type']): DynamicScenarioTrigger {
+  if (type === 'manual') return { type: 'manual' }
+  if (type === 'time') return { type: 'time', seconds: 30 }
+  if (type === 'condition') return { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 }
+  return { type: 'action', parameter: 'fio2', actor: 'either' }
+}
+
+function singleTriggerSummary(value: DynamicScenarioTrigger) {
+  if (value.type === 'manual') return 'Manual'
+  if (value.type === 'time') return `After ${value.seconds}s in stage`
+  if (value.type === 'condition') {
+    const metric = CONDITION_METRICS.find((item) => item.value === value.metric)
+    const operator = value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='
+    return `${metric?.label ?? value.metric} ${operator} ${value.value}${metric?.unit ? ` ${metric.unit}` : ''}`
+  }
+  const field = VENT_FIELDS.find((item) => item.key === value.parameter)
+  const actor = value.actor === 'either' ? 'candidate or instructor' : value.actor
+  return `${field?.label ?? String(value.parameter)} changed by ${actor}`
+}
+
+function triggerSummary(triggers: DynamicScenarioTrigger[]) {
+  return triggers.map(singleTriggerSummary).join(' OR ')
+}
+""")
+          replace_once(path,
+          """    advanceTrigger: stage.advanceTrigger ?? defaultAdvanceTrigger(),
+    apply: {
+""",
+          """    advanceTrigger: dynamicStageTriggers(stage)[0],
+    advanceTriggers: dynamicStageTriggers(stage),
+    apply: {
+""")
+          replace_once(path,
+          """    sourceName: 'Manual settings',
+    advanceTrigger: defaultAdvanceTrigger(),
+  }
+""",
+          """    sourceName: 'Manual settings',
+    advanceTrigger: defaultAdvanceTrigger(),
+    advanceTriggers: [defaultAdvanceTrigger()],
+  }
+""")
+          replace_once(path,
+          """  const setAdvanceTrigger = (index: number, advanceTrigger: DynamicScenarioTrigger) => {
+    updateStage(index, (stage) => ({ ...stage, advanceTrigger }))
+  }
+
+  const chooseTriggerType = (index: number, type: DynamicScenarioTrigger['type']) => {
+    const current = draft.stages[index]?.advanceTrigger
+    if (current?.type === type) return
+    if (type === 'manual') setAdvanceTrigger(index, { type: 'manual' })
+    if (type === 'time') setAdvanceTrigger(index, { type: 'time', seconds: 30 })
+    if (type === 'condition') setAdvanceTrigger(index, { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 })
+    if (type === 'action') setAdvanceTrigger(index, { type: 'action', parameter: 'fio2', actor: 'either' })
+  }
+""",
+          """  const setAdvanceTriggers = (index: number, advanceTriggers: DynamicScenarioTrigger[]) => {
+    const next = advanceTriggers.length ? advanceTriggers : [defaultAdvanceTrigger()]
+    updateStage(index, (stage) => ({ ...stage, advanceTrigger: next[0], advanceTriggers: next }))
+  }
+
+  const updateAdvanceTrigger = (index: number, nextTrigger: DynamicScenarioTrigger) => {
+    const stage = draft.stages[index]
+    if (!stage) return
+    const triggers = dynamicStageTriggers(stage).map((trigger) => trigger.type === nextTrigger.type ? nextTrigger : trigger)
+    setAdvanceTriggers(index, triggers)
+  }
+
+  const toggleTriggerType = (index: number, type: DynamicScenarioTrigger['type']) => {
+    const stage = draft.stages[index]
+    if (!stage) return
+    const triggers = dynamicStageTriggers(stage)
+    const selected = triggers.some((trigger) => trigger.type === type)
+    if (selected) {
+      if (triggers.length === 1) return
+      setAdvanceTriggers(index, triggers.filter((trigger) => trigger.type !== type))
+      return
+    }
+    setAdvanceTriggers(index, [...triggers, defaultTriggerForType(type)])
+  }
+""")
+          replace_once(path,
+          """        schemaVersion: 3,
+""",
+          """        schemaVersion: 4,
+""")
+          replace_once(path,
+          """          return {
+            ...stage,
+            snapshot,
+            apply: {
+""",
+          """          const triggers = dynamicStageTriggers(stage)
+          return {
+            ...stage,
+            advanceTrigger: triggers[0],
+            advanceTriggers: triggers,
+            snapshot,
+            apply: {
+""")
+          old_ui = """                <div className=\"dynamic-transition-builder\">\n                  <button\n                    type=\"button\"\n                    className=\"dynamic-add-stage\"\n                    onClick={() => setTriggerMenuIndex((current) => current === index ? null : index)}\n                    aria-label={`Configure transition after Stage ${index + 1}`}\n                    title=\"Configure transition and add the next stage\"\n                  >\n                    ＋\n                  </button>\n                  <span className=\"dynamic-trigger-summary\">{triggerSummary(stage.advanceTrigger)}</span>\n                  {triggerMenuIndex === index && (() => {\n                    const trigger = stage.advanceTrigger ?? defaultAdvanceTrigger()\n                    return <div className=\"dynamic-trigger-menu\">\n                      <div className=\"dynamic-trigger-types\">\n                        {(['manual', 'time', 'condition', 'action'] as const).map((type) => (\n                          <button type=\"button\" key={type} className={trigger.type === type ? 'selected' : ''} onClick={() => chooseTriggerType(index, type)}>\n                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : 'Action'}\n                          </button>\n                        ))}\n                      </div>\n                      {trigger.type === 'manual' && <p>Instructor advances using Proceed to Next. Back remains available during the scenario.</p>}\n                      {trigger.type === 'time' && <label className=\"dynamic-trigger-field\"><span>Time in stage</span><div><input type=\"number\" min={1} max={3600} step={1} value={trigger.seconds} onChange={(event) => setAdvanceTrigger(index, { ...trigger, seconds: Math.max(1, Number(event.target.value) || 1) })} /><em>seconds</em></div></label>}\n                      {trigger.type === 'condition' && <div className=\"dynamic-trigger-condition\">\n                        <label><span>Measured value</span><select value={trigger.metric} onChange={(event) => setAdvanceTrigger(index, { ...trigger, metric: event.target.value as DynamicScenarioMetric })}>{CONDITION_METRICS.map((metric) => <option key={metric.value} value={metric.value}>{metric.label}</option>)}</select></label>\n                        <label><span>Comparison</span><select value={trigger.operator} onChange={(event) => setAdvanceTrigger(index, { ...trigger, operator: event.target.value as 'lt' | 'eq' | 'gt' })}><option value=\"lt\">Less than (&lt;)</option><option value=\"eq\">Equal to (=)</option><option value=\"gt\">Greater than (&gt;)</option></select></label>\n                        <label><span>Value</span><input type=\"number\" step=\"0.1\" value={trigger.value} onChange={(event) => setAdvanceTrigger(index, { ...trigger, value: Number(event.target.value) || 0 })} /></label>\n                      </div>}\n                      {trigger.type === 'action' && <div className=\"dynamic-trigger-condition\">\n                        <label><span>Ventilator parameter</span><select value={String(trigger.parameter)} onChange={(event) => setAdvanceTrigger(index, { ...trigger, parameter: event.target.value as keyof VentilatorSettings })}>{VENT_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>\n                        <label><span>Changed by</span><select value={trigger.actor} onChange={(event) => setAdvanceTrigger(index, { ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value=\"either\">Candidate or instructor</option><option value=\"candidate\">Candidate</option><option value=\"instructor\">Instructor</option></select></label>\n                      </div>}\n                      <div className=\"dynamic-trigger-actions\"><button type=\"button\" onClick={() => setTriggerMenuIndex(null)}>Close</button><button type=\"button\" className=\"account-primary-button\" onClick={() => insertStage(index)}>Add next stage</button></div>\n                    </div>\n                  })()}\n                </div>\n"""
+          new_ui = """                <div className=\"dynamic-transition-builder\">\n                  <button\n                    type=\"button\"\n                    className=\"dynamic-add-stage\"\n                    onClick={() => setTriggerMenuIndex((current) => current === index ? null : index)}\n                    aria-label={`Configure transition after Stage ${index + 1}`}\n                    title=\"Configure transition after this stage\"\n                  >\n                    ＋\n                  </button>\n                  <span className=\"dynamic-trigger-summary\">{triggerSummary(dynamicStageTriggers(stage))}</span>\n                  {triggerMenuIndex === index && (() => {\n                    const triggers = dynamicStageTriggers(stage)\n                    const manualTrigger = triggers.find((trigger) => trigger.type === 'manual')\n                    const timeTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'time' }> => trigger.type === 'time')\n                    const conditionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'condition' }> => trigger.type === 'condition')\n                    const actionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'action' }> => trigger.type === 'action')\n                    return <div className=\"dynamic-trigger-menu\">\n                      <div className=\"dynamic-trigger-types\">\n                        {(['manual', 'time', 'condition', 'action'] as const).map((type) => (\n                          <button type=\"button\" key={type} className={triggers.some((trigger) => trigger.type === type) ? 'selected' : ''} onClick={() => toggleTriggerType(index, type)}>\n                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : 'Action'}\n                          </button>\n                        ))}\n                      </div>\n                      <p>Any selected trigger can advance to the next stage (OR). Manual keeps the instructor trigger available while automatic triggers remain armed.</p>\n                      {manualTrigger && <p>Manual: instructor advances from the Teaching tab. Back remains available during the scenario.</p>}\n                      {timeTrigger && <label className=\"dynamic-trigger-field\"><span>Time in stage</span><div><input type=\"number\" min={1} max={3600} step={1} value={timeTrigger.seconds} onChange={(event) => updateAdvanceTrigger(index, { ...timeTrigger, seconds: Math.max(1, Number(event.target.value) || 1) })} /><em>seconds</em></div></label>}\n                      {conditionTrigger && <div className=\"dynamic-trigger-condition\">\n                        <label><span>Measured value</span><select value={conditionTrigger.metric} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, metric: event.target.value as DynamicScenarioMetric })}>{CONDITION_METRICS.map((metric) => <option key={metric.value} value={metric.value}>{metric.label}</option>)}</select></label>\n                        <label><span>Comparison</span><select value={conditionTrigger.operator} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, operator: event.target.value as 'lt' | 'eq' | 'gt' })}><option value=\"lt\">Less than (&lt;)</option><option value=\"eq\">Equal to (=)</option><option value=\"gt\">Greater than (&gt;)</option></select></label>\n                        <label><span>Value</span><input type=\"number\" step=\"0.1\" value={conditionTrigger.value} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, value: Number(event.target.value) || 0 })} /></label>\n                      </div>}\n                      {actionTrigger && <div className=\"dynamic-trigger-condition\">\n                        <label><span>Ventilator parameter</span><select value={String(actionTrigger.parameter)} onChange={(event) => updateAdvanceTrigger(index, { ...actionTrigger, parameter: event.target.value as keyof VentilatorSettings })}>{VENT_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>\n                        <label><span>Changed by</span><select value={actionTrigger.actor} onChange={(event) => updateAdvanceTrigger(index, { ...actionTrigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value=\"either\">Candidate or instructor</option><option value=\"candidate\">Candidate</option><option value=\"instructor\">Instructor</option></select></label>\n                      </div>}\n                      <div className=\"dynamic-trigger-actions\"><button type=\"button\" onClick={() => setTriggerMenuIndex(null)}>Close</button>{index === draft.stages.length - 1 && <button type=\"button\" className=\"account-primary-button\" onClick={() => insertStage(index)}>Add next stage</button>}</div>\n                    </div>\n                  })()}\n                </div>\n"""
+          replace_once(path, old_ui, new_ui)
+
+          # --- InstructorAccountControls.tsx: OR runtime, stage timer, diagnostic context ---
+          path = 'src/components/InstructorAccountControls.tsx'
+          replace_once(path,
+          """  deleteInstructorPreset,
+  getInstructorAccount,
+""",
+          """  deleteInstructorPreset,
+  dynamicStageTriggers,
+  getInstructorAccount,
+""")
+          replace_once(path,
+          """interface InstructorAccountControlsProps {
+""",
+          """export interface DynamicScenarioDiagnosticContext {
+  scenarioId: string
+  scenarioName: string
+  description: string
+  schemaVersion: number | null
+  stageIndex: number
+  stageName: string
+  stageStartedAtSeconds: number
+  triggers: DynamicScenarioTrigger[]
+  scenario: InstructorScenarioSnapshot
+}
+
+interface InstructorAccountControlsProps {
+""")
+          replace_once(path,
+          """  onStartInstructorSession: (scenario?: InstructorScenarioSnapshot) => Promise<void>
+  onDynamicScenarioStarted?: () => void
+}
+""",
+          """  onStartInstructorSession: (scenario?: InstructorScenarioSnapshot) => Promise<void>
+  onDynamicScenarioStarted?: () => void
+  onScenarioDiagnosticChange?: (context: DynamicScenarioDiagnosticContext | null) => void
+}
+""")
+          replace_once(path,
+          """function triggerRuntimeLabel(trigger: DynamicScenarioTrigger | undefined) {
+  const value = trigger ?? { type: 'manual' as const }
+  if (value.type === 'manual') return 'Manual'
+  if (value.type === 'time') return `After ${value.seconds}s`
+  if (value.type === 'condition') return `${value.metric} ${value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='} ${value.value}`
+  return `${String(value.parameter)} changed · ${value.actor}`
+}
+""",
+          """function singleTriggerRuntimeLabel(value: DynamicScenarioTrigger) {
+  if (value.type === 'manual') return 'Manual'
+  if (value.type === 'time') return `After ${value.seconds}s`
+  if (value.type === 'condition') return `${value.metric} ${value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='} ${value.value}`
+  return `${String(value.parameter)} changed · ${value.actor}`
+}
+
+function triggerRuntimeLabel(triggers: DynamicScenarioTrigger[]) {
+  return triggers.map(singleTriggerRuntimeLabel).join(' OR ')
+}
+
+function formatStageTimer(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  return hours > 0
+    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+""")
+          replace_once(path,
+          """export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onDynamicScenarioStarted }: InstructorAccountControlsProps) {
+""",
+          """export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onDynamicScenarioStarted, onScenarioDiagnosticChange }: InstructorAccountControlsProps) {
+""")
+          replace_once(path,
+          """  const activeDynamicPreset = useMemo(() => dynamicPresets.find((preset) => preset.id === activeDynamicId) ?? null, [dynamicPresets, activeDynamicId])
+  const scenarioForStageSource = (sourceId: string) => sourceId === 'current' ? currentScenario : (staticPresets.find((preset) => preset.id === sourceId)?.scenario ?? currentScenario)
+""",
+          """  const activeDynamicPreset = useMemo(() => dynamicPresets.find((preset) => preset.id === activeDynamicId) ?? null, [dynamicPresets, activeDynamicId])
+
+  useEffect(() => {
+    if (!onScenarioDiagnosticChange) return
+    if (!activeDynamicPreset) {
+      onScenarioDiagnosticChange(null)
+      return
+    }
+    const stages = activeDynamicPreset.scenario.stages ?? []
+    const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))
+    const stage = stages[index]
+    onScenarioDiagnosticChange({
+      scenarioId: activeDynamicPreset.id,
+      scenarioName: activeDynamicPreset.name,
+      description: activeDynamicPreset.scenario.description ?? '',
+      schemaVersion: activeDynamicPreset.scenario.schemaVersion ?? null,
+      stageIndex: index,
+      stageName: stage?.name ?? `Stage ${index + 1}`,
+      stageStartedAtSeconds: activeDynamicStageStartedAt,
+      triggers: stage ? dynamicStageTriggers(stage) : [],
+      scenario: activeDynamicPreset.scenario,
+    })
+  }, [activeDynamicPreset, activeDynamicStage, activeDynamicStageStartedAt, onScenarioDiagnosticChange])
+
+  useEffect(() => () => onScenarioDiagnosticChange?.(null), [onScenarioDiagnosticChange])
+
+  const scenarioForStageSource = (sourceId: string) => sourceId === 'current' ? currentScenario : (staticPresets.find((preset) => preset.id === sourceId)?.scenario ?? currentScenario)
+""")
+          old_auto = """  useEffect(() => {\n    if (role === 'candidate' || !activeDynamicPreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return\n    const stages = activeDynamicPreset.scenario.stages ?? []\n    if (activeDynamicStage < 0 || activeDynamicStage >= stages.length - 1) return\n    const stage = stages[activeDynamicStage]\n    const trigger = stage.advanceTrigger ?? { type: 'manual' as const }\n    if (trigger.type === 'manual') return\n\n    let shouldAdvance = false\n    if (trigger.type === 'time') {\n      shouldAdvance = scenarioElapsedSeconds - activeDynamicStageStartedAt >= Math.max(1, trigger.seconds)\n    } else if (trigger.type === 'condition') {\n      const actual = conditionMetricValue(physiologyMeasurements, trigger.metric)\n      shouldAdvance = actual != null && conditionMatches(actual, trigger.operator, trigger.value)\n    } else if (trigger.type === 'action') {\n      if (trigger.actor === 'instructor' || trigger.actor === 'either') {\n        const baseline = actionBaselineInstructorRef.current\n        if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter], baseline[trigger.parameter])) shouldAdvance = true\n      }\n      if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {\n        for (const member of sessionMembers) {\n          if (member.role !== 'candidate') continue\n          const baseline = actionBaselineCandidatesRef.current.get(member.id)\n          const settings = member.ventilator_settings as Partial<VentilatorSettings>\n          if (!baseline || !settings || !(trigger.parameter in settings)) continue\n          if (settingChanged(settings[trigger.parameter], baseline[trigger.parameter])) { shouldAdvance = true; break }\n        }\n      }\n    }\n\n    if (!shouldAdvance) return\n    automaticAdvanceLockRef.current = true\n    loadDynamicStage(activeDynamicPreset, activeDynamicStage + 1, 'automatic')\n  }, [role, activeDynamicPreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers])\n"""
+          new_auto = """  useEffect(() => {\n    if (role === 'candidate' || !activeDynamicPreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return\n    const stages = activeDynamicPreset.scenario.stages ?? []\n    if (activeDynamicStage < 0 || activeDynamicStage >= stages.length - 1) return\n    const stage = stages[activeDynamicStage]\n    const automaticTriggers = dynamicStageTriggers(stage).filter((trigger) => trigger.type !== 'manual')\n    if (!automaticTriggers.length) return\n\n    let shouldAdvance = false\n    for (const trigger of automaticTriggers) {\n      if (trigger.type === 'time') {\n        shouldAdvance = scenarioElapsedSeconds - activeDynamicStageStartedAt >= Math.max(1, trigger.seconds)\n      } else if (trigger.type === 'condition') {\n        const actual = conditionMetricValue(physiologyMeasurements, trigger.metric)\n        shouldAdvance = actual != null && conditionMatches(actual, trigger.operator, trigger.value)\n      } else if (trigger.type === 'action') {\n        if (trigger.actor === 'instructor' || trigger.actor === 'either') {\n          const baseline = actionBaselineInstructorRef.current\n          if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter], baseline[trigger.parameter])) shouldAdvance = true\n        }\n        if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {\n          for (const member of sessionMembers) {\n            if (member.role !== 'candidate') continue\n            const baseline = actionBaselineCandidatesRef.current.get(member.id)\n            const settings = member.ventilator_settings as Partial<VentilatorSettings>\n            if (!baseline || !settings || !(trigger.parameter in settings)) continue\n            if (settingChanged(settings[trigger.parameter], baseline[trigger.parameter])) { shouldAdvance = true; break }\n          }\n        }\n      }\n      if (shouldAdvance) break\n    }\n\n    if (!shouldAdvance) return\n    automaticAdvanceLockRef.current = true\n    loadDynamicStage(activeDynamicPreset, activeDynamicStage + 1, 'automatic')\n  }, [role, activeDynamicPreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers])\n"""
+          replace_once(path, old_auto, new_auto)
+          replace_once(path,
+          """      sourceName: nameForStageSource(stageBuilderSourceId),
+    })
+""",
+          """      sourceName: nameForStageSource(stageBuilderSourceId),
+      advanceTrigger: { type: 'manual' },
+      advanceTriggers: [{ type: 'manual' }],
+    })
+""")
+          replace_once(path,
+          """      await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 3, kind: 'dynamic', stages } })
+""",
+          """      await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 4, kind: 'dynamic', stages } })
+""")
+          old_runtime = """      {runtimeHost && role === 'instructor' && activeDynamicPreset && createPortal((() => {\n        const stages = activeDynamicPreset.scenario.stages ?? []\n        const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))\n        const trigger = stages[index]?.advanceTrigger\n        const manualTrigger = (trigger ?? { type: 'manual' as const }).type === 'manual'\n        return <section className=\"dynamic-runtime-panel\" aria-label=\"Running dynamic scenario\">\n          <div className=\"dynamic-runtime-panel-heading\">\n            <div>\n              <span>Running scenario</span>\n              <strong>{activeDynamicPreset.name}</strong>\n            </div>\n            <button type=\"button\" onClick={openScenarios}>Scenario library</button>\n          </div>\n          <div className=\"dynamic-runtime-stage-card\">\n            <div><span>Current stage</span><strong>{stages[index]?.name ?? `Stage ${index + 1}`}</strong></div>\n            <div><span>Progress</span><strong>{index + 1} / {stages.length}</strong></div>\n            <div><span>Trigger</span><strong>{triggerRuntimeLabel(trigger)}</strong></div>\n          </div>\n          <div className=\"dynamic-runtime-panel-actions\">\n            <button type=\"button\" disabled={index <= 0} onClick={() => loadDynamicStage(activeDynamicPreset, index - 1)}>Back</button>\n            <button\n              type=\"button\"\n              className=\"dynamic-runtime-primary\"\n              disabled={index >= stages.length - 1}\n              title={manualTrigger ? 'Fire the manual trigger and load the next stage' : 'Advance to the next stage now'}\n              onClick={() => loadDynamicStage(activeDynamicPreset, index + 1)}\n            >\n              {manualTrigger ? 'Manual trigger' : 'Advance now'}\n            </button>\n            <button type=\"button\" className=\"dynamic-runtime-stop\" onClick={() => { setActiveDynamicId(null); setActiveDynamicStage(0); setPresetMessage('Dynamic scenario stopped.') }}>Stop scenario</button>\n          </div>\n        </section>\n      })(), runtimeHost)}\n"""
+          new_runtime = """      {runtimeHost && role === 'instructor' && activeDynamicPreset && createPortal((() => {\n        const stages = activeDynamicPreset.scenario.stages ?? []\n        const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))\n        const stage = stages[index]\n        const triggers = stage ? dynamicStageTriggers(stage) : [{ type: 'manual' as const }]\n        const manualTrigger = triggers.some((trigger) => trigger.type === 'manual')\n        const stageElapsedSeconds = Math.max(0, scenarioElapsedSeconds - activeDynamicStageStartedAt)\n        return <section className=\"dynamic-runtime-panel\" aria-label=\"Running dynamic scenario\">\n          <div className=\"dynamic-runtime-panel-heading\">\n            <div>\n              <span>Running scenario</span>\n              <strong>{activeDynamicPreset.name}</strong>\n            </div>\n          </div>\n          <div className=\"dynamic-runtime-stage-card\">\n            <div><span>Current stage</span><strong>{stage?.name ?? `Stage ${index + 1}`}</strong></div>\n            <div><span>Progress</span><strong>{index + 1} / {stages.length}</strong></div>\n            <div><span>Stage time</span><strong>{formatStageTimer(stageElapsedSeconds)}</strong></div>\n            <div><span>Trigger</span><strong>{triggerRuntimeLabel(triggers)}</strong></div>\n          </div>\n          <div className=\"dynamic-runtime-panel-actions\">\n            <button type=\"button\" disabled={index <= 0} onClick={() => loadDynamicStage(activeDynamicPreset, index - 1)}>Back</button>\n            <button\n              type=\"button\"\n              className=\"dynamic-runtime-primary\"\n              disabled={index >= stages.length - 1}\n              title={manualTrigger ? 'Advance manually to the next stage' : 'Advance to the next stage now'}\n              onClick={() => loadDynamicStage(activeDynamicPreset, index + 1)}\n            >\n              {manualTrigger ? 'Manual trigger' : 'Advance now'}\n            </button>\n            <button type=\"button\" className=\"dynamic-runtime-stop\" onClick={() => { setActiveDynamicId(null); setActiveDynamicStage(0); setPresetMessage('Dynamic scenario stopped.') }}>Stop scenario</button>\n          </div>\n        </section>\n      })(), runtimeHost)}\n"""
+          replace_once(path, old_runtime, new_runtime)
+
+          # --- diagnostics.ts: thread-friendly scenario snapshot ---
+          path = 'src/diagnostics.ts'
+          replace_once(path,
+          """export async function copyDiagnosticSnapshot(
+""",
+          """export async function copyScenarioSnapshot(snapshot: Record<string, unknown>): Promise<boolean> {
+  const entries: ScenarioLogEntry[] = readScenarioLogs()
+  return copyJsonPayload({
+    schema: 'eduvent-scenario-diagnostic-v1',
+    capturedAt: new Date().toISOString(),
+    appVersion: APP_VERSION,
+    purpose: 'Paste this JSON into the EDUVENT development thread for scenario debugging.',
+    snapshot,
+    recentScenarioEvents: entries.slice(-100),
+  }, 'Copy scenario diagnostic JSON')
+}
+
+export async function copyDiagnosticSnapshot(
+""")
+
+          # --- App.tsx: expose Scenario Debug Snapshot in diagnostics menu ---
+          path = 'src/App.tsx'
+          replace_once(path,
+          """import { InstructorAccountControls } from './components/InstructorAccountControls'
+""",
+          """import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
+""")
+          replace_once(path,
+          """import { appendScenarioLog, copyDiagnosticSnapshot, copyScenarioLogs } from './diagnostics'
+""",
+          """import { appendScenarioLog, copyDiagnosticSnapshot, copyScenarioLogs, copyScenarioSnapshot } from './diagnostics'
+""")
+          replace_once(path,
+          """  const [dynamicScenarioRuntimeHost, setDynamicScenarioRuntimeHost] = useState<HTMLDivElement | null>(null)
+  const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
+""",
+          """  const [dynamicScenarioRuntimeHost, setDynamicScenarioRuntimeHost] = useState<HTMLDivElement | null>(null)
+  const [dynamicScenarioDiagnostic, setDynamicScenarioDiagnostic] = useState<DynamicScenarioDiagnosticContext | null>(null)
+  const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
+""")
+          replace_once(path,
+          """  const toggleOxygenBoost = () => {
+""",
+          """  const copyScenarioSnapshotDiagnostics = async () => {
+    const active = dynamicScenarioDiagnostic
+    const copied = await copyScenarioSnapshot({
+      session: {
+        role: teachingSession.role,
+        status: teachingSession.session?.status ?? null,
+        connection: teachingSession.connection,
+        runtimeTransport: teachingSession.runtimeTransportKind,
+        runtimeConnection: teachingSession.localRuntimeConnection,
+        candidateCount: teachingSession.members.filter((member) => member.role === 'candidate').length,
+      },
+      runtime: {
+        scenarioElapsedSeconds: displayedScenarioElapsedTime,
+        simulationPaused,
+        simulationSpeed,
+        stageElapsedSeconds: active ? Math.max(0, displayedScenarioElapsedTime - active.stageStartedAtSeconds) : null,
+        activeScenario: active,
+      },
+      currentAppliedScenario: currentInstructorScenario,
+      physiologyMeasurements,
+    })
+    setDiagnosticMenuOpen(false)
+    setDiagnosticCopied(copied ? 'scenario' : null)
+    if (copied) window.setTimeout(() => setDiagnosticCopied(null), 1800)
+  }
+
+  const toggleOxygenBoost = () => {
+""")
+          replace_once(path,
+          """            onStartInstructorSession={startInstructorSession}
+            onDynamicScenarioStarted={() => { setControlTab('teaching'); setMobileWorkspacePage('settings') }}
+          />
+""",
+          """            onStartInstructorSession={startInstructorSession}
+            onDynamicScenarioStarted={() => { setControlTab('teaching'); setMobileWorkspacePage('settings') }}
+            onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
+          />
+""")
+          replace_once(path,
+          """                <button type=\"button\" role=\"menuitem\" onClick={() => void copyScenarioDiagnostics()}>\n                  <strong>Scenario Logs</strong><small>Teaching-session and scenario runtime events</small>\n                </button>\n""",
+          """                <button type=\"button\" role=\"menuitem\" onClick={() => void copyScenarioSnapshotDiagnostics()}>\n                  <strong>Scenario Debug Snapshot</strong><small>Scenario definition, current stage/state and recent events</small>\n                </button>\n                <button type=\"button\" role=\"menuitem\" onClick={() => void copyScenarioDiagnostics()}>\n                  <strong>Scenario Logs</strong><small>Teaching-session and scenario runtime events</small>\n                </button>\n""")
+
+          # --- account.css: four-column runtime status card ---
+          path = 'src/account.css'
+          replace_once(path,
+          """.dynamic-runtime-stage-card { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(70px,.45fr) minmax(0,1fr); gap: 1px; background: #263a43; border: 1px solid #263a43; }
+""",
+          """.dynamic-runtime-stage-card { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(70px,.45fr) minmax(82px,.5fr) minmax(0,1.25fr); gap: 1px; background: #263a43; border: 1px solid #263a43; }
+""")
+
+          # --- version ---
+          Path('src/scenario-builder/version.ts').write_text("export const SCENARIO_BUILDER_VERSION = '0.2.0.4'\n")
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit refined source
+        run: |
+          git checkout origin/main -- tsconfig.app.tsbuildinfo || true
+          rm .github/workflows/scenario-builder-v0204-refinements.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          git commit -m "Refine scenario triggers, timer and diagnostics"
+          git push origin HEAD:chatgpt/scenario-builder-v0.2.0.4-trigger-refinements
