@@ -496,7 +496,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   }, [account, role, dynamicPresets])
 
   useEffect(() => {
-    if (role === 'instructor' || !activeDynamicId) return
+    if (role !== 'candidate' || !activeDynamicId) return
     setActiveDynamicId(null)
     setActiveDynamicStage(0)
   }, [role, activeDynamicId])
