@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   TeachingHostAdapter,
   TeachingLibraryDraft,
@@ -273,12 +273,51 @@ export function TeachingCandidateOverlay({
   const [selectedOptionId, setSelectedOptionId] = useState('')
   const [dismissedPromptId, setDismissedPromptId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null)
 
   useEffect(() => {
     setSelectedOptionId('')
     setDismissedPromptId(null)
     setCollapsed(false)
+    setPosition({ x: 0, y: 0 })
+    dragRef.current = null
   }, [prompt?.id])
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth < 900 || (event.target as HTMLElement).closest('button')) return
+    event.preventDefault()
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: position.x, originY: position.y }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId || window.innerWidth < 900) return
+    const panel = event.currentTarget.closest('.teaching-prompt-modal') as HTMLElement | null
+    const rect = panel?.getBoundingClientRect()
+    const proposedX = drag.originX + event.clientX - drag.startX
+    const proposedY = drag.originY + event.clientY - drag.startY
+    if (!rect) {
+      setPosition({ x: proposedX, y: proposedY })
+      return
+    }
+    const baseLeft = window.innerWidth - rect.width - 18
+    const baseTop = window.innerHeight / 2
+    const minX = 16 - baseLeft
+    const maxX = 0
+    const minY = 16 - (baseTop - rect.height / 2)
+    const maxY = window.innerHeight - 16 - (baseTop + rect.height / 2)
+    setPosition({
+      x: Math.max(minX, Math.min(maxX, proposedX)),
+      y: Math.max(minY, Math.min(maxY, proposedY)),
+    })
+  }
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture?.(event.pointerId)
+  }
 
   if (role !== 'candidate' || !prompt || dismissedPromptId === prompt.id) return null
   const hasSubmitted = Boolean(myResponse)
@@ -293,8 +332,21 @@ export function TeachingCandidateOverlay({
 
   return (
     <div className="teaching-prompt-overlay" role="presentation">
-      <section className="teaching-prompt-modal" role="dialog" aria-modal="false" aria-labelledby="teaching-prompt-title">
-        <div className="teaching-prompt-dock-header">
+      <section
+        className="teaching-prompt-modal"
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="teaching-prompt-title"
+        style={{ transform: `translate(${position.x}px, calc(-50% + ${position.y}px))` }}
+      >
+        <div
+          className="teaching-prompt-dock-header"
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          title="Drag to move this question on wide screens"
+        >
           <span className="teaching-prompt-kind">{prompt.kind === 'message' ? 'Instructor information' : prompt.kind === 'mcq' ? 'Question' : 'Poll'}</span>
           <button type="button" onClick={() => setCollapsed(true)} aria-label="Temporarily hide question">Hide</button>
         </div>

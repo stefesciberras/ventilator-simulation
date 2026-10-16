@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserControl, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
+import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -238,6 +238,15 @@ function FreezeWaveformIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M2 9h4V5l5 7-5 7v-4H2zm20 0h-4V5l-5 7 5 7v-4h4zM11 3h2v18h-2z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function LaserPointerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="7" cy="17" r="2.2" fill="currentColor" />
+      <path d="M9 15l8.5-8.5M13.5 6.5l4 4M17.5 3.5l3 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
 }
@@ -1567,6 +1576,16 @@ export default function App() {
               disabled={teachingSession.candidateVentilatorLocked}
             />
             <div className="action-bar console-top-actions">
+            {teachingSession.role !== 'candidate' && (
+              <button
+                type="button"
+                className={`hardware-button icon-button teaching-laser-console-button ${teachingLaserEnabled ? 'active' : ''}`}
+                onClick={() => setTeachingLaserEnabled((enabled) => !enabled)}
+                title={teachingLaserEnabled ? 'Turn off teaching laser pointer' : 'Turn on teaching laser pointer'}
+                aria-label={teachingLaserEnabled ? 'Turn off teaching laser pointer' : 'Turn on teaching laser pointer'}
+                aria-pressed={teachingLaserEnabled}
+              ><LaserPointerIcon /></button>
+            )}
             <div className={`oxygen-enrichment-control ${oxygenBoost ? 'active' : ''}`}>
               <button
                 className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`}
@@ -1807,15 +1826,6 @@ export default function App() {
                   onUpdatePolicy={teachingSession.updatePolicy}
                   onBroadcastNow={teachingSession.broadcastNow}
                 />
-      <TeachingLaserControl
-        role={teachingSession.role}
-        enabled={teachingLaserEnabled}
-        sessionActive={teachingSession.role === 'instructor' && Boolean(teachingSession.session)}
-        onEnabledChange={(enabled) => {
-          setTeachingLaserEnabled(enabled)
-          if (enabled) setMobileWorkspacePage('ventilator')
-        }}
-      />
       <TeachingInstructorWorkspace
         role={teachingSession.role}
         host={eduventTeachingHost}

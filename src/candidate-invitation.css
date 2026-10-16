@@ -212,3 +212,24 @@
     width: auto;
   }
 }
+
+.candidate-invite-share-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+.candidate-invite-share-card .candidate-invite-link-card { margin-bottom: 0; }
+.candidate-invite-qr {
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  border-radius: 12px;
+  background: #fff;
+  line-height: 0;
+}
+@media (max-width: 640px) {
+  .candidate-invite-share-card { grid-template-columns: 1fr; }
+  .candidate-invite-qr { justify-self: center; }
+}
