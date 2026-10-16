@@ -206,13 +206,6 @@ function settingChanged(a: unknown, b: unknown) {
   return a !== b
 }
 
-function singleTriggerRuntimeLabel(value: DynamicScenarioTrigger) {
-  if (value.type === 'manual') return 'Manual'
-  if (value.type === 'time') return `After ${value.seconds}s`
-  if (value.type === 'condition') return `${value.metric} ${value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='} ${value.value}`
-  return `${String(value.parameter)} changed · ${value.actor}`
-}
-function triggerRuntimeLabel(triggers: DynamicScenarioTrigger[]) { return triggers.map(singleTriggerRuntimeLabel).join(' OR ') }
 function formatStageTimer(seconds: number) {
   const total=Math.max(0,Math.floor(seconds)), hours=Math.floor(total/3600), minutes=Math.floor((total%3600)/60), secs=total%60
   return hours>0 ? `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}` : `${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}`
@@ -575,7 +568,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     })
     setPresetBusy(true)
     try {
-      await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 4, kind: 'dynamic', stages } })
+      await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 5, kind: 'dynamic', stages } })
       setPresetMessage(`Added Stage ${stageNumber} to “${preset.name}”.`)
       setStageBuilderPresetId(null)
       setStageBuilderSourceId('current')
@@ -699,7 +692,6 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
             <div><span>Current stage</span><strong>{stage?.name ?? `Stage ${index+1}`}</strong></div>
             <div><span>Progress</span><strong>{index+1} / {stages.length}</strong></div>
             <div><span>Stage time</span><strong>{formatStageTimer(stageElapsedSeconds)}</strong></div>
-            <div><span>Trigger</span><strong>{triggerRuntimeLabel(triggers)}</strong></div>
           </div>
           <div className="dynamic-runtime-panel-actions">
             <button type="button" disabled={index<=0} onClick={()=>loadDynamicStage(activeDynamicPreset,index-1)}>Back</button>

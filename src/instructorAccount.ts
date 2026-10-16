@@ -29,6 +29,8 @@ export interface DynamicScenarioApplyMask {
 
 export interface DynamicScenarioStage {
   name: string
+  /** Instructor-facing explanation of what should happen during this stage. */
+  comment?: string
   snapshot: InstructorScenarioSnapshot
   /** Missing on v0.82.0 stages; absence means apply the complete snapshot. */
   apply?: DynamicScenarioApplyMask
@@ -123,10 +125,10 @@ export function asDynamicScenario(
   const firstStageSnapshot = asStaticScenario(current, '')
   return {
     ...firstStageSnapshot,
-    schemaVersion: 4,
+    schemaVersion: 5,
     kind: 'dynamic',
     description: description.trim(),
-    stages: [{ name: 'Stage 1', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
+    stages: [{ name: 'Stage 1', comment: '', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
   }
 }
 
@@ -162,6 +164,7 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
       const triggers = dynamicStageTriggers(stage)
       return {
         name: stage.name || `Stage ${index + 1}`,
+        comment: stage.comment ?? '',
         snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },
         apply: stage.apply,
         sourceName: stage.sourceName,
