@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
+import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserControl, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -1807,6 +1807,15 @@ export default function App() {
                   onUpdatePolicy={teachingSession.updatePolicy}
                   onBroadcastNow={teachingSession.broadcastNow}
                 />
+      <TeachingLaserControl
+        role={teachingSession.role}
+        enabled={teachingLaserEnabled}
+        sessionActive={teachingSession.role === 'instructor' && Boolean(teachingSession.session)}
+        onEnabledChange={(enabled) => {
+          setTeachingLaserEnabled(enabled)
+          if (enabled) setMobileWorkspacePage('ventilator')
+        }}
+      />
       <TeachingInstructorWorkspace
         role={teachingSession.role}
         host={eduventTeachingHost}
@@ -1819,12 +1828,6 @@ export default function App() {
         libraryAvailable={Boolean(teachingLibrary.author)}
         libraryBusy={teachingLibrary.busy}
         libraryError={teachingLibrary.error}
-        laserEnabled={teachingLaserEnabled}
-        laserAvailable={teachingSession.role === 'instructor' && Boolean(teachingSession.session)}
-        onLaserEnabledChange={(enabled) => {
-          setTeachingLaserEnabled(enabled)
-          if (enabled) setMobileWorkspacePage('ventilator')
-        }}
         onPresent={teachingPrompts.presentPrompt}
         onClose={teachingPrompts.closePrompt}
         onSaveLibrary={teachingLibrary.save}
