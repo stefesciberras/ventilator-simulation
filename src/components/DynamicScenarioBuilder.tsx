@@ -92,7 +92,12 @@ function singleTriggerSummary(value: DynamicScenarioTrigger) {
   return `${field?.label ?? String(value.parameter)} changed by ${actor}`
 }
 
-function triggerSummary(triggers: DynamicScenarioTrigger[]) { return triggers.map(singleTriggerSummary).join(' OR ') }
+function ImportScenarioIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h10m0 0-3.5-3.5M14 12l-3.5 3.5M17 5h3v14h-3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
+function DownloadScenarioIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
 function safeScenarioFilename(name: string) {
   const safe = name.trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'scenario'
   return `${safe}.eduvent-scenario.json`
@@ -261,6 +266,7 @@ function newStage(base: InstructorScenarioSnapshot, index: number): StageDraft {
   const inferredTemplate = inferPatientTemplate(snapshot.patient)
   return {
     name: `Stage ${index + 1}`,
+    comment: '',
     snapshot,
     patientProfile: inferredTemplate?.profile,
     ardsSeverity: inferredTemplate?.ardsSeverity,
@@ -327,6 +333,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [triggerMenuIndex, setTriggerMenuIndex] = useState<number | null>(null)
+  const [collapsedStages, setCollapsedStages] = useState<Set<number>>(() => new Set())
   const scenarioImportInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -343,6 +350,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
 
   const replaceDraft = (next: ScenarioDraft) => {
     setDraft(next)
+    setCollapsedStages(new Set())
     baselineRef.current = serialise(next)
     setMessage(null)
   }
@@ -365,6 +373,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   }
 
   const insertStage = (index: number) => {
+    setCollapsedStages(new Set())
     setDraft((current) => {
       const stages = [...current.stages]
       stages.splice(index + 1, 0, newStage(currentScenario, index + 1))
@@ -394,10 +403,21 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
 
   const removeStage = (index: number) => {
     if (draft.stages.length <= 1) return
+    setCollapsedStages(new Set())
     setDraft((current) => ({
       ...current,
       stages: current.stages.filter((_, i) => i !== index),
     }))
+  }
+
+  const toggleStageCollapsed = (index: number) => {
+    setCollapsedStages((current) => {
+      const next = new Set(current)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+    setTriggerMenuIndex((current) => current === index ? null : current)
   }
 
   const selectStageSource = (index: number, presetId: string) => {
@@ -611,7 +631,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       const base = asStaticScenario(cloneScenario(draft.stages[0]?.snapshot ?? currentScenario), '')
       const scenario: InstructorScenarioSnapshot = {
         ...base,
-        schemaVersion: 4,
+        schemaVersion: 5,
         kind: 'dynamic',
         description: draft.description.trim(),
         stages: draft.stages.map((stage) => {
@@ -665,7 +685,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       if (!parsed.scenario || parsed.scenario.kind !== 'dynamic') throw new Error('Only dynamic Scenario Builder files can be imported here.')
       if (!Array.isArray(parsed.scenario.stages) || parsed.scenario.stages.length === 0) throw new Error('The imported scenario has no stages.')
       const importedStages = parsed.scenario.stages.map((stage, index) => normaliseStage(stage, index))
-      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 4, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
+      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 5, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
       const saved = await createInstructorPreset(uniqueImportedName(parsed.name ?? 'Imported scenario', [...dynamicPresets, ...staticPresets]), scenario)
       await onRefresh(); replaceDraft(fromPreset(saved)); setMessage(`Imported “${saved.name}”.`)
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Unable to import scenario file.') }
@@ -735,8 +755,8 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
             style={{ display: 'none' }}
             onChange={(event) => { const file = event.target.files?.[0]; if (file) void importScenario(file) }}
           />
-          <button type="button" disabled={busy} onClick={() => scenarioImportInputRef.current?.click()}>Import scenario</button>
-          {selectedPreset && <button type="button" disabled={busy || dirty} title={dirty ? 'Save changes before downloading the scenario file' : 'Download portable scenario file'} onClick={() => downloadScenario(selectedPreset)}>Download scenario</button>}
+          <button type="button" className="dynamic-file-icon-button" disabled={busy} title="Import scenario file" aria-label="Import scenario file" onClick={() => scenarioImportInputRef.current?.click()}><ImportScenarioIcon /></button>
+          {selectedPreset && <button type="button" className="dynamic-file-icon-button" disabled={busy || dirty} title={dirty ? 'Save changes before downloading the scenario file' : 'Download scenario file'} aria-label="Download scenario file" onClick={() => downloadScenario(selectedPreset)}><DownloadScenarioIcon /></button>}
           {selectedPreset && (
             <button
               type="button"
@@ -777,6 +797,8 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
             const ventFields = ventKeysFor(stage.snapshot.ventilator)
               .map((key) => FIELD_BY_KEY.get(String(key)))
               .filter((field): field is FieldSpec => Boolean(field))
+            const collapsed = collapsedStages.has(index)
+            const triggers = dynamicStageTriggers(stage)
 
             return (
               <div className="dynamic-stage-shell" key={`${index}-${stage.name}`}>
@@ -790,18 +812,36 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                         placeholder={`Stage ${index + 1} name`}
                       />
                     </div>
-                    {draft.stages.length > 1 && (
+                    <div className="dynamic-stage-title-actions">
                       <button
                         type="button"
-                        className="dynamic-stage-remove"
-                        onClick={() => removeStage(index)}
-                        aria-label={`Delete Stage ${index + 1}`}
-                      >
-                        ×
-                      </button>
-                    )}
+                        className="dynamic-stage-collapse"
+                        onClick={() => toggleStageCollapsed(index)}
+                        aria-label={`${collapsed ? 'Expand' : 'Collapse'} Stage ${index + 1}`}
+                        aria-expanded={!collapsed}
+                        title={collapsed ? 'Expand stage' : 'Collapse stage'}
+                      >{collapsed ? '▸' : '▾'}</button>
+                      {draft.stages.length > 1 && (
+                        <button
+                          type="button"
+                          className="dynamic-stage-remove"
+                          onClick={() => removeStage(index)}
+                          aria-label={`Delete Stage ${index + 1}`}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   </div>
 
+                  <label className="dynamic-stage-comment">
+                    <span>Stage comment</span>
+                    {collapsed
+                      ? <div className={`dynamic-stage-comment-preview ${stage.comment?.trim() ? '' : 'empty'}`}>{stage.comment?.trim() || 'No stage comment'}</div>
+                      : <textarea rows={2} maxLength={800} value={stage.comment ?? ''} placeholder="Describe what should happen in this stage, the teaching objective, or what the instructor should look for…" onChange={(event) => updateStage(index, (current) => ({ ...current, comment: event.target.value }))} />}
+                  </label>
+
+                  {!collapsed && <>
                   <label className="dynamic-stage-source-row">
                     <span>Start from</span>
                     <select
@@ -898,21 +938,28 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                       </div>
                     </section>
                   </div>
+                  </>}
                 </article>
 
                 <div className="dynamic-transition-builder">
-                  <button
-                    type="button"
-                    className="dynamic-add-stage"
-                    onClick={() => setTriggerMenuIndex((current) => current === index ? null : index)}
-                    aria-label={`Configure transition after Stage ${index + 1}`}
-                    title="Configure transition after this stage"
-                  >
-                    ＋
-                  </button>
-                  <span className="dynamic-trigger-summary">{triggerSummary(dynamicStageTriggers(stage))}</span>
+                  <div className="dynamic-trigger-row" aria-label={`Triggers after Stage ${index + 1}`}>
+                    <div className="dynamic-trigger-list">
+                      {triggers.map((trigger, triggerIndex) => (
+                        <div className="dynamic-trigger-item" key={`${trigger.type}-${triggerIndex}`}>
+                          {triggerIndex > 0 && <span className="dynamic-trigger-or">OR</span>}
+                          <button type="button" className="dynamic-trigger-chip" onClick={() => setTriggerMenuIndex(index)} title="Edit triggers">{singleTriggerSummary(trigger)}</button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="dynamic-trigger-add"
+                      onClick={() => setTriggerMenuIndex((current) => current === index ? null : index)}
+                      aria-label={`Add or edit triggers after Stage ${index + 1}`}
+                      title="Add or edit triggers"
+                    >＋</button>
+                  </div>
                   {triggerMenuIndex === index && (() => {
-                    const triggers = dynamicStageTriggers(stage)
                     const manualTrigger = triggers.find((trigger) => trigger.type === 'manual')
                     const timeTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'time' }> => trigger.type === 'time')
                     const conditionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'condition' }> => trigger.type === 'condition')
