@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
+import { TeachingPromptInstructorPanel, TeachingPromptOverlay, useTeachingPrompts } from './components/TeachingPrompts'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -602,6 +603,8 @@ export default function App() {
     simulationSpeed,
     setSimulationSpeed,
   })
+
+  const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null)
 
   const candidateWaveformOptions = useMemo(
     () => teachingSession.candidateOesophagealPressureAllowed
@@ -1449,6 +1452,14 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <TeachingPromptOverlay
+        role={teachingSession.role}
+        prompt={teachingPrompts.activePrompt}
+        myResponse={teachingPrompts.myResponse}
+        busy={teachingPrompts.busy}
+        error={teachingPrompts.error}
+        onSubmit={teachingPrompts.submitResponse}
+      />
       <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={displayedPhysiologyMeasurements} oesophagealEnabled={oesophagealMonitoringEnabled} onClose={() => setMeasurementsOpen(false)} />
       <header className="topbar">
         <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
@@ -1783,6 +1794,16 @@ export default function App() {
                   onEndInstructorSession={teachingSession.endInstructorSession}
                   onUpdatePolicy={teachingSession.updatePolicy}
                   onBroadcastNow={teachingSession.broadcastNow}
+                />
+                <TeachingPromptInstructorPanel
+                  role={teachingSession.role}
+                  activePrompt={teachingPrompts.activePrompt}
+                  responses={teachingPrompts.responses}
+                  candidateCount={teachingSession.members.filter((member) => member.role === 'candidate').length}
+                  busy={teachingPrompts.busy}
+                  error={teachingPrompts.error}
+                  onPresent={teachingPrompts.presentPrompt}
+                  onClose={teachingPrompts.closePrompt}
                 />
                 <div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />
                 <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
