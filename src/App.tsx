@@ -621,11 +621,16 @@ export default function App() {
     mediaIds: scenarioMediaIds,
   }
 
-  const loadInstructorScenario = (scenario: InstructorScenarioSnapshot) => {
-    if (teachingSession.role === 'instructor') setSimulationPaused(true)
+  const loadInstructorScenario = (
+    scenario: InstructorScenarioSnapshot,
+    options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean },
+  ) => {
+    const pauseSimulation = options?.pauseSimulation ?? true
+    const resetScenarioClock = options?.resetScenarioClock ?? true
+    if (teachingSession.role === 'instructor' && pauseSimulation) setSimulationPaused(true)
     setWaveformFrozen(false)
     setFrozenSamples(null)
-    scenarioClockOriginRef.current = simulationTimeRef.current
+    if (resetScenarioClock) scenarioClockOriginRef.current = simulationTimeRef.current
     appendScenarioLog('scenario.loaded', {
       role: teachingSession.role,
       sessionId: teachingSession.session?.id ?? null,
