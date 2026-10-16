@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import {
   getInstructorAccount,
@@ -24,6 +24,7 @@ export function ScenarioBuilderApp() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
+  const launchingScenarioRef = useRef(false)
   const defaultScenario = useMemo(() => createDefaultVentilatorScenario(), [])
   const requestedScenarioId = useMemo(() => new URLSearchParams(window.location.search).get('scenario'), [])
 
@@ -90,9 +91,15 @@ export function ScenarioBuilderApp() {
   }
 
   const startScenario = (preset: InstructorPresetRow) => {
+    launchingScenarioRef.current = true
     const url = new URL('/', window.location.origin)
     url.searchParams.set('scenario', preset.id)
     window.location.assign(url.toString())
+  }
+
+  const closeBuilder = () => {
+    if (launchingScenarioRef.current) return
+    window.location.assign('/')
   }
 
   return (
@@ -106,7 +113,7 @@ export function ScenarioBuilderApp() {
         <div className="scenario-builder-appbar-actions">
           {account && <span className="scenario-builder-account">{account.email}</span>}
           {account && <button type="button" onClick={() => void signOut()} disabled={busy}>Sign out</button>}
-          <button type="button" className="scenario-builder-primary" onClick={() => window.location.assign('/')}>Return to simulator</button>
+          <button type="button" className="scenario-builder-primary" onClick={closeBuilder}>Return to simulator</button>
         </div>
       </header>
 
@@ -121,11 +128,6 @@ export function ScenarioBuilderApp() {
           <strong>{selectedModule.label}</strong>
           <p>{selectedModule.description}</p>
         </div>
-        <aside>
-          <span>Architecture</span>
-          <strong>Module-based</strong>
-          <small>The authoring shell is independent of the simulator engine; future monitor and anaesthesia modules can provide their own stage editors and runtime adapters.</small>
-        </aside>
       </section>
 
       {loading ? (
@@ -152,7 +154,7 @@ export function ScenarioBuilderApp() {
             staticPresets={staticPresets}
             onRefresh={refreshPresets}
             onStartScenario={startScenario}
-            onClose={() => window.location.assign('/')}
+            onClose={closeBuilder}
           />
         </section>
       ) : (
