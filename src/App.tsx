@@ -672,6 +672,8 @@ export default function App() {
   const effectivePatientRef = useRef<PatientSettings>({ ...patient })
   const patientTransitionRef = useRef<{ from: PatientSettings; to: PatientSettings; start: number; duration: number } | null>(null)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
+  const alarmSilenceLongPressTimeoutRef = useRef<number | null>(null)
+  const alarmSilenceLongPressTriggeredRef = useRef(false)
   const oxygenBoostDeadlineRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const alarmHistoryRef = useRef<Record<string, { everTriggered: boolean; triggerCount: number; firstTriggeredAt: number | null; lastTriggeredAt: number | null }>>({})
@@ -1113,6 +1115,7 @@ export default function App() {
 
   useEffect(() => () => {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
+    if (alarmSilenceLongPressTimeoutRef.current != null) window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
     void audioContextRef.current?.close()
   }, [])
 
@@ -1181,7 +1184,7 @@ export default function App() {
     setWaveformFrozen(true)
   }
 
-  const silenceAlarm = () => {
+  const silenceAlarm = (durationMs = 120000) => {
     setAlarmLifecycle((current) => {
       const next = { ...current }
       for (const [key, entry] of Object.entries(current)) {
@@ -1195,7 +1198,36 @@ export default function App() {
     alarmSilenceTimeoutRef.current = window.setTimeout(() => {
       setAlarmSilenced(false)
       alarmSilenceTimeoutRef.current = null
-    }, 120000)
+    }, durationMs)
+  }
+
+  const clearAlarmSilenceLongPress = () => {
+    if (alarmSilenceLongPressTimeoutRef.current != null) {
+      window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
+      alarmSilenceLongPressTimeoutRef.current = null
+    }
+  }
+
+  const startAlarmSilenceLongPress = () => {
+    clearAlarmSilenceLongPress()
+    alarmSilenceLongPressTriggeredRef.current = false
+    alarmSilenceLongPressTimeoutRef.current = window.setTimeout(() => {
+      alarmSilenceLongPressTriggeredRef.current = true
+      alarmSilenceLongPressTimeoutRef.current = null
+      silenceAlarm(600000)
+    }, 800)
+  }
+
+  const finishAlarmSilencePress = () => {
+    clearAlarmSilenceLongPress()
+  }
+
+  const handleAlarmSilenceClick = () => {
+    if (alarmSilenceLongPressTriggeredRef.current) {
+      alarmSilenceLongPressTriggeredRef.current = false
+      return
+    }
+    silenceAlarm()
   }
 
   const copyDiagnostics = async () => {
@@ -1510,7 +1542,16 @@ export default function App() {
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
             ><span className="hold-label-desktop">Exp Hold</span><span className="hold-label-mobile">Exp <PauseIcon paused={false} /></span></button>
             <button className="hardware-button icon-button measurements-button" type="button" onClick={() => setMeasurementsOpen(true)} title="Physiological measurements" aria-label="Open physiological measurements"><MeasurementsInfoIcon /></button>
-            <button className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`} onClick={silenceAlarm} title="Silence alarm sound for 2 minutes" aria-label="Silence alarm sound for 2 minutes"><AlarmSilenceIcon /></button>
+            <button
+              className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`}
+              onClick={handleAlarmSilenceClick}
+              onPointerDown={startAlarmSilenceLongPress}
+              onPointerUp={finishAlarmSilencePress}
+              onPointerCancel={finishAlarmSilencePress}
+              onContextMenu={(event) => event.preventDefault()}
+              title="Press to silence alarms for 2 minutes; hold for 10 minutes"
+              aria-label="Silence alarm sound: press for 2 minutes, hold for 10 minutes"
+            ><AlarmSilenceIcon /></button>
             </div>
           </div>
 
