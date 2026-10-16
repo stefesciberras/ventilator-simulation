@@ -1,0 +1,241 @@
+name: Verify teaching laser pointer
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.5-teaching-laser-pointer
+    paths:
+      - .github/workflows/v0.82.5-teaching-laser-pointer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.5-teaching-laser-pointer
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Wire reusable laser pointer into EDUVENT
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('src/App.tsx')
+          text = app.read_text()
+          old = "import { TeachingCandidateOverlay, TeachingInstructorWorkspace, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'"
+          new = "import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "  const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')"
+          new = old + "\n  const [teachingLaserEnabled, setTeachingLaserEnabled] = useState(false)"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "  const teachingLibrary = useTeachingQuestionLibrary(eduventTeachingHost)\n\n  const candidateWaveformOptions"
+          new = "  const teachingLibrary = useTeachingQuestionLibrary(eduventTeachingHost)\n\n  useEffect(() => {\n    if (teachingSession.role !== 'instructor') setTeachingLaserEnabled(false)\n  }, [teachingSession.role])\n\n  const candidateWaveformOptions"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '          <div className="screen-body">'
+          new = '''          <div className="screen-body teaching-laser-target">
+            <TeachingLaserPointerSurface
+              role={teachingSession.role}
+              sessionId={teachingSession.session?.id ?? null}
+              enabled={teachingLaserEnabled}
+              onEnabledChange={setTeachingLaserEnabled}
+            />'''
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '''        libraryBusy={teachingLibrary.busy}
+        libraryError={teachingLibrary.error}
+        onPresent={teachingPrompts.presentPrompt}'''
+          new = '''        libraryBusy={teachingLibrary.busy}
+        libraryError={teachingLibrary.error}
+        laserEnabled={teachingLaserEnabled}
+        laserAvailable={teachingSession.role === 'instructor' && Boolean(teachingSession.session)}
+        onLaserEnabledChange={(enabled) => {
+          setTeachingLaserEnabled(enabled)
+          if (enabled) setMobileWorkspacePage('ventilator')
+        }}
+        onPresent={teachingPrompts.presentPrompt}'''
+          assert old in text
+          text = text.replace(old, new, 1)
+          app.write_text(text)
+
+          workspace = Path('src/teaching/TeachingWorkspace.tsx')
+          text = workspace.read_text()
+          old = '''  libraryBusy,
+  libraryError,
+  onPresent,'''
+          new = '''  libraryBusy,
+  libraryError,
+  laserEnabled = false,
+  laserAvailable = false,
+  onLaserEnabledChange,
+  onPresent,'''
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '''  libraryBusy: boolean
+  libraryError: string | null
+  onPresent: (input: TeachingPromptDraft) => Promise<void>'''
+          new = '''  libraryBusy: boolean
+  libraryError: string | null
+  laserEnabled?: boolean
+  laserAvailable?: boolean
+  onLaserEnabledChange?: (enabled: boolean) => void
+  onPresent: (input: TeachingPromptDraft) => Promise<void>'''
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '''      <div className="teaching-prompt-section-heading">
+        <div><span className="session-kicker">Reusable teaching module</span><h3>Teaching workspace</h3><small>{host.appName}</small></div>
+        {activePrompt && <span className="teaching-prompt-live-badge">LIVE</span>}
+      </div>
+
+      {activePrompt && role === 'instructor' ? ('''
+          new = '''      <div className="teaching-prompt-section-heading">
+        <div><span className="session-kicker">Reusable teaching module</span><h3>Teaching workspace</h3><small>{host.appName}</small></div>
+        {activePrompt && <span className="teaching-prompt-live-badge">LIVE</span>}
+      </div>
+
+      {onLaserEnabledChange && (
+        <div className="teaching-laser-control-row">
+          <button
+            type="button"
+            className={`teaching-laser-toggle ${laserEnabled ? 'active' : ''}`}
+            disabled={!laserAvailable}
+            aria-pressed={laserEnabled}
+            onClick={() => onLaserEnabledChange(!laserEnabled)}
+          ><span className="teaching-laser-button-dot" />{laserEnabled ? 'Laser pointer on' : 'Laser pointer'}</button>
+          <small>{laserAvailable ? (laserEnabled ? 'Move over the simulator display to point. Use Exit on the display or press here again to stop.' : 'Show a live pointer on candidate simulator displays.') : 'Start an instructor session to use the laser pointer.'}</small>
+        </div>
+      )}
+
+      {activePrompt && role === 'instructor' ? ('''
+          assert old in text
+          workspace.write_text(text.replace(old, new, 1))
+
+          index = Path('src/teaching/index.ts')
+          text = index.read_text()
+          export = "export * from './TeachingLaserPointer'\n"
+          if export not in text:
+            text = text.replace("export * from './TeachingWorkspace'\n", "export * from './TeachingWorkspace'\n" + export)
+          index.write_text(text)
+
+          css = Path('src/teaching/teaching.css')
+          text = css.read_text()
+          text += '''
+
+/* Reusable instructor laser pointer */
+.teaching-laser-control-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  border: 1px solid #344751;
+  border-radius: 9px;
+  background: #0d171c;
+}
+.teaching-laser-control-row small { color: #aebdc4; line-height: 1.3; }
+.teaching-laser-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #53636a;
+  border-radius: 8px;
+  background: #24343c;
+  color: #eef5f7;
+  padding: 9px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.teaching-laser-toggle.active { border-color: #ff5a4f; background: #482421; color: #fff; }
+.teaching-laser-toggle:disabled { opacity: .45; cursor: not-allowed; }
+.teaching-laser-button-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 7px rgba(255, 59, 48, .9);
+}
+.teaching-laser-target { position: relative; }
+.teaching-laser-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.teaching-laser-layer-active {
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+.teaching-laser-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #ff2d20;
+  border: 2px solid rgba(255,255,255,.9);
+  box-shadow: 0 0 5px #fff, 0 0 12px #ff3b30, 0 0 24px rgba(255, 59, 48, .95);
+  pointer-events: none;
+}
+.teaching-laser-dot::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 70, 60, .45);
+  box-shadow: 0 0 18px rgba(255, 45, 32, .45);
+}
+.teaching-laser-exit {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 999px;
+  background: rgba(78, 22, 20, .92);
+  color: #fff;
+  padding: 7px 11px;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .teaching-laser-control-row { grid-template-columns: 1fr; }
+  .teaching-laser-toggle { justify-content: center; min-height: 44px; }
+  .teaching-laser-dot { width: 14px; height: 14px; }
+}
+'''
+          css.write_text(text)
+
+          Path('src/appVersion.ts').write_text("export const APP_VERSION = '0.82.5.0'\n")
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit verified implementation
+        run: |
+          rm .github/workflows/v0.82.5-teaching-laser-pointer.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add reusable live teaching laser pointer"
+          git push origin HEAD:chatgpt/v0.82.5-teaching-laser-pointer
