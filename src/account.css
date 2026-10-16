@@ -315,3 +315,13 @@
 .dynamic-runtime-status strong { color: #eff7f9; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dynamic-runtime-status small { grid-column: 1 / -1; color: #72c8df; font-size: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 999px) { .dynamic-runtime-toolbar { display: none; } }
+
+
+/* Scenario Builder v0.1 runtime handoff */
+.dynamic-runtime-library { display: grid; gap: 14px; }
+.scenario-builder-handoff { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px; border: 1px solid #365461; background: #0a171d; }
+.scenario-builder-handoff span { color: #75cbe7; font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.scenario-builder-handoff h3 { margin: 3px 0 5px; color: #eef8fb; }
+.scenario-builder-handoff p { max-width: 680px; margin: 0; color: #91a4ac; font-size: 11px; line-height: 1.45; }
+.scenario-builder-handoff button { flex: 0 0 auto; }
+@media (max-width: 680px) { .scenario-builder-handoff { align-items: stretch; flex-direction: column; } }

@@ -1,0 +1,50 @@
+import type { InstructorScenarioSnapshot } from '../../../instructorAccount'
+import { PATIENT_PROFILES } from '../../../patientProfiles'
+
+export function createDefaultVentilatorScenario(): InstructorScenarioSnapshot {
+  return {
+    schemaVersion: 2,
+    kind: 'static',
+    description: '',
+    mediaIds: [],
+    ventilator: {
+      mode: 'VC-AC',
+      fio2: 0.35,
+      peep: 5,
+      rate: 14,
+      tidalVolume: 500,
+      inspiratoryTime: 1,
+      inspiratoryFlow: 30,
+      plateauPercent: 0,
+      pressureControl: 15,
+      volumeGuaranteePressureLimit: 40,
+      pressureSupport: 10,
+      triggerType: 'pressure',
+      triggerSensitivity: 2,
+      flowTriggerSensitivity: 2,
+      terminationSensitivity: 25,
+      simvSyncWindowPercent: 25,
+      showSimvSyncWindow: false,
+      pHigh: 24,
+      pLow: 5,
+      tHigh: 4,
+      tLow: 0.5,
+    },
+    patient: { ...PATIENT_PROFILES.Normal },
+    alarmLimits: {
+      pressureLimit: 40,
+      apneaTime: 30,
+      peakPressure: 35,
+      co2Min: 30,
+      co2Max: 50,
+      minuteVentilationMin: 3,
+      minuteVentilationMax: 12,
+      tidalVolumeMin: 250,
+      tidalVolumeMax: 600,
+      respiratoryRateMin: 10,
+      respiratoryRateMax: 25,
+    },
+    patientTransitionSeconds: 0,
+    waveformDisplay: { third: 'volume', fourth: null },
+  }
+}
