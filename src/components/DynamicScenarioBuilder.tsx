@@ -620,6 +620,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
           const triggers = dynamicStageTriggers(stage)
           return {
             ...stage,
+            sourcePresetId: undefined,
             advanceTrigger: triggers[0],
             advanceTriggers: triggers,
             snapshot,
@@ -656,6 +657,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   }
 
   const importScenario = async (file: File) => {
+    if (!canDiscard()) { if (scenarioImportInputRef.current) scenarioImportInputRef.current.value = ''; return }
     setBusy(true); setMessage(null)
     try {
       const parsed = JSON.parse(await file.text()) as Partial<PortableScenarioFile>
@@ -663,7 +665,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       if (!parsed.scenario || parsed.scenario.kind !== 'dynamic') throw new Error('Only dynamic Scenario Builder files can be imported here.')
       if (!Array.isArray(parsed.scenario.stages) || parsed.scenario.stages.length === 0) throw new Error('The imported scenario has no stages.')
       const importedStages = parsed.scenario.stages.map((stage, index) => normaliseStage(stage, index))
-      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 4, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
+      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 4, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
       const saved = await createInstructorPreset(uniqueImportedName(parsed.name ?? 'Imported scenario', [...dynamicPresets, ...staticPresets]), scenario)
       await onRefresh(); replaceDraft(fromPreset(saved)); setMessage(`Imported “${saved.name}”.`)
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Unable to import scenario file.') }
@@ -734,7 +736,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
             onChange={(event) => { const file = event.target.files?.[0]; if (file) void importScenario(file) }}
           />
           <button type="button" disabled={busy} onClick={() => scenarioImportInputRef.current?.click()}>Import scenario</button>
-          {selectedPreset && <button type="button" disabled={busy} onClick={() => downloadScenario(selectedPreset)}>Download scenario</button>}
+          {selectedPreset && <button type="button" disabled={busy || dirty} title={dirty ? 'Save changes before downloading the scenario file' : 'Download portable scenario file'} onClick={() => downloadScenario(selectedPreset)}>Download scenario</button>}
           {selectedPreset && (
             <button
               type="button"
