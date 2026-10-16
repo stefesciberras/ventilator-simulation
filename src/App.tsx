@@ -1320,17 +1320,13 @@ export default function App() {
   }
   const applyPatientProfile = (profile: PatientProfileName) => {
     if (profile === 'ARDS') {
-      const cycle: Array<ArdsSeverity | 'off'> = ['off', 'mild', 'moderate', 'severe']
-      const currentIndex = Math.max(0, cycle.indexOf(ardsSeverity))
-      const next = cycle[(currentIndex + 1) % cycle.length]
+      const currentIndex = ARDS_SEVERITIES.indexOf(ardsSeverity as ArdsSeverity)
+      const next = currentIndex < 0
+        ? 'mild'
+        : ARDS_SEVERITIES[(currentIndex + 1) % ARDS_SEVERITIES.length]
       setArdsSeverityAndPersist(next)
-      if (next === 'off') {
-        persistPatientProfile('Normal')
-        setPatient({ ...PATIENT_PROFILES.Normal })
-      } else {
-        persistPatientProfile('ARDS')
-        setPatient({ ...ARDS_PROFILES[next] })
-      }
+      persistPatientProfile('ARDS')
+      setPatient({ ...ARDS_PROFILES[next] })
       return
     }
     setArdsSeverityAndPersist('off')
