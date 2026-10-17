@@ -94,7 +94,7 @@ export function TeachingInstructorWorkspace({
   const filteredLibrary = useMemo(() => {
     const needle = search.trim().toLowerCase()
     if (!needle) return libraryItems
-    return libraryItems.filter((item) => [item.title ?? '', item.body, item.module, ...item.tags].join(' ').toLowerCase().includes(needle))
+    return libraryItems.filter((item) => [item.title ?? '', item.body, ...item.tags].join(' ').toLowerCase().includes(needle))
   }, [libraryItems, search])
 
   if (role === 'candidate') return null
@@ -163,7 +163,7 @@ export function TeachingInstructorWorkspace({
   return (
     <section className="teaching-prompt-instructor" aria-label="Teaching interaction workspace">
       <div className="teaching-prompt-section-heading">
-        <div><span className="session-kicker">Reusable teaching module</span><h3>Teaching workspace</h3><small>{host.appName}</small></div>
+        <div><h3>Questions and Polls</h3></div>
         {activePrompt && <span className="teaching-prompt-live-badge">LIVE</span>}
       </div>
 
@@ -190,17 +190,30 @@ export function TeachingInstructorWorkspace({
         </>
       ) : (
         <>
-          <div className="teaching-workspace-tabs">
-            <button type="button" className={view === 'compose' ? 'active' : ''} onClick={() => setView('compose')}>Compose</button>
-            <button type="button" className={view === 'library' ? 'active' : ''} onClick={() => setView('library')}>Question library <span>{libraryItems.length}</span></button>
+          <div className="teaching-workspace-navigation">
+            <button
+              type="button"
+              className={`teaching-add-question ${view === 'compose' ? 'active' : ''}`}
+              onClick={() => { resetComposer(); setView('compose') }}
+            >
+              <span className="teaching-add-question-icon" aria-hidden="true">+</span>
+              <span>Add new Question / Poll</span>
+            </button>
+            <button
+              type="button"
+              className={`teaching-library-navigation ${view === 'library' ? 'active' : ''}`}
+              onClick={() => setView('library')}
+            >
+              <span>Question library</span>
+              <span className="teaching-library-count">{libraryItems.length}</span>
+            </button>
           </div>
 
           {view === 'compose' ? (
             <div className="teaching-prompt-composer">
-              <div className="teaching-composer-toolbar"><button type="button" onClick={resetComposer}>New</button>{editingLibraryId && <span>Editing saved question</span>}</div>
+              {editingLibraryId && <div className="teaching-composer-toolbar"><span>Editing saved question</span></div>}
               <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as TeachingPromptKind)}><option value="mcq">MCQ · unmarked</option><option value="poll">Poll</option><option value="message">Information</option></select></label>
-              <label>Module<input value={module} maxLength={120} onChange={(event) => setModule(event.target.value)} placeholder="e.g. Ventilation, Anaesthesia, Airway" /></label>
-              <label>Tags <span>(comma separated)</span><input value={tags} maxLength={300} onChange={(event) => setTags(event.target.value)} placeholder="e.g. COPD, AutoPEEP, waveforms" /></label>
+              <label>Tags <span>(optional)</span><input value={tags} maxLength={300} onChange={(event) => setTags(event.target.value)} placeholder="e.g. COPD, AutoPEEP, waveforms" /></label>
               <label>Title <span>(optional)</span><input value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
               <label>Prompt<textarea value={body} maxLength={4000} rows={4} onChange={(event) => setBody(event.target.value)} placeholder="Present the case, instruction or question…" /></label>
               {kind !== 'message' && (
@@ -215,11 +228,10 @@ export function TeachingInstructorWorkspace({
                 </div>
               )}
               <div className="teaching-composer-actions">
-                <button className="teaching-library-save" type="button" disabled={!valid || libraryBusy || !libraryAvailable} onClick={() => void save()}>{editingLibraryId ? 'Update library question' : 'Save to library'}</button>
+                <button className="teaching-library-save" type="button" disabled={!valid || libraryBusy || !libraryAvailable} onClick={() => void save()}>{editingLibraryId ? 'Update saved question' : 'Save to library'}</button>
                 <button className="teaching-prompt-present" type="button" disabled={!valid || promptBusy || role !== 'instructor'} onClick={() => void present()}>Present to candidates</button>
               </div>
               {!libraryAvailable && <small className="teaching-library-hint">Sign in to a permanent instructor account to prepare and save reusable questions.</small>}
-              {role !== 'instructor' && <small className="teaching-library-hint">You can prepare questions now. Start an instructor session when you want to present them.</small>}
               {message && <div className="teaching-library-success">{message}</div>}
             </div>
           ) : (
@@ -228,12 +240,12 @@ export function TeachingInstructorWorkspace({
                 <div className="teaching-library-empty">Sign in to an instructor account to use your reusable question library.</div>
               ) : (
                 <>
-                  <input className="teaching-library-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search title, text, module or tags…" />
+                  <input className="teaching-library-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search questions, polls or tags…" />
                   {filteredLibrary.length ? (
                     <div className="teaching-library-list">
                       {filteredLibrary.map((item) => (
                         <article key={item.id} className="teaching-library-card">
-                          <div className="teaching-library-card-heading"><div><span>{item.module}</span><strong>{item.title || 'Untitled'}</strong></div><em>{item.kind === 'message' ? 'Info' : item.kind.toUpperCase()}</em></div>
+                          <div className="teaching-library-card-heading"><div><strong>{item.title || 'Untitled'}</strong></div><em>{item.kind === 'message' ? 'Info' : item.kind.toUpperCase()}</em></div>
                           <p>{item.body}</p>
                           {item.tags.length > 0 && <div className="teaching-library-tags">{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                           <div className="teaching-library-card-actions">
@@ -243,7 +255,7 @@ export function TeachingInstructorWorkspace({
                         </article>
                       ))}
                     </div>
-                  ) : <div className="teaching-library-empty">No saved questions match this search.</div>}
+                  ) : <div className="teaching-library-empty">{search.trim() ? 'No saved questions or polls match this search.' : 'No saved questions or polls yet.'}</div>}
                 </>
               )}
             </div>

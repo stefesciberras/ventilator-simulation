@@ -10,10 +10,13 @@
 .teaching-prompt-section-heading small { color:#8fa2ab; }
 .teaching-prompt-live-badge { padding:4px 8px; border-radius:999px; background:#ef8a27; color:#111; font-size:.72rem; font-weight:800; letter-spacing:.08em; }
 
-.teaching-workspace-tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px; }
-.teaching-workspace-tabs button { border:1px solid #3c505a; border-radius:8px; background:#142128; color:#bdd0d8; padding:9px 10px; font-weight:700; cursor:pointer; }
-.teaching-workspace-tabs button.active { border-color:#ef8a27; color:#fff; background:#26231c; }
-.teaching-workspace-tabs button span { margin-left:5px; opacity:.7; }
+.teaching-workspace-navigation { display:grid; gap:7px; margin-bottom:12px; }
+.teaching-workspace-navigation button { width:100%; box-sizing:border-box; border:1px solid #3c505a; border-radius:8px; background:#142128; color:#bdd0d8; padding:10px 12px; font-weight:700; cursor:pointer; }
+.teaching-workspace-navigation button.active { border-color:#658492; color:#fff; background:#1d2c33; }
+.teaching-add-question { display:flex; align-items:center; gap:10px; text-align:left; }
+.teaching-add-question-icon { display:grid; place-items:center; width:28px; height:28px; flex:0 0 28px; border-radius:50%; background:#ef8a27; color:#111; font-size:1.35rem; font-weight:500; line-height:1; }
+.teaching-library-navigation { display:flex; align-items:center; justify-content:space-between; gap:12px; text-align:left; }
+.teaching-library-count { display:grid; place-items:center; min-width:24px; height:24px; padding:0 5px; box-sizing:border-box; border-radius:999px; background:#263942; color:#c7d7dd; font-size:.76rem; }
 
 .teaching-prompt-composer { display:grid; gap:10px; }
 .teaching-prompt-composer > label { display:grid; gap:5px; font-size:.82rem; color:#b8c6cc; }
@@ -233,4 +236,20 @@
 
 @media (max-width: 899px) {
   .teaching-prompt-modal { transform: none !important; }
+}
+
+/* Compact laser control: match the visible laser spot rather than a pointer glyph. */
+.teaching-laser-console-button svg { display:none; }
+.teaching-laser-console-button::before {
+  content:'';
+  display:block;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:#ff3228;
+  box-shadow:0 0 4px rgba(255,255,255,.75), 0 0 8px rgba(255,50,40,.95), 0 0 15px rgba(255,45,32,.7);
+}
+.teaching-laser-console-button.active::before {
+  background:#ff4338;
+  box-shadow:0 0 5px #fff, 0 0 11px #ff3b30, 0 0 20px rgba(255,59,48,.95);
 }
