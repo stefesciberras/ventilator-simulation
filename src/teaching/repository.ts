@@ -72,7 +72,12 @@ export async function presentSessionPrompt(sessionId: string, draft: TeachingPro
     .map((option) => ({ id: option.id, text: option.text.trim() }))
     .filter((option) => option.text)
 
-  const { error } = await supabase.from('teaching_prompts').insert({
+  const correctOptionId = draft.kind === 'mcq' ? draft.correctOptionId ?? null : null
+  if (draft.kind === 'mcq' && (!correctOptionId || !options.some((option) => option.id === correctOptionId))) {
+    throw new Error('Choose the correct answer before presenting this MCQ.')
+  }
+
+  const { data: prompt, error } = await supabase.from('teaching_prompts').insert({
     session_id: sessionId,
     instructor_id: user.id,
     kind: draft.kind,
@@ -80,7 +85,40 @@ export async function presentSessionPrompt(sessionId: string, draft: TeachingPro
     body: draft.body.trim(),
     options,
     status: 'active',
-  })
+  }).select('id').single()
+  if (error) throw error
+
+  if (correctOptionId) {
+    const { error: keyError } = await supabase.from('teaching_prompt_answer_keys').insert({
+      prompt_id: prompt.id,
+      session_id: sessionId,
+      instructor_id: user.id,
+      correct_option_id: correctOptionId,
+      explanation: draft.explanation?.trim() || null,
+    })
+    if (keyError) {
+      await supabase.from('teaching_prompts').delete().eq('id', prompt.id)
+      throw keyError
+    }
+  }
+}
+
+export async function releaseSessionPromptAnswer(promptId: string) {
+  const { data: answerKey, error: keyError } = await supabase
+    .from('teaching_prompt_answer_keys')
+    .select('correct_option_id')
+    .eq('prompt_id', promptId)
+    .single()
+  if (keyError) throw keyError
+
+  const { error } = await supabase
+    .from('teaching_prompts')
+    .update({
+      released_correct_option_id: answerKey.correct_option_id,
+      answer_released_at: new Date().toISOString(),
+    })
+    .eq('id', promptId)
+    .eq('status', 'active')
   if (error) throw error
 }
 

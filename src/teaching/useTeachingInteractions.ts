@@ -9,6 +9,7 @@ import {
   getPermanentTeachingAuthor,
   listTeachingLibraryItems,
   presentSessionPrompt,
+  releaseSessionPromptAnswer,
   submitSessionPromptResponse,
   subscribeTeachingAuth,
   subscribeToTeachingPrompts,
@@ -115,6 +116,22 @@ export function useTeachingPrompts(role: TeachingRole, sessionId: string | null,
     }
   }
 
+  const releaseAnswer = async () => {
+    if (role !== 'instructor' || !activePrompt || activePrompt.kind !== 'mcq' || activePrompt.answer_released_at) return
+    setBusy(true)
+    setError(null)
+    try {
+      await releaseSessionPromptAnswer(activePrompt.id)
+      await refresh()
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Unable to release the correct answer.'
+      setError(message)
+      throw cause
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const submitResponse = async (optionId: string) => {
     if (role !== 'candidate' || !activePrompt || myResponse) return
     setBusy(true)
@@ -129,7 +146,7 @@ export function useTeachingPrompts(role: TeachingRole, sessionId: string | null,
     }
   }
 
-  return { activePrompt, responses, myResponse, busy, error, presentPrompt, closePrompt, submitResponse }
+  return { activePrompt, responses, myResponse, busy, error, presentPrompt, closePrompt, releaseAnswer, submitResponse }
 }
 
 export function useTeachingQuestionLibrary(host: TeachingHostAdapter) {

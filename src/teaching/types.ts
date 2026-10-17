@@ -14,6 +14,8 @@ export interface TeachingPromptRow {
   title: string | null
   body: string
   options: TeachingPromptOption[]
+  answer_released_at: string | null
+  released_correct_option_id: string | null
   status: 'active' | 'closed'
   created_at: string
   closed_at: string | null
@@ -33,6 +35,8 @@ export interface TeachingPromptDraft {
   title?: string
   body: string
   options?: TeachingPromptOption[]
+  correctOptionId?: string | null
+  explanation?: string | null
 }
 
 export interface TeachingLibraryItem {
