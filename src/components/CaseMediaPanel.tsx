@@ -13,6 +13,7 @@ import {
   type CaseMediaRow,
   type SessionCaseMediaRow,
 } from '../caseMedia'
+import { TeachingMediaCandidateOverlay, useTeachingMediaPresentation } from '../teaching/TeachingMediaPresentation'
 import '../case-media.css'
 
 interface CaseMediaPanelProps {
@@ -57,10 +58,12 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
   const [error, setError] = useState<string | null>(null)
   const previousReleasedRef = useRef<Set<string>>(new Set())
   const firstSessionRefreshRef = useRef(true)
+  const liveMedia = useTeachingMediaPresentation(role, sessionId)
 
   const releasedRows = useMemo(() => sessionMedia.filter((row) => row.released), [sessionMedia])
   const releasedIds = useMemo(() => new Set(releasedRows.map((row) => row.media_id)), [releasedRows])
   const scenarioIds = useMemo(() => new Set(scenarioMediaIds), [scenarioMediaIds])
+  const liveMediaId = liveMedia.activePresentation?.media_id ?? null
 
   const availableMedia = useMemo(() => {
     if (role === 'candidate') return releasedRows.map((row) => row.media)
@@ -163,7 +166,7 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
     try {
       const media = await uploadCaseMedia(file, uploadTitle)
       setUploadTitle('')
-      setMessage(`Uploaded “${media.title}”. It remains hidden until you release it.`)
+      setMessage(`Uploaded “${media.title}”.`)
       await refreshLibrary()
       setSelectedId(media.id)
     } catch (cause) {
@@ -173,13 +176,37 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
     }
   }
 
+  const present = async (media: CaseMediaRow) => {
+    if (!sessionId || role !== 'instructor') return
+    setError(null)
+    setMessage(null)
+    try {
+      await liveMedia.present(media.id)
+      setMessage(`Presenting “${media.title}” to candidates.`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to present media.')
+    }
+  }
+
+  const stopPresenting = async () => {
+    const title = liveMedia.activePresentation?.media.title ?? 'media'
+    setError(null)
+    setMessage(null)
+    try {
+      await liveMedia.close()
+      setMessage(`Stopped presenting “${title}”.`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to stop presenting media.')
+    }
+  }
+
   const release = async (media: CaseMediaRow) => {
     if (!sessionId) return
     setBusy(true)
     setError(null)
     try {
       await releaseSessionCaseMedia(sessionId, media.id, releasedRows.length)
-      setMessage(`Released “${media.title}” to candidates.`)
+      setMessage(`Released “${media.title}” to the case-media library for candidates.`)
       await refreshSessionMedia()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to release case media.')
@@ -194,7 +221,7 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
     setError(null)
     try {
       await withdrawSessionCaseMedia(sessionId, media.id)
-      setMessage(`Withdrew “${media.title}” from candidates.`)
+      setMessage(`Withdrew “${media.title}” from the candidate case-media library.`)
       await refreshSessionMedia()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to withdraw case media.')
@@ -208,6 +235,7 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
     setBusy(true)
     setError(null)
     try {
+      if (liveMediaId === media.id) await liveMedia.close()
       await deleteCaseMedia(media)
       onScenarioMediaIdsChange(scenarioMediaIds.filter((id) => id !== media.id))
       setSignedUrls((current) => {
@@ -227,9 +255,11 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
 
   const badgeCount = role === 'candidate' ? releasedRows.length : (role === 'instructor' ? releasedRows.length : scenarioMediaIds.length)
   const previewUrl = selectedMedia ? signedUrls[selectedMedia.id] : undefined
+  const working = busy || liveMedia.busy
 
   return (
     <>
+      <TeachingMediaCandidateOverlay role={role} presentation={liveMedia.activePresentation} />
       <button
         type="button"
         className={`top-account-button case-media-top-button ${badgeCount ? 'has-media' : ''}`}
@@ -259,11 +289,11 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
                   <small>Images and short video clips · maximum 25 MB per file</small>
                 </div>
                 <input value={uploadTitle} maxLength={120} onChange={(event) => setUploadTitle(event.target.value)} placeholder="Optional title, e.g. Admission CXR" aria-label="Media title" />
-                <label className={`case-media-upload-button ${busy ? 'disabled' : ''}`}>
-                  <span>{busy ? 'Working…' : 'Upload media'}</span>
+                <label className={`case-media-upload-button ${working ? 'disabled' : ''}`}>
+                  <span>{working ? 'Working…' : 'Upload media'}</span>
                   <input
                     type="file"
-                    disabled={busy}
+                    disabled={working}
                     accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
                     onChange={(event) => {
                       const input = event.currentTarget
@@ -280,6 +310,7 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
                 {availableMedia.length ? availableMedia.map((media) => {
                   const attached = scenarioIds.has(media.id)
                   const released = releasedIds.has(media.id)
+                  const presenting = liveMediaId === media.id
                   return (
                     <article key={media.id} className={`case-media-item ${selectedMedia?.id === media.id ? 'selected' : ''}`} role="listitem">
                       <button type="button" className="case-media-item-main" onClick={() => setSelectedId(media.id)}>
@@ -290,17 +321,23 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
                         <div className="case-media-item-tags">
                           {attached && <em>Scenario</em>}
                           {released && <em className="released">Released</em>}
+                          {presenting && <em className="presenting">LIVE</em>}
                         </div>
                       )}
                       {role !== 'candidate' && (
                         <div className="case-media-item-actions">
-                          <button type="button" disabled={busy} onClick={() => toggleScenarioMedia(media.id)}>{attached ? 'Remove from scenario' : 'Add to scenario'}</button>
+                          <button type="button" disabled={working} onClick={() => toggleScenarioMedia(media.id)}>{attached ? 'Remove from scenario' : 'Add to scenario'}</button>
+                          {role === 'instructor' && sessionId && (
+                            presenting
+                              ? <button type="button" className="stop-presenting" disabled={working} onClick={() => void stopPresenting()}>Stop presenting</button>
+                              : <button type="button" className="present" disabled={working} onClick={() => void present(media)}>Present</button>
+                          )}
                           {role === 'instructor' && sessionId && (
                             released
-                              ? <button type="button" disabled={busy} onClick={() => void withdraw(media)}>Withdraw</button>
-                              : <button type="button" className="release" disabled={busy} onClick={() => void release(media)}>Release</button>
+                              ? <button type="button" disabled={working} onClick={() => void withdraw(media)}>Withdraw</button>
+                              : <button type="button" className="release" disabled={working} onClick={() => void release(media)}>Release</button>
                           )}
-                          <button type="button" className="delete" disabled={busy || released} onClick={() => void remove(media)}>Delete</button>
+                          <button type="button" className="delete" disabled={working || released} onClick={() => void remove(media)}>Delete</button>
                         </div>
                       )}
                     </article>
@@ -331,9 +368,14 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
                       )}
                     </div>
                     {role === 'instructor' && sessionId && (
-                      <button type="button" className={releasedIds.has(selectedMedia.id) ? 'case-media-withdraw-main' : 'case-media-release-main'} disabled={busy} onClick={() => void (releasedIds.has(selectedMedia.id) ? withdraw(selectedMedia) : release(selectedMedia))}>
-                        {releasedIds.has(selectedMedia.id) ? 'Withdraw from candidates' : 'Release to candidates'}
-                      </button>
+                      <div className="case-media-preview-actions">
+                        <button type="button" className={liveMediaId === selectedMedia.id ? 'case-media-stop-presenting-main' : 'case-media-present-main'} disabled={working} onClick={() => void (liveMediaId === selectedMedia.id ? stopPresenting() : present(selectedMedia))}>
+                          {liveMediaId === selectedMedia.id ? 'Stop presenting' : 'Present to candidates'}
+                        </button>
+                        <button type="button" className={releasedIds.has(selectedMedia.id) ? 'case-media-withdraw-main' : 'case-media-release-main'} disabled={working} onClick={() => void (releasedIds.has(selectedMedia.id) ? withdraw(selectedMedia) : release(selectedMedia))}>
+                          {releasedIds.has(selectedMedia.id) ? 'Withdraw from candidate library' : 'Release to candidate library'}
+                        </button>
+                      </div>
                     )}
                   </>
                 ) : (
@@ -346,7 +388,7 @@ export function CaseMediaPanel({ role, sessionId, scenarioMediaIds, onScenarioMe
               <div className="case-media-scenario-note">{scenarioMediaIds.length} media item{scenarioMediaIds.length === 1 ? '' : 's'} attached to the current scenario state. Saving or updating a scenario preserves these references.</div>
             )}
             {message && <div className="case-media-message">{message}</div>}
-            {error && <div className="case-media-error" role="alert">{error}</div>}
+            {(error || liveMedia.error) && <div className="case-media-error" role="alert">{error || liveMedia.error}</div>}
           </section>
         </div>
       )}
