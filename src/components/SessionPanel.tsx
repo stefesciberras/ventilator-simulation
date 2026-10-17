@@ -189,6 +189,8 @@ export function SessionPanel({
   const [joinMode, setJoinMode] = useState(false)
   const [sessionKey, setSessionKey] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [selfDirectedJoinMode, setSelfDirectedJoinMode] = useState(false)
+  const [assignmentCode, setAssignmentCode] = useState('')
   const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
   const [candidateCollapsed, setCandidateCollapsed] = useState(true)
   const [dashboardCollapsed, setDashboardCollapsed] = useState(() => loadPanelCollapsed('instructor-dashboard'))
@@ -321,7 +323,7 @@ export function SessionPanel({
           <div><span className="session-kicker">Teaching</span><h2>Session mode</h2></div>
           <span className="session-role-pill">Standalone</span>
         </div>
-        {!joinMode ? (
+        {!joinMode && !selfDirectedJoinMode ? (
           startWizardOpen ? (
             <div className="session-start-wizard">
               <div className="session-start-wizard-heading">
@@ -373,10 +375,32 @@ export function SessionPanel({
             <div className="session-launch-actions">
               <button type="button" className="session-primary-button" disabled={connection === 'connecting'} onClick={() => void openInstructorStart()}>Start instructor session</button>
               <button type="button" className="session-secondary-button" onClick={() => setJoinMode(true)}>Join as candidate</button>
+              <button type="button" className="session-secondary-button" onClick={() => setSelfDirectedJoinMode(true)}>Run self-directed scenario</button>
               {recoverableCandidate && onResumeCandidate && (<button type="button" className="session-secondary-button" disabled={connection === 'connecting'} onClick={() => void onResumeCandidate()}>Rejoin candidate {recoverableCandidate.sessionKey}</button>)}
               {recoverableInstructor && onResumeInstructor && (<button type="button" className="session-secondary-button" onClick={() => void onResumeInstructor(recoverableInstructor.sessionId)}>Rejoin instructor {recoverableInstructor.sessionKey}</button>)}
             </div>
           )
+        ) : selfDirectedJoinMode ? (
+          <form className="candidate-join-form" onSubmit={(event) => {
+            event.preventDefault()
+            const code = assignmentCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+            if (code.length !== 8) return
+            const url = new URL(window.location.href)
+            url.search = ''
+            url.hash = ''
+            url.searchParams.set('assignment', code)
+            window.location.assign(url.toString())
+          }}>
+            <label>
+              <span>Self-directed session code</span>
+              <input value={assignmentCode} onChange={(event) => setAssignmentCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} placeholder="A1B2C3D4" autoCapitalize="characters" autoComplete="off" maxLength={8} required />
+            </label>
+            <p className="session-start-note">This scenario runs independently on your device. No instructor needs to be online.</p>
+            <div className="session-launch-actions">
+              <button type="submit" className="session-primary-button" disabled={assignmentCode.length < 8}>Start scenario</button>
+              <button type="button" className="session-secondary-button" onClick={() => setSelfDirectedJoinMode(false)}>Cancel</button>
+            </div>
+          </form>
         ) : (
           <form className="candidate-join-form" onSubmit={(event) => {
             event.preventDefault()

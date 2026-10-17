@@ -35,6 +35,7 @@ import {
 } from '../session/supabase'
 import { APP_VERSION } from '../appVersion'
 import { DynamicScenarioRuntimeLibrary } from './DynamicScenarioRuntimeLibrary'
+import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'
 import '../account.css'
 
 export interface DynamicScenarioDiagnosticContext {
@@ -240,6 +241,8 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const [activeDynamicId, setActiveDynamicId] = useState<string | null>(null)
   const [activeDynamicStage, setActiveDynamicStage] = useState(0)
   const [activeDynamicStageStartedAt, setActiveDynamicStageStartedAt] = useState(0)
+  const [selfDirectedRun, setSelfDirectedRun] = useState<SelfDirectedRunStart | null>(null)
+  const [selfDirectedError, setSelfDirectedError] = useState<string | null>(null)
   const actionBaselineInstructorRef = useRef<VentilatorSettings | null>(null)
   const actionBaselineCandidatesRef = useRef(new Map<string, VentilatorSettings>())
   const triggerArmedAfterRef = useRef(0)
@@ -315,13 +318,17 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const staticPresets = useMemo(() => presets.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'), [presets])
   const dynamicPresets = useMemo(() => presets.filter((preset) => preset.scenario.kind === 'dynamic'), [presets])
   const activeDynamicPreset = useMemo(() => dynamicPresets.find((preset) => preset.id === activeDynamicId) ?? null, [dynamicPresets, activeDynamicId])
+  const selfDirectedPreset = useMemo<InstructorPresetRow | null>(() => selfDirectedRun ? ({
+    id: `self-directed:${selfDirectedRun.runId}`, instructor_id: '', name: selfDirectedRun.title, scenario: selfDirectedRun.scenario, created_at: '', updated_at: '',
+  }) : null, [selfDirectedRun])
+  const activeRuntimePreset = selfDirectedPreset ?? activeDynamicPreset
   useEffect(() => {
     if (!onScenarioDiagnosticChange) return
-    if (!activeDynamicPreset) { onScenarioDiagnosticChange(null); return }
-    const stages=activeDynamicPreset.scenario.stages ?? []
+    if (!activeRuntimePreset) { onScenarioDiagnosticChange(null); return }
+    const stages=activeRuntimePreset.scenario.stages ?? []
     const index=Math.min(activeDynamicStage,Math.max(0,stages.length-1)), stage=stages[index]
-    onScenarioDiagnosticChange({ scenarioId: activeDynamicPreset.id, scenarioName: activeDynamicPreset.name, description: activeDynamicPreset.scenario.description ?? '', schemaVersion: activeDynamicPreset.scenario.schemaVersion ?? null, stageIndex: index, stageName: stage?.name ?? `Stage ${index+1}`, stageStartedAtSeconds: activeDynamicStageStartedAt, triggers: stage ? dynamicStageTriggers(stage) : [], scenario: activeDynamicPreset.scenario })
-  }, [activeDynamicPreset, activeDynamicStage, activeDynamicStageStartedAt, onScenarioDiagnosticChange])
+    onScenarioDiagnosticChange({ scenarioId: activeRuntimePreset.id, scenarioName: activeRuntimePreset.name, description: activeRuntimePreset.scenario.description ?? '', schemaVersion: activeRuntimePreset.scenario.schemaVersion ?? null, stageIndex: index, stageName: stage?.name ?? `Stage ${index+1}`, stageStartedAtSeconds: activeDynamicStageStartedAt, triggers: stage ? dynamicStageTriggers(stage) : [], scenario: activeRuntimePreset.scenario })
+  }, [activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, onScenarioDiagnosticChange])
   useEffect(() => () => onScenarioDiagnosticChange?.(null), [onScenarioDiagnosticChange])
   const scenarioForStageSource = (sourceId: string) => sourceId === 'current' ? currentScenario : (staticPresets.find((preset) => preset.id === sourceId)?.scenario ?? currentScenario)
   const nameForStageSource = (sourceId: string) => sourceId === 'current' ? 'Current simulator state' : (staticPresets.find((preset) => preset.id === sourceId)?.name ?? 'Current simulator state')
@@ -462,7 +469,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     const stages = preset.scenario.stages ?? []
     if (!stages.length) return
     const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
-    setActiveDynamicId(preset.id)
+    if (!preset.id.startsWith('self-directed:')) setActiveDynamicId(preset.id)
     setActiveDynamicStage(nextIndex)
     setActiveDynamicStageStartedAt(stageStartedAt)
     actionBaselineInstructorRef.current = { ...nextScenario.ventilator }
@@ -476,13 +483,15 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   }
 
   const loadDynamicStage = (preset: InstructorPresetRow, index: number, reason: 'manual' | 'automatic' = 'manual') => {
-    if (role !== 'instructor') return
+    const selfDirected = preset.id.startsWith('self-directed:')
+    if (role !== 'instructor' && !selfDirected) return
     const stages = preset.scenario.stages ?? []
     if (!stages.length) return
     const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
     const nextScenario = applyDynamicStage(currentScenario, stages[nextIndex])
     onLoadScenario(nextScenario, { pauseSimulation: false, resetScenarioClock: false })
     activateDynamicStage(preset, nextIndex, nextScenario, reason)
+    if (selfDirected && selfDirectedRun) void updateSelfDirectedRun(selfDirectedRun.runId, nextIndex, nextIndex === stages.length - 1).catch(() => undefined)
   }
 
   const startDynamicScenario = async (preset: InstructorPresetRow) => {
@@ -502,7 +511,38 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   }
 
   useEffect(() => {
-    if (!account || role === 'candidate') return
+    if (role !== 'standalone' || selfDirectedRun) return
+    const url = new URL(window.location.href)
+    const assignmentCode = url.searchParams.get('assignment')
+    if (!assignmentCode) return
+    let cancelled = false
+    setSelfDirectedError(null)
+    void startSelfDirectedRun(assignmentCode).then((run) => {
+      if (cancelled) return
+      const stages = run.scenario.stages ?? []
+      if (run.scenario.kind !== 'dynamic' || !stages.length) throw new Error('This self-directed session does not contain a runnable dynamic scenario.')
+      const firstScenario = applyDynamicStage(currentScenario, stages[0])
+      setSelfDirectedRun(run)
+      setActiveDynamicId(null)
+      setActiveDynamicStage(0)
+      setActiveDynamicStageStartedAt(0)
+      actionBaselineInstructorRef.current = { ...firstScenario.ventilator }
+      actionBaselineCandidatesRef.current = new Map()
+      triggerArmedAfterRef.current = Date.now() + 750
+      automaticAdvanceLockRef.current = false
+      onLoadScenario(firstScenario, { pauseSimulation: false, resetScenarioClock: true })
+      void updateSelfDirectedRun(run.runId, 0, stages.length === 1).catch(() => undefined)
+      onDynamicScenarioStarted?.()
+    }).catch((cause) => {
+      if (cancelled) return
+      setSelfDirectedError(cause instanceof Error ? cause.message : 'Unable to start this self-directed scenario.')
+      onDynamicScenarioStarted?.()
+    })
+    return () => { cancelled = true }
+  }, [role])
+
+  useEffect(() => {
+    if (!account || role === 'candidate' || selfDirectedRun) return
     const url = new URL(window.location.href)
     const requestedScenarioId = url.searchParams.get('scenario')
     if (!requestedScenarioId) return
@@ -521,8 +561,8 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   }, [role, activeDynamicId])
 
   useEffect(() => {
-    if (role === 'candidate' || !activeDynamicPreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return
-    const stages = activeDynamicPreset.scenario.stages ?? []
+    if (role === 'candidate' || !activeRuntimePreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return
+    const stages = activeRuntimePreset.scenario.stages ?? []
     if (activeDynamicStage < 0 || activeDynamicStage >= stages.length - 1) return
     const automaticTriggers = dynamicStageTriggers(stages[activeDynamicStage]).filter((trigger) => trigger.type !== 'manual')
     if (!automaticTriggers.length) return
@@ -533,16 +573,23 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
         const actual=conditionMetricValue(physiologyMeasurements,trigger.metric)
         shouldAdvance=actual!=null && conditionMatches(actual,trigger.operator,trigger.value)
       } else if (trigger.type === 'action') {
-        if (trigger.actor === 'instructor' || trigger.actor === 'either') {
-          const baseline=actionBaselineInstructorRef.current
-          if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
-        }
-        if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {
-          for (const member of sessionMembers) {
-            if (member.role !== 'candidate') continue
-            const baseline=actionBaselineCandidatesRef.current.get(member.id), settings=member.ventilator_settings as Partial<VentilatorSettings>
-            if (!baseline || !settings || !(trigger.parameter in settings)) continue
-            if (settingChanged(settings[trigger.parameter],baseline[trigger.parameter])) { shouldAdvance=true; break }
+        if (selfDirectedRun) {
+          if (trigger.actor === 'candidate' || trigger.actor === 'either') {
+            const baseline=actionBaselineInstructorRef.current
+            if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
+          }
+        } else {
+          if (trigger.actor === 'instructor' || trigger.actor === 'either') {
+            const baseline=actionBaselineInstructorRef.current
+            if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
+          }
+          if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {
+            for (const member of sessionMembers) {
+              if (member.role !== 'candidate') continue
+              const baseline=actionBaselineCandidatesRef.current.get(member.id), settings=member.ventilator_settings as Partial<VentilatorSettings>
+              if (!baseline || !settings || !(trigger.parameter in settings)) continue
+              if (settingChanged(settings[trigger.parameter],baseline[trigger.parameter])) { shouldAdvance=true; break }
+            }
           }
         }
       }
@@ -550,8 +597,8 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     }
     if (!shouldAdvance) return
     automaticAdvanceLockRef.current=true
-    loadDynamicStage(activeDynamicPreset,activeDynamicStage+1,'automatic')
-  }, [role, activeDynamicPreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers])
+    loadDynamicStage(activeRuntimePreset,activeDynamicStage+1,'automatic')
+  }, [role, activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers, selfDirectedRun])
 
   const addDynamicStage = async (preset: InstructorPresetRow) => {
     if (!account) return
@@ -681,25 +728,26 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
           <ScenarioIcon />
         </button>
       )}
-      {runtimeHost && role === 'instructor' && activeDynamicPreset && createPortal((() => {
-        const stages=activeDynamicPreset.scenario.stages ?? [], index=Math.min(activeDynamicStage,Math.max(0,stages.length-1)), stage=stages[index]
+      {runtimeHost && activeRuntimePreset && (role === 'instructor' || Boolean(selfDirectedRun)) && createPortal((() => {
+        const stages=activeRuntimePreset.scenario.stages ?? [], index=Math.min(activeDynamicStage,Math.max(0,stages.length-1)), stage=stages[index]
         const triggers: DynamicScenarioTrigger[]=stage ? dynamicStageTriggers(stage) : [{ type: 'manual' }]
         const manualTrigger=triggers.some((trigger)=>trigger.type==='manual')
         const stageElapsedSeconds=Math.max(0,scenarioElapsedSeconds-activeDynamicStageStartedAt)
         return <section className="dynamic-runtime-panel" aria-label="Running dynamic scenario">
-          <div className="dynamic-runtime-panel-heading"><div><span>Running scenario</span><strong>{activeDynamicPreset.name}</strong></div></div>
+          <div className="dynamic-runtime-panel-heading"><div><span>{selfDirectedRun ? 'Self-directed scenario' : 'Running scenario'}</span><strong>{activeRuntimePreset.name}</strong></div>{selfDirectedRun && <em className="self-directed-mode-badge">Independent</em>}</div>
           <div className="dynamic-runtime-stage-card">
             <div><span>Current stage</span><strong>{stage?.name ?? `Stage ${index+1}`}</strong></div>
             <div><span>Progress</span><strong>{index+1} / {stages.length}</strong></div>
             <div><span>Stage time</span><strong>{formatStageTimer(stageElapsedSeconds)}</strong></div>
           </div>
           <div className="dynamic-runtime-panel-actions">
-            <button type="button" disabled={index<=0} onClick={()=>loadDynamicStage(activeDynamicPreset,index-1)}>Back</button>
-            <button type="button" className="dynamic-runtime-primary" disabled={index>=stages.length-1} title={manualTrigger ? 'Advance manually; automatic triggers remain armed' : 'Advance to the next stage now'} onClick={()=>loadDynamicStage(activeDynamicPreset,index+1)}>{manualTrigger ? 'Manual trigger' : 'Advance now'}</button>
-            <button type="button" className="dynamic-runtime-stop" onClick={()=>{setActiveDynamicId(null);setActiveDynamicStage(0);setPresetMessage('Dynamic scenario stopped.')}}>Stop scenario</button>
+            <button type="button" disabled={index<=0} onClick={()=>loadDynamicStage(activeRuntimePreset,index-1)}>Back</button>
+            <button type="button" className="dynamic-runtime-primary" disabled={index>=stages.length-1} title={selfDirectedRun ? 'Continue to the next stage; automatic triggers remain armed' : manualTrigger ? 'Advance manually; automatic triggers remain armed' : 'Advance to the next stage now'} onClick={()=>loadDynamicStage(activeRuntimePreset,index+1)}>{selfDirectedRun ? (index>=stages.length-1 ? 'Completed' : 'Continue') : manualTrigger ? 'Manual trigger' : 'Advance now'}</button>
+            <button type="button" className="dynamic-runtime-stop" onClick={()=>{ if (selfDirectedRun) { setSelfDirectedRun(null); const url=new URL(window.location.href); url.searchParams.delete('assignment'); window.history.replaceState({},'',`${url.pathname}${url.search}${url.hash}`) } setActiveDynamicId(null);setActiveDynamicStage(0);setPresetMessage(selfDirectedRun ? 'Self-directed scenario closed.' : 'Dynamic scenario stopped.')}}>{selfDirectedRun ? 'Exit scenario' : 'Stop scenario'}</button>
           </div>
         </section>
       })(), runtimeHost)}
+      {runtimeHost && selfDirectedError && createPortal(<section className="dynamic-runtime-panel self-directed-error-panel" role="alert"><div className="dynamic-runtime-panel-heading"><div><span>Self-directed scenario</span><strong>Unable to start</strong></div></div><p>{selfDirectedError}</p><div className="dynamic-runtime-panel-actions"><button type="button" onClick={() => { setSelfDirectedError(null); const url=new URL(window.location.href); url.searchParams.delete('assignment'); window.history.replaceState({},'',`${url.pathname}${url.search}${url.hash}`) }}>Close</button></div></section>, runtimeHost)}
       <button
         type="button"
         className="top-account-button"

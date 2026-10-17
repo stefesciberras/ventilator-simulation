@@ -352,3 +352,7 @@
 .dynamic-runtime-panel-actions .dynamic-runtime-primary { color: #dff8e6; border-color: #4e9764; background: #173821; }
 .dynamic-runtime-panel-actions .dynamic-runtime-stop { color: #efb9b9; border-color: #754646; background: #291717; }
 @media (max-width: 560px) { .dynamic-runtime-stage-card { grid-template-columns: 1fr; } .dynamic-runtime-panel-actions { grid-template-columns: 1fr; } }
+
+
+/* v0.3 self-directed runtime */
+.self-directed-mode-badge{font-style:normal;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;border:1px solid #3c6f7e;padding:5px 8px;color:#9de4ff}.self-directed-error-panel p{margin:4px 0 12px;color:#ffc2c2}
