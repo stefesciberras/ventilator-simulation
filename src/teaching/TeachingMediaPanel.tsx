@@ -147,13 +147,19 @@ export function TeachingMediaInstructorPanel({ role, sessionId, scenarioMediaIds
 
   return (
     <section className="teaching-media-panel" aria-label="Media">
-      <button className="teaching-media-heading" type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed}>
-        <span><strong>Media</strong><small>Images and short video clips</small></span>
-        <span className="teaching-media-heading-right">
-          {activeMediaId && <em>LIVE</em>}
-          <b aria-hidden="true">{collapsed ? '▸' : '▾'}</b>
-        </span>
-      </button>
+      <div className="teaching-prompt-section-heading teaching-media-section-heading">
+        <div><h3>Media</h3></div>
+        <div className="teaching-prompt-heading-actions">
+          {activeMediaId && <span className="teaching-prompt-live-badge">LIVE</span>}
+          <button
+            type="button"
+            className={`teaching-workspace-collapse ${collapsed ? 'collapsed' : 'expanded'}`}
+            onClick={() => setCollapsed((value) => !value)}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Expand Media' : 'Collapse Media'}
+          ><span className="teaching-collapse-caret" aria-hidden="true" /></button>
+        </div>
+      </div>
 
       {!collapsed && (
         <div className="teaching-media-body">
