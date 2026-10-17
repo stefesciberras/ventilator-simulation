@@ -283,3 +283,39 @@
 @media (max-width:640px) {
   .teaching-live-actions { grid-template-columns:1fr; }
 }
+
+
+/* v0.82.7 responsive candidate prompt finalization */
+@media (max-width:899px) {
+  .teaching-prompt-overlay {
+    display:flex;
+    align-items:flex-start;
+    justify-content:flex-end;
+    padding:74px 10px 10px;
+  }
+  .teaching-prompt-modal {
+    position:relative;
+    top:auto;
+    right:auto;
+    width:min(430px,58vw);
+    max-height:calc(100dvh - 84px);
+    transform:none !important;
+  }
+}
+@media (max-width:640px) {
+  .teaching-prompt-overlay {
+    display:flex;
+    align-items:flex-end;
+    justify-content:stretch;
+    padding:0;
+  }
+  .teaching-prompt-modal {
+    width:100%;
+    max-height:72dvh;
+    border-radius:18px 18px 0 0;
+    border-left:0;
+    border-right:0;
+    border-bottom:0;
+    padding:18px 16px calc(18px + env(safe-area-inset-bottom));
+  }
+}

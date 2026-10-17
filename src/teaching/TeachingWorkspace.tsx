@@ -240,7 +240,7 @@ export function TeachingInstructorWorkspace({
           {view === 'compose' ? (
             <div className="teaching-prompt-composer">
               {editingLibraryId && <div className="teaching-composer-toolbar"><span>Editing saved question</span></div>}
-              <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as TeachingPromptKind)}><option value="mcq">MCQ · unmarked</option><option value="poll">Poll</option><option value="message">Information</option></select></label>
+              <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as TeachingPromptKind)}><option value="mcq">MCQ</option><option value="poll">Poll</option><option value="message">Information</option></select></label>
               <label>Tags <span>(optional)</span><input value={tags} maxLength={300} onChange={(event) => setTags(event.target.value)} placeholder="e.g. COPD, AutoPEEP, waveforms" /></label>
               <label>Title <span>(optional)</span><input value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
               <label>Prompt<textarea value={body} maxLength={4000} rows={4} onChange={(event) => setBody(event.target.value)} placeholder="Present the case, instruction or question…" /></label>
@@ -333,6 +333,12 @@ export function TeachingCandidateOverlay({
     setPosition({ x: 0, y: 0 })
     dragRef.current = null
   }, [prompt?.id])
+
+  useEffect(() => {
+    if (!prompt?.answer_released_at || !myResponse) return
+    setDismissedPromptId(null)
+    setCollapsed(false)
+  }, [prompt?.answer_released_at, myResponse?.id])
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (window.innerWidth < 900 || (event.target as HTMLElement).closest('button')) return
