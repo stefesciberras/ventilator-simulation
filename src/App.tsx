@@ -1581,8 +1581,8 @@ export default function App() {
                 type="button"
                 className={`hardware-button icon-button teaching-laser-console-button ${teachingLaserEnabled ? 'active' : ''}`}
                 onClick={() => setTeachingLaserEnabled((enabled) => !enabled)}
-                title={teachingLaserEnabled ? 'Turn off teaching laser pointer' : 'Turn on teaching laser pointer'}
-                aria-label={teachingLaserEnabled ? 'Turn off teaching laser pointer' : 'Turn on teaching laser pointer'}
+                title={teachingLaserEnabled ? 'Turn off laser pointer' : 'Laser pointer'}
+                aria-label={teachingLaserEnabled ? 'Turn off laser pointer' : 'Laser pointer'}
                 aria-pressed={teachingLaserEnabled}
               ><LaserPointerIcon /></button>
             )}
