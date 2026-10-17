@@ -16,6 +16,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Normalize App patch indentation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/implement_teaching_marking.py')
+          s = p.read_text()
+          s = s.replace("                  onPresent={teachingPrompts.presentPrompt}\\n                  onClose={teachingPrompts.closePrompt}\\n", "        onPresent={teachingPrompts.presentPrompt}\\n        onClose={teachingPrompts.closePrompt}\\n")
+          s = s.replace("                  onPresent={teachingPrompts.presentPrompt}\\n                  onClose={teachingPrompts.closePrompt}\\n                  onReleaseAnswer={teachingPrompts.releaseAnswer}\\n", "        onPresent={teachingPrompts.presentPrompt}\\n        onClose={teachingPrompts.closePrompt}\\n        onReleaseAnswer={teachingPrompts.releaseAnswer}\\n")
+          p.write_text(s)
+          PY
       - name: Apply marking implementation
         run: python scripts/implement_teaching_marking.py
       - name: Install dependencies
