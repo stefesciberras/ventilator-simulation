@@ -16,6 +16,7 @@ import {
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
 import { SCENARIO_BUILDER_VERSION } from '../scenario-builder/version'
+import { createSelfDirectedAssignment, selfDirectedAssignmentUrl, type SelfDirectedAssignmentCreated } from '../selfDirectedAssignments'
 import './DynamicScenarioBuilder.css'
 
 interface DynamicScenarioBuilderProps {
@@ -335,6 +336,12 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   const [triggerMenuIndex, setTriggerMenuIndex] = useState<number | null>(null)
   const [collapsedStages, setCollapsedStages] = useState<Set<number>>(() => new Set())
   const scenarioImportInputRef = useRef<HTMLInputElement | null>(null)
+  const [assignmentOpen, setAssignmentOpen] = useState(false)
+  const [assignmentExpiryValue, setAssignmentExpiryValue] = useState(7)
+  const [assignmentExpiryUnit, setAssignmentExpiryUnit] = useState<'days' | 'weeks'>('days')
+  const [assignmentBusy, setAssignmentBusy] = useState(false)
+  const [assignmentError, setAssignmentError] = useState<string | null>(null)
+  const [assignmentResult, setAssignmentResult] = useState<SelfDirectedAssignmentCreated | null>(null)
 
   useEffect(() => {
     if (!wideScreen) return
@@ -692,6 +699,33 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     finally { setBusy(false); if (scenarioImportInputRef.current) scenarioImportInputRef.current.value = '' }
   }
 
+  const publishSelfDirected = async () => {
+    if (!selectedPreset || dirty) return
+    setAssignmentBusy(true)
+    setAssignmentError(null)
+    setAssignmentResult(null)
+    try {
+      const multiplier = assignmentExpiryUnit === 'weeks' ? 7 : 1
+      const result = await createSelfDirectedAssignment(selectedPreset.name, selectedPreset.scenario, Math.min(365, assignmentExpiryValue * multiplier))
+      setAssignmentResult(result)
+    } catch (cause) {
+      setAssignmentError(cause instanceof Error ? cause.message : 'Unable to create self-directed session.')
+    } finally {
+      setAssignmentBusy(false)
+    }
+  }
+
+  const copyAssignmentLink = async () => {
+    if (!assignmentResult) return
+    const link = selfDirectedAssignmentUrl(assignmentResult.accessCode)
+    try {
+      await navigator.clipboard.writeText(link)
+      setMessage('Self-directed session link copied.')
+    } catch {
+      window.prompt('Copy this self-directed session link:', link)
+    }
+  }
+
   const remove = async () => {
     if (!draft.id || !window.confirm(`Delete dynamic scenario “${draft.name}”?`)) return
     setBusy(true)
@@ -757,6 +791,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
           />
           <button type="button" className="dynamic-file-icon-button" disabled={busy} title="Import scenario file" aria-label="Import scenario file" onClick={() => scenarioImportInputRef.current?.click()}><ImportScenarioIcon /></button>
           {selectedPreset && <button type="button" className="dynamic-file-icon-button" disabled={busy || dirty} title={dirty ? 'Save changes before downloading the scenario file' : 'Download scenario file'} aria-label="Download scenario file" onClick={() => downloadScenario(selectedPreset)}><DownloadScenarioIcon /></button>}
+          {selectedPreset && <button type="button" className="account-secondary-button" disabled={busy || dirty} title={dirty ? 'Save changes before creating a self-directed session' : 'Create a self-directed session'} onClick={() => { setAssignmentOpen((current) => !current); setAssignmentResult(null); setAssignmentError(null) }}>Assign</button>}
           {selectedPreset && (
             <button
               type="button"
@@ -768,6 +803,30 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
             </button>
           )}
         </div>
+
+        {assignmentOpen && selectedPreset && (
+          <section className="dynamic-assignment-card" aria-label="Create self-directed session">
+            <div className="dynamic-assignment-heading">
+              <div><span>Self-directed session</span><strong>{selectedPreset.name}</strong></div>
+              <button type="button" className="dynamic-stage-collapse" onClick={() => setAssignmentOpen(false)} aria-label="Close self-directed session setup">×</button>
+            </div>
+            <p>Candidates receive an independent copy of this saved scenario and can run it without an instructor connected.</p>
+            <div className="dynamic-assignment-expiry">
+              <label><span>Expires in</span><input type="number" min={1} max={assignmentExpiryUnit === 'weeks' ? 52 : 365} value={assignmentExpiryValue} onChange={(event) => setAssignmentExpiryValue(Math.max(1, Number(event.target.value) || 1))} /></label>
+              <label><span>Unit</span><select value={assignmentExpiryUnit} onChange={(event) => setAssignmentExpiryUnit(event.target.value as 'days' | 'weeks')}><option value="days">Days</option><option value="weeks">Weeks</option></select></label>
+              <button type="button" className="account-primary-button" disabled={assignmentBusy} onClick={() => void publishSelfDirected()}>{assignmentBusy ? 'Creating…' : 'Create session'}</button>
+            </div>
+            <small className="dynamic-assignment-note">The assignment is a snapshot of the scenario at publication time. Media, questions and polling are intentionally not included in v0.3.</small>
+            {assignmentResult && (
+              <div className="dynamic-assignment-result">
+                <div><span>Session code</span><strong>{assignmentResult.accessCode}</strong></div>
+                <div><span>Expires</span><strong>{new Date(assignmentResult.expiresAt).toLocaleString()}</strong></div>
+                <button type="button" className="account-secondary-button" onClick={() => void copyAssignmentLink()}>Copy link</button>
+              </div>
+            )}
+            {assignmentError && <div className="account-error" role="alert">{assignmentError}</div>}
+          </section>
+        )}
 
         <div className="dynamic-scenario-header-block">
           <label>
