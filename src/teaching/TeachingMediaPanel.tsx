@@ -15,6 +15,7 @@ import './TeachingMediaPanel.css'
 
 interface TeachingMediaInstructorPanelProps {
   role: TeachingRole
+  instructorAuthenticated: boolean
   sessionId: string | null
   scenarioMediaIds: string[]
   onScenarioMediaIdsChange: (ids: string[]) => void
@@ -25,7 +26,7 @@ function fileSizeLabel(bytes: number) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-export function TeachingMediaInstructorPanel({ role, sessionId, scenarioMediaIds, onScenarioMediaIdsChange }: TeachingMediaInstructorPanelProps) {
+export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, sessionId, scenarioMediaIds, onScenarioMediaIdsChange }: TeachingMediaInstructorPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [library, setLibrary] = useState<CaseMediaRow[]>([])
   const [releasedIds, setReleasedIds] = useState<Set<string>>(new Set())
@@ -44,7 +45,12 @@ export function TeachingMediaInstructorPanel({ role, sessionId, scenarioMediaIds
   const working = busy || liveMedia.busy
 
   const refresh = useCallback(async () => {
-    if (role === 'candidate') return
+    if (role === 'candidate' || !instructorAuthenticated) {
+      setLibrary([])
+      setReleasedIds(new Set())
+      setError(null)
+      return
+    }
     try {
       const media = await listInstructorCaseMedia()
       setLibrary(media)
@@ -59,7 +65,7 @@ export function TeachingMediaInstructorPanel({ role, sessionId, scenarioMediaIds
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to load media library.')
     }
-  }, [role, selectedId, sessionId])
+  }, [role, instructorAuthenticated, selectedId, sessionId])
 
   useEffect(() => { void refresh() }, [refresh])
 
@@ -71,6 +77,12 @@ export function TeachingMediaInstructorPanel({ role, sessionId, scenarioMediaIds
   }, [selected, signedUrls])
 
   if (role === 'candidate') return null
+  if (!instructorAuthenticated) return (
+    <section className="teaching-media-panel teaching-account-required" aria-label="Media">
+      <div className="teaching-media-heading teaching-media-heading-static"><span><strong>Media</strong></span></div>
+      <div className="teaching-account-required-message"><strong>Instructor sign-in required</strong><span>Sign in to your instructor account to use the media library and present media to candidates.</span></div>
+    </section>
+  )
 
   const upload = async (file: File | null) => {
     if (!file) return

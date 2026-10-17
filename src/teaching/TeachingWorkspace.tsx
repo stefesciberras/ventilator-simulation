@@ -47,6 +47,7 @@ function PromptPreview({ prompt }: { prompt: TeachingPromptRow | TeachingLibrary
 
 export function TeachingInstructorWorkspace({
   role,
+  instructorAuthenticated,
   host,
   activePrompt,
   responses,
@@ -63,6 +64,7 @@ export function TeachingInstructorWorkspace({
   onSaveLibrary,
 }: {
   role: TeachingRole
+  instructorAuthenticated: boolean
   host: TeachingHostAdapter
   activePrompt: TeachingPromptRow | null
   responses: TeachingPromptResponseRow[]
@@ -105,6 +107,12 @@ export function TeachingInstructorWorkspace({
   }, [libraryItems, search])
 
   if (role === 'candidate') return null
+  if (!instructorAuthenticated) return (
+    <section className="teaching-prompt-instructor teaching-account-required" aria-label="Questions and Polls">
+      <div className="teaching-prompt-section-heading"><div><h3>Questions and Polls</h3></div></div>
+      <div className="teaching-account-required-message"><strong>Instructor sign-in required</strong><span>Sign in to your instructor account to prepare, save and present questions or polls.</span></div>
+    </section>
+  )
 
   const resetComposer = () => {
     setKind('mcq')
