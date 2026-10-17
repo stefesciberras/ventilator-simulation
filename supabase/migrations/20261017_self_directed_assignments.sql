@@ -37,6 +37,11 @@ create index if not exists self_directed_runs_user_idx
 alter table public.self_directed_assignments enable row level security;
 alter table public.self_directed_runs enable row level security;
 
+drop policy if exists "Instructors can read own self-directed assignments" on public.self_directed_assignments;
+drop policy if exists "Instructors can update own self-directed assignments" on public.self_directed_assignments;
+drop policy if exists "Instructors can delete own self-directed assignments" on public.self_directed_assignments;
+drop policy if exists "Candidates can read own self-directed runs" on public.self_directed_runs;
+
 create policy "Instructors can read own self-directed assignments"
   on public.self_directed_assignments for select
   to authenticated

@@ -706,7 +706,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     setAssignmentResult(null)
     try {
       const multiplier = assignmentExpiryUnit === 'weeks' ? 7 : 1
-      const result = await createSelfDirectedAssignment(selectedPreset.name, selectedPreset.scenario, assignmentExpiryValue * multiplier)
+      const result = await createSelfDirectedAssignment(selectedPreset.name, selectedPreset.scenario, Math.min(365, assignmentExpiryValue * multiplier))
       setAssignmentResult(result)
     } catch (cause) {
       setAssignmentError(cause instanceof Error ? cause.message : 'Unable to create self-directed session.')
