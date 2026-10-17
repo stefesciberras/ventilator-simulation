@@ -1,0 +1,30 @@
+name: Apply and verify v0.82.8.3 instructor auth gating
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.8.3-instructor-auth-gating
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.8.3-instructor-auth-gating
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python .github/scripts/apply-v08283.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit applied changes
+        run: |
+          rm .github/scripts/apply-v08283.py
+          rm .github/workflows/v0.82.8.3-auth-gating.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          git commit -m "v0.82.8.3 require instructor account for teaching tools"
+          git push origin HEAD:chatgpt/v0.82.8.3-instructor-auth-gating
