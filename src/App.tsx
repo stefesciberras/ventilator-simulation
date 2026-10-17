@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
+import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, TeachingMediaInstructorPanel, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -1524,12 +1524,14 @@ export default function App() {
             onDynamicScenarioStarted={() => { setControlTab('teaching'); setMobileWorkspacePage('settings') }}
             onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
           />
-          <CaseMediaPanel
-            role={teachingSession.role}
-            sessionId={teachingSession.session?.id ?? null}
-            scenarioMediaIds={scenarioMediaIds}
-            onScenarioMediaIdsChange={setScenarioMediaIds}
-          />
+          {teachingSession.role === 'candidate' && (
+            <CaseMediaPanel
+              role={teachingSession.role}
+              sessionId={teachingSession.session?.id ?? null}
+              scenarioMediaIds={scenarioMediaIds}
+              onScenarioMediaIdsChange={setScenarioMediaIds}
+            />
+          )}
           <div className="top-diagnostic-menu">
             <button
               className={`top-diagnostic-button ${diagnosticMenuOpen ? 'active' : ''} ${diagnosticCopied ? 'copied' : ''}`}
@@ -1825,6 +1827,12 @@ export default function App() {
                   onEndInstructorSession={teachingSession.endInstructorSession}
                   onUpdatePolicy={teachingSession.updatePolicy}
                   onBroadcastNow={teachingSession.broadcastNow}
+                />
+                <TeachingMediaInstructorPanel
+                  role={teachingSession.role}
+                  sessionId={teachingSession.session?.id ?? null}
+                  scenarioMediaIds={scenarioMediaIds}
+                  onScenarioMediaIdsChange={setScenarioMediaIds}
                 />
       <TeachingInstructorWorkspace
         role={teachingSession.role}
