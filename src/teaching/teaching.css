@@ -208,8 +208,8 @@
 .teaching-laser-mode.shared { background:#492522; color:#ffb0aa; }
 .teaching-laser-panel .teaching-laser-control-row { margin:0; }
 
-.teaching-prompt-overlay { inset:0; display:flex; align-items:flex-start; justify-content:flex-end; padding:84px 18px 18px; background:transparent; backdrop-filter:none; pointer-events:none; }
-.teaching-prompt-modal { width:min(430px,38vw); max-height:calc(100dvh - 102px); border-radius:14px; padding:18px; box-shadow:0 18px 48px rgba(0,0,0,.48); pointer-events:auto; }
+.teaching-prompt-overlay { inset:0; display:block; padding:0; background:transparent; backdrop-filter:none; pointer-events:none; }
+.teaching-prompt-modal { position:fixed; top:86px; right:18px; width:min(430px,38vw); max-height:calc(100dvh - 104px); overflow:auto; border-radius:14px; padding:18px; box-shadow:0 18px 48px rgba(0,0,0,.48); pointer-events:auto; }
 .teaching-prompt-dock-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:4px; }
 .teaching-prompt-dock-header .teaching-prompt-kind { margin-bottom:0; }
 .teaching-prompt-dock-header button { border:1px solid #4a5d66; border-radius:999px; background:#1b2a31; color:#dfeaec; padding:5px 10px; cursor:pointer; }
@@ -252,4 +252,34 @@
 .teaching-laser-console-button.active::before {
   background:#ff4338;
   box-shadow:0 0 5px #fff, 0 0 11px #ff3b30, 0 0 20px rgba(255,59,48,.95);
+}
+
+
+/* v0.82.7 teaching marking and workspace refinements */
+.teaching-prompt-heading-actions { display:flex; align-items:center; gap:8px; }
+.teaching-workspace-collapse { width:30px; height:30px; display:grid; place-items:center; border:1px solid #40545f; border-radius:7px; background:#15242b; color:#dce9ed; cursor:pointer; font-size:1rem; font-weight:800; }
+.teaching-prompt-instructor:has(.teaching-workspace-collapse[aria-expanded="false"]) { padding-bottom:10px; }
+.teaching-live-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+.teaching-live-actions .teaching-prompt-close { margin-top:0; }
+.teaching-answer-release { border:1px solid #ef8a27; border-radius:8px; background:#3a2a18; color:#ffc17d; padding:10px 12px; font-weight:800; cursor:pointer; }
+.teaching-answer-release:disabled { opacity:.65; cursor:default; }
+.teaching-correct-answer-hint { color:#f0b06e; font-size:.76rem; font-weight:800; letter-spacing:.02em; }
+.teaching-prompt-option-editor label { grid-template-columns:28px 1fr auto; }
+.teaching-prompt-option-editor label.correct-answer-marked { padding:4px; margin:-4px; border-radius:8px; background:rgba(52, 121, 77, .16); }
+.teaching-mark-correct { width:30px; height:30px; display:grid; place-items:center; border:1px solid #4a5d66; border-radius:50%; background:#17262e; color:#8fa2ab; cursor:pointer; font-weight:900; }
+.teaching-mark-correct.selected { border-color:#4ebc76; background:#245c38; color:#effff4; box-shadow:0 0 0 2px rgba(78,188,118,.12); }
+.teaching-prompt-candidate-options button.answer-correct { border-color:#4ebc76; background:#173524; }
+.teaching-prompt-candidate-options button.answer-correct strong { background:#3c9b5e; color:#fff; }
+.teaching-prompt-candidate-options button.answer-incorrect { border-color:#d96666; background:#3a2020; }
+.teaching-prompt-candidate-options button.answer-incorrect strong { background:#a94646; color:#fff; }
+.teaching-prompt-submitted.answer-released { border-color:#4a6f5c; }
+@media (min-width:900px) {
+  .teaching-prompt-dock-header { position:sticky; top:-18px; z-index:3; margin:-18px -18px 10px; padding:12px 14px; background:#101b21; border-bottom:1px solid #344751; cursor:grab; }
+  .teaching-prompt-dock-header:active { cursor:grabbing; }
+}
+@media (max-width:899px) {
+  .teaching-prompt-modal { position:relative; top:auto; right:auto; transform:none !important; }
+}
+@media (max-width:640px) {
+  .teaching-live-actions { grid-template-columns:1fr; }
 }

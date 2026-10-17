@@ -25,13 +25,15 @@ function draftFromLibrary(item: TeachingLibraryItem) {
     options: item.options.map((option) => option.text),
     module: item.module,
     tags: item.tags.join(', '),
+    correctOptionId: item.correct_option_id,
+    explanation: item.explanation ?? '',
   }
 }
 
 function PromptPreview({ prompt }: { prompt: TeachingPromptRow | TeachingLibraryItem }) {
   return (
     <div className="teaching-prompt-preview">
-      <span className="teaching-prompt-kind">{prompt.kind === 'message' ? 'Information' : prompt.kind === 'mcq' ? 'MCQ · unmarked' : 'Poll'}</span>
+      <span className="teaching-prompt-kind">{prompt.kind === 'message' ? 'Information' : prompt.kind === 'mcq' ? 'MCQ' : 'Poll'}</span>
       {prompt.title && <h4>{prompt.title}</h4>}
       <p>{prompt.body}</p>
       {prompt.options.length > 0 && (
@@ -57,6 +59,7 @@ export function TeachingInstructorWorkspace({
   libraryError,
   onPresent,
   onClose,
+  onReleaseAnswer,
   onSaveLibrary,
 }: {
   role: TeachingRole
@@ -72,6 +75,7 @@ export function TeachingInstructorWorkspace({
   libraryError: string | null
   onPresent: (input: TeachingPromptDraft) => Promise<void>
   onClose: () => Promise<void>
+  onReleaseAnswer: () => Promise<void>
   onSaveLibrary: (draft: TeachingLibraryDraft, existingId?: string | null) => Promise<TeachingLibraryItem>
 }) {
   const [view, setView] = useState<'compose' | 'library'>('compose')
@@ -79,6 +83,9 @@ export function TeachingInstructorWorkspace({
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [options, setOptions] = useState(['', '', '', ''])
+  const [correctOptionId, setCorrectOptionId] = useState<string | null>(null)
+  const [explanation, setExplanation] = useState('')
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false)
   const [module, setModule] = useState(host.defaultModule)
   const [tags, setTags] = useState('')
   const [editingLibraryId, setEditingLibraryId] = useState<string | null>(null)
@@ -104,6 +111,8 @@ export function TeachingInstructorWorkspace({
     setTitle('')
     setBody('')
     setOptions(['', '', '', ''])
+    setCorrectOptionId(null)
+    setExplanation('')
     setModule(host.defaultModule)
     setTags('')
     setEditingLibraryId(null)
@@ -116,6 +125,8 @@ export function TeachingInstructorWorkspace({
     setTitle(draft.title)
     setBody(draft.body)
     setOptions([...draft.options, '', '', '', '', '', ''].slice(0, Math.max(2, Math.min(6, draft.options.length || 4))))
+    setCorrectOptionId(draft.correctOptionId)
+    setExplanation(draft.explanation)
     setModule(draft.module)
     setTags(draft.tags)
     setEditingLibraryId(item.id)
@@ -128,9 +139,13 @@ export function TeachingInstructorWorkspace({
     title,
     body: body.trim(),
     options: kind === 'message' ? [] : normaliseOptions(options),
+    correctOptionId: kind === 'mcq' ? correctOptionId : null,
+    explanation: kind === 'mcq' ? explanation : null,
   })
 
-  const valid = Boolean(body.trim()) && (kind === 'message' || normaliseOptions(options).length >= 2)
+  const normalisedOptions = normaliseOptions(options)
+  const markedCorrectAnswerIsValid = kind !== 'mcq' || Boolean(correctOptionId && normalisedOptions.some((option) => option.id === correctOptionId))
+  const valid = Boolean(body.trim()) && (kind === 'message' || normalisedOptions.length >= 2) && markedCorrectAnswerIsValid
 
   const present = async () => {
     if (role !== 'instructor' || !valid) return
@@ -150,6 +165,8 @@ export function TeachingInstructorWorkspace({
       ...promptDraft(),
       module: module.trim() || host.defaultModule,
       tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+      correctOptionId: kind === 'mcq' ? correctOptionId : null,
+      explanation: kind === 'mcq' ? explanation : null,
     }
     try {
       const saved = await onSaveLibrary(draft, editingLibraryId)
@@ -164,9 +181,13 @@ export function TeachingInstructorWorkspace({
     <section className="teaching-prompt-instructor" aria-label="Teaching interaction workspace">
       <div className="teaching-prompt-section-heading">
         <div><h3>Questions and Polls</h3></div>
-        {activePrompt && <span className="teaching-prompt-live-badge">LIVE</span>}
+        <div className="teaching-prompt-heading-actions">
+          {activePrompt && <span className="teaching-prompt-live-badge">LIVE</span>}
+          <button type="button" className="teaching-workspace-collapse" onClick={() => setWorkspaceCollapsed((collapsed) => !collapsed)} aria-expanded={!workspaceCollapsed} aria-label={workspaceCollapsed ? 'Expand Questions and Polls' : 'Collapse Questions and Polls'}>{workspaceCollapsed ? '⌄' : '⌃'}</button>
+        </div>
       </div>
 
+      {!workspaceCollapsed && <>
       {activePrompt && role === 'instructor' ? (
         <>
           <PromptPreview prompt={activePrompt} />
@@ -186,7 +207,14 @@ export function TeachingInstructorWorkspace({
               })}
             </div>
           )}
-          <button className="teaching-prompt-close" type="button" disabled={promptBusy} onClick={() => void onClose()}>Close prompt</button>
+          <div className="teaching-live-actions">
+            {activePrompt.kind === 'mcq' && (
+              <button className="teaching-answer-release" type="button" disabled={promptBusy || Boolean(activePrompt.answer_released_at)} onClick={() => void onReleaseAnswer()}>
+                {activePrompt.answer_released_at ? 'Answer released' : 'Release correct answer'}
+              </button>
+            )}
+            <button className="teaching-prompt-close" type="button" disabled={promptBusy} onClick={() => void onClose()}>Close prompt</button>
+          </div>
         </>
       ) : (
         <>
@@ -218,9 +246,18 @@ export function TeachingInstructorWorkspace({
               <label>Prompt<textarea value={body} maxLength={4000} rows={4} onChange={(event) => setBody(event.target.value)} placeholder="Present the case, instruction or question…" /></label>
               {kind !== 'message' && (
                 <div className="teaching-prompt-option-editor">
-                  {options.map((option, index) => (
-                    <label key={index}><span>{String.fromCharCode(65 + index)}</span><input value={option} maxLength={500} onChange={(event) => setOptions((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} /></label>
-                  ))}
+                  {kind === 'mcq' && <div className="teaching-correct-answer-hint">Mark the correct answer</div>}
+                  {options.map((option, index) => {
+                    const optionId = `opt-${index + 1}`
+                    const markedCorrect = correctOptionId === optionId
+                    return (
+                      <label key={index} className={markedCorrect ? 'correct-answer-marked' : ''}>
+                        <span>{String.fromCharCode(65 + index)}</span>
+                        <input value={option} maxLength={500} onChange={(event) => setOptions((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} />
+                        {kind === 'mcq' && <button type="button" className={`teaching-mark-correct ${markedCorrect ? 'selected' : ''}`} onClick={() => setCorrectOptionId(optionId)} aria-pressed={markedCorrect} title={`Mark option ${String.fromCharCode(65 + index)} as correct`} aria-label={`Mark option ${String.fromCharCode(65 + index)} as correct`}>✓</button>}
+                      </label>
+                    )
+                  })}
                   <div className="teaching-option-actions">
                     {options.length < 6 && <button type="button" onClick={() => setOptions((current) => [...current, ''])}>+ option</button>}
                     {options.length > 2 && <button type="button" onClick={() => setOptions((current) => current.slice(0, -1))}>− option</button>}
@@ -250,7 +287,7 @@ export function TeachingInstructorWorkspace({
                           {item.tags.length > 0 && <div className="teaching-library-tags">{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                           <div className="teaching-library-card-actions">
                             <button type="button" onClick={() => loadLibraryItem(item)}>Edit / use</button>
-                            {role === 'instructor' && <button type="button" className="primary" disabled={promptBusy} onClick={() => { void onPresent({ kind: item.kind, title: item.title ?? '', body: item.body, options: item.options }).catch(() => undefined) }}>Present</button>}
+                            {role === 'instructor' && <button type="button" className="primary" disabled={promptBusy || (item.kind === 'mcq' && !item.correct_option_id)} title={item.kind === 'mcq' && !item.correct_option_id ? 'Edit this saved MCQ and mark the correct answer before presenting it.' : undefined} onClick={() => { void onPresent({ kind: item.kind, title: item.title ?? '', body: item.body, options: item.options, correctOptionId: item.correct_option_id, explanation: item.explanation }).catch(() => undefined) }}>Present</button>}
                           </div>
                         </article>
                       ))}
@@ -263,6 +300,7 @@ export function TeachingInstructorWorkspace({
         </>
       )}
       {(promptError || libraryError) && <div className="teaching-prompt-error">{promptError || libraryError}</div>}
+      </>}
     </section>
   )
 }
@@ -286,7 +324,7 @@ export function TeachingCandidateOverlay({
   const [dismissedPromptId, setDismissedPromptId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [position, setPosition] = useState({ x: 0, y: 0 })
-  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null)
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; baseLeft: number; baseTop: number; width: number; height: number } | null>(null)
 
   useEffect(() => {
     setSelectedOptionId('')
@@ -298,28 +336,34 @@ export function TeachingCandidateOverlay({
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (window.innerWidth < 900 || (event.target as HTMLElement).closest('button')) return
+    const panel = event.currentTarget.closest('.teaching-prompt-modal') as HTMLElement | null
+    if (!panel) return
     event.preventDefault()
-    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: position.x, originY: position.y }
+    const rect = panel.getBoundingClientRect()
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: position.x,
+      originY: position.y,
+      baseLeft: rect.left - position.x,
+      baseTop: rect.top - position.y,
+      width: rect.width,
+      height: rect.height,
+    }
     event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
   const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId || window.innerWidth < 900) return
-    const panel = event.currentTarget.closest('.teaching-prompt-modal') as HTMLElement | null
-    const rect = panel?.getBoundingClientRect()
     const proposedX = drag.originX + event.clientX - drag.startX
     const proposedY = drag.originY + event.clientY - drag.startY
-    if (!rect) {
-      setPosition({ x: proposedX, y: proposedY })
-      return
-    }
-    const baseLeft = window.innerWidth - rect.width - 18
-    const baseTop = window.innerHeight / 2
-    const minX = 16 - baseLeft
-    const maxX = 0
-    const minY = 16 - (baseTop - rect.height / 2)
-    const maxY = window.innerHeight - 16 - (baseTop + rect.height / 2)
+    const margin = 12
+    const minX = margin - drag.baseLeft
+    const maxX = window.innerWidth - margin - (drag.baseLeft + drag.width)
+    const minY = margin - drag.baseTop
+    const maxY = window.innerHeight - margin - (drag.baseTop + drag.height)
     setPosition({
       x: Math.max(minX, Math.min(maxX, proposedX)),
       y: Math.max(minY, Math.min(maxY, proposedY)),
@@ -349,7 +393,7 @@ export function TeachingCandidateOverlay({
         role="dialog"
         aria-modal="false"
         aria-labelledby="teaching-prompt-title"
-        style={{ transform: `translate(${position.x}px, calc(-50% + ${position.y}px))` }}
+        style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
       >
         <div
           className="teaching-prompt-dock-header"
@@ -368,14 +412,30 @@ export function TeachingCandidateOverlay({
           <div className="teaching-prompt-candidate-options">
             {prompt.options.map((option, index) => {
               const selected = selectedOptionId === option.id || myResponse?.option_id === option.id
-              return <button key={option.id} type="button" className={selected ? 'selected' : ''} disabled={hasSubmitted || busy} onClick={() => setSelectedOptionId(option.id)}><strong>{String.fromCharCode(65 + index)}</strong><span>{option.text}</span></button>
+              const answerReleased = Boolean(prompt.answer_released_at && prompt.released_correct_option_id)
+              const correct = answerReleased && prompt.released_correct_option_id === option.id
+              const selectedWrong = answerReleased && myResponse?.option_id === option.id && !correct
+              return <button key={option.id} type="button" className={`${selected ? 'selected' : ''} ${correct ? 'answer-correct' : ''} ${selectedWrong ? 'answer-incorrect' : ''}`} disabled={hasSubmitted || busy} onClick={() => setSelectedOptionId(option.id)}><strong>{String.fromCharCode(65 + index)}</strong><span>{option.text}</span></button>
             })}
           </div>
         )}
         {prompt.kind === 'message' ? (
           <button className="teaching-prompt-primary" type="button" onClick={() => setDismissedPromptId(prompt.id)}>Continue</button>
         ) : hasSubmitted ? (
-          <div className="teaching-prompt-submitted"><strong>Response submitted</strong><span>Your answer has been sent to the instructor.</span><button type="button" onClick={() => setDismissedPromptId(prompt.id)}>Return to simulator</button></div>
+          <div className={`teaching-prompt-submitted ${prompt.answer_released_at ? 'answer-released' : ''}`}>
+            {prompt.answer_released_at && prompt.released_correct_option_id ? (
+              <>
+                <strong>{myResponse?.option_id === prompt.released_correct_option_id ? 'Correct' : 'Not correct'}</strong>
+                <span>{myResponse?.option_id === prompt.released_correct_option_id ? 'Your response is correct.' : `Correct answer: ${String.fromCharCode(65 + Math.max(0, prompt.options.findIndex((option) => option.id === prompt.released_correct_option_id)))}. ${prompt.options.find((option) => option.id === prompt.released_correct_option_id)?.text ?? ''}`}</span>
+              </>
+            ) : (
+              <>
+                <strong>Response submitted</strong>
+                <span>Your answer has been sent to the instructor. The correct answer will be released by the instructor.</span>
+              </>
+            )}
+            <button type="button" onClick={() => setDismissedPromptId(prompt.id)}>Return to simulator</button>
+          </div>
         ) : (
           <button className="teaching-prompt-primary" type="button" disabled={!selectedOptionId || busy} onClick={() => void onSubmit(selectedOptionId)}>Submit response</button>
         )}

@@ -1840,6 +1840,7 @@ export default function App() {
         libraryError={teachingLibrary.error}
         onPresent={teachingPrompts.presentPrompt}
         onClose={teachingPrompts.closePrompt}
+                  onReleaseAnswer={teachingPrompts.releaseAnswer}
         onSaveLibrary={teachingLibrary.save}
       />
                 <div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />
