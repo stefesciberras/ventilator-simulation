@@ -1,0 +1,34 @@
+name: Scenario Builder v0.3.0
+
+on:
+  push:
+    branches:
+      - chatgpt/scenario-builder-v0.3.0-self-directed
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.3.0-self-directed
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply v0.3.0 patches
+        run: node scripts/patch-v030-self-directed.mjs
+      - run: npm ci
+      - run: npm run build
+      - name: Commit validated changes
+        run: |
+          rm -f scripts/patch-v030-self-directed.mjs .github/workflows/scenario-builder-v030.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          git commit -m "Scenario Builder v0.3.0 self-directed assignments"
+          git push origin HEAD:chatgpt/scenario-builder-v0.3.0-self-directed
