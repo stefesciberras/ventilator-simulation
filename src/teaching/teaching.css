@@ -329,3 +329,6 @@
 .teaching-workspace-collapse.expanded .teaching-collapse-caret { transform:translateY(2px) rotate(225deg); }
 .teaching-mark-correct { display:flex; align-items:center; justify-content:center; padding:0; line-height:1; }
 .teaching-mark-correct svg { display:block; width:17px; height:17px; flex:0 0 17px; }
+
+/* Permanent instructor account gating */
+.teaching-account-required{opacity:.82}.teaching-account-required-message{display:grid;gap:4px;margin-top:10px;padding:12px;border:1px dashed #465860;border-radius:8px;background:#0d171c;color:#98a9b0}.teaching-account-required-message strong{color:#dbe7eb;font-size:.86rem}.teaching-account-required-message span{font-size:.78rem;line-height:1.4}.teaching-media-heading-static{cursor:default}

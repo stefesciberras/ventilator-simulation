@@ -475,6 +475,7 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 
 export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [instructorAccountConnected, setInstructorAccountConnected] = useState(false)
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => {
     const stored = loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient)
@@ -1535,6 +1536,7 @@ export default function App() {
             sessionMembers={teachingSession.members}
             runtimeHost={dynamicScenarioRuntimeHost}
             onStartInstructorSession={startInstructorSession}
+            onAccountConnectionChange={setInstructorAccountConnected}
             onDynamicScenarioStarted={() => { setControlTab('teaching'); setMobileWorkspacePage('settings') }}
             onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
           />
@@ -1819,6 +1821,7 @@ export default function App() {
               <div className="control-tab-pane teaching-tab-pane" role="tabpanel">
                 <SessionPanel
                   role={teachingSession.role}
+                  instructorAuthenticated={instructorAccountConnected}
                   simulatorExpanded={teachingSession.role === 'instructor'}
                   onSimulatorExpandedChange={() => undefined}
                   connection={teachingSession.connection}
@@ -1845,12 +1848,14 @@ export default function App() {
                 />
                 <TeachingMediaInstructorPanel
                   role={teachingSession.role}
+                  instructorAuthenticated={instructorAccountConnected}
                   sessionId={teachingSession.session?.id ?? null}
                   scenarioMediaIds={scenarioMediaIds}
                   onScenarioMediaIdsChange={setScenarioMediaIds}
                 />
       <TeachingInstructorWorkspace
         role={teachingSession.role}
+        instructorAuthenticated={instructorAccountConnected}
         host={eduventTeachingHost}
         activePrompt={teachingPrompts.activePrompt}
         responses={teachingPrompts.responses}

@@ -15,6 +15,7 @@ import '../instructor.css'
 
 interface SessionPanelProps {
   role: SessionRole
+  instructorAuthenticated: boolean
   simulatorExpanded: boolean
   onSimulatorExpandedChange: (expanded: boolean) => void
   connection: SessionConnection
@@ -162,6 +163,7 @@ export function InstructorLiveRoom({ role, members }: { role: SessionRole; membe
 
 export function SessionPanel({
   role,
+  instructorAuthenticated,
   simulatorExpanded,
   onSimulatorExpandedChange,
   connection,
@@ -269,6 +271,7 @@ export function SessionPanel({
   )
 
   const openInstructorStart = async () => {
+    if (!instructorAuthenticated) return
     setStartWizardOpen(true)
     setStartSource('current')
     setSelectedStartPresetId('')
@@ -293,6 +296,7 @@ export function SessionPanel({
   }
 
   const startInstructorFromWizard = async () => {
+    if (!instructorAuthenticated) return
     const scenario = startSource === 'scenario' ? selectedStartPreset?.scenario : undefined
     if (startSource === 'scenario' && !scenario) return
     await onStartInstructor(scenario)
@@ -365,7 +369,7 @@ export function SessionPanel({
               {startPresetsBusy && <div className="session-start-note">Loading saved scenarios…</div>}
               {startPresetMessage && <div className="session-start-note">{startPresetMessage}</div>}
               <div className="session-start-actions">
-                <button type="button" className="session-primary-button" disabled={connection === 'connecting' || (startSource === 'scenario' && !selectedStartPreset)} onClick={() => void startInstructorFromWizard()}>
+                <button type="button" className="session-primary-button" disabled={!instructorAuthenticated || connection === 'connecting' || (startSource === 'scenario' && !selectedStartPreset)} onClick={() => void startInstructorFromWizard()}>
                   {startSource === 'scenario' && selectedStartPreset ? `Start with ${selectedStartPreset.name}` : 'Start with current setup'}
                 </button>
                 <button type="button" className="session-secondary-button" onClick={() => setStartWizardOpen(false)}>Cancel</button>
@@ -373,11 +377,12 @@ export function SessionPanel({
             </div>
           ) : (
             <div className="session-launch-actions">
-              <button type="button" className="session-primary-button" disabled={connection === 'connecting'} onClick={() => void openInstructorStart()}>Start instructor session</button>
+              <button type="button" className="session-primary-button" disabled={!instructorAuthenticated || connection === 'connecting'} title={!instructorAuthenticated ? 'Sign in to an instructor account first' : undefined} onClick={() => void openInstructorStart()}>Start instructor session</button>
               <button type="button" className="session-secondary-button" onClick={() => setJoinMode(true)}>Join as candidate</button>
               <button type="button" className="session-secondary-button" onClick={() => setSelfDirectedJoinMode(true)}>Run self-directed scenario</button>
               {recoverableCandidate && onResumeCandidate && (<button type="button" className="session-secondary-button" disabled={connection === 'connecting'} onClick={() => void onResumeCandidate()}>Rejoin candidate {recoverableCandidate.sessionKey}</button>)}
-              {recoverableInstructor && onResumeInstructor && (<button type="button" className="session-secondary-button" onClick={() => void onResumeInstructor(recoverableInstructor.sessionId)}>Rejoin instructor {recoverableInstructor.sessionKey}</button>)}
+              {recoverableInstructor && onResumeInstructor && (<button type="button" className="session-secondary-button" disabled={!instructorAuthenticated} title={!instructorAuthenticated ? 'Sign in to an instructor account first' : undefined} onClick={() => void onResumeInstructor(recoverableInstructor.sessionId)}>Rejoin instructor {recoverableInstructor.sessionKey}</button>)}
+              {!instructorAuthenticated && <div className="session-instructor-signin-note">Sign in to an instructor account to start or resume an instructor teaching session. Joining as a candidate does not require an account.</div>}
             </div>
           )
         ) : selfDirectedJoinMode ? (
