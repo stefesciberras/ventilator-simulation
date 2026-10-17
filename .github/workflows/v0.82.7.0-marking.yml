@@ -16,28 +16,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Normalize App patch indentation
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('scripts/implement_teaching_marking.py')
-          s = p.read_text()
-          s = s.replace("                  onPresent={teachingPrompts.presentPrompt}\\n                  onClose={teachingPrompts.closePrompt}\\n", "        onPresent={teachingPrompts.presentPrompt}\\n        onClose={teachingPrompts.closePrompt}\\n")
-          s = s.replace("                  onPresent={teachingPrompts.presentPrompt}\\n                  onClose={teachingPrompts.closePrompt}\\n                  onReleaseAnswer={teachingPrompts.releaseAnswer}\\n", "        onPresent={teachingPrompts.presentPrompt}\\n        onClose={teachingPrompts.closePrompt}\\n        onReleaseAnswer={teachingPrompts.releaseAnswer}\\n")
-          p.write_text(s)
-          PY
-      - name: Apply marking implementation
-        run: python scripts/implement_teaching_marking.py
+      - name: Apply final teaching refinements
+        run: python scripts/finalize_teaching_marking.py
       - name: Install dependencies
         run: npm ci
       - name: Production build
         run: npm run build
-      - name: Commit verified implementation
+      - name: Commit verified final refinements
         run: |
           git config user.name "stefesciberras"
           git config user.email "43134239+stefesciberras@users.noreply.github.com"
-          git add src supabase/migrations/20261017_teaching_prompt_answer_release.sql
+          git add src
           if ! git diff --cached --quiet; then
-            git commit -m "feat: add marked MCQs and delayed answer release"
+            git commit -m "fix: finalize marked question reveal and prompt layout"
             git push origin HEAD:chatgpt/v0.82.7.0-marking
           fi
