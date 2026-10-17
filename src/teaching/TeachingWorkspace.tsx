@@ -213,7 +213,7 @@ export function TeachingInstructorWorkspace({
             <div className="teaching-prompt-composer">
               {editingLibraryId && <div className="teaching-composer-toolbar"><span>Editing saved question</span></div>}
               <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as TeachingPromptKind)}><option value="mcq">MCQ · unmarked</option><option value="poll">Poll</option><option value="message">Information</option></select></label>
-              <label>Tags <span>(comma separated)</span><input value={tags} maxLength={300} onChange={(event) => setTags(event.target.value)} placeholder="e.g. COPD, AutoPEEP, waveforms" /></label>
+              <label>Tags <span>(optional)</span><input value={tags} maxLength={300} onChange={(event) => setTags(event.target.value)} placeholder="e.g. COPD, AutoPEEP, waveforms" /></label>
               <label>Title <span>(optional)</span><input value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
               <label>Prompt<textarea value={body} maxLength={4000} rows={4} onChange={(event) => setBody(event.target.value)} placeholder="Present the case, instruction or question…" /></label>
               {kind !== 'message' && (
@@ -228,7 +228,7 @@ export function TeachingInstructorWorkspace({
                 </div>
               )}
               <div className="teaching-composer-actions">
-                <button className="teaching-library-save" type="button" disabled={!valid || libraryBusy || !libraryAvailable} onClick={() => void save()}>{editingLibraryId ? 'Update library question' : 'Save to library'}</button>
+                <button className="teaching-library-save" type="button" disabled={!valid || libraryBusy || !libraryAvailable} onClick={() => void save()}>{editingLibraryId ? 'Update saved question' : 'Save to library'}</button>
                 <button className="teaching-prompt-present" type="button" disabled={!valid || promptBusy || role !== 'instructor'} onClick={() => void present()}>Present to candidates</button>
               </div>
               {!libraryAvailable && <small className="teaching-library-hint">Sign in to a permanent instructor account to prepare and save reusable questions.</small>}
