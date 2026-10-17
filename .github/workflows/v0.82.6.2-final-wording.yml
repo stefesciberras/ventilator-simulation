@@ -1,0 +1,37 @@
+name: Verify v0.82.6.2 final wording
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.6.2-questions-ui
+    paths:
+      - .github/workflows/v0.82.6.2-final-wording.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.6.2-questions-ui
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python scripts/final_questions_wording.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit verified wording
+        run: |
+          rm scripts/final_questions_wording.py
+          rm .github/workflows/v0.82.6.2-final-wording.yml
+          git checkout -- tsconfig.app.tsbuildinfo || true
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          git commit -m "ui: finalise questions and polls wording"
+          git push origin HEAD:chatgpt/v0.82.6.2-questions-ui
