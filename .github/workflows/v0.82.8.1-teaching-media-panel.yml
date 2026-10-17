@@ -1,0 +1,30 @@
+name: Apply and verify v0.82.8.1 teaching media panel
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.8.1-teaching-media-panel
+permissions:
+  contents: write
+jobs:
+  build:
+    if: ${{ !contains(github.event.head_commit.message, '[v08281-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.8.1-teaching-media-panel
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python .github/scripts/apply-v08281.py
+      - run: npm ci
+      - run: npm run build
+      - run: |
+          rm .github/scripts/apply-v08281.py
+          rm .github/workflows/v0.82.8.1-teaching-media-panel.yml
+          git config user.name 'stefesciberras'
+          git config user.email '43134239+stefesciberras@users.noreply.github.com'
+          git add -A
+          git commit -m 'v0.82.8.1 move media presentation into Teaching [v08281-applied]'
+          git push origin HEAD:chatgpt/v0.82.8.1-teaching-media-panel
