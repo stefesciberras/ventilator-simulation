@@ -319,3 +319,13 @@
     padding:18px 16px calc(18px + env(safe-area-inset-bottom));
   }
 }
+
+
+/* v0.82.8.2 Teaching visual consistency */
+.teaching-prompt-section-heading { min-height:30px; margin-bottom:12px; }
+.teaching-prompt-section-heading h3 { margin:0; font-size:1rem; line-height:1.2; font-weight:800; letter-spacing:0; }
+.teaching-workspace-collapse { position:relative; display:flex; align-items:center; justify-content:center; width:30px; height:30px; padding:0; line-height:1; }
+.teaching-collapse-caret { display:block; width:9px; height:9px; border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:translateY(-2px) rotate(45deg); transform-origin:center; transition:transform .15s ease; }
+.teaching-workspace-collapse.expanded .teaching-collapse-caret { transform:translateY(2px) rotate(225deg); }
+.teaching-mark-correct { display:flex; align-items:center; justify-content:center; padding:0; line-height:1; }
+.teaching-mark-correct svg { display:block; width:17px; height:17px; flex:0 0 17px; }

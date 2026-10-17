@@ -183,7 +183,7 @@ export function TeachingInstructorWorkspace({
         <div><h3>Questions and Polls</h3></div>
         <div className="teaching-prompt-heading-actions">
           {activePrompt && <span className="teaching-prompt-live-badge">LIVE</span>}
-          <button type="button" className="teaching-workspace-collapse" onClick={() => setWorkspaceCollapsed((collapsed) => !collapsed)} aria-expanded={!workspaceCollapsed} aria-label={workspaceCollapsed ? 'Expand Questions and Polls' : 'Collapse Questions and Polls'}>{workspaceCollapsed ? '⌄' : '⌃'}</button>
+          <button type="button" className={`teaching-workspace-collapse ${workspaceCollapsed ? 'collapsed' : 'expanded'}`} onClick={() => setWorkspaceCollapsed((collapsed) => !collapsed)} aria-expanded={!workspaceCollapsed} aria-label={workspaceCollapsed ? 'Expand Questions and Polls' : 'Collapse Questions and Polls'}><span className="teaching-collapse-caret" aria-hidden="true" /></button>
         </div>
       </div>
 
@@ -254,7 +254,7 @@ export function TeachingInstructorWorkspace({
                       <label key={index} className={markedCorrect ? 'correct-answer-marked' : ''}>
                         <span>{String.fromCharCode(65 + index)}</span>
                         <input value={option} maxLength={500} onChange={(event) => setOptions((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} />
-                        {kind === 'mcq' && <button type="button" className={`teaching-mark-correct ${markedCorrect ? 'selected' : ''}`} onClick={() => setCorrectOptionId(optionId)} aria-pressed={markedCorrect} title={`Mark option ${String.fromCharCode(65 + index)} as correct`} aria-label={`Mark option ${String.fromCharCode(65 + index)} as correct`}>✓</button>}
+                        {kind === 'mcq' && <button type="button" className={`teaching-mark-correct ${markedCorrect ? 'selected' : ''}`} onClick={() => setCorrectOptionId(optionId)} aria-pressed={markedCorrect} title={`Mark option ${String.fromCharCode(65 + index)} as correct`} aria-label={`Mark option ${String.fromCharCode(65 + index)} as correct`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg></button>}
                       </label>
                     )
                   })}

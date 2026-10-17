@@ -474,6 +474,7 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 }
 
 export default function App() {
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => {
     const stored = loadStoredSettings(PATIENT_STORAGE_KEY, initialPatient)
@@ -1476,6 +1477,19 @@ export default function App() {
         onSubmit={teachingPrompts.submitResponse}
       />
       <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={displayedPhysiologyMeasurements} oesophagealEnabled={oesophagealMonitoringEnabled} onClose={() => setMeasurementsOpen(false)} />
+      {aboutOpen && (
+        <div className="about-backdrop" onMouseDown={() => setAboutOpen(false)}>
+          <section className="about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="about-dialog-heading">
+              <div><span>EDUVENT</span><h2 id="about-title">Mechanical Ventilation Simulator</h2></div>
+              <button type="button" onClick={() => setAboutOpen(false)} aria-label="Close About">×</button>
+            </div>
+            <p>An interactive mechanical ventilation simulator for education and training.</p>
+            <div className="about-version-row"><span>Version</span><strong>v{APP_VERSION}</strong></div>
+            <p className="about-disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</p>
+          </section>
+        </div>
+      )}
       <header className="topbar">
         <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
         <div className="top-simulation-controls">
@@ -1557,6 +1571,7 @@ export default function App() {
             )}
           </div>
           <span className="version">v{APP_VERSION}</span>
+          <button type="button" className="top-about-button" onClick={() => setAboutOpen(true)}>About</button>
         </div>
       </header>
 

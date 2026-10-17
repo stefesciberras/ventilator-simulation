@@ -341,3 +341,18 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .patient-profile-strip button {
   border-radius: 0 !important;
 }
+
+
+/* v0.82.8.2 About */
+.top-about-button { padding:5px 7px; border-radius:5px; background:#182229; color:#bfd0d7; border:1px solid #334650; font-size:11px; letter-spacing:.04em; }
+.about-backdrop { position:fixed; inset:0; z-index:8000; display:grid; place-items:center; padding:20px; background:rgba(3,8,11,.76); backdrop-filter:blur(5px); }
+.about-dialog { width:min(460px,100%); padding:22px; border:1px solid #40545f; border-radius:15px; background:#101a20; box-shadow:0 24px 70px rgba(0,0,0,.55); }
+.about-dialog-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.about-dialog-heading span { color:#79c6e2; font-size:11px; font-weight:800; letter-spacing:.2em; }
+.about-dialog-heading h2 { margin:4px 0 0; font-size:1.25rem; line-height:1.2; }
+.about-dialog-heading button { width:32px; height:32px; padding:0; display:grid; place-items:center; border-radius:50%; font-size:20px; line-height:1; }
+.about-dialog > p { color:#b8c6cc; line-height:1.5; }
+.about-version-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:18px 0; padding:10px 12px; border:1px solid #334650; border-radius:8px; background:#0d171c; }
+.about-version-row span { color:#8fa2ab; }
+.about-version-row strong { color:#eef5f7; }
+.about-disclaimer { margin-bottom:0; padding-top:14px; border-top:1px solid #293840; font-size:.82rem; color:#8799a1 !important; }
