@@ -1,0 +1,33 @@
+name: Apply v0.82.9.5
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.9.5-laser-metrics-shared-resume
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: node scripts/apply-v0.82.9.5.mjs
+      - run: npm ci
+      - run: npm run build
+      - name: Commit generated source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          if git diff --cached --quiet; then
+            echo "No source changes to commit"
+          else
+            git commit -m "Apply v0.82.9.5 laser metrics and shared resume fixes"
+            git push
+          fi
