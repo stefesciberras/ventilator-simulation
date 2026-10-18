@@ -1,1 +1,77 @@
-/* placeholder */
+/* Shared instructor waveform used while the teaching laser is active. */
+.teaching-shared-waveform-frame {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: 2px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgba(239, 138, 39, .48);
+  border-radius: 8px;
+  background: #071015;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025), 0 8px 24px rgba(0,0,0,.28);
+  pointer-events: none;
+}
+
+.teaching-shared-waveform-card {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #071015;
+}
+
+.teaching-shared-waveform-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.teaching-shared-waveform-label {
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  left: 10px;
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(7, 16, 21, .72);
+  color: #eef5f7;
+  font-size: .72rem;
+  line-height: 1;
+}
+
+.teaching-shared-waveform-label span {
+  color: #95aab3;
+  font-size: .66rem;
+}
+
+.teaching-shared-waveform-badge {
+  position: absolute;
+  z-index: 3;
+  top: 7px;
+  right: 8px;
+  padding: 4px 7px;
+  border: 1px solid rgba(239, 138, 39, .55);
+  border-radius: 999px;
+  background: rgba(34, 24, 13, .9);
+  color: #ffc47f;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.teaching-laser-dot {
+  z-index: 5;
+}
+
+.simulation-clock.teaching-clock-synced > strong:not(.teaching-shared-session-clock) {
+  display: none;
+}
+
+.simulation-clock .teaching-shared-session-clock {
+  display: block;
+}
