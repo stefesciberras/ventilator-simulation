@@ -1,0 +1,33 @@
+name: Verify v0.82.9.0 media controls and wake lock
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.9.0-media-controls-wakelock
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.9.0-media-controls-wakelock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python .github/scripts/apply-v08290.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit applied changes
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/App.tsx src/styles.css src/appVersion.ts src/components/SessionPanel.tsx src/session/supabase.ts src/session/useTeachingSession.ts src/session/localRuntimeTransport.ts
+            git commit -m "implement v0.82.9.0 media controls and wake lock"
+            git push origin HEAD:chatgpt/v0.82.9.0-media-controls-wakelock
+          fi
