@@ -356,3 +356,56 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .about-version-row span { color:#8fa2ab; }
 .about-version-row strong { color:#eef5f7; }
 .about-disclaimer { margin-bottom:0; padding-top:14px; border-top:1px solid #293840; font-size:.82rem; color:#8799a1 !important; }
+
+
+/* v0.82.8.5 tablet-landscape compact workspace */
+@media (orientation: landscape) and (min-width: 681px) and (max-width: 1100px) {
+  .version,
+  .top-diagnostic-menu { display: none !important; }
+
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+  }
+  .brand-block h1 { font-size: clamp(18px, 2.25vw, 24px); }
+  .top-simulation-controls { gap: 6px; }
+  .top-simulation-pause { min-width: 150px; padding-inline: 12px; }
+
+  .mobile-workspace-switcher {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    margin: 0 0 8px;
+    padding: 4px;
+    border: 1px solid #293b45;
+    border-radius: 10px;
+    background: rgba(10, 16, 20, .96);
+  }
+  .mobile-workspace-switcher button {
+    min-width: 0;
+    min-height: 36px;
+    padding: 7px 8px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #8da4ae;
+    background: #111a20;
+    border-color: transparent;
+  }
+  .mobile-workspace-switcher button.active {
+    color: #e2f8ff;
+    border-color: #5bbbdc;
+    background: #17313d;
+  }
+
+  .workspace { display: block; touch-action: pan-y; }
+  .workspace.mobile-page-ventilator .control-panel { display: none; }
+  .workspace.mobile-page-settings .ventilator-console { display: none; }
+  .workspace.mobile-page-settings .control-panel { display: block; }
+  .control-panel { max-height: none; }
+}
+
+.about-diagnostics { display: grid; gap: 8px; margin-top: 12px; }
+.about-section-label { color: #8fa2ab; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.about-diagnostic-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.about-diagnostic-actions button { flex: 1 1 180px; }
