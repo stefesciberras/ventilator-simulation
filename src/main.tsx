@@ -6,6 +6,7 @@ import './styles.css'
 import './alarm.css'
 import './mobile-metrics.css'
 import './teaching/TeachingMediaPresentation.css'
+import './tablet-responsive.css'
 
 const isScenarioBuilderRoute = window.location.pathname === '/scenarios' || window.location.pathname.startsWith('/scenarios/')
 
