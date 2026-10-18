@@ -371,6 +371,7 @@ export function TeachingCandidateOverlay({
   const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId || window.innerWidth < 900) return
+    event.preventDefault()
     const proposedX = drag.originX + event.clientX - drag.startX
     const proposedY = drag.originY + event.clientY - drag.startY
     const margin = 12

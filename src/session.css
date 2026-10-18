@@ -107,6 +107,8 @@
   cursor: default;
 }
 
+.candidate-name-input:focus { border-color:#ef8a27 !important; box-shadow:0 0 0 3px rgba(239,138,39,.24); outline:none; }
+
 .candidate-join-form {
   display: grid;
   gap: 10px;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CandidateInvitation } from './CandidateInvitation'
 import type { RuntimeTransportKind, SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { LocalRuntimeConnection } from '../session/localRuntimeTransport'
@@ -192,6 +192,7 @@ export function SessionPanel({
   const [joinMode, setJoinMode] = useState(false)
   const [sessionKey, setSessionKey] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const candidateNameInputRef = useRef<HTMLInputElement | null>(null)
   const [selfDirectedJoinMode, setSelfDirectedJoinMode] = useState(false)
   const [assignmentCode, setAssignmentCode] = useState('')
   const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
@@ -217,6 +218,10 @@ export function SessionPanel({
     if (deepLinkKey.length !== 6) return
     setSessionKey(deepLinkKey)
     setJoinMode(true)
+    window.setTimeout(() => {
+      candidateNameInputRef.current?.focus()
+      candidateNameInputRef.current?.select()
+    }, 80)
   }, [role])
 
   useEffect(() => {
@@ -427,7 +432,7 @@ export function SessionPanel({
             </label>
             <label>
               <span>Name <small>(optional)</small></span>
-              <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={60} placeholder="Candidate" />
+              <input ref={candidateNameInputRef} className="candidate-name-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={60} placeholder="Candidate" />
             </label>
             <div className="session-launch-actions">
               <button type="submit" className="session-primary-button" disabled={connection === 'connecting' || sessionKey.length < 6}>Join session</button>

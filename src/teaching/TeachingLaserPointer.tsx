@@ -21,11 +21,19 @@ interface TeachingWaveformCardSnapshot {
   image: string
 }
 
+interface TeachingMetricSnapshot {
+  label: string
+  value: string
+  unit: string
+  className: string
+}
+
 interface TeachingWaveformSnapshot {
   frameId: string
   capturedAt: number
   clockText: string | null
   cards: TeachingWaveformCardSnapshot[]
+  metrics: TeachingMetricSnapshot[]
 }
 
 interface TeachingWaveformSnapshotMessage {
@@ -73,6 +81,13 @@ function isWaveformSnapshot(value: unknown): value is TeachingWaveformSnapshot {
       && typeof (card as TeachingWaveformCardSnapshot).label === 'string'
       && typeof (card as TeachingWaveformCardSnapshot).unit === 'string'
       && typeof (card as TeachingWaveformCardSnapshot).image === 'string')
+    && Array.isArray(candidate.metrics)
+    && candidate.metrics.every((metric) => Boolean(metric)
+      && typeof metric === 'object'
+      && typeof (metric as TeachingMetricSnapshot).label === 'string'
+      && typeof (metric as TeachingMetricSnapshot).value === 'string'
+      && typeof (metric as TeachingMetricSnapshot).unit === 'string'
+      && typeof (metric as TeachingMetricSnapshot).className === 'string')
 }
 
 function isWaveformSnapshotMessage(value: unknown): value is TeachingWaveformSnapshotMessage {
@@ -138,11 +153,34 @@ function captureWaveformSnapshot(surface: HTMLDivElement): TeachingWaveformSnaps
     .filter((card): card is TeachingWaveformCardSnapshot => Boolean(card))
 
   if (!cards.length) return null
+
+  const metricsPanel = surface.parentElement?.querySelector<HTMLElement>('.metrics-panel')
+  const metrics: TeachingMetricSnapshot[] = []
+  if (metricsPanel) {
+    for (const metric of Array.from(metricsPanel.querySelectorAll<HTMLElement>(':scope > .metric:not(.gas-metric)'))) {
+      metrics.push({
+        label: metric.querySelector<HTMLElement>(':scope > span')?.textContent?.trim() || '',
+        value: metric.querySelector<HTMLElement>(':scope > strong')?.textContent?.trim() || '—',
+        unit: metric.querySelector<HTMLElement>(':scope > small')?.textContent?.trim() || '',
+        className: metric.className,
+      })
+    }
+    for (const metric of Array.from(metricsPanel.querySelectorAll<HTMLElement>('.gas-metric-item'))) {
+      metrics.push({
+        label: metric.querySelector<HTMLElement>(':scope > span')?.textContent?.trim() || '',
+        value: metric.querySelector<HTMLElement>('strong')?.textContent?.trim() || '—',
+        unit: metric.querySelector<HTMLElement>('small')?.textContent?.trim() || '',
+        className: metric.className,
+      })
+    }
+  }
+
   return {
     frameId: crypto.randomUUID(),
     capturedAt: Date.now(),
     clockText: readVisibleClockText(),
     cards,
+    metrics,
   }
 }
 
@@ -426,6 +464,18 @@ export function TeachingLaserPointerSurface({
       gridTemplateRows: `repeat(${sharedSnapshot.cards.length}, minmax(0, 1fr))`,
     }
   })()
+  const sharedMetricsPosition = (() => {
+    const surface = surfaceRef.current
+    if (!surface || !sharedSnapshot || !sharedSnapshot.metrics.length) return null
+    const surfaceRect = surface.getBoundingClientRect()
+    const rect = regionRectFor(surface, 'metrics')
+    return {
+      left: `${rect.left - surfaceRect.left}px`,
+      top: `${rect.top - surfaceRect.top}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+    }
+  })()
   const visible = Boolean(displayed?.active) && (role === 'candidate' || enabled)
 
   const clockPortal = role === 'candidate' && remoteClock && clockTarget
@@ -458,6 +508,18 @@ export function TeachingLaserPointerSurface({
                 <img src={card.image} alt="" draggable={false} />
               </div>
             ))}
+          </div>
+        )}
+        {sharedSnapshot && sharedMetricsPosition && (
+          <div className="teaching-shared-metrics-frame" style={sharedMetricsPosition}>
+            <span className="teaching-shared-metrics-badge">Instructor measured values</span>
+            <div className="teaching-shared-metrics-list">
+              {sharedSnapshot.metrics.map((metric, index) => (
+                <div key={`${sharedSnapshot.frameId}-metric-${index}`} className={`teaching-shared-metric ${metric.className.includes('metric-alarm-red') ? 'alarm-red' : metric.className.includes('metric-alarm-yellow') ? 'alarm-yellow' : ''}`}>
+                  <span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.unit}</small>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {isController && enabled && onEnabledChange && (

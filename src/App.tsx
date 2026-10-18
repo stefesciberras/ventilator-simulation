@@ -20,6 +20,7 @@ import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
+import { useTeachingSharedWaveformFreeze } from './teaching/useTeachingSharedWaveformFreeze'
 import './session.css'
 import './physiology.css'
 
@@ -618,11 +619,30 @@ export default function App() {
     setSimulationSpeed,
   })
 
+  const sharedWaveformFreeze = useTeachingSharedWaveformFreeze(
+    teachingSession.role,
+    teachingSession.session?.id ?? null,
+    (active) => {
+      if (teachingSession.role !== 'candidate') return
+      setWaveformFrozen(active)
+      if (!active) setFrozenSamples(null)
+    },
+  )
+
   const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
 
   useEffect(() => {
     if (!candidateControlsVisible && mobileWorkspacePage === 'settings') setMobileWorkspacePage('ventilator')
   }, [candidateControlsVisible, mobileWorkspacePage])
+
+  useEffect(() => {
+    if (teachingSession.role !== 'standalone') return
+    const rawKey = new URLSearchParams(window.location.search).get('session') ?? ''
+    const deepLinkKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+    if (deepLinkKey.length !== 6) return
+    setControlTab('teaching')
+    setMobileWorkspacePage('settings')
+  }, [teachingSession.role])
 
   const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, eduventTeachingHost)
   const teachingLibrary = useTeachingQuestionLibrary(eduventTeachingHost)
@@ -709,6 +729,8 @@ export default function App() {
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
   const alarmSilenceLongPressTimeoutRef = useRef<number | null>(null)
   const alarmSilenceLongPressTriggeredRef = useRef(false)
+  const freezeLongPressTimeoutRef = useRef<number | null>(null)
+  const freezeLongPressTriggeredRef = useRef(false)
   const oxygenBoostDeadlineRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const alarmHistoryRef = useRef<Record<string, { everTriggered: boolean; triggerCount: number; firstTriggeredAt: number | null; lastTriggeredAt: number | null }>>({})
@@ -1151,6 +1173,7 @@ export default function App() {
   useEffect(() => () => {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
     if (alarmSilenceLongPressTimeoutRef.current != null) window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
+    if (freezeLongPressTimeoutRef.current != null) window.clearTimeout(freezeLongPressTimeoutRef.current)
     void audioContextRef.current?.close()
   }, [])
 
@@ -1185,6 +1208,39 @@ export default function App() {
       setWaveformFrozen(false)
       setFrozenSamples(null)
     }
+  }
+
+  const startFreezeLongPress = () => {
+    if (teachingSession.role !== 'instructor' || !teachingSession.session?.id) return
+    freezeLongPressTriggeredRef.current = false
+    if (freezeLongPressTimeoutRef.current != null) window.clearTimeout(freezeLongPressTimeoutRef.current)
+    freezeLongPressTimeoutRef.current = window.setTimeout(() => {
+      freezeLongPressTimeoutRef.current = null
+      freezeLongPressTriggeredRef.current = true
+      const next = !sharedWaveformFreeze.active
+      if (next && !waveformFrozen) {
+        setFrozenSamples(movingSamples)
+        setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
+      }
+      setWaveformFrozen(next)
+      if (!next) setFrozenSamples(null)
+      sharedWaveformFreeze.setActive(next)
+    }, 700)
+  }
+
+  const finishFreezePress = () => {
+    if (freezeLongPressTimeoutRef.current != null) {
+      window.clearTimeout(freezeLongPressTimeoutRef.current)
+      freezeLongPressTimeoutRef.current = null
+    }
+  }
+
+  const handleFreezeClick = () => {
+    if (freezeLongPressTriggeredRef.current) {
+      freezeLongPressTriggeredRef.current = false
+      return
+    }
+    toggleFreeze()
   }
 
   const beginInspiratoryHold = () => {
@@ -1634,7 +1690,17 @@ export default function App() {
               {oxygenBoost && <span className="oxygen-enrichment-timer" aria-live="polite">{oxygenBoostTimer}</span>}
             </div>
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
-            <button className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''}`} onClick={toggleFreeze} title={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'} aria-label={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'}><FreezeWaveformIcon /></button>
+            <button
+              className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''} ${sharedWaveformFreeze.active ? 'shared-freeze' : ''}`}
+              onClick={handleFreezeClick}
+              onPointerDown={startFreezeLongPress}
+              onPointerUp={finishFreezePress}
+              onPointerCancel={finishFreezePress}
+              onPointerLeave={finishFreezePress}
+              onContextMenu={(event) => event.preventDefault()}
+              title={teachingSession.role === 'instructor' ? (sharedWaveformFreeze.active ? 'Waveforms frozen for instructor and candidates — hold to resume all' : 'Press to freeze locally; hold to freeze instructor and candidate waveforms') : (waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms')}
+              aria-label={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'}
+            ><FreezeWaveformIcon /></button>
             <button
               className={`hardware-button hold-button ${inspiratoryHoldPressed ? 'active' : ''}`}
               disabled={waveformFrozen || simulationPaused || !manualHoldAvailable}
