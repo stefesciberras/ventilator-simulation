@@ -5,6 +5,8 @@ import { createCaseMediaSignedUrl, type CaseMediaRow } from '../caseMedia'
 import type { TeachingRole } from './types'
 import './teaching.css'
 
+const PRESENTATION_EVENT = 'teaching-media-presentation-state'
+
 export interface TeachingMediaPresentationRow {
   id: string
   session_id: string
@@ -33,6 +35,7 @@ export function useTeachingMediaPresentation(role: TeachingRole, sessionId: stri
   const [activePresentation, setActivePresentation] = useState<TeachingMediaPresentationRow | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   const refresh = useCallback(async () => {
     if (!sessionId || role === 'standalone') {
@@ -50,12 +53,22 @@ export function useTeachingMediaPresentation(role: TeachingRole, sessionId: stri
     void refresh()
     if (!sessionId || role === 'standalone') return
     const channel: RealtimeChannel = supabase
-      .channel(`teaching-media-presentations-${sessionId}-${crypto.randomUUID()}`)
+      .channel(`teaching-media-presentations-${sessionId}-${crypto.randomUUID()}`, { config: { broadcast: { self: false, ack: false } } })
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'teaching_media_presentations', filter: `session_id=eq.${sessionId}`,
       }, () => { void refresh() })
+      .on('broadcast', { event: PRESENTATION_EVENT }, ({ payload }) => {
+        if (role !== 'candidate' || !payload || typeof payload !== 'object') return
+        const state = payload as { active?: unknown }
+        if (state.active === false) setActivePresentation(null)
+        else if (state.active === true) void refresh()
+      })
       .subscribe()
-    return () => { void supabase.removeChannel(channel) }
+    channelRef.current = channel
+    return () => {
+      if (channelRef.current === channel) channelRef.current = null
+      void supabase.removeChannel(channel)
+    }
   }, [refresh, role, sessionId])
 
   const present = useCallback(async (mediaId: string) => {
@@ -74,6 +87,7 @@ export function useTeachingMediaPresentation(role: TeachingRole, sessionId: stri
       })
       if (insertError) throw insertError
       await refresh()
+      void channelRef.current?.send({ type: 'broadcast', event: PRESENTATION_EVENT, payload: { active: true, sentAt: Date.now() } })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to present media.')
       throw cause
@@ -91,6 +105,8 @@ export function useTeachingMediaPresentation(role: TeachingRole, sessionId: stri
         .update({ status: 'closed', closed_at: new Date().toISOString() })
         .eq('id', activePresentation.id)
       if (updateError) throw updateError
+      setActivePresentation(null)
+      void channelRef.current?.send({ type: 'broadcast', event: PRESENTATION_EVENT, payload: { active: false, sentAt: Date.now() } })
       await refresh()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to close media presentation.')
@@ -152,6 +168,7 @@ export function TeachingMediaCandidateOverlay({
   const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId || window.innerWidth < 900) return
+    event.preventDefault()
     const margin = 12
     const x = drag.originX + event.clientX - drag.startX
     const y = drag.originY + event.clientY - drag.startY

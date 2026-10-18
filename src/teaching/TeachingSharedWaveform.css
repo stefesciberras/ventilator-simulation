@@ -75,3 +75,30 @@
 .simulation-clock .teaching-shared-session-clock {
   display: block;
 }
+
+
+/* Frozen instructor measurements paired with the shared teaching waveform. */
+.teaching-shared-metrics-frame {
+  position:absolute;
+  z-index:2;
+  box-sizing:border-box;
+  overflow:hidden;
+  padding:28px 8px 8px;
+  border:1px solid rgba(239,138,39,.48);
+  border-radius:8px;
+  background:#071015;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.025),0 8px 24px rgba(0,0,0,.28);
+  pointer-events:none;
+}
+.teaching-shared-metrics-badge {
+  position:absolute; top:6px; left:8px; right:8px;
+  overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+  color:#ffc47f; font-size:.58rem; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+}
+.teaching-shared-metrics-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; align-content:start; height:100%; }
+.teaching-shared-metric { min-width:0; display:grid; grid-template-columns:1fr auto; grid-template-areas:'label value' 'unit unit'; align-items:baseline; gap:1px 5px; padding:5px 6px; border-radius:5px; background:#0e1c22; color:#eef5f7; }
+.teaching-shared-metric span { grid-area:label; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#95aab3; font-size:.61rem; }
+.teaching-shared-metric strong { grid-area:value; font-size:.84rem; line-height:1; }
+.teaching-shared-metric small { grid-area:unit; color:#78909a; font-size:.55rem; }
+.teaching-shared-metric.alarm-yellow { box-shadow:inset 3px 0 #f4c542; }
+.teaching-shared-metric.alarm-red { box-shadow:inset 3px 0 #ef5a55; }
