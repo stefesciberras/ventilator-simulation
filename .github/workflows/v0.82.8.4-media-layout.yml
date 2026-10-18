@@ -1,0 +1,33 @@
+name: Verify v0.82.8.4 media layout
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.82.8.4-media-library-layout
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.82.8.4-media-library-layout
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python .github/scripts/apply-v08284.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit applied changes
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/teaching/TeachingWorkspace.tsx
+            git commit -m "default teaching questions to collapsed"
+            git push origin HEAD:chatgpt/v0.82.8.4-media-library-layout
+          fi
