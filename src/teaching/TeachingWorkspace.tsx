@@ -87,7 +87,7 @@ export function TeachingInstructorWorkspace({
   const [options, setOptions] = useState(['', '', '', ''])
   const [correctOptionId, setCorrectOptionId] = useState<string | null>(null)
   const [explanation, setExplanation] = useState('')
-  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false)
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true)
   const [module, setModule] = useState(host.defaultModule)
   const [tags, setTags] = useState('')
   const [editingLibraryId, setEditingLibraryId] = useState<string | null>(null)
