@@ -19,31 +19,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: python .github/scripts/apply-v08290.py
-      - name: Commit applied changes
+      - name: Normalize branch sources
+        run: python .github/scripts/apply-v08290.py
+      - name: Commit normalized sources
         run: |
           if ! git diff --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src/App.tsx src/styles.css src/instructor.css src/appVersion.ts src/components/SessionPanel.tsx src/session/supabase.ts src/session/useTeachingSession.ts src/session/localRuntimeTransport.ts src/teaching/TeachingLaserPointer.tsx
-            git commit -m "implement v0.82.9.0 teaching sync and tablet refinements"
+            git add src/App.tsx src/styles.css src/instructor.css src/components/SessionPanel.tsx src/teaching/TeachingLaserPointer.tsx
+            git commit -m "normalize v0.82.9.0 teaching refinements"
             git push origin HEAD:chatgpt/v0.82.9.0-media-controls-wakelock
           fi
       - run: npm ci
-      - name: Build and capture diagnostics
-        run: |
-          set +e
-          npm run build > /tmp/v08290-build.log 2>&1
-          status=$?
-          cat /tmp/v08290-build.log
-          if [ $status -ne 0 ]; then
-            cp /tmp/v08290-build.log .github/v08290-build.log
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .github/v08290-build.log
-            if ! git diff --cached --quiet; then
-              git commit -m "capture v0.82.9.0 build diagnostics"
-              git push origin HEAD:chatgpt/v0.82.9.0-media-controls-wakelock
-            fi
-            exit $status
-          fi
+      - run: npm run build
