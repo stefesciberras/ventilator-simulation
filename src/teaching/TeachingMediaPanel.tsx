@@ -26,8 +26,16 @@ function fileSizeLabel(bytes: number) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 7h15M9 7V4.8h6V7M7.2 7l.7 12h8.2l.7-12M10 10.3v5.8M14 10.3v5.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, sessionId, scenarioMediaIds, onScenarioMediaIdsChange }: TeachingMediaInstructorPanelProps) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const [library, setLibrary] = useState<CaseMediaRow[]>([])
   const [releasedIds, setReleasedIds] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -43,6 +51,9 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
   const selected = library.find((item) => item.id === selectedId) ?? library[0] ?? null
   const previewUrl = selected ? signedUrls[selected.id] : undefined
   const working = busy || liveMedia.busy
+  const selectedLive = Boolean(selected && activeMediaId === selected.id)
+  const selectedAvailable = Boolean(selected && releasedIds.has(selected.id))
+  const selectedInScenario = Boolean(selected && scenarioIds.has(selected.id))
 
   const refresh = useCallback(async () => {
     if (role === 'candidate' || !instructorAuthenticated) {
@@ -190,31 +201,33 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
           {!sessionId && <small className="teaching-media-session-note">Start an instructor session to present media or make it available to candidates.</small>}
 
           <div className="teaching-media-library">
-            <div className="teaching-media-list">
+            <div className="teaching-media-list" role="listbox" aria-label="Media library">
               {library.length ? library.map((media) => {
                 const live = activeMediaId === media.id
                 const available = releasedIds.has(media.id)
                 const inScenario = scenarioIds.has(media.id)
                 return (
-                  <article key={media.id} className={`teaching-media-item ${selected?.id === media.id ? 'selected' : ''}`}>
-                    <button type="button" className="teaching-media-select" onClick={() => setSelectedId(media.id)}>
-                      <span className="teaching-media-kind">{media.media_kind === 'video' ? '▶' : '▣'}</span>
-                      <span><strong>{media.title}</strong><small>{media.media_kind === 'video' ? 'Video' : 'Image'} · {fileSizeLabel(media.size_bytes)}</small></span>
-                    </button>
-                    <div className="teaching-media-badges">
-                      {live && <em className="live">LIVE</em>}
-                      {available && <em>Available</em>}
-                      {inScenario && <em>Scenario</em>}
-                    </div>
-                    <div className="teaching-media-actions">
-                      {live
-                        ? <button type="button" className="danger" disabled={working} onClick={() => void stopPresenting()}>Stop presenting</button>
-                        : <button type="button" className="primary" disabled={working || role !== 'instructor' || !sessionId} onClick={() => void present(media)}>Present</button>}
-                      <button type="button" disabled={working || role !== 'instructor' || !sessionId} onClick={() => void toggleAvailable(media)}>{available ? 'Remove availability' : 'Make available'}</button>
-                      <button type="button" disabled={working} onClick={() => toggleScenario(media.id)}>{inScenario ? 'Remove from scenario' : 'Add to scenario'}</button>
-                      <button type="button" className="delete" disabled={working || available} onClick={() => void remove(media)}>Delete</button>
-                    </div>
-                  </article>
+                  <button
+                    key={media.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected?.id === media.id}
+                    className={`teaching-media-list-item ${selected?.id === media.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedId(media.id)}
+                  >
+                    <span className="teaching-media-kind">{media.media_kind === 'video' ? '▶' : '▣'}</span>
+                    <span className="teaching-media-list-copy">
+                      <strong>{media.title}</strong>
+                      <small>{media.media_kind === 'video' ? 'Video' : 'Image'} · {fileSizeLabel(media.size_bytes)}</small>
+                      {(live || available || inScenario) && (
+                        <span className="teaching-media-badges">
+                          {live && <em className="live">LIVE</em>}
+                          {available && <em>Available</em>}
+                          {inScenario && <em>Scenario</em>}
+                        </span>
+                      )}
+                    </span>
+                  </button>
                 )
               }) : <div className="teaching-media-empty">No media in your library yet.</div>}
             </div>
@@ -222,7 +235,10 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
             <div className="teaching-media-preview">
               {selected ? (
                 <>
-                  <strong>{selected.title}</strong>
+                  <div className="teaching-media-preview-heading">
+                    <strong>{selected.title}</strong>
+                    <small>{selected.media_kind === 'video' ? 'Video' : 'Image'} · {fileSizeLabel(selected.size_bytes)}</small>
+                  </div>
                   <div className="teaching-media-preview-stage">
                     {!previewUrl ? <span>Loading media…</span> : selected.media_kind === 'video'
                       ? <video key={previewUrl} src={previewUrl} controls playsInline preload="metadata" />
@@ -232,6 +248,17 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
               ) : <span>Select a media item to preview it.</span>}
             </div>
           </div>
+
+          {selected && (
+            <div className="teaching-media-actions" aria-label={`Actions for ${selected.title}`}>
+              {selectedLive
+                ? <button type="button" className="danger" disabled={working} onClick={() => void stopPresenting()}>Stop presenting</button>
+                : <button type="button" className="primary" disabled={working || role !== 'instructor' || !sessionId} onClick={() => void present(selected)}>Present</button>}
+              <button type="button" disabled={working || role !== 'instructor' || !sessionId} onClick={() => void toggleAvailable(selected)}>{selectedAvailable ? 'Remove availability' : 'Make available'}</button>
+              <button type="button" disabled={working} onClick={() => toggleScenario(selected.id)}>{selectedInScenario ? 'Remove from scenario' : 'Add to scenario'}</button>
+              <button type="button" className="delete-icon" disabled={working || selectedAvailable} onClick={() => void remove(selected)} aria-label={`Delete ${selected.title}`} title="Delete from media library"><TrashIcon /></button>
+            </div>
+          )}
 
           {message && <div className="teaching-media-message">{message}</div>}
           {(error || liveMedia.error) && <div className="teaching-media-error" role="alert">{error || liveMedia.error}</div>}
