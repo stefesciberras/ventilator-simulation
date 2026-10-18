@@ -495,14 +495,6 @@ export function SessionPanel({
                   <span>Show Controls view to candidate</span>
                   <input type="checkbox" checked={session?.candidate_controls_visible !== false} onChange={(event) => void onUpdatePolicy({ candidateControlsVisible: event.target.checked })} />
                 </label>
-                <label className="session-switch-row session-switch-row-emphasis">
-                  <span>Show Controls view to candidate</span>
-                  <input type="checkbox" checked={session?.candidate_controls_visible !== false} onChange={(event) => void onUpdatePolicy({ candidateControlsVisible: event.target.checked })} />
-                </label>
-                <label className="session-switch-row session-switch-row-emphasis">
-                  <span>Show Controls view to candidate</span>
-                  <input type="checkbox" checked={session?.candidate_controls_visible !== false} onChange={(event) => void onUpdatePolicy({ candidateControlsVisible: event.target.checked })} />
-                </label>
                 <label className="session-switch-row">
                   <span>Share patient settings</span>
                   <input type="checkbox" checked={Boolean(session?.sync_patient)} onChange={(event) => void onUpdatePolicy({ syncPatient: event.target.checked })} />

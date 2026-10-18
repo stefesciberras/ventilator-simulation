@@ -6,14 +6,11 @@ import type { TeachingRole } from './types'
 
 type TeachingLaserRegion = 'display' | 'waveforms' | 'metrics'
 
-type TeachingLaserRegion = 'display' | 'waveforms' | 'metrics'
-
 interface TeachingLaserPointerState {
   x: number
   y: number
   active: boolean
   sentAt: number
-  region?: TeachingLaserRegion
   region?: TeachingLaserRegion
 }
 
@@ -31,7 +28,6 @@ function isPointerState(value: unknown): value is TeachingLaserPointerState {
     && Number.isFinite(candidate.y)
     && typeof candidate.active === 'boolean'
     && typeof candidate.sentAt === 'number'
-    && (candidate.region == null || candidate.region === 'display' || candidate.region === 'waveforms' || candidate.region === 'metrics')
     && (candidate.region == null || candidate.region === 'display' || candidate.region === 'waveforms' || candidate.region === 'metrics')
 }
 
@@ -91,24 +87,12 @@ export function TeachingLaserPointerSurface({
   const channelRef = useRef<RealtimeChannel | null>(null)
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const [, setLayoutRevision] = useState(0)
-  const surfaceRef = useRef<HTMLDivElement | null>(null)
-  const [, setLayoutRevision] = useState(0)
   const localPointerRef = useRef<TeachingLaserPointerState | null>(null)
   const lastSentAtRef = useRef(0)
   const lastReceivedAtRef = useRef(0)
   const isController = role !== 'candidate'
 
   useEffect(() => { localPointerRef.current = localPointer }, [localPointer])
-
-  useEffect(() => {
-    const onResize = () => setLayoutRevision((value) => value + 1)
-    window.addEventListener('resize', onResize)
-    window.addEventListener('orientationchange', onResize)
-    return () => {
-      window.removeEventListener('resize', onResize)
-      window.removeEventListener('orientationchange', onResize)
-    }
-  }, [])
 
   useEffect(() => {
     const onResize = () => setLayoutRevision((value) => value + 1)

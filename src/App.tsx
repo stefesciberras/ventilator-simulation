@@ -20,8 +20,6 @@ import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
-import { useScreenWakeLock } from './useScreenWakeLock'
-import { useScreenWakeLock } from './useScreenWakeLock'
 import './session.css'
 import './physiology.css'
 
@@ -479,8 +477,6 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const screenWakeLock = useScreenWakeLock()
-  const screenWakeLock = useScreenWakeLock()
-  const screenWakeLock = useScreenWakeLock()
   const [instructorAccountConnected, setInstructorAccountConnected] = useState(false)
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => {
@@ -594,11 +590,11 @@ export default function App() {
   const [dynamicScenarioDiagnostic, setDynamicScenarioDiagnostic] = useState<DynamicScenarioDiagnosticContext | null>(null)
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
   const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
-  const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1101px)').matches)
+  const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1181px)').matches)
   const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
 
   useEffect(() => {
-    const media = window.matchMedia('(min-width: 1101px)')
+    const media = window.matchMedia('(min-width: 1181px)')
     const update = () => setWideInstructorLayout(media.matches)
     update()
     media.addEventListener('change', update)
@@ -621,18 +617,6 @@ export default function App() {
     simulationSpeed,
     setSimulationSpeed,
   })
-
-  const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
-
-  useEffect(() => {
-    if (!candidateControlsVisible && mobileWorkspacePage === 'settings') setMobileWorkspacePage('ventilator')
-  }, [candidateControlsVisible, mobileWorkspacePage])
-
-  const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
-
-  useEffect(() => {
-    if (!candidateControlsVisible && mobileWorkspacePage === 'settings') setMobileWorkspacePage('ventilator')
-  }, [candidateControlsVisible, mobileWorkspacePage])
 
   const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
 
@@ -1511,14 +1495,6 @@ export default function App() {
             </div>
             <p>An interactive mechanical ventilation simulator for education and training.</p>
             <div className="about-version-row"><span>Version</span><strong>v{APP_VERSION}</strong></div>
-            <label className="about-wake-row">
-              <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
-              <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
-            </label>
-            <label className="about-wake-row">
-              <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
-              <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
-            </label>
             <label className="about-wake-row">
               <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
               <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
