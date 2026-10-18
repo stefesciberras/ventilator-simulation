@@ -420,3 +420,5 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .about-wake-row strong { color:#dcebf0; font-size:.9rem; }
 .about-wake-row small { color:#81959e; font-size:.75rem; line-height:1.35; }
 .about-wake-row input { width:20px; height:20px; accent-color:#53c8ed; }
+
+.hold-label-two-line { display:grid; justify-items:center; line-height:1.02; gap:1px; }

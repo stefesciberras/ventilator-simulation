@@ -68,7 +68,7 @@ function ConnectionBadge({ connection }: { connection: SessionConnection }) {
 
 function RuntimeTransportBadge({ connection, url, kind }: { connection: LocalRuntimeConnection; url: string | null; kind: RuntimeTransportKind }) {
   if (connection === 'disabled' || kind === 'cloud') return null
-  const name = kind === 'webrtc' ? 'Peer-to-peer' : kind === 'appliance' ? 'EDUVENT box' : 'LAN server'
+  const name = kind === 'webrtc' ? 'P2P' : kind === 'appliance' ? 'EDUVENT box' : 'LAN server'
   const label = connection === 'connected'
     ? `${name} live`
     : connection === 'connecting'
@@ -449,7 +449,7 @@ export function SessionPanel({
           <div className="collapsible-heading-actions">
             <ConnectionBadge connection={connection} />
             <RuntimeTransportBadge connection={localRuntimeConnection} url={localRuntimeUrl} kind={runtimeTransportKind} />
-            <button className="panel-collapse-button" type="button" onClick={toggleDashboardCollapsed} aria-expanded={!dashboardCollapsed} aria-label={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'} title={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'}>{dashboardCollapsed ? '▾' : '▴'}</button>
+            <button className={`teaching-workspace-collapse ${dashboardCollapsed ? 'collapsed' : 'expanded'}`} type="button" onClick={toggleDashboardCollapsed} aria-expanded={!dashboardCollapsed} aria-label={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'} title={dashboardCollapsed ? 'Expand instructor dashboard' : 'Collapse instructor dashboard'}><span className="teaching-collapse-caret" aria-hidden="true" /></button>
           </div>
         </div>
 
@@ -491,6 +491,10 @@ export function SessionPanel({
             <div className="session-domain-grid instructor-domain-grid">
               <div className={`session-domain-card ${session?.sync_patient ? 'shared' : ''}`}>
                 <div className="session-domain-title"><strong>Patient</strong><span>{session?.sync_patient ? 'Shared' : 'Local'}</span></div>
+                <label className="session-switch-row session-switch-row-emphasis">
+                  <span>Show Controls view to candidate</span>
+                  <input type="checkbox" checked={session?.candidate_controls_visible !== false} onChange={(event) => void onUpdatePolicy({ candidateControlsVisible: event.target.checked })} />
+                </label>
                 <label className="session-switch-row session-switch-row-emphasis">
                   <span>Show Controls view to candidate</span>
                   <input type="checkbox" checked={session?.candidate_controls_visible !== false} onChange={(event) => void onUpdatePolicy({ candidateControlsVisible: event.target.checked })} />

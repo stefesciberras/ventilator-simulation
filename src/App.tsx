@@ -20,6 +20,7 @@ import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
+import { useScreenWakeLock } from './useScreenWakeLock'
 import './session.css'
 import './physiology.css'
 
@@ -477,6 +478,7 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const screenWakeLock = useScreenWakeLock()
+  const screenWakeLock = useScreenWakeLock()
   const [instructorAccountConnected, setInstructorAccountConnected] = useState(false)
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => {
@@ -617,6 +619,12 @@ export default function App() {
     simulationSpeed,
     setSimulationSpeed,
   })
+
+  const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
+
+  useEffect(() => {
+    if (!candidateControlsVisible && mobileWorkspacePage === 'settings') setMobileWorkspacePage('ventilator')
+  }, [candidateControlsVisible, mobileWorkspacePage])
 
   const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
 
@@ -1499,6 +1507,10 @@ export default function App() {
               <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
               <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
             </label>
+            <label className="about-wake-row">
+              <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
+              <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
+            </label>
             <div className="about-diagnostics">
               <span className="about-section-label">Diagnostics</span>
               <div className="about-diagnostic-actions">
@@ -1644,7 +1656,7 @@ export default function App() {
               onPointerCancel={releaseInspiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginInspiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseInspiratoryHold() } }}
-            ><span className="hold-label-desktop">Insp Hold</span><span className="hold-label-mobile">Insp <PauseIcon paused={false} /></span></button>
+            ><span className="hold-label-two-line"><span>Insp</span><span>Hold</span></span></button>
             <button
               className={`hardware-button hold-button ${expiratoryHoldPressed ? 'active' : ''}`}
               disabled={waveformFrozen || simulationPaused || activeMode === 'APRV' || activeMode === 'BIPAP'}
@@ -1654,7 +1666,7 @@ export default function App() {
               onPointerCancel={releaseExpiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
-            ><span className="hold-label-desktop">Exp Hold</span><span className="hold-label-mobile">Exp <PauseIcon paused={false} /></span></button>
+            ><span className="hold-label-two-line"><span>Exp</span><span>Hold</span></span></button>
             <button className="hardware-button icon-button measurements-button" type="button" onClick={() => setMeasurementsOpen(true)} title="Physiological measurements" aria-label="Open physiological measurements"><MeasurementsInfoIcon /></button>
             <button
               className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`}
