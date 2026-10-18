@@ -67,6 +67,7 @@ export interface TeachingSessionRow {
   sync_ventilator: boolean
   candidate_can_edit_patient: boolean
   candidate_can_edit_ventilator: boolean
+  candidate_controls_visible: boolean
   patient_settings: PatientSettings
   ventilator_settings: VentilatorSettings
   patient_revision: number

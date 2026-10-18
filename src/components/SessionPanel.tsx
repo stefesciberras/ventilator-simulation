@@ -42,6 +42,7 @@ interface SessionPanelProps {
     syncVentilator?: boolean
     candidateCanEditPatient?: boolean
     candidateCanEditVentilator?: boolean
+    candidateControlsVisible?: boolean
     syncAlarms?: boolean
     candidateCanEditAlarms?: boolean
     alarmsSilent?: boolean
@@ -490,6 +491,10 @@ export function SessionPanel({
             <div className="session-domain-grid instructor-domain-grid">
               <div className={`session-domain-card ${session?.sync_patient ? 'shared' : ''}`}>
                 <div className="session-domain-title"><strong>Patient</strong><span>{session?.sync_patient ? 'Shared' : 'Local'}</span></div>
+                <label className="session-switch-row session-switch-row-emphasis">
+                  <span>Show Controls view to candidate</span>
+                  <input type="checkbox" checked={session?.candidate_controls_visible !== false} onChange={(event) => void onUpdatePolicy({ candidateControlsVisible: event.target.checked })} />
+                </label>
                 <label className="session-switch-row">
                   <span>Share patient settings</span>
                   <input type="checkbox" checked={Boolean(session?.sync_patient)} onChange={(event) => void onUpdatePolicy({ syncPatient: event.target.checked })} />
