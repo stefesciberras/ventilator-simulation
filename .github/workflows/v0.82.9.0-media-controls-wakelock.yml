@@ -30,4 +30,20 @@ jobs:
             git push origin HEAD:chatgpt/v0.82.9.0-media-controls-wakelock
           fi
       - run: npm ci
-      - run: npm run build
+      - name: Build and capture diagnostics
+        run: |
+          set +e
+          npm run build > /tmp/v08290-build.log 2>&1
+          status=$?
+          cat /tmp/v08290-build.log
+          if [ $status -ne 0 ]; then
+            cp /tmp/v08290-build.log .github/v08290-build.log
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/v08290-build.log
+            if ! git diff --cached --quiet; then
+              git commit -m "capture v0.82.9.0 build diagnostics"
+              git push origin HEAD:chatgpt/v0.82.9.0-media-controls-wakelock
+            fi
+            exit $status
+          fi
