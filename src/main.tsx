@@ -7,6 +7,7 @@ import './styles.css'
 import './alarm.css'
 import './mobile-metrics.css'
 import './teaching/TeachingMediaPresentation.css'
+import './teaching/TeachingSharedWaveform.css'
 import './tablet-responsive.css'
 import './tablet-runtime.css'
 
