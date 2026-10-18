@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, TeachingMediaInstructorPanel, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary } from './teaching'
+import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, TeachingMediaInstructorPanel, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -587,6 +587,7 @@ export default function App() {
   const [candidateAlarmLevelForSession, setCandidateAlarmLevelForSession] = useState<CandidateAlarmLevel>(null)
   const [controlTab, setControlTab] = useState<'teaching' | 'vent' | 'patient' | 'physio'>('teaching')
   const [teachingLaserEnabled, setTeachingLaserEnabled] = useState(false)
+  const [teachingLaserMetrics, setTeachingLaserMetrics] = useState<TeachingMetricSnapshot[] | null>(null)
   const [dynamicScenarioRuntimeHost, setDynamicScenarioRuntimeHost] = useState<HTMLDivElement | null>(null)
   const [dynamicScenarioDiagnostic, setDynamicScenarioDiagnostic] = useState<DynamicScenarioDiagnosticContext | null>(null)
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
@@ -651,6 +652,10 @@ export default function App() {
     if (teachingSession.role !== 'instructor') setTeachingLaserEnabled(false)
   }, [teachingSession.role])
 
+  useEffect(() => {
+    if (!teachingLaserEnabled && teachingSession.role !== 'candidate') setTeachingLaserMetrics(null)
+  }, [teachingLaserEnabled, teachingSession.role])
+
   const candidateWaveformOptions = useMemo(
     () => teachingSession.candidateOesophagealPressureAllowed
       ? waveformOptions
@@ -660,6 +665,8 @@ export default function App() {
   const oesophagealMonitoringEnabled = teachingSession.candidateOesophagealPressureAllowed && (
     waveformDisplay.third === 'oesophagealPressure' || waveformDisplay.fourth === 'oesophagealPressure'
   )
+
+  const teachingMetric = (label: string) => teachingLaserMetrics?.find((metric) => metric.label === label) ?? null
 
   const currentInstructorScenario: InstructorScenarioSnapshot = {
     ventilator,
@@ -1753,6 +1760,7 @@ export default function App() {
               sessionId={teachingSession.session?.id ?? null}
               enabled={teachingLaserEnabled}
               onEnabledChange={setTeachingLaserEnabled}
+              onSharedMetricsChange={setTeachingLaserMetrics}
             />
             {alarmDialogOpen && (
               <div className="alarm-dialog-backdrop" onClick={() => setAlarmDialogOpen(false)}>
@@ -1841,18 +1849,18 @@ export default function App() {
               <div className="metrics-actions">
                 <button className="metrics-alarm-limits" type="button" disabled={teachingSession.candidateAlarmsLocked} onClick={() => setAlarmDialogOpen(true)} title={teachingSession.candidateAlarmsLocked ? 'Alarm limits controlled by instructor' : 'Set alarm limits'}>Alarm limits</button>
               </div>
-              <Metric label="Ppeak" value={eventMeasures.peakPressure.toFixed(0)} unit="cmH₂O" alarmLevel={ppeakMetricAlarm} />
-              <Metric label="VTe" value={tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '-'} unit={tidalVolumeDisplayAvailable ? 'mL' : ''} alarmLevel={tidalVolumeMetricAlarm} />
-              <Metric label="RR" value={eventMeasures.respiratoryRate.toFixed(0)} unit="/min" alarmLevel={respiratoryRateMetricAlarm} />
-              <Metric label="MV" value={measures.minuteVentilation.toFixed(1)} unit="L/min" alarmLevel={minuteVentilationMetricAlarm} />
-              <Metric label="PEEP" value={measures.peep.toFixed(0)} unit="cmH₂O" />
-              <Metric label="Pmean" value={slowDisplayMeasurements.meanPressure == null ? '—' : slowDisplayMeasurements.meanPressure.toFixed(1)} unit="cmH₂O" />
-              <Metric label="I:E measured" value={measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`} unit="" />
+              <Metric label="Ppeak" value={teachingMetric('Ppeak')?.value ?? eventMeasures.peakPressure.toFixed(0)} unit={teachingMetric('Ppeak')?.unit ?? 'cmH₂O'} alarmLevel={teachingMetric('Ppeak')?.className.includes('metric-alarm-red') ? 'red' : teachingMetric('Ppeak')?.className.includes('metric-alarm-yellow') ? 'yellow' : ppeakMetricAlarm} />
+              <Metric label="VTe" value={teachingMetric('VTe')?.value ?? (tidalVolumeDisplayAvailable ? eventMeasures.tidalVolume.toFixed(0) : '-')} unit={teachingMetric('VTe')?.unit ?? (tidalVolumeDisplayAvailable ? 'mL' : '')} alarmLevel={teachingMetric('VTe')?.className.includes('metric-alarm-red') ? 'red' : teachingMetric('VTe')?.className.includes('metric-alarm-yellow') ? 'yellow' : tidalVolumeMetricAlarm} />
+              <Metric label="RR" value={teachingMetric('RR')?.value ?? eventMeasures.respiratoryRate.toFixed(0)} unit={teachingMetric('RR')?.unit ?? '/min'} alarmLevel={teachingMetric('RR')?.className.includes('metric-alarm-red') ? 'red' : teachingMetric('RR')?.className.includes('metric-alarm-yellow') ? 'yellow' : respiratoryRateMetricAlarm} />
+              <Metric label="MV" value={teachingMetric('MV')?.value ?? measures.minuteVentilation.toFixed(1)} unit={teachingMetric('MV')?.unit ?? 'L/min'} alarmLevel={teachingMetric('MV')?.className.includes('metric-alarm-red') ? 'red' : teachingMetric('MV')?.className.includes('metric-alarm-yellow') ? 'yellow' : minuteVentilationMetricAlarm} />
+              <Metric label="PEEP" value={teachingMetric('PEEP')?.value ?? measures.peep.toFixed(0)} unit={teachingMetric('PEEP')?.unit ?? 'cmH₂O'} />
+              <Metric label="Pmean" value={teachingMetric('Pmean')?.value ?? (slowDisplayMeasurements.meanPressure == null ? '—' : slowDisplayMeasurements.meanPressure.toFixed(1))} unit={teachingMetric('Pmean')?.unit ?? 'cmH₂O'} />
+              <Metric label="I:E measured" value={teachingMetric('I:E measured')?.value ?? (measuredIERatio == null ? '—' : `1:${measuredIERatio.toFixed(1)}`)} unit={teachingMetric('I:E measured')?.unit ?? ''} />
               <div className="metrics-spacer" aria-hidden="true" />
               <GasMetric
-                etco2={endTidalCO2 == null ? '-' : endTidalCO2.toFixed(0)}
-                spo2={latestSample?.spo2 == null ? '—' : latestSample.spo2.toFixed(0)}
-                spo2AlarmLevel={spo2MetricAlarm}
+                etco2={teachingMetric('EtCO₂')?.value ?? (endTidalCO2 == null ? '-' : endTidalCO2.toFixed(0))}
+                spo2={teachingMetric('SpO₂')?.value ?? (latestSample?.spo2 == null ? '—' : latestSample.spo2.toFixed(0))}
+                spo2AlarmLevel={teachingMetric('SpO₂')?.className.includes('metric-alarm-red') ? 'red' : teachingMetric('SpO₂')?.className.includes('metric-alarm-yellow') ? 'yellow' : spo2MetricAlarm}
               />
               {waveformFrozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
