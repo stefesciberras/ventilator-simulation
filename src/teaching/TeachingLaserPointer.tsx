@@ -21,7 +21,7 @@ interface TeachingWaveformCardSnapshot {
   image: string
 }
 
-interface TeachingMetricSnapshot {
+export interface TeachingMetricSnapshot {
   label: string
   value: string
   unit: string
@@ -225,11 +225,13 @@ export function TeachingLaserPointerSurface({
   sessionId,
   enabled,
   onEnabledChange,
+  onSharedMetricsChange,
 }: {
   role: TeachingRole
   sessionId: string | null
   enabled: boolean
   onEnabledChange?: (enabled: boolean) => void
+  onSharedMetricsChange?: (metrics: TeachingMetricSnapshot[] | null) => void
 }) {
   const [remotePointer, setRemotePointer] = useState<TeachingLaserPointerState | null>(null)
   const [localPointer, setLocalPointer] = useState<TeachingLaserPointerState | null>(null)
@@ -441,6 +443,11 @@ export function TeachingLaserPointerSurface({
 
   const displayed = isController ? localPointer : remotePointer
   const sharedSnapshot = role === 'candidate' ? remoteSnapshot : localSnapshot
+
+  useEffect(() => {
+    onSharedMetricsChange?.(sharedSnapshot?.metrics?.length ? sharedSnapshot.metrics : null)
+    return () => onSharedMetricsChange?.(null)
+  }, [sharedSnapshot, onSharedMetricsChange])
   const displayedPosition = (() => {
     const surface = surfaceRef.current
     if (!surface || !displayed) return { left: `${(displayed?.x ?? 0.5) * 100}%`, top: `${(displayed?.y ?? 0.5) * 100}%` }
@@ -462,18 +469,6 @@ export function TeachingLaserPointerSurface({
       width: `${rect.width}px`,
       height: `${rect.height}px`,
       gridTemplateRows: `repeat(${sharedSnapshot.cards.length}, minmax(0, 1fr))`,
-    }
-  })()
-  const sharedMetricsPosition = (() => {
-    const surface = surfaceRef.current
-    if (!surface || !sharedSnapshot || !sharedSnapshot.metrics.length) return null
-    const surfaceRect = surface.getBoundingClientRect()
-    const rect = regionRectFor(surface, 'metrics')
-    return {
-      left: `${rect.left - surfaceRect.left}px`,
-      top: `${rect.top - surfaceRect.top}px`,
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
     }
   })()
   const visible = Boolean(displayed?.active) && (role === 'candidate' || enabled)
@@ -508,18 +503,6 @@ export function TeachingLaserPointerSurface({
                 <img src={card.image} alt="" draggable={false} />
               </div>
             ))}
-          </div>
-        )}
-        {sharedSnapshot && sharedMetricsPosition && (
-          <div className="teaching-shared-metrics-frame" style={sharedMetricsPosition}>
-            <span className="teaching-shared-metrics-badge">Instructor measured values</span>
-            <div className="teaching-shared-metrics-list">
-              {sharedSnapshot.metrics.map((metric, index) => (
-                <div key={`${sharedSnapshot.frameId}-metric-${index}`} className={`teaching-shared-metric ${metric.className.includes('metric-alarm-red') ? 'alarm-red' : metric.className.includes('metric-alarm-yellow') ? 'alarm-yellow' : ''}`}>
-                  <span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.unit}</small>
-                </div>
-              ))}
-            </div>
           </div>
         )}
         {isController && enabled && onEnabledChange && (

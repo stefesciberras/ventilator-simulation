@@ -45,6 +45,7 @@ export function useTeachingSharedWaveformFreeze(
     if (previous) void supabase.removeChannel(previous)
     setActiveState(false)
     activeRef.current = false
+    if (role === 'candidate') candidateHandlerRef.current(false)
 
     if (!sessionId || role === 'standalone') return
 
@@ -84,11 +85,21 @@ export function useTeachingSharedWaveformFreeze(
     }
   }, [role, sessionId])
 
+  useEffect(() => {
+    if (role !== 'instructor' || !sessionId) return
+    const timer = window.setInterval(() => broadcastState(activeRef.current), 1000)
+    return () => window.clearInterval(timer)
+  }, [broadcastState, role, sessionId])
+
   const setActive = useCallback((next: boolean) => {
     if (role !== 'instructor' || !sessionId) return
     activeRef.current = next
     setActiveState(next)
     broadcastState(next)
+    if (!next) {
+      window.setTimeout(() => broadcastState(false), 120)
+      window.setTimeout(() => broadcastState(false), 400)
+    }
   }, [broadcastState, role, sessionId])
 
   return { active, setActive }
