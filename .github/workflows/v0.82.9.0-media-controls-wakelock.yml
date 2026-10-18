@@ -20,8 +20,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: python .github/scripts/apply-v08290.py
-      - run: npm ci
-      - run: npm run build
       - name: Commit applied changes
         run: |
           if ! git diff --quiet; then
@@ -31,3 +29,5 @@ jobs:
             git commit -m "implement v0.82.9.0 teaching sync and tablet refinements"
             git push origin HEAD:chatgpt/v0.82.9.0-media-controls-wakelock
           fi
+      - run: npm ci
+      - run: npm run build
