@@ -274,7 +274,6 @@ export function TeachingLaserPointerSurface({
         if (role !== 'candidate' || !isPointerState(payload)) return
         lastReceivedAtRef.current = Date.now()
         setRemotePointer({ ...payload, x: clamp01(payload.x), y: clamp01(payload.y) })
-        if (payload.active && !remoteSnapshot) requestSnapshot(channel)
       })
       .on('broadcast', { event: SNAPSHOT_EVENT }, ({ payload }) => {
         if (role !== 'candidate' || !isWaveformSnapshotMessage(payload)) return
@@ -326,6 +325,7 @@ export function TeachingLaserPointerSurface({
     if (!isController) return
     if (!enabled) {
       setLocalPointer(null)
+      localSnapshotRef.current = null
       setLocalSnapshot(null)
       sendPointer({ x: 0.5, y: 0.5, active: false, sentAt: Date.now(), region: 'display' }, true)
       if (role === 'instructor' && sessionId) sendSnapshot(null)
