@@ -9,6 +9,7 @@ export interface LocalRuntimePolicy {
   syncVentilator: boolean
   candidateCanEditPatient: boolean
   candidateCanEditVentilator: boolean
+  candidateControlsVisible: boolean
   syncAlarms: boolean
   candidateCanEditAlarms: boolean
   alarmsSilent: boolean

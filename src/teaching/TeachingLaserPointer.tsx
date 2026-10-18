@@ -4,11 +4,14 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../session/supabase'
 import type { TeachingRole } from './types'
 
+type TeachingLaserRegion = 'display' | 'waveforms' | 'metrics'
+
 interface TeachingLaserPointerState {
   x: number
   y: number
   active: boolean
   sentAt: number
+  region?: TeachingLaserRegion
 }
 
 const POINTER_EVENT = 'teaching-laser-pointer'
@@ -25,6 +28,7 @@ function isPointerState(value: unknown): value is TeachingLaserPointerState {
     && Number.isFinite(candidate.y)
     && typeof candidate.active === 'boolean'
     && typeof candidate.sentAt === 'number'
+    && (candidate.region == null || candidate.region === 'display' || candidate.region === 'waveforms' || candidate.region === 'metrics')
 }
 
 function clamp01(value: number) {
@@ -81,12 +85,24 @@ export function TeachingLaserPointerSurface({
   const [remotePointer, setRemotePointer] = useState<TeachingLaserPointerState | null>(null)
   const [localPointer, setLocalPointer] = useState<TeachingLaserPointerState | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const surfaceRef = useRef<HTMLDivElement | null>(null)
+  const [, setLayoutRevision] = useState(0)
   const localPointerRef = useRef<TeachingLaserPointerState | null>(null)
   const lastSentAtRef = useRef(0)
   const lastReceivedAtRef = useRef(0)
   const isController = role !== 'candidate'
 
   useEffect(() => { localPointerRef.current = localPointer }, [localPointer])
+
+  useEffect(() => {
+    const onResize = () => setLayoutRevision((value) => value + 1)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('orientationchange', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('orientationchange', onResize)
+    }
+  }, [])
 
   const sendPointer = (next: TeachingLaserPointerState, force = false) => {
     const channel = channelRef.current
@@ -122,7 +138,7 @@ export function TeachingLaserPointerSurface({
         void channel.send({
           type: 'broadcast',
           event: POINTER_EVENT,
-          payload: { x: 0.5, y: 0.5, active: false, sentAt: Date.now() } satisfies TeachingLaserPointerState,
+          payload: { x: 0.5, y: 0.5, active: false, sentAt: Date.now(), region: 'display' } satisfies TeachingLaserPointerState,
         })
       }
       channelRef.current = null
@@ -134,7 +150,7 @@ export function TeachingLaserPointerSurface({
     if (!isController) return
     if (!enabled) {
       setLocalPointer(null)
-      sendPointer({ x: 0.5, y: 0.5, active: false, sentAt: Date.now() }, true)
+      sendPointer({ x: 0.5, y: 0.5, active: false, sentAt: Date.now(), region: 'display' }, true)
       return
     }
     if (role !== 'instructor' || !sessionId) return
@@ -153,15 +169,32 @@ export function TeachingLaserPointerSurface({
     return () => window.clearInterval(staleTimer)
   }, [remotePointer, role, sessionId])
 
+  const regionRectFor = (surface: HTMLDivElement, region: TeachingLaserRegion) => {
+    if (region === 'display') return surface.getBoundingClientRect()
+    const selector = region === 'waveforms' ? '.waveforms' : '.metrics-panel'
+    return surface.parentElement?.querySelector<HTMLElement>(selector)?.getBoundingClientRect() ?? surface.getBoundingClientRect()
+  }
+
+  const regionAtPoint = (surface: HTMLDivElement, clientX: number, clientY: number): TeachingLaserRegion => {
+    for (const region of ['waveforms', 'metrics'] as const) {
+      const rect = regionRectFor(surface, region)
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) return region
+    }
+    return 'display'
+  }
+
   const updateFromPointerEvent = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!isController || !enabled) return
-    const rect = event.currentTarget.getBoundingClientRect()
+    const surface = event.currentTarget
+    const region = regionAtPoint(surface, event.clientX, event.clientY)
+    const rect = regionRectFor(surface, region)
     if (!rect.width || !rect.height) return
     const next: TeachingLaserPointerState = {
       x: clamp01((event.clientX - rect.left) / rect.width),
       y: clamp01((event.clientY - rect.top) / rect.height),
       active: true,
       sentAt: Date.now(),
+      region,
     }
     setLocalPointer(next)
     sendPointer(next)
@@ -170,14 +203,25 @@ export function TeachingLaserPointerSurface({
   const hideLocalPointer = () => {
     if (!isController || !enabled) return
     setLocalPointer(null)
-    sendPointer({ x: 0.5, y: 0.5, active: false, sentAt: Date.now() }, true)
+    sendPointer({ x: 0.5, y: 0.5, active: false, sentAt: Date.now(), region: 'display' }, true)
   }
 
   const displayed = isController ? localPointer : remotePointer
+  const displayedPosition = (() => {
+    const surface = surfaceRef.current
+    if (!surface || !displayed) return { left: `${(displayed?.x ?? 0.5) * 100}%`, top: `${(displayed?.y ?? 0.5) * 100}%` }
+    const surfaceRect = surface.getBoundingClientRect()
+    const rect = regionRectFor(surface, displayed.region ?? 'display')
+    return {
+      left: `${rect.left - surfaceRect.left + displayed.x * rect.width}px`,
+      top: `${rect.top - surfaceRect.top + displayed.y * rect.height}px`,
+    }
+  })()
   const visible = Boolean(displayed?.active) && (role === 'candidate' || enabled)
 
   return (
     <div
+      ref={surfaceRef}
       className={`teaching-laser-layer ${isController && enabled ? 'teaching-laser-layer-active' : ''}`}
       aria-hidden={!isController}
       onPointerDown={(event) => {
@@ -201,7 +245,7 @@ export function TeachingLaserPointerSurface({
       {visible && displayed && (
         <span
           className="teaching-laser-dot"
-          style={{ left: `${displayed.x * 100}%`, top: `${displayed.y * 100}%` }}
+          style={displayedPosition}
         />
       )}
     </div>

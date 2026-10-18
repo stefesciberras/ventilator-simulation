@@ -19,6 +19,7 @@ import { calculatePhysiologicalMeasurements } from './physiologyMeasurements'
 import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type ArdsSeverity, type PatientProfileName } from './patientProfiles'
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
+import { useScreenWakeLock } from './useScreenWakeLock'
 import './session.css'
 import './physiology.css'
 
@@ -475,6 +476,7 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 
 export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
+  const screenWakeLock = useScreenWakeLock()
   const [instructorAccountConnected, setInstructorAccountConnected] = useState(false)
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => {
@@ -588,11 +590,11 @@ export default function App() {
   const [dynamicScenarioDiagnostic, setDynamicScenarioDiagnostic] = useState<DynamicScenarioDiagnosticContext | null>(null)
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
   const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
-  const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1101px)').matches)
+  const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1181px)').matches)
   const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
 
   useEffect(() => {
-    const media = window.matchMedia('(min-width: 1101px)')
+    const media = window.matchMedia('(min-width: 1181px)')
     const update = () => setWideInstructorLayout(media.matches)
     update()
     media.addEventListener('change', update)
@@ -615,6 +617,12 @@ export default function App() {
     simulationSpeed,
     setSimulationSpeed,
   })
+
+  const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
+
+  useEffect(() => {
+    if (!candidateControlsVisible && mobileWorkspacePage === 'settings') setMobileWorkspacePage('ventilator')
+  }, [candidateControlsVisible, mobileWorkspacePage])
 
   const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, eduventTeachingHost)
   const teachingLibrary = useTeachingQuestionLibrary(eduventTeachingHost)
@@ -1446,7 +1454,7 @@ export default function App() {
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
 
   const handleMobileWorkspaceTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (!window.matchMedia('(max-width: 680px), (orientation: landscape) and (max-width: 1100px)').matches || event.touches.length !== 1) {
+    if (!window.matchMedia('(max-width: 1180px)').matches || event.touches.length !== 1) {
       mobileSwipeStartRef.current = null
       return
     }
@@ -1487,6 +1495,10 @@ export default function App() {
             </div>
             <p>An interactive mechanical ventilation simulator for education and training.</p>
             <div className="about-version-row"><span>Version</span><strong>v{APP_VERSION}</strong></div>
+            <label className="about-wake-row">
+              <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
+              <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
+            </label>
             <div className="about-diagnostics">
               <span className="about-section-label">Diagnostics</span>
               <div className="about-diagnostic-actions">
@@ -1584,13 +1596,13 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="mobile-workspace-switcher" aria-label="Mobile workspace pages">
+      <nav className={`mobile-workspace-switcher ${candidateControlsVisible ? '' : 'candidate-controls-hidden'}`} aria-label="Mobile workspace pages">
         <button type="button" className={mobileWorkspacePage === 'ventilator' ? 'active' : ''} aria-current={mobileWorkspacePage === 'ventilator' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('ventilator')}>Ventilator</button>
-        <button type="button" className={mobileWorkspacePage === 'settings' ? 'active' : ''} aria-current={mobileWorkspacePage === 'settings' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('settings')}>Controls</button>
+        {candidateControlsVisible && <button type="button" className={mobileWorkspacePage === 'settings' ? 'active' : ''} aria-current={mobileWorkspacePage === 'settings' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('settings')}>Controls</button>}
       </nav>
 
       <div
-        className={`workspace mobile-page-${mobileWorkspacePage}`}
+        className={`workspace mobile-page-${mobileWorkspacePage} ${candidateControlsVisible ? '' : 'candidate-controls-hidden'}`}
         onTouchStart={handleMobileWorkspaceTouchStart}
         onTouchEnd={handleMobileWorkspaceTouchEnd}
       >
@@ -1632,7 +1644,7 @@ export default function App() {
               onPointerCancel={releaseInspiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginInspiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseInspiratoryHold() } }}
-            ><span className="hold-label-desktop">Insp Hold</span><span className="hold-label-mobile">Insp <PauseIcon paused={false} /></span></button>
+            ><span className="hold-label-two-line"><span>Insp</span><span>Hold</span></span></button>
             <button
               className={`hardware-button hold-button ${expiratoryHoldPressed ? 'active' : ''}`}
               disabled={waveformFrozen || simulationPaused || activeMode === 'APRV' || activeMode === 'BIPAP'}
@@ -1642,7 +1654,7 @@ export default function App() {
               onPointerCancel={releaseExpiratoryHold}
               onKeyDown={(event) => { if (isHoldKey(event.key) && !event.repeat) { event.preventDefault(); beginExpiratoryHold() } }}
               onKeyUp={(event) => { if (isHoldKey(event.key)) { event.preventDefault(); releaseExpiratoryHold() } }}
-            ><span className="hold-label-desktop">Exp Hold</span><span className="hold-label-mobile">Exp <PauseIcon paused={false} /></span></button>
+            ><span className="hold-label-two-line"><span>Exp</span><span>Hold</span></span></button>
             <button className="hardware-button icon-button measurements-button" type="button" onClick={() => setMeasurementsOpen(true)} title="Physiological measurements" aria-label="Open physiological measurements"><MeasurementsInfoIcon /></button>
             <button
               className={`hardware-button icon-button alarm-button alarm-silence-bottom ${alarmSilenced ? 'active' : ''}`}

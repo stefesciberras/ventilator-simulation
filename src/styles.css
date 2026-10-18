@@ -359,7 +359,7 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 
 
 /* v0.82.8.5 tablet-landscape compact workspace */
-@media (orientation: landscape) and (min-width: 681px) and (max-width: 1100px) {
+@media (min-width: 681px) and (max-width: 1180px) {
   .version,
   .top-diagnostic-menu { display: none !important; }
 
@@ -409,3 +409,16 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .about-section-label { color: #8fa2ab; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .about-diagnostic-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .about-diagnostic-actions button { flex: 1 1 180px; }
+
+
+/* v0.82.9.0 candidate controls visibility + wake-lock settings */
+.workspace.candidate-controls-hidden { grid-template-columns: minmax(0, 1fr); }
+.workspace.candidate-controls-hidden .control-panel { display: none !important; }
+.mobile-workspace-switcher.candidate-controls-hidden { grid-template-columns: 1fr; }
+.about-wake-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:12px; padding:12px 0; border-top:1px solid #293840; }
+.about-wake-row > span { display:grid; gap:3px; }
+.about-wake-row strong { color:#dcebf0; font-size:.9rem; }
+.about-wake-row small { color:#81959e; font-size:.75rem; line-height:1.35; }
+.about-wake-row input { width:20px; height:20px; accent-color:#53c8ed; }
+
+.hold-label-two-line { display:grid; justify-items:center; line-height:1.02; gap:1px; }

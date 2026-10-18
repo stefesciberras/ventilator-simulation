@@ -54,6 +54,7 @@ interface PolicyPatch {
   syncVentilator?: boolean
   candidateCanEditPatient?: boolean
   candidateCanEditVentilator?: boolean
+  candidateControlsVisible?: boolean
   syncAlarms?: boolean
   candidateCanEditAlarms?: boolean
   alarmsSilent?: boolean
@@ -216,6 +217,7 @@ export function useTeachingSession({
         syncVentilator: Boolean(row.sync_ventilator),
         candidateCanEditPatient: Boolean(row.candidate_can_edit_patient),
         candidateCanEditVentilator: Boolean(row.candidate_can_edit_ventilator),
+        candidateControlsVisible: row.candidate_controls_visible !== false,
         syncAlarms: Boolean(row.sync_alarms),
         candidateCanEditAlarms: Boolean(row.candidate_can_edit_alarms),
         alarmsSilent: Boolean(row.alarms_silent),
@@ -248,6 +250,7 @@ export function useTeachingSession({
       sync_ventilator: snapshot.policy.syncVentilator,
       candidate_can_edit_patient: snapshot.policy.candidateCanEditPatient,
       candidate_can_edit_ventilator: snapshot.policy.candidateCanEditVentilator,
+      candidate_controls_visible: snapshot.policy.candidateControlsVisible !== false,
       sync_alarms: snapshot.policy.syncAlarms,
       candidate_can_edit_alarms: snapshot.policy.candidateCanEditAlarms,
       alarms_silent: snapshot.policy.alarmsSilent,
@@ -460,6 +463,7 @@ export function useTeachingSession({
     if (patch.syncVentilator != null) databasePatch.sync_ventilator = patch.syncVentilator
     if (patch.candidateCanEditPatient != null) databasePatch.candidate_can_edit_patient = patch.candidateCanEditPatient
     if (patch.candidateCanEditVentilator != null) databasePatch.candidate_can_edit_ventilator = patch.candidateCanEditVentilator
+    if (patch.candidateControlsVisible != null) databasePatch.candidate_controls_visible = patch.candidateControlsVisible
     if (patch.syncAlarms != null) databasePatch.sync_alarms = patch.syncAlarms
     if (patch.candidateCanEditAlarms != null) databasePatch.candidate_can_edit_alarms = patch.candidateCanEditAlarms
     if (patch.alarmsSilent != null) databasePatch.alarms_silent = patch.alarmsSilent

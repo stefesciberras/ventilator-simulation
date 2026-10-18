@@ -341,7 +341,7 @@ body.eduvent-instructor-mode:not(.eduvent-instructor-simulator-open) .control-pa
 /* v0.81.2 fixed instructor workspace: ventilator remains visible outside narrow mobile paging */
 body.eduvent-instructor-mode .instructor-ventilator-toggle { display: none !important; }
 
-@media (min-width: 1101px) {
+@media (min-width: 1181px) {
   body.eduvent-instructor-mode.eduvent-instructor-simulator-open .workspace {
     grid-template-columns: minmax(0, 1fr) 430px;
     gap: 14px;
@@ -360,7 +360,7 @@ body.eduvent-instructor-mode .instructor-ventilator-toggle { display: none !impo
   }
 }
 
-@media (min-width: 681px) and (max-width: 1100px) {
+@media (min-width: 681px) and (max-width: 1180px) {
   body.eduvent-instructor-mode.eduvent-instructor-simulator-open .workspace {
     grid-template-columns: 1fr;
   }
@@ -376,4 +376,13 @@ body.eduvent-instructor-mode .instructor-ventilator-toggle { display: none !impo
     max-height: none;
     overflow: visible;
   }
+}
+
+
+/* v0.82.9.0 tablet paging override */
+@media (min-width: 681px) and (max-width: 1180px) {
+  body.eduvent-instructor-mode .workspace.mobile-page-ventilator > .ventilator-console { display: block !important; }
+  body.eduvent-instructor-mode .workspace.mobile-page-ventilator > .control-panel { display: none !important; }
+  body.eduvent-instructor-mode .workspace.mobile-page-settings > .ventilator-console { display: none !important; }
+  body.eduvent-instructor-mode .workspace.mobile-page-settings > .control-panel { display: block !important; grid-row: 1; }
 }
