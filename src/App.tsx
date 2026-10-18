@@ -21,6 +21,7 @@ import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
 import { useScreenWakeLock } from './useScreenWakeLock'
+import { useScreenWakeLock } from './useScreenWakeLock'
 import './session.css'
 import './physiology.css'
 
@@ -479,6 +480,7 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const screenWakeLock = useScreenWakeLock()
   const screenWakeLock = useScreenWakeLock()
+  const screenWakeLock = useScreenWakeLock()
   const [instructorAccountConnected, setInstructorAccountConnected] = useState(false)
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => {
@@ -619,6 +621,12 @@ export default function App() {
     simulationSpeed,
     setSimulationSpeed,
   })
+
+  const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
+
+  useEffect(() => {
+    if (!candidateControlsVisible && mobileWorkspacePage === 'settings') setMobileWorkspacePage('ventilator')
+  }, [candidateControlsVisible, mobileWorkspacePage])
 
   const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
 
@@ -1503,6 +1511,10 @@ export default function App() {
             </div>
             <p>An interactive mechanical ventilation simulator for education and training.</p>
             <div className="about-version-row"><span>Version</span><strong>v{APP_VERSION}</strong></div>
+            <label className="about-wake-row">
+              <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
+              <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
+            </label>
             <label className="about-wake-row">
               <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
               <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
