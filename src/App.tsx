@@ -1446,7 +1446,7 @@ export default function App() {
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
 
   const handleMobileWorkspaceTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (!window.matchMedia('(max-width: 680px)').matches || event.touches.length !== 1) {
+    if (!window.matchMedia('(max-width: 680px), (orientation: landscape) and (max-width: 1100px)').matches || event.touches.length !== 1) {
       mobileSwipeStartRef.current = null
       return
     }
@@ -1487,6 +1487,13 @@ export default function App() {
             </div>
             <p>An interactive mechanical ventilation simulator for education and training.</p>
             <div className="about-version-row"><span>Version</span><strong>v{APP_VERSION}</strong></div>
+            <div className="about-diagnostics">
+              <span className="about-section-label">Diagnostics</span>
+              <div className="about-diagnostic-actions">
+                <button type="button" onClick={() => void copyDiagnostics()}>Simulation Logs</button>
+                <button type="button" onClick={() => void copyScenarioSnapshotDiagnostics()}>Scenario Debug Snapshot</button>
+              </div>
+            </div>
             <p className="about-disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</p>
           </section>
         </div>
