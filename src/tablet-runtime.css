@@ -96,19 +96,24 @@ body.eduvent-tablet-landscape.eduvent-instructor-mode .workspace.mobile-page-set
   grid-row: 1 !important;
 }
 
+/* Tablet keeps the desktop ventilator toolbar geometry: Mode remains inline
+   with laser/O2/nebuliser/freeze/holds/measurements/alarm silence. */
 body.eduvent-tablet-landscape .console-mode-bar {
-  flex-direction: column !important;
-  align-items: stretch !important;
+  flex-direction: row !important;
+  align-items: center !important;
   gap: 6px !important;
 }
 
 body.eduvent-tablet-landscape .console-mode-control,
 body.eduvent-tablet-landscape .console-mode-button {
-  width: 100%;
+  width: auto !important;
+  flex: 0 0 auto;
 }
 
 body.eduvent-tablet-landscape .console-top-actions {
-  width: 100%;
+  width: auto !important;
+  flex: 1 1 auto;
+  min-width: 0;
   margin-left: 0 !important;
   justify-content: flex-start !important;
   flex-wrap: nowrap !important;
