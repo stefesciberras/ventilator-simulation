@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-import { supabase } from '../session/supabase'
+import { sendTeachingBroadcast, subscribeTeachingBroadcast } from './teachingRealtimeBus'
 import type { TeachingRole } from './types'
 
 type TeachingLaserRegion = 'display' | 'waveforms' | 'metrics'
@@ -239,7 +238,6 @@ export function TeachingLaserPointerSurface({
   const [remoteSnapshot, setRemoteSnapshot] = useState<TeachingWaveformSnapshot | null>(null)
   const [remoteClock, setRemoteClock] = useState<TeachingClockState | null>(null)
   const [clockTarget, setClockTarget] = useState<HTMLElement | null>(null)
-  const channelRef = useRef<RealtimeChannel | null>(null)
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const [, setLayoutRevision] = useState(0)
   const localPointerRef = useRef<TeachingLaserPointerState | null>(null)
@@ -274,32 +272,27 @@ export function TeachingLaserPointerSurface({
   }, [clockTarget, role, remoteClock])
 
   const sendPointer = (next: TeachingLaserPointerState, force = false) => {
-    const channel = channelRef.current
-    if (!channel || role !== 'instructor' || !sessionId) return
+    if (role !== 'instructor' || !sessionId) return
     const now = Date.now()
     if (!force && now - lastSentAtRef.current < MIN_SEND_INTERVAL_MS) return
     lastSentAtRef.current = now
-    void channel.send({ type: 'broadcast', event: POINTER_EVENT, payload: next })
+    void sendTeachingBroadcast(sessionId, POINTER_EVENT, next)
   }
 
   const sendSnapshot = (snapshot: TeachingWaveformSnapshot | null) => {
-    const channel = channelRef.current
-    if (!channel || role !== 'instructor' || !sessionId) return
+    if (role !== 'instructor' || !sessionId) return
     const payload: TeachingWaveformSnapshotMessage = snapshot
       ? { active: true, snapshot }
       : { active: false }
-    void channel.send({ type: 'broadcast', event: SNAPSHOT_EVENT, payload })
+    void sendTeachingBroadcast(sessionId, SNAPSHOT_EVENT, payload)
   }
 
-  const requestSnapshot = (channel = channelRef.current) => {
-    if (!channel || role !== 'candidate' || !sessionId) return
-    void channel.send({ type: 'broadcast', event: SNAPSHOT_REQUEST_EVENT, payload: { requestedAt: Date.now() } })
+  const requestSnapshot = () => {
+    if (role !== 'candidate' || !sessionId) return
+    void sendTeachingBroadcast(sessionId, SNAPSHOT_REQUEST_EVENT, { requestedAt: Date.now() })
   }
 
   useEffect(() => {
-    const previous = channelRef.current
-    channelRef.current = null
-    if (previous) void supabase.removeChannel(previous)
     setRemotePointer(null)
     setLocalPointer(null)
     setRemoteSnapshot(null)
@@ -307,54 +300,46 @@ export function TeachingLaserPointerSurface({
 
     if (!sessionId || role === 'standalone') return
 
-    const channel = supabase.channel(`teaching-pointer:${sessionId}`, {
-      config: { broadcast: { self: false, ack: false } },
+    const unsubPointer = subscribeTeachingBroadcast(sessionId, POINTER_EVENT, (payload) => {
+      if (role !== 'candidate' || !isPointerState(payload)) return
+      lastReceivedAtRef.current = Date.now()
+      setRemotePointer({ ...payload, x: clamp01(payload.x), y: clamp01(payload.y) })
     })
-      .on('broadcast', { event: POINTER_EVENT }, ({ payload }) => {
-        if (role !== 'candidate' || !isPointerState(payload)) return
-        lastReceivedAtRef.current = Date.now()
-        setRemotePointer({ ...payload, x: clamp01(payload.x), y: clamp01(payload.y) })
-      })
-      .on('broadcast', { event: SNAPSHOT_EVENT }, ({ payload }) => {
-        if (role !== 'candidate' || !isWaveformSnapshotMessage(payload)) return
-        setRemoteSnapshot(payload.active && payload.snapshot ? payload.snapshot : null)
-      })
-      .on('broadcast', { event: SNAPSHOT_REQUEST_EVENT }, () => {
-        if (role !== 'instructor') return
-        const snapshot = localSnapshotRef.current
-        if (snapshot) void channel.send({ type: 'broadcast', event: SNAPSHOT_EVENT, payload: { active: true, snapshot } satisfies TeachingWaveformSnapshotMessage })
-      })
-      .on('broadcast', { event: CLOCK_EVENT }, ({ payload }) => {
-        if (role !== 'candidate' || !isClockState(payload)) return
-        lastClockReceivedAtRef.current = Date.now()
-        setRemoteClock(payload)
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED' && role === 'candidate') requestSnapshot(channel)
-      })
+    const unsubSnapshot = subscribeTeachingBroadcast(sessionId, SNAPSHOT_EVENT, (payload) => {
+      if (role !== 'candidate' || !isWaveformSnapshotMessage(payload)) return
+      setRemoteSnapshot(payload.active && payload.snapshot ? payload.snapshot : null)
+    })
+    const unsubRequest = subscribeTeachingBroadcast(sessionId, SNAPSHOT_REQUEST_EVENT, () => {
+      if (role !== 'instructor') return
+      const snapshot = localSnapshotRef.current
+      if (snapshot) void sendTeachingBroadcast(sessionId, SNAPSHOT_EVENT, { active: true, snapshot } satisfies TeachingWaveformSnapshotMessage)
+    })
+    const unsubClock = subscribeTeachingBroadcast(sessionId, CLOCK_EVENT, (payload) => {
+      if (role !== 'candidate' || !isClockState(payload)) return
+      lastClockReceivedAtRef.current = Date.now()
+      setRemoteClock(payload)
+    })
 
-    channelRef.current = channel
+    if (role === 'candidate') requestSnapshot()
+
     return () => {
+      unsubPointer()
+      unsubSnapshot()
+      unsubRequest()
+      unsubClock()
       if (role === 'instructor') {
-        void channel.send({
-          type: 'broadcast',
-          event: POINTER_EVENT,
-          payload: { x: 0.5, y: 0.5, active: false, sentAt: Date.now(), region: 'display' } satisfies TeachingLaserPointerState,
-        })
-        void channel.send({ type: 'broadcast', event: SNAPSHOT_EVENT, payload: { active: false } satisfies TeachingWaveformSnapshotMessage })
+        void sendTeachingBroadcast(sessionId, POINTER_EVENT, { x: 0.5, y: 0.5, active: false, sentAt: Date.now(), region: 'display' } satisfies TeachingLaserPointerState)
+        void sendTeachingBroadcast(sessionId, SNAPSHOT_EVENT, { active: false } satisfies TeachingWaveformSnapshotMessage)
       }
-      channelRef.current = null
-      void supabase.removeChannel(channel)
     }
   }, [role, sessionId])
 
   useEffect(() => {
     if (role !== 'instructor' || !sessionId) return
     const broadcastClock = () => {
-      const channel = channelRef.current
       const text = readVisibleClockText()
-      if (!channel || !text) return
-      void channel.send({ type: 'broadcast', event: CLOCK_EVENT, payload: { text, sentAt: Date.now() } satisfies TeachingClockState })
+      if (!text) return
+      void sendTeachingBroadcast(sessionId, CLOCK_EVENT, { text, sentAt: Date.now() } satisfies TeachingClockState)
     }
     broadcastClock()
     const timer = window.setInterval(broadcastClock, CLOCK_BROADCAST_MS)
