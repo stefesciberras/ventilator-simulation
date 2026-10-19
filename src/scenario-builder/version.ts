@@ -1,1 +1,1 @@
-export const SCENARIO_BUILDER_VERSION = '0.5.2'
+export const SCENARIO_BUILDER_VERSION = '0.6.0'

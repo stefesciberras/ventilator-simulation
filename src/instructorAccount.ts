@@ -3,6 +3,7 @@ import type { AlarmLimits } from './alarmTypes'
 import type { PatientSettings, VentilatorSettings } from './simulation/types'
 import { calculatePredictedBodyWeight } from './patientMetrics'
 import { supabase } from './session/supabase'
+import { createBranchId, createStageId } from './scenario-builder/ids'
 
 export type ScenarioWaveform = 'volume' | 'co2' | 'oesophagealPressure'
 export type InstructorScenarioKind = 'static' | 'dynamic'
@@ -72,6 +73,7 @@ export interface DynamicScenarioApplyMask {
 }
 
 export interface DynamicScenarioStage {
+  id?: string
   name: string
   /** Instructor-facing explanation of what should happen during this stage. */
   comment?: string
@@ -92,6 +94,17 @@ export interface DynamicScenarioStage {
   /** v4 trigger list. Any configured trigger may advance the stage (OR semantics). */
   advanceTriggers?: DynamicScenarioTrigger[]
 }
+
+export interface DynamicScenarioBranch {
+  id: string
+  fromStageId: string
+  toStageId: string
+  trigger: DynamicScenarioTrigger
+  priority: number
+  label?: string
+  enabled?: boolean
+}
+
 
 export function dynamicStageTriggers(stage: DynamicScenarioStage): DynamicScenarioTrigger[] {
   const fallback: DynamicScenarioTrigger = (stage.stageType ?? 'controls') === 'question' ? { type: 'question-any' } : { type: 'manual' }
@@ -114,6 +127,7 @@ export interface InstructorScenarioSnapshot {
   description?: string
   mediaIds?: string[]
   stages?: DynamicScenarioStage[]
+  branches?: DynamicScenarioBranch[]
   ventilator: VentilatorSettings
   patient: PatientSettings
   alarmLimits: AlarmLimits
@@ -184,7 +198,8 @@ export function asDynamicScenario(
     schemaVersion: 7,
     kind: 'dynamic',
     description: description.trim(),
-    stages: [{ name: 'Stage 1', comment: '', stageType: 'controls', transition: { mode: 'immediate' }, transitionOverrides: {}, snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
+    stages: [{ id: createStageId(), name: 'Stage 1', comment: '', stageType: 'controls', transition: { mode: 'immediate' }, transitionOverrides: {}, snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
+    branches: [],
   }
 }
 
@@ -219,6 +234,7 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
     stages: scenario.kind === 'dynamic' ? (scenario.stages ?? []).map((stage, index) => {
       const triggers = dynamicStageTriggers(stage)
       return {
+        id: stage.id ?? createStageId(),
         name: stage.name || `Stage ${index + 1}`,
         comment: stage.comment ?? '',
         stageType: stage.stageType ?? 'controls',
@@ -233,6 +249,12 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
         advanceTriggers: triggers,
       }
     }) : undefined,
+    branches: scenario.kind === 'dynamic' ? (scenario.branches ?? []).map((branch, index) => ({
+      ...branch,
+      id: branch.id || createBranchId(),
+      priority: Number.isFinite(branch.priority) ? branch.priority : index,
+      enabled: branch.enabled !== false,
+    })) : undefined,
   }
 }
 

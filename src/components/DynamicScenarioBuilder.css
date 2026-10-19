@@ -413,3 +413,6 @@
   .dynamic-stage-drag-handle { display: none; }
   .dynamic-stage-move { min-width: 36px; width: 36px; height: 34px; }
 }
+
+/* v0.6.0 branching */
+.dynamic-branch-builder{margin-top:10px;padding:10px;border:1px solid #334851;border-radius:10px;background:#0b151a}.dynamic-branch-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.dynamic-branch-heading>div{display:grid;gap:2px}.dynamic-branch-heading span{color:#8fa4ad;font-size:.72rem}.dynamic-branch-heading button{min-height:32px}.dynamic-branch-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0;border-top:1px solid #24363e}.dynamic-branch-row:first-of-type{border-top:0}.dynamic-branch-row select,.dynamic-branch-row input{min-height:34px;background:#101b21;color:#dce8eb;border:1px solid #40545e;border-radius:6px}.dynamic-branch-label{min-width:150px;flex:1}.dynamic-branch-row input[type=number]{width:88px}
