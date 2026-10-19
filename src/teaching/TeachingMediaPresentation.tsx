@@ -5,6 +5,7 @@ import type { TeachingRole } from './types'
 import { TeachingMediaLaserCandidateLayer } from './TeachingMediaLaser'
 import { sendTeachingBroadcast, subscribeTeachingBroadcast } from './teachingRealtimeBus'
 import './teaching.css'
+import './TeachingMediaPresentation.css'
 
 const PRESENTATION_EVENT = 'teaching-media-presentation-state'
 
