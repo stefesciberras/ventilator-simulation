@@ -422,3 +422,9 @@ input[type="range"] { width: 100%; accent-color: #61bedd; }
 .about-wake-row input { width:20px; height:20px; accent-color:#53c8ed; }
 
 .hold-label-two-line { display:grid; justify-items:center; line-height:1.02; gap:1px; }
+
+
+.freeze-control-group { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:2px; min-width:0; }
+.freeze-control-group .freeze-button { flex:0 0 auto; }
+.shared-freeze-label { max-width:64px; color:#ef9a46; font-size:.58rem; font-weight:800; line-height:1.05; text-align:center; white-space:normal; }
+.freeze-control-group .freeze-button:disabled { opacity:.72; cursor:not-allowed; }

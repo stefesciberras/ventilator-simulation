@@ -334,3 +334,20 @@
 
 /* Permanent instructor account gating */
 .teaching-account-required{opacity:.82}.teaching-account-required-message{display:grid;gap:4px;margin-top:10px;padding:12px;border:1px dashed #465860;border-radius:8px;background:#0d171c;color:#98a9b0}.teaching-account-required-message strong{color:#dbe7eb;font-size:.86rem}.teaching-account-required-message span{font-size:.78rem;line-height:1.4}.teaching-media-heading-static{cursor:default}
+
+
+/* Presented-media laser pointer */
+.teaching-media-laser-overlay { position:fixed; inset:0; z-index:6200; display:grid; place-items:center; padding:18px; background:rgba(3,8,11,.78); backdrop-filter:blur(5px); }
+.teaching-media-laser-modal { width:min(980px,96vw); max-height:94vh; display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; border:2px solid #ef8a27; border-radius:16px; background:#101b21; box-shadow:0 24px 70px rgba(0,0,0,.58); }
+.teaching-media-laser-modal > header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-bottom:1px solid #344751; }
+.teaching-media-laser-modal > header > div { display:grid; gap:2px; }
+.teaching-media-laser-modal > header span { color:#ef9a46; font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+.teaching-media-laser-modal > header strong { color:#fff; }
+.teaching-media-laser-modal > header button { border:1px solid #53636a; border-radius:8px; background:#24343c; color:#eef5f7; padding:7px 11px; font-weight:800; cursor:pointer; }
+.teaching-media-laser-stage { min-height:0; display:grid; place-items:center; overflow:auto; padding:14px; cursor:crosshair; touch-action:none; user-select:none; }
+.teaching-media-laser-image-frame { position:relative; display:inline-block; max-width:100%; line-height:0; }
+.teaching-media-laser-image-frame img { display:block; max-width:100%; max-height:78vh; width:auto; height:auto; object-fit:contain; }
+.teaching-media-laser-image-frame.candidate img { max-height:70vh; }
+.teaching-media-laser-dot { position:absolute; width:13px; height:13px; border-radius:50%; transform:translate(-50%,-50%); background:#ff2d20; border:2px solid rgba(255,255,255,.95); box-shadow:0 0 5px #fff,0 0 12px #ff3b30,0 0 24px rgba(255,59,48,.95); pointer-events:none; z-index:4; }
+.teaching-media-laser-dot::after { content:''; position:absolute; inset:-12px; border-radius:50%; border:1px solid rgba(255,70,60,.45); box-shadow:0 0 18px rgba(255,45,32,.45); }
+@media (max-width:640px) { .teaching-media-laser-overlay { padding:0; align-items:end; } .teaching-media-laser-modal { width:100%; max-height:96dvh; border-radius:18px 18px 0 0; border-left:0; border-right:0; border-bottom:0; } }
