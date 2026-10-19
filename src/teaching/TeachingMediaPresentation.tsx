@@ -3,6 +3,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../session/supabase'
 import { createCaseMediaSignedUrl, type CaseMediaRow } from '../caseMedia'
 import type { TeachingRole } from './types'
+import { TeachingMediaLaserCandidateLayer } from './TeachingMediaLaser'
 import './teaching.css'
 
 const PRESENTATION_EVENT = 'teaching-media-presentation-state'
@@ -53,7 +54,7 @@ export function useTeachingMediaPresentation(role: TeachingRole, sessionId: stri
     void refresh()
     if (!sessionId || role === 'standalone') return
     const channel: RealtimeChannel = supabase
-      .channel(`teaching-media-presentations-${sessionId}-${crypto.randomUUID()}`, { config: { broadcast: { self: false, ack: false } } })
+      .channel(`teaching-media-presentations:${sessionId}`, { config: { broadcast: { self: false, ack: false } } })
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'teaching_media_presentations', filter: `session_id=eq.${sessionId}`,
       }, () => { void refresh() })
@@ -107,6 +108,9 @@ export function useTeachingMediaPresentation(role: TeachingRole, sessionId: stri
       if (updateError) throw updateError
       setActivePresentation(null)
       void channelRef.current?.send({ type: 'broadcast', event: PRESENTATION_EVENT, payload: { active: false, sentAt: Date.now() } })
+      window.setTimeout(() => {
+        void channelRef.current?.send({ type: 'broadcast', event: PRESENTATION_EVENT, payload: { active: false, sentAt: Date.now() } })
+      }, 150)
       await refresh()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to close media presentation.')
@@ -205,7 +209,12 @@ export function TeachingMediaCandidateOverlay({
             <video key={url} src={url} controls playsInline preload="metadata" />
           )}
           {url && presentation.media.media_kind === 'image' && (
-            <img src={url} alt={presentation.media.title} />
+            <TeachingMediaLaserCandidateLayer
+              sessionId={presentation.session_id}
+              mediaId={presentation.media_id}
+              imageUrl={url}
+              title={presentation.media.title}
+            />
           )}
         </div>
       </section>
