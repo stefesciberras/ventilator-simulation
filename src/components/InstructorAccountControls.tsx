@@ -216,6 +216,12 @@ function settingChanged(a: unknown, b: unknown) {
   return a !== b
 }
 
+function stageTransitionDuration(stage: DynamicScenarioStage, group: 'ventilator' | 'patient', parameter: string): number {
+  const overrides = stage.transitionOverrides?.[group] as Record<string, { mode: 'immediate' } | { mode: 'linear'; durationSeconds: number }> | undefined
+  const policy = overrides?.[parameter] ?? stage.transition ?? { mode: 'immediate' as const }
+  return policy.mode === 'linear' ? Math.max(0, policy.durationSeconds) : 0
+}
+
 function formatStageTimer(seconds: number) {
   const total=Math.max(0,Math.floor(seconds)), hours=Math.floor(total/3600), minutes=Math.floor((total%3600)/60), secs=total%60
   return hours>0 ? `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}` : `${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}`
@@ -611,6 +617,8 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
         const correct = question?.correctOptionId ?? null
         shouldAdvance = Boolean(correct && (selfDirectedRun ? selfDirectedQuestionAnswer === correct : scenarioPromptRuntime.responses.some((response) => response.option_id === correct)))
       } else if (trigger.type === 'patient-change') {
+        const transitionDuration = stageTransitionDuration(stages[activeDynamicStage], 'patient', String(trigger.parameter))
+        if (scenarioElapsedSeconds - activeDynamicStageStartedAt < transitionDuration) continue
         if (selfDirectedRun) {
           if (trigger.actor === 'candidate' || trigger.actor === 'either') {
             const baseline=patientBaselineInstructorRef.current
@@ -644,6 +652,8 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
           }
         }
       } else if (trigger.type === 'action') {
+        const transitionDuration = stageTransitionDuration(stages[activeDynamicStage], 'ventilator', String(trigger.parameter))
+        if (scenarioElapsedSeconds - activeDynamicStageStartedAt < transitionDuration) continue
         if (selfDirectedRun) {
           if (trigger.actor === 'candidate' || trigger.actor === 'either') {
             const baseline=actionBaselineInstructorRef.current
