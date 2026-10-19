@@ -351,3 +351,16 @@
 .teaching-media-laser-dot { position:absolute; width:13px; height:13px; border-radius:50%; transform:translate(-50%,-50%); background:#ff2d20; border:2px solid rgba(255,255,255,.95); box-shadow:0 0 5px #fff,0 0 12px #ff3b30,0 0 24px rgba(255,59,48,.95); pointer-events:none; z-index:4; }
 .teaching-media-laser-dot::after { content:''; position:absolute; inset:-12px; border-radius:50%; border:1px solid rgba(255,70,60,.45); box-shadow:0 0 18px rgba(255,45,32,.45); }
 @media (max-width:640px) { .teaching-media-laser-overlay { padding:0; align-items:end; } .teaching-media-laser-modal { width:100%; max-height:96dvh; border-radius:18px 18px 0 0; border-left:0; border-right:0; border-bottom:0; } }
+
+
+/* Active scenario summary in Teaching */
+.teaching-active-scenario { display:grid; gap:8px; margin:0 0 12px; padding:11px 13px; border:1px solid #3c515c; border-radius:10px; background:#101a20; box-shadow:inset 0 1px 0 rgba(255,255,255,.035); }
+.teaching-active-scenario-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.teaching-active-scenario-heading > span { color:#8297a1; font-size:.68rem; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
+.teaching-active-scenario-heading > strong { padding:3px 7px; border:1px solid #5c7380; border-radius:999px; color:#b8ccd5; font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; }
+.teaching-active-scenario-heading > strong.dynamic { color:#ffd28a; border-color:#9c6d30; background:rgba(156,109,48,.12); }
+.teaching-active-scenario-heading > strong.static { color:#9ee6f8; border-color:#39798b; background:rgba(57,121,139,.12); }
+.teaching-active-scenario-body { display:flex; align-items:baseline; justify-content:space-between; gap:12px; min-width:0; }
+.teaching-active-scenario-body > strong { min-width:0; overflow:hidden; color:#eff7f9; font-size:.9rem; text-overflow:ellipsis; white-space:nowrap; }
+.teaching-active-scenario-body > span { flex:0 0 auto; color:#93a8b1; font-size:.72rem; }
+@media (max-width:680px) { .teaching-active-scenario-body { align-items:flex-start; flex-direction:column; gap:4px; } .teaching-active-scenario-body > strong { max-width:100%; } }

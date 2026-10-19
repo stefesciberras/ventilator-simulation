@@ -63,6 +63,7 @@ interface InstructorAccountControlsProps {
   onStartInstructorSession: (scenario?: InstructorScenarioSnapshot) => Promise<void>
   onAccountConnectionChange?: (connected: boolean) => void
   onDynamicScenarioStarted?: () => void
+  onStaticScenarioLoaded?: (name: string) => void
   onScenarioDiagnosticChange?: (context: DynamicScenarioDiagnosticContext | null) => void
 }
 
@@ -224,7 +225,7 @@ function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
   return candidate
 }
 
-export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onScenarioDiagnosticChange }: InstructorAccountControlsProps) {
+export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange }: InstructorAccountControlsProps) {
   const [account, setAccount] = useState<User | null>(null)
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
   const [accountOpen, setAccountOpen] = useState(false)
@@ -630,6 +631,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
 
   const loadScenario = (preset: InstructorPresetRow) => {
     onLoadScenario(preset.scenario)
+    onStaticScenarioLoaded?.(preset.name)
     setPresetMessage(`Loaded “${preset.name}”.`)
     setScenarioOpen(false)
   }
