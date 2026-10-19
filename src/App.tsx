@@ -14,7 +14,8 @@ import { appendScenarioLog, copyDiagnosticSnapshot, copyScenarioLogs, copyScenar
 import type { PatientSettings, Sample, VentilatorSettings } from './simulation/types'
 import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
-import type { InstructorScenarioSnapshot } from './instructorAccount'
+import { recordSessionScenarioAction } from './session/supabase'
+import type { DynamicScenarioActionId, InstructorScenarioSnapshot } from './instructorAccount'
 import { calculatePhysiologicalMeasurements } from './physiologyMeasurements'
 import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type ArdsSeverity, type PatientProfileName } from './patientProfiles'
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
@@ -556,6 +557,8 @@ export default function App() {
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [oxygenBoostSecondsRemaining, setOxygenBoostSecondsRemaining] = useState(0)
   const [nebuliser, setNebuliser] = useState(false)
+  const [scenarioActionEvent, setScenarioActionEvent] = useState<{ action: DynamicScenarioActionId; sequence: number } | null>(null)
+  const scenarioActionSequenceRef = useRef(0)
   const [alarmSilenced, setAlarmSilenced] = useState(false)
   const [alarmClock, setAlarmClock] = useState(() => Date.now())
   const [alarmLifecycle, setAlarmLifecycle] = useState<Record<string, { activeSince: number | null; resolvedAt: number | null; acknowledged: boolean }>>({})
@@ -1214,8 +1217,16 @@ export default function App() {
     setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
   }, [waveformFrozen, frozenSamples, movingSamples])
 
+  const recordScenarioAction = (action: DynamicScenarioActionId) => {
+    const sequence = scenarioActionSequenceRef.current + 1
+    scenarioActionSequenceRef.current = sequence
+    setScenarioActionEvent({ action, sequence })
+    if (teachingSession.role === 'candidate' && teachingSession.session?.id) void recordSessionScenarioAction(teachingSession.session.id, action).catch(() => undefined)
+  }
+
   const toggleFreeze = () => {
     if (!waveformFrozen) {
+      recordScenarioAction('freeze-waveform')
       setFrozenSamples(movingSamples)
       setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
       setWaveformFrozen(true)
@@ -1233,6 +1244,7 @@ export default function App() {
       freezeLongPressTimeoutRef.current = null
       freezeLongPressTriggeredRef.current = true
       const next = !sharedWaveformFreeze.active
+      if (next) recordScenarioAction('freeze-waveform')
       if (next && !waveformFrozen) {
         setFrozenSamples(movingSamples)
         setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
@@ -1267,6 +1279,7 @@ export default function App() {
 
   const beginInspiratoryHold = () => {
     if (waveformFrozen || simulationPaused || !manualHoldAvailable || inspiratoryHoldPressed) return
+    recordScenarioAction('inspiratory-hold')
     setExpiratoryHoldRequestTime(null)
     setExpiratoryHoldReleaseTime(null)
     setInspiratoryHoldRequestTime(currentSimulationTime)
@@ -1283,6 +1296,7 @@ export default function App() {
 
   const beginExpiratoryHold = () => {
     if (waveformFrozen || simulationPaused || activeMode === 'APRV' || expiratoryHoldPressed) return
+    recordScenarioAction('expiratory-hold')
     setInspiratoryHoldRequestTime(null)
     setInspiratoryHoldReleaseTime(null)
     setExpiratoryHoldRequestTime(currentSimulationTime)
@@ -1469,9 +1483,17 @@ export default function App() {
       return
     }
 
+    recordScenarioAction('oxygen-flush')
     oxygenBoostDeadlineRef.current = Date.now() + 60_000
     setOxygenBoostSecondsRemaining(60)
     setOxygenBoost(true)
+  }
+
+  const toggleNebuliser = () => {
+    setNebuliser((active) => {
+      if (!active) recordScenarioAction('nebulisation')
+      return !active
+    })
   }
 
   const oxygenBoostTimer = `0:${String(oxygenBoostSecondsRemaining).padStart(2, '0')}`
@@ -1638,6 +1660,7 @@ export default function App() {
             onDynamicScenarioStarted={() => { setActiveStaticScenarioName(null); setControlTab('teaching'); setMobileWorkspacePage('settings') }}
             onStaticScenarioLoaded={(name) => { setActiveStaticScenarioName(name); setControlTab('teaching') }}
             onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
+            scenarioActionEvent={scenarioActionEvent}
           />
           {teachingSession.role === 'candidate' && (
             <CaseMediaPanel
@@ -1713,7 +1736,7 @@ export default function App() {
               >O₂</button>
               {oxygenBoost && <span className="oxygen-enrichment-timer" aria-live="polite">{oxygenBoostTimer}</span>}
             </div>
-            <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
+            <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={toggleNebuliser} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
             <div className="freeze-control-group">
               <button
                 className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''} ${sharedWaveformFreeze.active ? 'shared-freeze' : ''}`}

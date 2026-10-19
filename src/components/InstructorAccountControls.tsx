@@ -21,6 +21,7 @@ import {
   signOutInstructor,
   subscribeToInstructorAccount,
   updateInstructorPreset,
+  type DynamicScenarioActionId,
   type DynamicScenarioApplyMask,
   type DynamicScenarioMetric,
   type DynamicScenarioTrigger,
@@ -69,6 +70,7 @@ interface InstructorAccountControlsProps {
   onDynamicScenarioStarted?: () => void
   onStaticScenarioLoaded?: (name: string) => void
   onScenarioDiagnosticChange?: (context: DynamicScenarioDiagnosticContext | null) => void
+  scenarioActionEvent?: { action: DynamicScenarioActionId; sequence: number } | null
 }
 
 function CloudIcon({ connected }: { connected: boolean }) {
@@ -229,7 +231,7 @@ function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
   return candidate
 }
 
-export function InstructorAccountControls({ role, sessionId, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange }: InstructorAccountControlsProps) {
+export function InstructorAccountControls({ role, sessionId, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange, scenarioActionEvent = null }: InstructorAccountControlsProps) {
   const [account, setAccount] = useState<User | null>(null)
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
   const [accountOpen, setAccountOpen] = useState(false)
@@ -259,6 +261,10 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const scenarioMediaRuntime = useTeachingMediaPresentation(role, sessionId)
   const actionBaselineInstructorRef = useRef<VentilatorSettings | null>(null)
   const actionBaselineCandidatesRef = useRef(new Map<string, VentilatorSettings>())
+  const patientBaselineInstructorRef = useRef<PatientSettings | null>(null)
+  const patientBaselineCandidatesRef = useRef(new Map<string, PatientSettings>())
+  const localScenarioActionBaselineRef = useRef(0)
+  const candidateScenarioActionBaselineRef = useRef(new Map<string, number>())
   const triggerArmedAfterRef = useRef(0)
   const automaticAdvanceLockRef = useRef(false)
   const [dynamicCreateSourceId, setDynamicCreateSourceId] = useState('current')
@@ -491,6 +497,13 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
       const settings = member.ventilator_settings as Partial<VentilatorSettings>
       return settings && Object.keys(settings).length ? [[member.id, { ...settings } as VentilatorSettings] as const] : []
     }))
+    patientBaselineInstructorRef.current = { ...nextScenario.patient }
+    patientBaselineCandidatesRef.current = new Map(sessionMembers.filter((member) => member.role === 'candidate').flatMap((member) => {
+      const settings = member.patient_settings as Partial<PatientSettings>
+      return settings && Object.keys(settings).length ? [[member.id, { ...settings } as PatientSettings] as const] : []
+    }))
+    localScenarioActionBaselineRef.current = scenarioActionEvent?.sequence ?? 0
+    candidateScenarioActionBaselineRef.current = new Map(sessionMembers.filter((member) => member.role === 'candidate').map((member) => [member.id, member.scenario_action_revision ?? 0]))
     triggerArmedAfterRef.current = Date.now() + 750
     automaticAdvanceLockRef.current = false
     setPresetMessage(`“${preset.name}” · ${stages[nextIndex].name} (${nextIndex + 1}/${stages.length})${reason === 'automatic' ? ' · auto advanced' : ''}`)
@@ -542,6 +555,10 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
       setActiveDynamicStageStartedAt(0)
       actionBaselineInstructorRef.current = { ...firstScenario.ventilator }
       actionBaselineCandidatesRef.current = new Map()
+      patientBaselineInstructorRef.current = { ...firstScenario.patient }
+      patientBaselineCandidatesRef.current = new Map()
+      localScenarioActionBaselineRef.current = scenarioActionEvent?.sequence ?? 0
+      candidateScenarioActionBaselineRef.current = new Map()
       triggerArmedAfterRef.current = Date.now() + 750
       automaticAdvanceLockRef.current = false
       onLoadScenario(firstScenario, { pauseSimulation: false, resetScenarioClock: true })
@@ -592,6 +609,39 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
         const question = stages[activeDynamicStage].question
         const correct = question?.correctOptionId ?? null
         shouldAdvance = Boolean(correct && (selfDirectedRun ? selfDirectedQuestionAnswer === correct : scenarioPromptRuntime.responses.some((response) => response.option_id === correct)))
+      } else if (trigger.type === 'patient-change') {
+        if (selfDirectedRun) {
+          if (trigger.actor === 'candidate' || trigger.actor === 'either') {
+            const baseline=patientBaselineInstructorRef.current
+            if (baseline && settingChanged(currentScenario.patient[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
+          }
+        } else {
+          if (trigger.actor === 'instructor' || trigger.actor === 'either') {
+            const baseline=patientBaselineInstructorRef.current
+            if (baseline && settingChanged(currentScenario.patient[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
+          }
+          if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {
+            for (const member of sessionMembers) {
+              if (member.role !== 'candidate') continue
+              const baseline=patientBaselineCandidatesRef.current.get(member.id), settings=member.patient_settings as Partial<PatientSettings>
+              if (!baseline || !settings || !(trigger.parameter in settings)) continue
+              if (settingChanged(settings[trigger.parameter],baseline[trigger.parameter])) { shouldAdvance=true; break }
+            }
+          }
+        }
+      } else if (trigger.type === 'device-action') {
+        if (selfDirectedRun) {
+          shouldAdvance = (trigger.actor === 'candidate' || trigger.actor === 'either') && Boolean(scenarioActionEvent && scenarioActionEvent.sequence > localScenarioActionBaselineRef.current && scenarioActionEvent.action === trigger.action)
+        } else {
+          if ((trigger.actor === 'instructor' || trigger.actor === 'either') && scenarioActionEvent && scenarioActionEvent.sequence > localScenarioActionBaselineRef.current && scenarioActionEvent.action === trigger.action) shouldAdvance=true
+          if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {
+            for (const member of sessionMembers) {
+              if (member.role !== 'candidate') continue
+              const baseline=candidateScenarioActionBaselineRef.current.get(member.id) ?? 0
+              if ((member.scenario_action_revision ?? 0) > baseline && member.last_scenario_action === trigger.action) { shouldAdvance=true; break }
+            }
+          }
+        }
       } else if (trigger.type === 'action') {
         if (selfDirectedRun) {
           if (trigger.actor === 'candidate' || trigger.actor === 'either') {
@@ -618,7 +668,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     if (!shouldAdvance) return
     automaticAdvanceLockRef.current=true
     loadDynamicStage(activeRuntimePreset,activeDynamicStage+1,'automatic')
-  }, [role, activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers, selfDirectedRun, selfDirectedQuestionAnswer, scenarioPromptRuntime.responses])
+  }, [role, activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, currentScenario.patient, sessionMembers, selfDirectedRun, selfDirectedQuestionAnswer, scenarioPromptRuntime.responses, scenarioActionEvent])
 
   useEffect(() => {
     const stages = activeRuntimePreset?.scenario.stages ?? []
