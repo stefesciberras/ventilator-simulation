@@ -646,6 +646,13 @@ export default function App() {
     setMobileWorkspacePage('settings')
   }, [teachingSession.role])
 
+  useEffect(() => {
+    if (teachingSession.role !== 'candidate') return
+    const compactWorkspace = window.matchMedia('(max-width: 1180px)').matches
+      || document.body.classList.contains('eduvent-tablet-landscape')
+    if (compactWorkspace) setMobileWorkspacePage('ventilator')
+  }, [teachingSession.role])
+
   const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, eduventTeachingHost)
   const teachingLibrary = useTeachingQuestionLibrary(eduventTeachingHost)
 
