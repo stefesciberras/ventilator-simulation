@@ -1,0 +1,30 @@
+name: Scenario Builder v0.5.0 trigger fix
+
+on:
+  push:
+    branches: [chatgpt/scenario-builder-v0.5.0-transitions]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.5.0-transitions
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python3 scripts/fix-v050-transition-trigger-arming.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit fix
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src/components/InstructorAccountControls.tsx
+          git commit -m "Avoid transition-driven action trigger advancement"
+          git push
