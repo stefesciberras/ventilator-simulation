@@ -17,6 +17,30 @@ export type DynamicScenarioTrigger =
   | { type: 'time'; seconds: number }
   | { type: 'condition'; metric: DynamicScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
   | { type: 'action'; parameter: keyof VentilatorSettings; actor: 'candidate' | 'instructor' | 'either' }
+  | { type: 'question-any' }
+  | { type: 'question-correct' }
+
+export type DynamicScenarioStageType = 'controls' | 'media' | 'question'
+
+export interface DynamicScenarioStageMedia {
+  mediaId: string
+  title: string
+  mediaKind: 'image' | 'video'
+  storagePath: string
+  mimeType: string
+}
+
+export interface DynamicScenarioStageQuestionOption { id: string; text: string }
+
+export interface DynamicScenarioStageQuestion {
+  libraryItemId?: string
+  kind: 'mcq' | 'poll'
+  title: string | null
+  body: string
+  options: DynamicScenarioStageQuestionOption[]
+  correctOptionId: string | null
+  explanation: string | null
+}
 
 export interface DynamicScenarioApplyMask {
   ventilator: Array<keyof VentilatorSettings>
@@ -31,6 +55,10 @@ export interface DynamicScenarioStage {
   name: string
   /** Instructor-facing explanation of what should happen during this stage. */
   comment?: string
+  /** v6 content model. Older stages default to controls. */
+  stageType?: DynamicScenarioStageType
+  media?: DynamicScenarioStageMedia
+  question?: DynamicScenarioStageQuestion
   snapshot: InstructorScenarioSnapshot
   /** Missing on v0.82.0 stages; absence means apply the complete snapshot. */
   apply?: DynamicScenarioApplyMask
@@ -42,16 +70,17 @@ export interface DynamicScenarioStage {
 }
 
 export function dynamicStageTriggers(stage: DynamicScenarioStage): DynamicScenarioTrigger[] {
+  const fallback: DynamicScenarioTrigger = (stage.stageType ?? 'controls') === 'question' ? { type: 'question-any' } : { type: 'manual' }
   const configured = stage.advanceTriggers?.length
     ? stage.advanceTriggers
-    : [stage.advanceTrigger ?? { type: 'manual' as const }]
+    : [stage.advanceTrigger ?? fallback]
   const seen = new Set<DynamicScenarioTrigger['type']>()
   const deduplicated = configured.filter((trigger) => {
     if (seen.has(trigger.type)) return false
     seen.add(trigger.type)
     return true
   })
-  return deduplicated.length ? deduplicated : [{ type: 'manual' }]
+  return deduplicated.length ? deduplicated : [fallback]
 }
 
 export interface InstructorScenarioSnapshot {
@@ -100,6 +129,9 @@ function mergeSelected<T extends object>(current: T, source: T, keys: Array<keyo
 }
 
 export function applyDynamicStage(current: InstructorScenarioSnapshot, stage: DynamicScenarioStage): InstructorScenarioSnapshot {
+  if ((stage.stageType ?? 'controls') !== 'controls') {
+    return { ...current, schemaVersion: 2, kind: 'static', description: '', stages: undefined }
+  }
   const mask = stage.apply
   return {
     ...current,
@@ -128,7 +160,7 @@ export function asDynamicScenario(
     schemaVersion: 5,
     kind: 'dynamic',
     description: description.trim(),
-    stages: [{ name: 'Stage 1', comment: '', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
+    stages: [{ name: 'Stage 1', comment: '', stageType: 'controls', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
   }
 }
 
@@ -165,6 +197,9 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
       return {
         name: stage.name || `Stage ${index + 1}`,
         comment: stage.comment ?? '',
+        stageType: stage.stageType ?? 'controls',
+        media: stage.media,
+        question: stage.question,
         snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },
         apply: stage.apply,
         sourceName: stage.sourceName,

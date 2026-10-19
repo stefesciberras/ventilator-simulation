@@ -17,6 +17,9 @@ import {
 } from '../instructorAccount'
 import { SCENARIO_BUILDER_VERSION } from '../scenario-builder/version'
 import { createSelfDirectedAssignment, selfDirectedAssignmentUrl, type SelfDirectedAssignmentCreated } from '../selfDirectedAssignments'
+import { listInstructorCaseMedia, type CaseMediaRow } from '../caseMedia'
+import { listTeachingLibraryItems } from '../teaching/repository'
+import type { TeachingLibraryItem } from '../teaching/types'
 import './DynamicScenarioBuilder.css'
 
 interface DynamicScenarioBuilderProps {
@@ -77,12 +80,16 @@ function defaultTriggerForType(type: DynamicScenarioTrigger['type']): DynamicSce
   if (type === 'manual') return { type: 'manual' }
   if (type === 'time') return { type: 'time', seconds: 30 }
   if (type === 'condition') return { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 }
+  if (type === 'question-any') return { type: 'question-any' }
+  if (type === 'question-correct') return { type: 'question-correct' }
   return { type: 'action', parameter: 'fio2', actor: 'either' }
 }
 
 function singleTriggerSummary(value: DynamicScenarioTrigger) {
   if (value.type === 'manual') return 'Manual'
   if (value.type === 'time') return `After ${value.seconds}s in stage`
+  if (value.type === 'question-any') return 'Any answer submitted'
+  if (value.type === 'question-correct') return 'Correct answer submitted'
   if (value.type === 'condition') {
     const metric = CONDITION_METRICS.find((item) => item.value === value.metric)
     const operator = value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='
@@ -250,6 +257,7 @@ function normaliseStage(stage: DynamicScenarioStage, index: number): StageDraft 
   return {
     ...cloned,
     name: stage.name || `Stage ${index + 1}`,
+    stageType: stage.stageType ?? 'controls',
     patientProfile: cloned.patientProfile ?? inferredTemplate?.profile,
     ardsSeverity: cloned.ardsSeverity ?? inferredTemplate?.ardsSeverity,
     advanceTrigger: dynamicStageTriggers(stage)[0],
@@ -268,6 +276,7 @@ function newStage(base: InstructorScenarioSnapshot, index: number): StageDraft {
   return {
     name: `Stage ${index + 1}`,
     comment: '',
+    stageType: 'controls',
     snapshot,
     patientProfile: inferredTemplate?.profile,
     ardsSeverity: inferredTemplate?.ardsSeverity,
@@ -342,6 +351,20 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   const [assignmentBusy, setAssignmentBusy] = useState(false)
   const [assignmentError, setAssignmentError] = useState<string | null>(null)
   const [assignmentResult, setAssignmentResult] = useState<SelfDirectedAssignmentCreated | null>(null)
+  const [mediaLibrary, setMediaLibrary] = useState<CaseMediaRow[]>([])
+  const [questionLibrary, setQuestionLibrary] = useState<TeachingLibraryItem[]>([])
+  const [libraryError, setLibraryError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void Promise.all([listInstructorCaseMedia(), listTeachingLibraryItems()]).then(([media, questions]) => {
+      if (cancelled) return
+      setMediaLibrary(media)
+      setQuestionLibrary(questions.filter((item) => item.kind === 'mcq' || item.kind === 'poll'))
+      setLibraryError(null)
+    }).catch((cause) => { if (!cancelled) setLibraryError(cause instanceof Error ? cause.message : 'Unable to load scenario libraries.') })
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (!wideScreen) return
@@ -425,6 +448,37 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       return next
     })
     setTriggerMenuIndex((current) => current === index ? null : current)
+  }
+
+  const setStageType = (index: number, stageType: 'controls' | 'media' | 'question') => {
+    updateStage(index, (stage) => {
+      if (stageType === 'question') {
+        const trigger: DynamicScenarioTrigger = { type: 'question-any' }
+        return { ...stage, stageType, media: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
+      }
+      const trigger: DynamicScenarioTrigger = { type: 'manual' }
+      return stageType === 'controls'
+        ? { ...stage, stageType, media: undefined, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
+        : { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
+    })
+    setTriggerMenuIndex(null)
+  }
+
+  const selectStageMedia = (index: number, mediaId: string) => {
+    const media = mediaLibrary.find((item) => item.id === mediaId)
+    if (!media) return
+    updateStage(index, (stage) => ({ ...stage, stageType: 'media', media: { mediaId: media.id, title: media.title, mediaKind: media.media_kind, storagePath: media.storage_path, mimeType: media.mime_type } }))
+  }
+
+  const selectStageQuestion = (index: number, questionId: string) => {
+    const item = questionLibrary.find((entry) => entry.id === questionId)
+    if (!item || (item.kind !== 'mcq' && item.kind !== 'poll')) return
+    const trigger: DynamicScenarioTrigger = { type: 'question-any' }
+    updateStage(index, (stage) => ({
+      ...stage, stageType: 'question', media: undefined,
+      question: { libraryItemId: item.id, kind: item.kind as 'mcq' | 'poll', title: item.title, body: item.body, options: item.options, correctOptionId: item.correct_option_id, explanation: item.explanation },
+      advanceTrigger: trigger, advanceTriggers: [trigger],
+    }))
   }
 
   const selectStageSource = (index: number, presetId: string) => {
@@ -638,7 +692,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       const base = asStaticScenario(cloneScenario(draft.stages[0]?.snapshot ?? currentScenario), '')
       const scenario: InstructorScenarioSnapshot = {
         ...base,
-        schemaVersion: 5,
+        schemaVersion: 6,
         kind: 'dynamic',
         description: draft.description.trim(),
         stages: draft.stages.map((stage) => {
@@ -692,7 +746,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       if (!parsed.scenario || parsed.scenario.kind !== 'dynamic') throw new Error('Only dynamic Scenario Builder files can be imported here.')
       if (!Array.isArray(parsed.scenario.stages) || parsed.scenario.stages.length === 0) throw new Error('The imported scenario has no stages.')
       const importedStages = parsed.scenario.stages.map((stage, index) => normaliseStage(stage, index))
-      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 5, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
+      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 6, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
       const saved = await createInstructorPreset(uniqueImportedName(parsed.name ?? 'Imported scenario', [...dynamicPresets, ...staticPresets]), scenario)
       await onRefresh(); replaceDraft(fromPreset(saved)); setMessage(`Imported “${saved.name}”.`)
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Unable to import scenario file.') }
@@ -816,7 +870,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
               <label><span>Unit</span><select value={assignmentExpiryUnit} onChange={(event) => setAssignmentExpiryUnit(event.target.value as 'days' | 'weeks')}><option value="days">Days</option><option value="weeks">Weeks</option></select></label>
               <button type="button" className="account-primary-button" disabled={assignmentBusy} onClick={() => void publishSelfDirected()}>{assignmentBusy ? 'Creating…' : 'Create session'}</button>
             </div>
-            <small className="dynamic-assignment-note">The assignment is a snapshot of the scenario at publication time. Media, questions and polling are intentionally not included in v0.3.</small>
+            <small className="dynamic-assignment-note">The assignment is a snapshot of the scenario at publication time, including stage media and question content.</small>
             {assignmentResult && (
               <div className="dynamic-assignment-result">
                 <div><span>Session code</span><strong>{assignmentResult.accessCode}</strong></div>
@@ -857,6 +911,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
               .map((key) => FIELD_BY_KEY.get(String(key)))
               .filter((field): field is FieldSpec => Boolean(field))
             const collapsed = collapsedStages.has(index)
+            const stageType = stage.stageType ?? 'controls'
             const triggers = dynamicStageTriggers(stage)
 
             return (
@@ -901,6 +956,10 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                   </label>
 
                   {!collapsed && <>
+                  <div className="dynamic-stage-type-tabs" role="group" aria-label={`Stage ${index + 1} type`}>
+                    {(['controls', 'media', 'question'] as const).map((type) => <button type="button" key={type} className={stageType === type ? 'selected' : ''} onClick={() => setStageType(index, type)}>{type === 'controls' ? 'Controls' : type === 'media' ? 'Media' : 'Question'}</button>)}
+                  </div>
+                  {stageType === 'controls' && <>
                   <label className="dynamic-stage-source-row">
                     <span>Start from</span>
                     <select
@@ -998,6 +1057,20 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                     </section>
                   </div>
                   </>}
+                  {stageType === 'media' && <div className="dynamic-stage-content-picker">
+                    <div className="dynamic-stage-content-heading"><strong>Media library</strong><span>Select the image or video presented during this stage.</span></div>
+                    <select value={stage.media?.mediaId ?? ''} onChange={(event) => selectStageMedia(index, event.target.value)}><option value="">Select media…</option>{mediaLibrary.map((media) => <option key={media.id} value={media.id}>{media.title} · {media.media_kind === 'video' ? 'Video' : 'Image'}</option>)}</select>
+                    {stage.media && <div className="dynamic-stage-selected-content"><strong>{stage.media.title}</strong><span>{stage.media.mediaKind === 'video' ? 'Video' : 'Image'} · simulator continues running while displayed.</span></div>}
+                    {!mediaLibrary.length && <small>No media are available in your media library.</small>}
+                  </div>}
+                  {stageType === 'question' && <div className="dynamic-stage-content-picker">
+                    <div className="dynamic-stage-content-heading"><strong>Question library</strong><span>Select a saved MCQ or poll. The question is copied into the scenario snapshot.</span></div>
+                    <select value={stage.question?.libraryItemId ?? ''} onChange={(event) => selectStageQuestion(index, event.target.value)}><option value="">Select question…</option>{questionLibrary.map((item) => <option key={item.id} value={item.id}>{item.title || item.body.slice(0, 60)} · {item.kind.toUpperCase()}</option>)}</select>
+                    {stage.question && <div className="dynamic-stage-selected-content question"><strong>{stage.question.title || 'Question'}</strong><span>{stage.question.body}</span><small>{stage.question.kind === 'mcq' ? (stage.question.correctOptionId ? 'MCQ · correct-answer trigger available' : 'MCQ · no correct answer marked') : 'Poll · any-answer or time trigger'}</small></div>}
+                    {!questionLibrary.length && <small>No MCQs or polls are available in your question library.</small>}
+                  </div>}
+                  {libraryError && <div className="account-error">{libraryError}</div>}
+                  </>}
                 </article>
 
                 <div className="dynamic-transition-builder">
@@ -1023,15 +1096,16 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                     const timeTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'time' }> => trigger.type === 'time')
                     const conditionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'condition' }> => trigger.type === 'condition')
                     const actionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'action' }> => trigger.type === 'action')
+                    const triggerTypes: DynamicScenarioTrigger['type'][] = stageType === 'question' ? ['question-any', 'question-correct', 'time'] : ['manual', 'time', 'condition', 'action']
                     return <div className="dynamic-trigger-menu">
                       <div className="dynamic-trigger-types">
-                        {(['manual', 'time', 'condition', 'action'] as const).map((type) => (
-                          <button type="button" key={type} className={triggers.some((trigger) => trigger.type === type) ? 'selected' : ''} onClick={() => toggleTriggerType(index, type)}>
-                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : 'Action'}
+                        {triggerTypes.map((type) => (
+                          <button type="button" key={type} disabled={type === 'question-correct' && !stage.question?.correctOptionId} className={triggers.some((trigger) => trigger.type === type) ? 'selected' : ''} onClick={() => toggleTriggerType(index, type)}>
+                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : type === 'action' ? 'Action' : type === 'question-correct' ? 'Correct answer' : 'Any answer'}
                           </button>
                         ))}
                       </div>
-                      <p>Any selected trigger can advance to the next stage (OR). Manual keeps the instructor trigger available while automatic triggers remain armed.</p>
+                      <p>{stageType === 'question' ? 'Any selected question trigger can advance to the next stage (OR).' : 'Any selected trigger can advance to the next stage (OR). Manual keeps the instructor trigger available while automatic triggers remain armed.'}</p>
                       {manualTrigger && <p>Manual: instructor advances from the Teaching tab. Back remains available during the scenario.</p>}
                       {timeTrigger && <label className="dynamic-trigger-field"><span>Time in stage</span><div><input type="number" min={1} max={3600} step={1} value={timeTrigger.seconds} onChange={(event) => updateAdvanceTrigger(index, { ...timeTrigger, seconds: Math.max(1, Number(event.target.value) || 1) })} /><em>seconds</em></div></label>}
                       {conditionTrigger && <div className="dynamic-trigger-condition">

@@ -36,6 +36,9 @@ import {
 import { APP_VERSION } from '../appVersion'
 import { DynamicScenarioRuntimeLibrary } from './DynamicScenarioRuntimeLibrary'
 import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'
+import { createCaseMediaSignedUrl, listCaseMediaByIds, releaseSessionCaseMedia } from '../caseMedia'
+import { eduventTeachingHost, useTeachingPrompts } from '../teaching'
+import { useTeachingMediaPresentation } from '../teaching/TeachingMediaPresentation'
 import '../account.css'
 
 export interface DynamicScenarioDiagnosticContext {
@@ -52,6 +55,7 @@ export interface DynamicScenarioDiagnosticContext {
 
 interface InstructorAccountControlsProps {
   role: SessionRole
+  sessionId: string | null
   currentScenario: InstructorScenarioSnapshot
   onLoadScenario: (scenario: InstructorScenarioSnapshot, options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean }) => void
   simulationPaused: boolean
@@ -225,7 +229,7 @@ function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
   return candidate
 }
 
-export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange }: InstructorAccountControlsProps) {
+export function InstructorAccountControls({ role, sessionId, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange }: InstructorAccountControlsProps) {
   const [account, setAccount] = useState<User | null>(null)
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
   const [accountOpen, setAccountOpen] = useState(false)
@@ -246,6 +250,13 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
   const [activeDynamicStageStartedAt, setActiveDynamicStageStartedAt] = useState(0)
   const [selfDirectedRun, setSelfDirectedRun] = useState<SelfDirectedRunStart | null>(null)
   const [selfDirectedError, setSelfDirectedError] = useState<string | null>(null)
+  const [selfDirectedPanelPosition, setSelfDirectedPanelPosition] = useState({ x: 0, y: 0 })
+  const selfDirectedPanelDragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; baseLeft: number; baseTop: number; width: number; height: number } | null>(null)
+  const [selfDirectedStageMediaUrl, setSelfDirectedStageMediaUrl] = useState<string | null>(null)
+  const [selfDirectedQuestionSelected, setSelfDirectedQuestionSelected] = useState('')
+  const [selfDirectedQuestionAnswer, setSelfDirectedQuestionAnswer] = useState<string | null>(null)
+  const scenarioPromptRuntime = useTeachingPrompts(role, sessionId, eduventTeachingHost)
+  const scenarioMediaRuntime = useTeachingMediaPresentation(role, sessionId)
   const actionBaselineInstructorRef = useRef<VentilatorSettings | null>(null)
   const actionBaselineCandidatesRef = useRef(new Map<string, VentilatorSettings>())
   const triggerArmedAfterRef = useRef(0)
@@ -575,6 +586,12 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
       else if (trigger.type === 'condition') {
         const actual=conditionMetricValue(physiologyMeasurements,trigger.metric)
         shouldAdvance=actual!=null && conditionMatches(actual,trigger.operator,trigger.value)
+      } else if (trigger.type === 'question-any') {
+        shouldAdvance = selfDirectedRun ? selfDirectedQuestionAnswer != null : scenarioPromptRuntime.responses.length > 0
+      } else if (trigger.type === 'question-correct') {
+        const question = stages[activeDynamicStage].question
+        const correct = question?.correctOptionId ?? null
+        shouldAdvance = Boolean(correct && (selfDirectedRun ? selfDirectedQuestionAnswer === correct : scenarioPromptRuntime.responses.some((response) => response.option_id === correct)))
       } else if (trigger.type === 'action') {
         if (selfDirectedRun) {
           if (trigger.actor === 'candidate' || trigger.actor === 'either') {
@@ -601,7 +618,40 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     if (!shouldAdvance) return
     automaticAdvanceLockRef.current=true
     loadDynamicStage(activeRuntimePreset,activeDynamicStage+1,'automatic')
-  }, [role, activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers, selfDirectedRun])
+  }, [role, activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers, selfDirectedRun, selfDirectedQuestionAnswer, scenarioPromptRuntime.responses])
+
+  useEffect(() => {
+    const stages = activeRuntimePreset?.scenario.stages ?? []
+    const stage = stages[Math.min(activeDynamicStage, Math.max(0, stages.length - 1))]
+    setSelfDirectedQuestionSelected('')
+    setSelfDirectedQuestionAnswer(null)
+    setSelfDirectedStageMediaUrl(null)
+    if (!stage || !activeRuntimePreset) return
+    const stageType = stage.stageType ?? 'controls'
+    if (selfDirectedRun) {
+      if (stageType === 'media' && stage.media?.mediaId) {
+        let cancelled = false
+        void listCaseMediaByIds([stage.media.mediaId]).then((rows) => {
+          const media = rows[0]
+          if (!media) throw new Error('Scenario media is no longer available.')
+          return createCaseMediaSignedUrl(media.storage_path, 3600)
+        }).then((url) => { if (!cancelled) setSelfDirectedStageMediaUrl(url) }).catch(() => { if (!cancelled) setSelfDirectedStageMediaUrl(null) })
+        return () => { cancelled = true }
+      }
+      return
+    }
+    if (role !== 'instructor' || !sessionId) return
+    if (stageType === 'media' && stage.media?.mediaId) {
+      void releaseSessionCaseMedia(sessionId, stage.media.mediaId).then(() => scenarioMediaRuntime.present(stage.media!.mediaId)).catch(() => undefined)
+    } else if (scenarioMediaRuntime.activePresentation) {
+      void scenarioMediaRuntime.close().catch(() => undefined)
+    }
+    if (stageType === 'question' && stage.question) {
+      void scenarioPromptRuntime.presentPrompt({ kind: stage.question.kind, title: stage.question.title ?? '', body: stage.question.body, options: stage.question.options, correctOptionId: stage.question.correctOptionId, explanation: stage.question.explanation }).catch(() => undefined)
+    } else if (scenarioPromptRuntime.activePrompt) {
+      void scenarioPromptRuntime.closePrompt().catch(() => undefined)
+    }
+  }, [activeRuntimePreset?.id, activeDynamicStage, selfDirectedRun?.runId, role, sessionId])
 
   const addDynamicStage = async (preset: InstructorPresetRow) => {
     if (!account) return
@@ -618,7 +668,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
     })
     setPresetBusy(true)
     try {
-      await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 5, kind: 'dynamic', stages } })
+      await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 6, kind: 'dynamic', stages } })
       setPresetMessage(`Added Stage ${stageNumber} to “${preset.name}”.`)
       setStageBuilderPresetId(null)
       setStageBuilderSourceId('current')
@@ -755,33 +805,42 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
         const stages = activeRuntimePreset.scenario.stages ?? []
         const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))
         const stage = stages[index]
+        const stageType = stage?.stageType ?? 'controls'
         const triggers: DynamicScenarioTrigger[] = stage ? dynamicStageTriggers(stage) : [{ type: 'manual' }]
         const completed = index >= stages.length - 1
         const manualTrigger = !completed && triggers.some((trigger) => trigger.type === 'manual')
         const exitSelfDirectedScenario = () => {
-          setSelfDirectedRun(null)
-          setActiveDynamicId(null)
-          setActiveDynamicStage(0)
-          const url = new URL(window.location.href)
-          url.searchParams.delete('assignment')
-          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+          setSelfDirectedRun(null); setActiveDynamicId(null); setActiveDynamicStage(0); setSelfDirectedPanelPosition({ x: 0, y: 0 })
+          const url = new URL(window.location.href); url.searchParams.delete('assignment'); window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
           setPresetMessage('Self-directed scenario closed.')
         }
-        return <div className="self-directed-scenario-overlay" role="presentation">
-          <section className="self-directed-scenario-modal" role="dialog" aria-modal="false" aria-label="Active scenario">
-            <div className="self-directed-scenario-header">
-              <div><span>Active scenario</span><strong>{activeRuntimePreset.name}</strong></div>
-              <button type="button" onClick={exitSelfDirectedScenario}>Exit</button>
-            </div>
-            <div className="self-directed-scenario-body">
-              {completed ? (
-                <div className="self-directed-scenario-status complete"><strong>Scenario complete</strong><span>You have reached the end of this scenario.</span></div>
-              ) : manualTrigger ? (
-                <button type="button" className="self-directed-scenario-continue" onClick={() => loadDynamicStage(activeRuntimePreset, index + 1)}>Continue</button>
-              ) : (
-                <div className="self-directed-scenario-status"><strong>Scenario active</strong><span>Continue working with the simulator.</span></div>
-              )}
-            </div>
+        const startPanelDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+          if ((event.target as HTMLElement).closest('button')) return
+          const panel = event.currentTarget.closest('.self-directed-scenario-modal') as HTMLElement | null; if (!panel) return
+          const rect = panel.getBoundingClientRect()
+          selfDirectedPanelDragRef.current = { pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,originX:selfDirectedPanelPosition.x,originY:selfDirectedPanelPosition.y,baseLeft:rect.left-selfDirectedPanelPosition.x,baseTop:rect.top-selfDirectedPanelPosition.y,width:rect.width,height:rect.height }
+          event.currentTarget.setPointerCapture?.(event.pointerId); event.preventDefault()
+        }
+        const movePanelDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+          const drag=selfDirectedPanelDragRef.current; if(!drag||drag.pointerId!==event.pointerId)return; const margin=8
+          const x=drag.originX+event.clientX-drag.startX,y=drag.originY+event.clientY-drag.startY
+          setSelfDirectedPanelPosition({x:Math.max(margin-drag.baseLeft,Math.min(window.innerWidth-margin-drag.baseLeft-drag.width,x)),y:Math.max(margin-drag.baseTop,Math.min(window.innerHeight-margin-drag.baseTop-drag.height,y))}); event.preventDefault()
+        }
+        const endPanelDrag = (event: React.PointerEvent<HTMLDivElement>) => { if(selfDirectedPanelDragRef.current?.pointerId===event.pointerId)selfDirectedPanelDragRef.current=null; if(event.currentTarget.hasPointerCapture?.(event.pointerId))event.currentTarget.releasePointerCapture?.(event.pointerId) }
+        return <div className="teaching-media-overlay self-directed-scenario-overlay" role="presentation">
+          <section className={`teaching-media-modal self-directed-scenario-modal stage-${stageType}`} role="dialog" aria-modal="false" aria-label="Active scenario" style={{ transform:`translate(${selfDirectedPanelPosition.x}px, ${selfDirectedPanelPosition.y}px)` }}>
+            <div className="teaching-media-header self-directed-scenario-header" onPointerDown={startPanelDrag} onPointerMove={movePanelDrag} onPointerUp={endPanelDrag} onPointerCancel={endPanelDrag} title="Drag to move"><div><span>{stageType === 'media' ? 'Scenario media' : stageType === 'question' ? 'Scenario question' : 'Active scenario'}</span></div><button type="button" onClick={exitSelfDirectedScenario}>Exit</button></div>
+            {stageType === 'media' && stage?.media ? <div className="self-directed-stage-media">
+              {!selfDirectedStageMediaUrl ? <div className="teaching-media-loading">Loading media…</div> : stage.media.mediaKind === 'video' ? <video src={selfDirectedStageMediaUrl} controls playsInline autoPlay /> : <img src={selfDirectedStageMediaUrl} alt={stage.media.title} />}
+              {manualTrigger && !completed && <button type="button" className="self-directed-scenario-continue" onClick={() => loadDynamicStage(activeRuntimePreset,index+1)}>Continue</button>}
+            </div> : stageType === 'question' && stage?.question ? <div className="self-directed-stage-question">
+              {stage.question.title && <h3>{stage.question.title}</h3>}<p>{stage.question.body}</p>
+              <div className="self-directed-question-options">{stage.question.options.map((option, optionIndex) => <button type="button" key={option.id} className={selfDirectedQuestionSelected===option.id?'selected':''} onClick={() => setSelfDirectedQuestionSelected(option.id)}><strong>{String.fromCharCode(65+optionIndex)}</strong><span>{option.text}</span></button>)}</div>
+              {selfDirectedQuestionAnswer && stage.question.correctOptionId && selfDirectedQuestionAnswer !== stage.question.correctOptionId && triggers.some((trigger)=>trigger.type==='question-correct') && <div className="self-directed-question-feedback">Not correct. Select another answer and try again.</div>}
+              <button type="button" className="self-directed-scenario-continue" disabled={!selfDirectedQuestionSelected} onClick={() => setSelfDirectedQuestionAnswer(selfDirectedQuestionSelected)}>Submit answer</button>
+            </div> : <div className="self-directed-scenario-body">
+              {completed ? <div className="self-directed-scenario-status complete"><strong>Scenario complete</strong><span>You have reached the end of this scenario.</span></div> : manualTrigger ? <button type="button" className="self-directed-scenario-continue" onClick={() => loadDynamicStage(activeRuntimePreset,index+1)}>Continue</button> : <div className="self-directed-scenario-status"><strong>Scenario active</strong><span>Continue working with the simulator.</span></div>}
+            </div>}
           </section>
         </div>
       })(), document.body)}

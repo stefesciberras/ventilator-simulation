@@ -313,3 +313,18 @@
 /* v0.3 self-directed assignment publishing */
 .dynamic-assignment-card{margin:0 0 18px;border:1px solid #34505d;background:#0b171d;padding:16px;display:grid;gap:14px}
 .dynamic-assignment-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.dynamic-assignment-heading>div{display:grid;gap:3px}.dynamic-assignment-heading span,.dynamic-assignment-result span{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:#91a7b2}.dynamic-assignment-heading strong{font-size:1.05rem}.dynamic-assignment-card p,.dynamic-assignment-note{margin:0;color:#a9bbc4}.dynamic-assignment-expiry{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.dynamic-assignment-expiry label{display:grid;gap:5px}.dynamic-assignment-expiry label span{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:#91a7b2}.dynamic-assignment-expiry input{width:88px}.dynamic-assignment-expiry input,.dynamic-assignment-expiry select{min-height:40px;background:#101e25;border:1px solid #3b5561;color:#e4edf1;padding:0 10px}.dynamic-assignment-result{display:flex;align-items:center;gap:20px;flex-wrap:wrap;border-top:1px solid #29404a;padding-top:12px}.dynamic-assignment-result>div{display:grid;gap:2px}.dynamic-assignment-result>div:first-child strong{font-size:1.35rem;letter-spacing:.12em;color:#9de4ff}
+
+
+/* Scenario Builder v0.4 stage content */
+.dynamic-stage-type-tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
+.dynamic-stage-type-tabs button { min-height:42px; border:1px solid #3b505b; background:#111c22; color:#b9c9d0; border-radius:8px; font-weight:700; }
+.dynamic-stage-type-tabs button.selected { border-color:#69c5e4; background:#173443; color:#e8f9ff; }
+.dynamic-stage-content-picker { display:grid; gap:12px; padding:14px; border:1px solid #314650; border-radius:10px; background:#091419; }
+.dynamic-stage-content-heading { display:grid; gap:3px; }
+.dynamic-stage-content-heading strong { color:#edf5f7; }
+.dynamic-stage-content-heading span,.dynamic-stage-content-picker small { color:#8298a2; font-size:11px; }
+.dynamic-stage-content-picker select { min-height:42px; border:1px solid #3b505b; border-radius:8px; background:#0c171d; color:#e9f2f5; padding:8px 10px; }
+.dynamic-stage-selected-content { display:grid; gap:4px; padding:11px; border:1px solid #365160; border-radius:8px; background:#0d1b22; }
+.dynamic-stage-selected-content strong { color:#dff4fb; }
+.dynamic-stage-selected-content span { color:#a9bac1; font-size:12px; line-height:1.4; }
+.dynamic-stage-selected-content.question span { white-space:pre-wrap; }

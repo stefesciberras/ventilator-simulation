@@ -1624,6 +1624,7 @@ export default function App() {
           <span>{simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>
           <InstructorAccountControls
             role={teachingSession.role}
+            sessionId={teachingSession.session?.id ?? null}
             currentScenario={currentInstructorScenario}
             onLoadScenario={loadInstructorScenario}
             simulationPaused={simulationPaused}
