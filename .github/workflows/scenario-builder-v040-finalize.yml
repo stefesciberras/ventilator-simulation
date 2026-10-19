@@ -25,19 +25,11 @@ jobs:
           from pathlib import Path
           p = Path('src/components/DynamicScenarioBuilder.tsx')
           s = p.read_text()
-          s = s.replace(
-            "const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 5, kind: 'dynamic'",
-            "const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 6, kind: 'dynamic'"
-          )
-          old = """      const trigger: DynamicScenarioTrigger = { type: 'manual' }
-      return { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
-"""
-          new = """      const trigger: DynamicScenarioTrigger = { type: 'manual' }
-      return stageType === 'controls'
-        ? { ...stage, stageType, media: undefined, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
-        : { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
-"""
-          if old in s: s = s.replace(old, new, 1)
+          s = s.replace("const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 5, kind: 'dynamic'", "const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 6, kind: 'dynamic'")
+          old = "      const trigger: DynamicScenarioTrigger = { type: 'manual' }\n      return { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }\n"
+          new = "      const trigger: DynamicScenarioTrigger = { type: 'manual' }\n      return stageType === 'controls'\n        ? { ...stage, stageType, media: undefined, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }\n        : { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }\n"
+          if old in s:
+              s = s.replace(old, new, 1)
           p.write_text(s)
           PY
       - run: npm ci
