@@ -1968,13 +1968,17 @@ export default function App() {
                     </div>
                   </section>
                 )}
-                <TeachingMediaInstructorPanel
-                  role={teachingSession.role}
-                  instructorAuthenticated={instructorAccountConnected}
-                  sessionId={teachingSession.session?.id ?? null}
-                  scenarioMediaIds={scenarioMediaIds}
-                  onScenarioMediaIdsChange={setScenarioMediaIds}
-                />
+                {teachingSession.role !== 'candidate' && !instructorAccountConnected ? (
+                  <div className="teaching-more-features-note">Instructor account needed for more features</div>
+                ) : (
+                  <>
+                    <TeachingMediaInstructorPanel
+                      role={teachingSession.role}
+                      instructorAuthenticated={instructorAccountConnected}
+                      sessionId={teachingSession.session?.id ?? null}
+                      scenarioMediaIds={scenarioMediaIds}
+                      onScenarioMediaIdsChange={setScenarioMediaIds}
+                    />
       <TeachingInstructorWorkspace
         role={teachingSession.role}
         instructorAuthenticated={instructorAccountConnected}
@@ -1990,9 +1994,11 @@ export default function App() {
         libraryError={teachingLibrary.error}
         onPresent={teachingPrompts.presentPrompt}
         onClose={teachingPrompts.closePrompt}
-                  onReleaseAnswer={teachingPrompts.releaseAnswer}
+                      onReleaseAnswer={teachingPrompts.releaseAnswer}
         onSaveLibrary={teachingLibrary.save}
       />
+                  </>
+                )}
                 <div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />
                 <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
               </div>

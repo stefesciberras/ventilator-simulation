@@ -364,3 +364,9 @@
 .teaching-active-scenario-body > strong { min-width:0; overflow:hidden; color:#eff7f9; font-size:.9rem; text-overflow:ellipsis; white-space:nowrap; }
 .teaching-active-scenario-body > span { flex:0 0 auto; color:#93a8b1; font-size:.72rem; }
 @media (max-width:680px) { .teaching-active-scenario-body { align-items:flex-start; flex-direction:column; gap:4px; } .teaching-active-scenario-body > strong { max-width:100%; } }
+
+
+/* Video laser overlay and compact instructor-account gating */
+.teaching-media-laser-image-frame video { display:block; max-width:100%; max-height:78vh; width:auto !important; height:auto !important; object-fit:contain; background:#000; }
+.teaching-media-laser-image-frame.candidate video { max-height:70vh; }
+.teaching-more-features-note { margin:12px 0; padding:10px 12px; border:1px dashed #465860; border-radius:8px; background:#0d171c; color:#98a9b0; font-size:.78rem; line-height:1.4; text-align:center; }

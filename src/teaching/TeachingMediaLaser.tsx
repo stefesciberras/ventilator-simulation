@@ -48,18 +48,22 @@ function useMediaLaserCandidate(sessionId: string, mediaId: string) {
 export function TeachingMediaLaserCandidateLayer({
   sessionId,
   mediaId,
-  imageUrl,
+  mediaUrl,
+  mediaKind,
   title,
 }: {
   sessionId: string
   mediaId: string
-  imageUrl: string
+  mediaUrl: string
+  mediaKind: 'image' | 'video'
   title: string
 }) {
   const state = useMediaLaserCandidate(sessionId, mediaId)
   return (
     <div className="teaching-media-laser-image-frame candidate">
-      <img src={imageUrl} alt={title} />
+      {mediaKind === 'video'
+        ? <video key={mediaUrl} src={mediaUrl} controls playsInline preload="metadata" aria-label={title} />
+        : <img src={mediaUrl} alt={title} />}
       {state?.active && (
         <span className="teaching-media-laser-dot" style={{ left: `${state.x * 100}%`, top: `${state.y * 100}%` }} />
       )}
@@ -70,17 +74,17 @@ export function TeachingMediaLaserCandidateLayer({
 export function TeachingMediaLaserInstructorModal({
   sessionId,
   media,
-  imageUrl,
+  mediaUrl,
   onClose,
 }: {
   sessionId: string
   media: CaseMediaRow
-  imageUrl: string
+  mediaUrl: string
   onClose: () => void
 }) {
   const [pointer, setPointer] = useState<MediaLaserState>({ active: false, x: 0.5, y: 0.5, sentAt: Date.now(), mediaId: media.id })
   const pointerRef = useRef(pointer)
-  const imageRef = useRef<HTMLImageElement | null>(null)
+  const mediaRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null)
   const lastSentAt = useRef(0)
 
   useEffect(() => { pointerRef.current = pointer }, [pointer])
@@ -106,9 +110,9 @@ export function TeachingMediaLaserInstructorModal({
   }, [media.id, send, sessionId])
 
   const updatePointer = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const image = imageRef.current
-    if (!image) return
-    const rect = image.getBoundingClientRect()
+    const mediaElement = mediaRef.current
+    if (!mediaElement) return
+    const rect = mediaElement.getBoundingClientRect()
     if (!rect.width || !rect.height) return
     const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
     if (!inside) return
@@ -146,7 +150,9 @@ export function TeachingMediaLaserInstructorModal({
           onPointerLeave={hidePointer}
         >
           <div className="teaching-media-laser-image-frame instructor">
-            <img ref={imageRef} src={imageUrl} alt={media.title} draggable={false} />
+            {media.media_kind === 'video'
+              ? <video ref={mediaRef as React.RefObject<HTMLVideoElement>} key={mediaUrl} src={mediaUrl} controls playsInline preload="metadata" aria-label={media.title} />
+              : <img ref={mediaRef as React.RefObject<HTMLImageElement>} src={mediaUrl} alt={media.title} draggable={false} />}
             {pointer.active && <span className="teaching-media-laser-dot" style={{ left: `${pointer.x * 100}%`, top: `${pointer.y * 100}%` }} />}
           </div>
         </div>
