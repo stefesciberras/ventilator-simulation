@@ -99,6 +99,9 @@ export interface SessionMemberRow {
   ventilator_settings: VentilatorSettings | Record<string, never>
   state_updated_at: string | null
   alarm_level: CandidateAlarmLevel
+  last_scenario_action: string | null
+  scenario_action_revision: number
+  scenario_action_at: string | null
 }
 
 export async function ensureAnonymousSession() {
@@ -180,6 +183,11 @@ export async function touchSessionMember(
     p_ventilator_settings: ventilator,
     p_alarm_level: alarmLevel,
   })
+  if (error) throw error
+}
+
+export async function recordSessionScenarioAction(sessionId: string, action: string) {
+  const { error } = await supabase.rpc('record_scenario_action', { p_session_id: sessionId, p_action: action })
   if (error) throw error
 }
 

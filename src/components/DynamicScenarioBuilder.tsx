@@ -82,6 +82,8 @@ function defaultTriggerForType(type: DynamicScenarioTrigger['type']): DynamicSce
   if (type === 'condition') return { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 }
   if (type === 'question-any') return { type: 'question-any' }
   if (type === 'question-correct') return { type: 'question-correct' }
+  if (type === 'patient-change') return { type: 'patient-change', parameter: 'compliance', actor: 'either' }
+  if (type === 'device-action') return { type: 'device-action', action: 'freeze-waveform', actor: 'either' }
   return { type: 'action', parameter: 'fio2', actor: 'either' }
 }
 
@@ -95,9 +97,17 @@ function singleTriggerSummary(value: DynamicScenarioTrigger) {
     const operator = value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='
     return `${metric?.label ?? value.metric} ${operator} ${value.value}${metric?.unit ? ` ${metric.unit}` : ''}`
   }
-  const field = VENT_FIELDS.find((item) => item.key === value.parameter)
   const actor = value.actor === 'either' ? 'candidate or instructor' : value.actor
-  return `${field?.label ?? String(value.parameter)} changed by ${actor}`
+  if (value.type === 'action') {
+    const field = VENT_FIELDS.find((item) => item.key === value.parameter)
+    return `${field?.label ?? String(value.parameter)} changed by ${actor}`
+  }
+  if (value.type === 'patient-change') {
+    const field = [...PATIENT_FIELDS, ...PHYSIO_FIELDS].find((item) => item.key === value.parameter)
+    return `${field?.label ?? String(value.parameter)} changed by ${actor}`
+  }
+  const labels: Record<string, string> = { 'freeze-waveform': 'Freeze waveform', 'inspiratory-hold': 'Inspiratory hold', 'expiratory-hold': 'Expiratory hold', 'oxygen-flush': 'Oxygen flush', nebulisation: 'Nebulisation' }
+  return `${labels[value.action] ?? value.action} by ${actor}`
 }
 
 function ImportScenarioIcon() {
@@ -1096,12 +1106,14 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                     const timeTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'time' }> => trigger.type === 'time')
                     const conditionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'condition' }> => trigger.type === 'condition')
                     const actionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'action' }> => trigger.type === 'action')
-                    const triggerTypes: DynamicScenarioTrigger['type'][] = stageType === 'question' ? ['question-any', 'question-correct', 'time'] : ['manual', 'time', 'condition', 'action']
+                    const patientTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'patient-change' }> => trigger.type === 'patient-change')
+                    const deviceActionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'device-action' }> => trigger.type === 'device-action')
+                    const triggerTypes: DynamicScenarioTrigger['type'][] = stageType === 'question' ? ['question-any', 'question-correct', 'time'] : ['manual', 'time', 'condition', 'action', 'patient-change', 'device-action']
                     return <div className="dynamic-trigger-menu">
                       <div className="dynamic-trigger-types">
                         {triggerTypes.map((type) => (
                           <button type="button" key={type} disabled={type === 'question-correct' && !stage.question?.correctOptionId} className={triggers.some((trigger) => trigger.type === type) ? 'selected' : ''} onClick={() => toggleTriggerType(index, type)}>
-                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : type === 'action' ? 'Action' : type === 'question-correct' ? 'Correct answer' : 'Any answer'}
+                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Measured value' : type === 'action' ? 'Ventilator change' : type === 'patient-change' ? 'Patient change' : type === 'device-action' ? 'Action' : type === 'question-correct' ? 'Correct answer' : 'Any answer'}
                           </button>
                         ))}
                       </div>
@@ -1116,6 +1128,14 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                       {actionTrigger && <div className="dynamic-trigger-condition">
                         <label><span>Ventilator parameter</span><select value={String(actionTrigger.parameter)} onChange={(event) => updateAdvanceTrigger(index, { ...actionTrigger, parameter: event.target.value as keyof VentilatorSettings })}>{VENT_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
                         <label><span>Changed by</span><select value={actionTrigger.actor} onChange={(event) => updateAdvanceTrigger(index, { ...actionTrigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Candidate or instructor</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label>
+                      </div>}
+                      {patientTrigger && <div className="dynamic-trigger-condition">
+                        <label><span>Patient / physiology parameter</span><select value={String(patientTrigger.parameter)} onChange={(event) => updateAdvanceTrigger(index, { ...patientTrigger, parameter: event.target.value as keyof PatientSettings })}>{[...PATIENT_FIELDS, ...PHYSIO_FIELDS].map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
+                        <label><span>Changed by</span><select value={patientTrigger.actor} onChange={(event) => updateAdvanceTrigger(index, { ...patientTrigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Candidate or instructor</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label>
+                      </div>}
+                      {deviceActionTrigger && <div className="dynamic-trigger-condition">
+                        <label><span>Action</span><select value={deviceActionTrigger.action} onChange={(event) => updateAdvanceTrigger(index, { ...deviceActionTrigger, action: event.target.value as typeof deviceActionTrigger.action })}><option value="freeze-waveform">Freeze waveform</option><option value="inspiratory-hold">Inspiratory hold</option><option value="expiratory-hold">Expiratory hold</option><option value="oxygen-flush">Oxygen flush</option><option value="nebulisation">Nebulisation</option></select></label>
+                        <label><span>Performed by</span><select value={deviceActionTrigger.actor} onChange={(event) => updateAdvanceTrigger(index, { ...deviceActionTrigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Candidate or instructor</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label>
                       </div>}
                       <div className="dynamic-trigger-actions"><button type="button" onClick={() => setTriggerMenuIndex(null)}>Close</button>{index === draft.stages.length - 1 && <button type="button" className="account-primary-button" onClick={() => insertStage(index)}>Add next stage</button>}</div>
                     </div>

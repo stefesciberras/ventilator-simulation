@@ -12,11 +12,22 @@ export type DynamicScenarioMetric =
   | 'expiredTidalVolume' | 'totalRespiratoryRate' | 'actualMinuteVentilation'
   | 'alveolarMinuteVentilation' | 'endTidalCO2' | 'oxygenSaturation' | 'drivingPressure'
 
+export type DynamicScenarioActor = 'candidate' | 'instructor' | 'either'
+
+export type DynamicScenarioActionId =
+  | 'freeze-waveform'
+  | 'inspiratory-hold'
+  | 'expiratory-hold'
+  | 'oxygen-flush'
+  | 'nebulisation'
+
 export type DynamicScenarioTrigger =
   | { type: 'manual' }
   | { type: 'time'; seconds: number }
   | { type: 'condition'; metric: DynamicScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
-  | { type: 'action'; parameter: keyof VentilatorSettings; actor: 'candidate' | 'instructor' | 'either' }
+  | { type: 'action'; parameter: keyof VentilatorSettings; actor: DynamicScenarioActor }
+  | { type: 'patient-change'; parameter: keyof PatientSettings; actor: DynamicScenarioActor }
+  | { type: 'device-action'; action: DynamicScenarioActionId; actor: DynamicScenarioActor }
   | { type: 'question-any' }
   | { type: 'question-correct' }
 
