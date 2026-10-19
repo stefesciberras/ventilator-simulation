@@ -1,0 +1,22 @@
+name: Scenario Builder v0.5.0 transitions
+
+on:
+  push:
+    branches: [chatgpt/scenario-builder-v0.5.0-transitions]
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.5.0-transitions
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
