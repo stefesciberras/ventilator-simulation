@@ -1,0 +1,10 @@
+from pathlib import Path
+p=Path('src/components/InstructorAccountControls.tsx');s=p.read_text()
+def r(a,b):
+ global s
+ if a not in s: raise SystemExit('anchor missing')
+ s=s.replace(a,b,1)
+r("  const [selfDirectedPanelPosition, setSelfDirectedPanelPosition] = useState({ x: 0, y: 0 })\n","  const [selfDirectedPanelPosition, setSelfDirectedPanelPosition] = useState({ x: 0, y: 0 })\n  const [instructorFlowHidden,setInstructorFlowHidden]=useState(false)\n  const [instructorFlowPosition,setInstructorFlowPosition]=useState({x:0,y:0})\n  const instructorFlowDragRef=useRef<{pointerId:number;startX:number;startY:number;originX:number;originY:number;baseLeft:number;baseTop:number;width:number;height:number}|null>(null)\n")
+r("  const startDynamicScenario = async (preset: InstructorPresetRow) => {\n","  const scenarioAtDynamicStage=(preset:InstructorPresetRow,index:number)=>{\n    const stages=preset.scenario.stages??[]; const target=Math.max(0,Math.min(stages.length-1,index))\n    let next=asStaticScenario({...preset.scenario,kind:'static',stages:undefined},'')\n    for(let i=0;i<=target;i+=1) next=applyDynamicStage(next,stages[i])\n    return next\n  }\n  const jumpDynamicStage=(preset:InstructorPresetRow,index:number)=>{\n    if(role!=='instructor')return; const stages=preset.scenario.stages??[]; if(!stages.length)return\n    const target=Math.max(0,Math.min(stages.length-1,index)); if(target===activeDynamicStage)return\n    const next=scenarioAtDynamicStage(preset,target)\n    onLoadScenario(next,{pauseSimulation:false,resetScenarioClock:false,stageTransition:target>0?stages[target]:undefined})\n    activateDynamicStage(preset,target,next,'manual')\n  }\n\n  const startDynamicScenario = async (preset: InstructorPresetRow) => {\n")
+r("    if (!stages.length) return\n    const firstScenario = applyDynamicStage(currentScenario, stages[0])\n","    if (!stages.length) return\n    setInstructorFlowHidden(false); setInstructorFlowPosition({x:0,y:0})\n    const firstScenario = applyDynamicStage(currentScenario, stages[0])\n")
+p.write_text(s)
