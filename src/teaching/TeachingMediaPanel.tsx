@@ -11,6 +11,7 @@ import {
 } from '../caseMedia'
 import type { TeachingRole } from './types'
 import { useTeachingMediaPresentation } from './TeachingMediaPresentation'
+import { TeachingMediaLaserInstructorModal } from './TeachingMediaLaser'
 import './TeachingMediaPanel.css'
 
 interface TeachingMediaInstructorPanelProps {
@@ -44,6 +45,7 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [mediaLaserOpen, setMediaLaserOpen] = useState(false)
   const liveMedia = useTeachingMediaPresentation(role, sessionId)
 
   const scenarioIds = useMemo(() => new Set(scenarioMediaIds), [scenarioMediaIds])
@@ -87,6 +89,10 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
       .catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to preview media.'))
   }, [selected, signedUrls])
 
+  useEffect(() => {
+    if (!selectedLive || selected?.media_kind !== 'image') setMediaLaserOpen(false)
+  }, [selectedLive, selected?.media_kind])
+
   if (role === 'candidate') return null
   if (!instructorAuthenticated) return (
     <section className="teaching-media-panel teaching-account-required" aria-label="Media">
@@ -122,6 +128,7 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
 
   const stopPresenting = async () => {
     setError(null); setMessage(null)
+    setMediaLaserOpen(false)
     try {
       await liveMedia.close()
       setMessage('Live media presentation stopped.')
@@ -254,6 +261,9 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
               {selectedLive
                 ? <button type="button" className="danger" disabled={working} onClick={() => void stopPresenting()}>Stop presenting</button>
                 : <button type="button" className="primary" disabled={working || role !== 'instructor' || !sessionId} onClick={() => void present(selected)}>Present</button>}
+              {selectedLive && selected.media_kind === 'image' && (
+                <button type="button" disabled={working || !previewUrl || !sessionId} onClick={() => setMediaLaserOpen(true)}>Laser pointer</button>
+              )}
               <button type="button" disabled={working || role !== 'instructor' || !sessionId} onClick={() => void toggleAvailable(selected)}>{selectedAvailable ? 'Remove availability' : 'Make available'}</button>
               <button type="button" disabled={working} onClick={() => toggleScenario(selected.id)}>{selectedInScenario ? 'Remove from scenario' : 'Add to scenario'}</button>
               <button type="button" className="delete-icon" disabled={working || selectedAvailable} onClick={() => void remove(selected)} aria-label={`Delete ${selected.title}`} title="Delete from media library"><TrashIcon /></button>
@@ -263,6 +273,15 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
           {message && <div className="teaching-media-message">{message}</div>}
           {(error || liveMedia.error) && <div className="teaching-media-error" role="alert">{error || liveMedia.error}</div>}
         </div>
+      )}
+
+      {mediaLaserOpen && selected && selectedLive && selected.media_kind === 'image' && previewUrl && sessionId && (
+        <TeachingMediaLaserInstructorModal
+          sessionId={sessionId}
+          media={selected}
+          imageUrl={previewUrl}
+          onClose={() => setMediaLaserOpen(false)}
+        />
       )}
     </section>
   )
