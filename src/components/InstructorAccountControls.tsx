@@ -260,6 +260,9 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const [selfDirectedRun, setSelfDirectedRun] = useState<SelfDirectedRunStart | null>(null)
   const [selfDirectedError, setSelfDirectedError] = useState<string | null>(null)
   const [selfDirectedPanelPosition, setSelfDirectedPanelPosition] = useState({ x: 0, y: 0 })
+  const [instructorFlowHidden,setInstructorFlowHidden]=useState(false)
+  const [instructorFlowPosition,setInstructorFlowPosition]=useState({x:0,y:0})
+  const instructorFlowDragRef=useRef<{pointerId:number;startX:number;startY:number;originX:number;originY:number;baseLeft:number;baseTop:number;width:number;height:number}|null>(null)
   const selfDirectedPanelDragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; baseLeft: number; baseTop: number; width: number; height: number } | null>(null)
   const [selfDirectedStageMediaUrl, setSelfDirectedStageMediaUrl] = useState<string | null>(null)
   const [selfDirectedQuestionSelected, setSelfDirectedQuestionSelected] = useState('')
@@ -528,10 +531,25 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     if (selfDirected && selfDirectedRun) void updateSelfDirectedRun(selfDirectedRun.runId, nextIndex, nextIndex === stages.length - 1).catch(() => undefined)
   }
 
+  const scenarioAtDynamicStage=(preset:InstructorPresetRow,index:number)=>{
+    const stages=preset.scenario.stages??[]; const target=Math.max(0,Math.min(stages.length-1,index))
+    let next=asStaticScenario({...preset.scenario,kind:'static',stages:undefined},'')
+    for(let i=0;i<=target;i+=1) next=applyDynamicStage(next,stages[i])
+    return next
+  }
+  const jumpDynamicStage=(preset:InstructorPresetRow,index:number)=>{
+    if(role!=='instructor')return; const stages=preset.scenario.stages??[]; if(!stages.length)return
+    const target=Math.max(0,Math.min(stages.length-1,index)); if(target===activeDynamicStage)return
+    const next=scenarioAtDynamicStage(preset,target)
+    onLoadScenario(next,{pauseSimulation:false,resetScenarioClock:false,stageTransition:target>0?stages[target]:undefined})
+    activateDynamicStage(preset,target,next,'manual')
+  }
+
   const startDynamicScenario = async (preset: InstructorPresetRow) => {
     if (role === 'candidate') return
     const stages = preset.scenario.stages ?? []
     if (!stages.length) return
+    setInstructorFlowHidden(false); setInstructorFlowPosition({x:0,y:0})
     const firstScenario = applyDynamicStage(currentScenario, stages[0])
     if (role === 'standalone') {
       await onStartInstructorSession(firstScenario)
@@ -821,6 +839,10 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     }
   }
 
+  const flowDragStart=(e:React.PointerEvent<HTMLDivElement>)=>{if(window.innerWidth<900||(e.target as HTMLElement).closest('button'))return;const el=e.currentTarget.closest('.instructor-scenario-flow-modal') as HTMLElement|null;if(!el)return;const q=el.getBoundingClientRect();instructorFlowDragRef.current={pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,originX:instructorFlowPosition.x,originY:instructorFlowPosition.y,baseLeft:q.left-instructorFlowPosition.x,baseTop:q.top-instructorFlowPosition.y,width:q.width,height:q.height};e.currentTarget.setPointerCapture?.(e.pointerId);e.preventDefault()}
+  const flowDragMove=(e:React.PointerEvent<HTMLDivElement>)=>{const d=instructorFlowDragRef.current;if(!d||d.pointerId!==e.pointerId||window.innerWidth<900)return;const m=12,x=d.originX+e.clientX-d.startX,y=d.originY+e.clientY-d.startY;setInstructorFlowPosition({x:Math.max(m-d.baseLeft,Math.min(window.innerWidth-m-d.baseLeft-d.width,x)),y:Math.max(m-d.baseTop,Math.min(window.innerHeight-m-d.baseTop-d.height,y))});e.preventDefault()}
+  const flowDragEnd=(e:React.PointerEvent<HTMLDivElement>)=>{if(instructorFlowDragRef.current?.pointerId===e.pointerId)instructorFlowDragRef.current=null;if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture?.(e.pointerId)}
+
   return (
     <>
       <button
@@ -843,25 +865,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
           <ScenarioIcon />
         </button>
       )}
-      {runtimeHost && activeRuntimePreset && role === 'instructor' && createPortal((() => {
-        const stages=activeRuntimePreset.scenario.stages ?? [], index=Math.min(activeDynamicStage,Math.max(0,stages.length-1)), stage=stages[index]
-        const triggers: DynamicScenarioTrigger[]=stage ? dynamicStageTriggers(stage) : [{ type: 'manual' }]
-        const manualTrigger=triggers.some((trigger)=>trigger.type==='manual')
-        const stageElapsedSeconds=Math.max(0,scenarioElapsedSeconds-activeDynamicStageStartedAt)
-        return <section className="dynamic-runtime-panel" aria-label="Running dynamic scenario">
-          <div className="dynamic-runtime-panel-heading"><div><span>{selfDirectedRun ? 'Self-directed scenario' : 'Running scenario'}</span><strong>{activeRuntimePreset.name}</strong></div>{selfDirectedRun && <em className="self-directed-mode-badge">Independent</em>}</div>
-          <div className="dynamic-runtime-stage-card">
-            <div><span>Current stage</span><strong>{stage?.name ?? `Stage ${index+1}`}</strong></div>
-            <div><span>Progress</span><strong>{index+1} / {stages.length}</strong></div>
-            <div><span>Stage time</span><strong>{formatStageTimer(stageElapsedSeconds)}</strong></div>
-          </div>
-          <div className="dynamic-runtime-panel-actions">
-            <button type="button" disabled={index<=0} onClick={()=>loadDynamicStage(activeRuntimePreset,index-1)}>Back</button>
-            <button type="button" className="dynamic-runtime-primary" disabled={index>=stages.length-1 || Boolean(selfDirectedRun && !manualTrigger)} title={selfDirectedRun ? (manualTrigger ? 'Continue to the next stage; automatic triggers remain armed' : 'This stage advances automatically when its trigger is met') : manualTrigger ? 'Advance manually; automatic triggers remain armed' : 'Advance to the next stage now'} onClick={()=>loadDynamicStage(activeRuntimePreset,index+1)}>{selfDirectedRun ? (index>=stages.length-1 ? 'Completed' : manualTrigger ? 'Continue' : 'Waiting…') : manualTrigger ? 'Manual trigger' : 'Advance now'}</button>
-            <button type="button" className="dynamic-runtime-stop" onClick={()=>{ if (selfDirectedRun) { setSelfDirectedRun(null); const url=new URL(window.location.href); url.searchParams.delete('assignment'); window.history.replaceState({},'',`${url.pathname}${url.search}${url.hash}`) } setActiveDynamicId(null);setActiveDynamicStage(0);setPresetMessage(selfDirectedRun ? 'Self-directed scenario closed.' : 'Dynamic scenario stopped.')}}>{selfDirectedRun ? 'Exit scenario' : 'Stop scenario'}</button>
-          </div>
-        </section>
-      })(), runtimeHost)}
+      {runtimeHost&&activeRuntimePreset&&role==='instructor'&&createPortal((()=>{const stages=activeRuntimePreset.scenario.stages??[],index=Math.min(activeDynamicStage,Math.max(0,stages.length-1)),stage=stages[index],manual=stage?dynamicStageTriggers(stage).some(t=>t.type==='manual'):false,elapsed=Math.max(0,scenarioElapsedSeconds-activeDynamicStageStartedAt);if(instructorFlowHidden)return <button type="button" className="teaching-prompt-reopen instructor-scenario-flow-reopen" onClick={()=>setInstructorFlowHidden(false)}><span>Scenario flow</span><strong>Show</strong></button>;return <div className="teaching-media-overlay instructor-scenario-flow-overlay"><section className="teaching-media-modal instructor-scenario-flow-modal" role="dialog" aria-modal="false" style={{transform:`translate(${instructorFlowPosition.x}px, ${instructorFlowPosition.y}px)`}}><div className="teaching-media-header instructor-scenario-flow-header" onPointerDown={flowDragStart} onPointerMove={flowDragMove} onPointerUp={flowDragEnd} onPointerCancel={flowDragEnd}><div><span>Scenario flow</span><strong>{activeRuntimePreset.name}</strong></div><button type="button" onClick={()=>setInstructorFlowHidden(true)}>Hide</button></div><div className="instructor-scenario-flow-body"><div className="instructor-scenario-flow-meta"><strong>{stage?.name??`Stage ${index+1}`}</strong><span>{index+1}/{stages.length} · {formatStageTimer(elapsed)}</span></div><div className="instructor-scenario-flow-track">{stages.map((x,i)=><div className="instructor-scenario-flow-wrap" key={`${i}-${x.name}`}>{i>0&&<span>→</span>}<button type="button" className={`instructor-scenario-flow-node ${i===index?'active':''}`} onClick={()=>jumpDynamicStage(activeRuntimePreset,i)}><small>Stage {i+1}</small><strong>{x.name||`Stage ${i+1}`}</strong><em>{(x.stageType??'controls')==='controls'?'Controls':(x.stageType??'controls')==='media'?'Media':'Question'}</em></button></div>)}</div>{stage?.comment?.trim()&&<p className="instructor-scenario-flow-comment">{stage.comment.trim()}</p>}<div className="instructor-scenario-flow-actions"><button type="button" disabled={index<=0} onClick={()=>jumpDynamicStage(activeRuntimePreset,index-1)}>Previous</button><button type="button" className="instructor-scenario-flow-primary" disabled={index>=stages.length-1} onClick={()=>loadDynamicStage(activeRuntimePreset,index+1)}>{manual?'Manual trigger':'Advance now'}</button><button type="button" className="instructor-scenario-flow-stop" onClick={()=>{setActiveDynamicId(null);setActiveDynamicStage(0);setInstructorFlowHidden(false);setInstructorFlowPosition({x:0,y:0});setPresetMessage('Dynamic scenario stopped.')}}>Stop</button></div><small className="instructor-scenario-flow-help">Select any stage to activate it in the live session.</small></div></section></div>})(),runtimeHost)}
       {selfDirectedRun && activeRuntimePreset && createPortal((() => {
         const stages = activeRuntimePreset.scenario.stages ?? []
         const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))
