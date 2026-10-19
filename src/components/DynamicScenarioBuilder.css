@@ -346,3 +346,70 @@
 .dynamic-stage-transition-override { display:grid; grid-template-columns:minmax(150px,1fr) 150px 92px; gap:8px; align-items:center; font-size:11px; }
 .dynamic-stage-transition-override > label { display:flex; align-items:center; gap:4px; }
 @media (max-width: 900px) { .dynamic-stage-transition-override { grid-template-columns:minmax(120px,1fr) 132px; } .dynamic-stage-transition-override > label { grid-column:2; } }
+
+
+/* Scenario Builder v0.5.1 stage ordering */
+.dynamic-stage-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dynamic-stage-drag-handle,
+.dynamic-stage-move {
+  min-width: 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.dynamic-stage-drag-handle {
+  cursor: grab;
+  color: #9eb1b8;
+  letter-spacing: -3px;
+}
+
+.dynamic-stage-drag-handle:active { cursor: grabbing; }
+.dynamic-stage-move:disabled { opacity: .28; cursor: default; }
+.dynamic-stage-shell.dragging { opacity: .48; }
+.dynamic-stage-shell.drag-over > .dynamic-stage-card { outline: 2px solid #70c7df; outline-offset: 2px; }
+
+.dynamic-stage-insert-row {
+  display: grid;
+  grid-template-columns: minmax(20px, 1fr) auto minmax(20px, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: min(760px, 94%);
+  margin: 5px auto 12px;
+}
+
+.dynamic-stage-insert-row > span {
+  height: 1px;
+  background: rgba(112, 199, 223, .28);
+}
+
+.dynamic-stage-insert {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid #405862;
+  border-radius: 0;
+  background: #0a171c;
+  color: #a7dce9;
+  font-size: 12px;
+}
+
+.dynamic-stage-insert small {
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+@media (pointer: coarse) {
+  .dynamic-stage-drag-handle { display: none; }
+  .dynamic-stage-move { min-width: 36px; width: 36px; height: 34px; }
+}

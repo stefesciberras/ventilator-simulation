@@ -357,6 +357,8 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   const [message, setMessage] = useState<string | null>(null)
   const [triggerMenuIndex, setTriggerMenuIndex] = useState<number | null>(null)
   const [collapsedStages, setCollapsedStages] = useState<Set<number>>(() => new Set())
+  const [draggedStageIndex, setDraggedStageIndex] = useState<number | null>(null)
+  const [dragOverStageIndex, setDragOverStageIndex] = useState<number | null>(null)
   const scenarioImportInputRef = useRef<HTMLInputElement | null>(null)
   const [assignmentOpen, setAssignmentOpen] = useState(false)
   const [assignmentExpiryValue, setAssignmentExpiryValue] = useState(7)
@@ -419,10 +421,36 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     setCollapsedStages(new Set())
     setDraft((current) => {
       const stages = [...current.stages]
-      stages.splice(index + 1, 0, newStage(currentScenario, index + 1))
+      const base = stages[index]?.snapshot ?? currentScenario
+      stages.splice(index + 1, 0, newStage(base, index + 1))
       return { ...current, stages }
     })
     setTriggerMenuIndex(null)
+  }
+
+  const moveStage = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= draft.stages.length || toIndex >= draft.stages.length) return
+    setCollapsedStages(new Set())
+    setTriggerMenuIndex(null)
+    setDraft((current) => {
+      const stages = [...current.stages]
+      const [moved] = stages.splice(fromIndex, 1)
+      stages.splice(toIndex, 0, moved)
+      if (stages[0]) stages[0] = { ...stages[0], transition: immediateTransition() }
+      return { ...current, stages }
+    })
+  }
+
+  const beginStageDrag = (index: number, event: React.DragEvent<HTMLElement>) => {
+    setDraggedStageIndex(index)
+    setDragOverStageIndex(index)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(index))
+  }
+
+  const finishStageDrag = () => {
+    setDraggedStageIndex(null)
+    setDragOverStageIndex(null)
   }
 
   const setAdvanceTriggers = (index: number, advanceTriggers: DynamicScenarioTrigger[]) => {
@@ -931,7 +959,22 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
             const numericPatientFields = [...PATIENT_FIELDS, ...PHYSIO_FIELDS].filter((field) => field.type !== 'select' && field.type !== 'boolean' && patientSelected.includes(field.key))
 
             return (
-              <div className="dynamic-stage-shell" key={`${index}-${stage.name}`}>
+              <div
+                className={`dynamic-stage-shell ${draggedStageIndex === index ? 'dragging' : ''} ${dragOverStageIndex === index && draggedStageIndex !== index ? 'drag-over' : ''}`}
+                key={`${index}-${stage.name}`}
+                onDragOver={(event) => {
+                  if (draggedStageIndex == null) return
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'move'
+                  setDragOverStageIndex(index)
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  const source = draggedStageIndex ?? Number(event.dataTransfer.getData('text/plain'))
+                  if (Number.isInteger(source)) moveStage(source, index)
+                  finishStageDrag()
+                }}
+              >
                 <article className="dynamic-stage-card">
                   <div className="dynamic-stage-title-row">
                     <div>
@@ -943,6 +986,31 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                       />
                     </div>
                     <div className="dynamic-stage-title-actions">
+                      <button
+                        type="button"
+                        className="dynamic-stage-drag-handle"
+                        draggable
+                        onDragStart={(event) => beginStageDrag(index, event)}
+                        onDragEnd={finishStageDrag}
+                        aria-label={`Drag Stage ${index + 1} to reorder`}
+                        title="Drag stage to reorder"
+                      >⋮⋮</button>
+                      <button
+                        type="button"
+                        className="dynamic-stage-move"
+                        disabled={index === 0}
+                        onClick={() => moveStage(index, index - 1)}
+                        aria-label={`Move Stage ${index + 1} up`}
+                        title="Move stage up"
+                      >↑</button>
+                      <button
+                        type="button"
+                        className="dynamic-stage-move"
+                        disabled={index === draft.stages.length - 1}
+                        onClick={() => moveStage(index, index + 1)}
+                        aria-label={`Move Stage ${index + 1} down`}
+                        title="Move stage down"
+                      >↓</button>
                       <button
                         type="button"
                         className="dynamic-stage-collapse"
@@ -1176,6 +1244,17 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                       <div className="dynamic-trigger-actions"><button type="button" onClick={() => setTriggerMenuIndex(null)}>Close</button>{index === draft.stages.length - 1 && <button type="button" className="account-primary-button" onClick={() => insertStage(index)}>Add next stage</button>}</div>
                     </div>
                   })()}
+                </div>
+
+                <div className="dynamic-stage-insert-row" aria-label={index < draft.stages.length - 1 ? `Insert stage between Stage ${index + 1} and Stage ${index + 2}` : 'Add stage'}>
+                  <span />
+                  <button
+                    type="button"
+                    className="dynamic-stage-insert"
+                    onClick={() => insertStage(index)}
+                    title={index < draft.stages.length - 1 ? `Insert a new stage between Stage ${index + 1} and Stage ${index + 2}` : 'Add a new stage'}
+                  >＋ <small>{index < draft.stages.length - 1 ? 'Insert stage' : 'Add stage'}</small></button>
+                  <span />
                 </div>
               </div>
             )
