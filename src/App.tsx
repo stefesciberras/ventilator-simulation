@@ -1247,6 +1247,13 @@ export default function App() {
       freezeLongPressTriggeredRef.current = false
       return
     }
+    if (teachingSession.role === 'candidate' && sharedWaveformFreeze.active) return
+    if (teachingSession.role === 'instructor' && sharedWaveformFreeze.active) {
+      setWaveformFrozen(false)
+      setFrozenSamples(null)
+      sharedWaveformFreeze.setActive(false)
+      return
+    }
     toggleFreeze()
   }
 
@@ -1697,17 +1704,23 @@ export default function App() {
               {oxygenBoost && <span className="oxygen-enrichment-timer" aria-live="polite">{oxygenBoostTimer}</span>}
             </div>
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={() => setNebuliser((v) => !v)} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
-            <button
-              className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''} ${sharedWaveformFreeze.active ? 'shared-freeze' : ''}`}
-              onClick={handleFreezeClick}
-              onPointerDown={startFreezeLongPress}
-              onPointerUp={finishFreezePress}
-              onPointerCancel={finishFreezePress}
-              onPointerLeave={finishFreezePress}
-              onContextMenu={(event) => event.preventDefault()}
-              title={teachingSession.role === 'instructor' ? (sharedWaveformFreeze.active ? 'Waveforms frozen for instructor and candidates — hold to resume all' : 'Press to freeze locally; hold to freeze instructor and candidate waveforms') : (waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms')}
-              aria-label={waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'}
-            ><FreezeWaveformIcon /></button>
+            <div className="freeze-control-group">
+              <button
+                className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''} ${sharedWaveformFreeze.active ? 'shared-freeze' : ''}`}
+                onClick={handleFreezeClick}
+                onPointerDown={startFreezeLongPress}
+                onPointerUp={finishFreezePress}
+                onPointerCancel={finishFreezePress}
+                onPointerLeave={finishFreezePress}
+                onContextMenu={(event) => event.preventDefault()}
+                disabled={teachingSession.role === 'candidate' && sharedWaveformFreeze.active}
+                title={sharedWaveformFreeze.active
+                  ? (teachingSession.role === 'instructor' ? 'All screens frozen — press to resume all' : 'All screens frozen by instructor')
+                  : (teachingSession.role === 'instructor' ? 'Press to freeze locally; hold to freeze instructor and candidate waveforms' : (waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'))}
+                aria-label={sharedWaveformFreeze.active ? 'All screens frozen' : (waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms')}
+              ><FreezeWaveformIcon /></button>
+              {sharedWaveformFreeze.active && <span className="shared-freeze-label">All screens frozen</span>}
+            </div>
             <button
               className={`hardware-button hold-button ${inspiratoryHoldPressed ? 'active' : ''}`}
               disabled={waveformFrozen || simulationPaused || !manualHoldAvailable}

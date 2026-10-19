@@ -45,7 +45,6 @@ export function useTeachingSharedWaveformFreeze(
     if (previous) void supabase.removeChannel(previous)
     setActiveState(false)
     activeRef.current = false
-    if (role === 'candidate') candidateHandlerRef.current(false)
 
     if (!sessionId || role === 'standalone') return
 
@@ -54,8 +53,12 @@ export function useTeachingSharedWaveformFreeze(
     })
       .on('broadcast', { event: STATE_EVENT }, ({ payload }) => {
         if (role !== 'candidate' || !isFreezeStateMessage(payload)) return
+        const wasSharedFrozen = activeRef.current
+        activeRef.current = payload.active
         setActiveState(payload.active)
-        candidateHandlerRef.current(payload.active)
+        // A remote "false" only resumes a candidate that was actually frozen by the instructor.
+        // It must never cancel an independent local candidate freeze.
+        if (payload.active || wasSharedFrozen) candidateHandlerRef.current(payload.active)
       })
       .on('broadcast', { event: REQUEST_EVENT }, () => {
         if (role !== 'instructor') return
@@ -79,6 +82,8 @@ export function useTeachingSharedWaveformFreeze(
           event: STATE_EVENT,
           payload: { active: false, sentAt: Date.now() } satisfies FreezeStateMessage,
         })
+      } else if (role === 'candidate' && activeRef.current) {
+        candidateHandlerRef.current(false)
       }
       channelRef.current = null
       void supabase.removeChannel(channel)
@@ -87,7 +92,11 @@ export function useTeachingSharedWaveformFreeze(
 
   useEffect(() => {
     if (role !== 'instructor' || !sessionId) return
-    const timer = window.setInterval(() => broadcastState(activeRef.current), 1000)
+    // Only heartbeat an active shared freeze. Repeated false heartbeats would incorrectly
+    // override a candidate's independent local freeze.
+    const timer = window.setInterval(() => {
+      if (activeRef.current) broadcastState(true)
+    }, 1000)
     return () => window.clearInterval(timer)
   }, [broadcastState, role, sessionId])
 
@@ -97,6 +106,8 @@ export function useTeachingSharedWaveformFreeze(
     setActiveState(next)
     broadcastState(next)
     if (!next) {
+      // Repeat the explicit resume a few times to make release robust without maintaining
+      // a continuous false heartbeat.
       window.setTimeout(() => broadcastState(false), 120)
       window.setTimeout(() => broadcastState(false), 400)
     }
