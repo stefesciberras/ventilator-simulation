@@ -457,7 +457,9 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
         return { ...stage, stageType, media: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
       }
       const trigger: DynamicScenarioTrigger = { type: 'manual' }
-      return { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
+      return stageType === 'controls'
+        ? { ...stage, stageType, media: undefined, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
+        : { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
     })
     setTriggerMenuIndex(null)
   }
@@ -744,7 +746,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       if (!parsed.scenario || parsed.scenario.kind !== 'dynamic') throw new Error('Only dynamic Scenario Builder files can be imported here.')
       if (!Array.isArray(parsed.scenario.stages) || parsed.scenario.stages.length === 0) throw new Error('The imported scenario has no stages.')
       const importedStages = parsed.scenario.stages.map((stage, index) => normaliseStage(stage, index))
-      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 5, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
+      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 6, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
       const saved = await createInstructorPreset(uniqueImportedName(parsed.name ?? 'Imported scenario', [...dynamicPresets, ...staticPresets]), scenario)
       await onRefresh(); replaceDraft(fromPreset(saved)); setMessage(`Imported “${saved.name}”.`)
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Unable to import scenario file.') }
