@@ -732,7 +732,7 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
           <ScenarioIcon />
         </button>
       )}
-      {runtimeHost && activeRuntimePreset && (role === 'instructor' || Boolean(selfDirectedRun)) && createPortal((() => {
+      {runtimeHost && activeRuntimePreset && role === 'instructor' && createPortal((() => {
         const stages=activeRuntimePreset.scenario.stages ?? [], index=Math.min(activeDynamicStage,Math.max(0,stages.length-1)), stage=stages[index]
         const triggers: DynamicScenarioTrigger[]=stage ? dynamicStageTriggers(stage) : [{ type: 'manual' }]
         const manualTrigger=triggers.some((trigger)=>trigger.type==='manual')
@@ -751,6 +751,40 @@ export function InstructorAccountControls({ role, currentScenario, onLoadScenari
           </div>
         </section>
       })(), runtimeHost)}
+      {selfDirectedRun && activeRuntimePreset && createPortal((() => {
+        const stages = activeRuntimePreset.scenario.stages ?? []
+        const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))
+        const stage = stages[index]
+        const triggers: DynamicScenarioTrigger[] = stage ? dynamicStageTriggers(stage) : [{ type: 'manual' }]
+        const completed = index >= stages.length - 1
+        const manualTrigger = !completed && triggers.some((trigger) => trigger.type === 'manual')
+        const exitSelfDirectedScenario = () => {
+          setSelfDirectedRun(null)
+          setActiveDynamicId(null)
+          setActiveDynamicStage(0)
+          const url = new URL(window.location.href)
+          url.searchParams.delete('assignment')
+          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+          setPresetMessage('Self-directed scenario closed.')
+        }
+        return <div className="self-directed-scenario-overlay" role="presentation">
+          <section className="self-directed-scenario-modal" role="dialog" aria-modal="false" aria-label="Active scenario">
+            <div className="self-directed-scenario-header">
+              <div><span>Active scenario</span><strong>{activeRuntimePreset.name}</strong></div>
+              <button type="button" onClick={exitSelfDirectedScenario}>Exit</button>
+            </div>
+            <div className="self-directed-scenario-body">
+              {completed ? (
+                <div className="self-directed-scenario-status complete"><strong>Scenario complete</strong><span>You have reached the end of this scenario.</span></div>
+              ) : manualTrigger ? (
+                <button type="button" className="self-directed-scenario-continue" onClick={() => loadDynamicStage(activeRuntimePreset, index + 1)}>Continue</button>
+              ) : (
+                <div className="self-directed-scenario-status"><strong>Scenario active</strong><span>Continue working with the simulator.</span></div>
+              )}
+            </div>
+          </section>
+        </div>
+      })(), document.body)}
       {runtimeHost && selfDirectedError && createPortal(<section className="dynamic-runtime-panel self-directed-error-panel" role="alert"><div className="dynamic-runtime-panel-heading"><div><span>Self-directed scenario</span><strong>Unable to start</strong></div></div><p>{selfDirectedError}</p><div className="dynamic-runtime-panel-actions"><button type="button" onClick={() => { setSelfDirectedError(null); const url=new URL(window.location.href); url.searchParams.delete('assignment'); window.history.replaceState({},'',`${url.pathname}${url.search}${url.hash}`) }}>Close</button></div></section>, runtimeHost)}
       <button
         type="button"
