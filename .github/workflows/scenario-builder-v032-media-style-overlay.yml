@@ -1,0 +1,126 @@
+name: Scenario Builder v0.3.2 media-style overlay
+
+on:
+  push:
+    branches:
+      - chatgpt/scenario-builder-v0.3.2-media-style-overlay
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.3.2-media-style-overlay
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply active-scenario panel refinements
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/components/InstructorAccountControls.tsx')
+          s = p.read_text()
+          if "import '../teaching/TeachingMediaPresentation.css'" not in s:
+              s = s.replace("import '../account.css'", "import '../account.css'\nimport '../teaching/TeachingMediaPresentation.css'", 1)
+
+          old = '''        return <div className="self-directed-scenario-overlay" role="presentation">
+          <section className="self-directed-scenario-modal" role="dialog" aria-modal="false" aria-label="Active scenario">
+            <div className="self-directed-scenario-header">
+              <div><span>Active scenario</span><strong>{activeRuntimePreset.name}</strong></div>
+              <button type="button" onClick={exitSelfDirectedScenario}>Exit</button>
+            </div>
+            <div className="self-directed-scenario-body">
+              {completed ? (
+                <div className="self-directed-scenario-status complete"><strong>Scenario complete</strong><span>You have reached the end of this scenario.</span></div>
+              ) : manualTrigger ? (
+                <button type="button" className="self-directed-scenario-continue" onClick={() => loadDynamicStage(activeRuntimePreset, index + 1)}>Continue</button>
+              ) : (
+                <div className="self-directed-scenario-status"><strong>Scenario active</strong><span>Continue working with the simulator.</span></div>
+              )}
+            </div>
+          </section>
+        </div>'''
+          new = '''        return <div className="teaching-media-overlay self-directed-scenario-overlay" role="presentation">
+          <section className="teaching-media-modal self-directed-scenario-modal" role="dialog" aria-modal="false" aria-label="Active scenario">
+            <div className="teaching-media-header self-directed-scenario-header">
+              <div><span>Active scenario</span></div>
+              <button type="button" onClick={exitSelfDirectedScenario}>Exit</button>
+            </div>
+            <div className="self-directed-scenario-body">
+              {completed ? (
+                <div className="self-directed-scenario-status complete"><strong>Scenario complete</strong><span>You have reached the end of this scenario.</span></div>
+              ) : manualTrigger ? (
+                <button type="button" className="self-directed-scenario-continue" onClick={() => loadDynamicStage(activeRuntimePreset, index + 1)}>Continue</button>
+              ) : (
+                <div className="self-directed-scenario-status"><strong>Scenario active</strong><span>Continue working with the simulator.</span></div>
+              )}
+            </div>
+          </section>
+        </div>'''
+          if old not in s:
+              raise SystemExit('candidate overlay block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          css = Path('src/account.css')
+          c = css.read_text()
+          marker = '/* Scenario Builder v0.3.1 candidate active-scenario overlay */'
+          if marker in c:
+              c = c.split(marker, 1)[0].rstrip() + '\n'
+          c += '''\n\n/* Scenario Builder v0.3.2 candidate active-scenario panel */
+.self-directed-scenario-overlay { z-index: 4998; }
+.self-directed-scenario-modal { width: min(430px, 38vw); }
+.self-directed-scenario-header { min-height: 48px; }
+.self-directed-scenario-header > div { display: grid; gap: 2px; min-width: 0; }
+.self-directed-scenario-body {
+  padding: 14px;
+  background: #071014;
+}
+.self-directed-scenario-continue {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 8px;
+  background: #ef8a27;
+  color: #111;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.self-directed-scenario-status {
+  display: grid;
+  gap: 5px;
+  padding: 4px 2px;
+}
+.self-directed-scenario-status strong { color: #eef5f7; font-size: .92rem; }
+.self-directed-scenario-status span { color: #9dafb7; font-size: .8rem; line-height: 1.4; }
+.self-directed-scenario-status.complete strong { color: #9ee9b3; }
+@media (max-width: 899px) {
+  .self-directed-scenario-modal { width: min(390px, 48vw); }
+}
+@media (max-width: 640px) {
+  .self-directed-scenario-modal { width: 100%; }
+}
+'''
+          css.write_text(c)
+
+          v = Path('src/scenario-builder/version.ts')
+          text = v.read_text().replace("SCENARIO_BUILDER_VERSION = '0.3.1'", "SCENARIO_BUILDER_VERSION = '0.3.2'")
+          v.write_text(text)
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit validated changes
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src/components/InstructorAccountControls.tsx src/account.css src/scenario-builder/version.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Scenario Builder v0.3.2 match candidate panel to media presenter"
+          git push origin HEAD:chatgpt/scenario-builder-v0.3.2-media-style-overlay
