@@ -90,8 +90,8 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
   }, [selected, signedUrls])
 
   useEffect(() => {
-    if (!selectedLive || selected?.media_kind !== 'image') setMediaLaserOpen(false)
-  }, [selectedLive, selected?.media_kind])
+    if (!selectedLive) setMediaLaserOpen(false)
+  }, [selectedLive])
 
   if (role === 'candidate') return null
   if (!instructorAuthenticated) return (
@@ -261,7 +261,7 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
               {selectedLive
                 ? <button type="button" className="danger" disabled={working} onClick={() => void stopPresenting()}>Stop presenting</button>
                 : <button type="button" className="primary" disabled={working || role !== 'instructor' || !sessionId} onClick={() => void present(selected)}>Present</button>}
-              {selectedLive && selected.media_kind === 'image' && (
+              {selectedLive && (
                 <button type="button" disabled={working || !previewUrl || !sessionId} onClick={() => setMediaLaserOpen(true)}>Laser pointer</button>
               )}
               <button type="button" disabled={working || role !== 'instructor' || !sessionId} onClick={() => void toggleAvailable(selected)}>{selectedAvailable ? 'Remove availability' : 'Make available'}</button>
@@ -275,11 +275,11 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
         </div>
       )}
 
-      {mediaLaserOpen && selected && selectedLive && selected.media_kind === 'image' && previewUrl && sessionId && (
+      {mediaLaserOpen && selected && selectedLive && previewUrl && sessionId && (
         <TeachingMediaLaserInstructorModal
           sessionId={sessionId}
           media={selected}
-          imageUrl={previewUrl}
+          mediaUrl={previewUrl}
           onClose={() => setMediaLaserOpen(false)}
         />
       )}

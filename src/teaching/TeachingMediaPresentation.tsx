@@ -200,11 +200,14 @@ export function TeachingMediaCandidateOverlay({
         <div className="teaching-media-stage">
           {!url && !error && <div className="teaching-media-loading">Loading media…</div>}
           {error && <div className="teaching-prompt-error">{error}</div>}
-          {url && presentation.media.media_kind === 'video' && (
-            <video key={url} src={url} controls playsInline preload="metadata" />
-          )}
-          {url && presentation.media.media_kind === 'image' && (
-            <TeachingMediaLaserCandidateLayer sessionId={presentation.session_id} mediaId={presentation.media_id} imageUrl={url} title={presentation.media.title} />
+          {url && (
+            <TeachingMediaLaserCandidateLayer
+              sessionId={presentation.session_id}
+              mediaId={presentation.media_id}
+              mediaUrl={url}
+              mediaKind={presentation.media.media_kind}
+              title={presentation.media.title}
+            />
           )}
         </div>
       </section>
