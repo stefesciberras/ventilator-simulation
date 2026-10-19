@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-import { supabase } from '../session/supabase'
 import type { CaseMediaRow } from '../caseMedia'
+import { sendTeachingBroadcast, subscribeTeachingBroadcast } from './teachingRealtimeBus'
 
 const STATE_EVENT = 'teaching-media-laser-state'
 const REQUEST_EVENT = 'teaching-media-laser-request'
@@ -12,12 +11,14 @@ type MediaLaserState = {
   x: number
   y: number
   sentAt: number
+  mediaId: string
 }
 
-function isMediaLaserState(value: unknown): value is MediaLaserState {
+function isMediaLaserState(value: unknown, mediaId: string): value is MediaLaserState {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<MediaLaserState>
-  return typeof candidate.active === 'boolean'
+  return candidate.mediaId === mediaId
+    && typeof candidate.active === 'boolean'
     && typeof candidate.x === 'number'
     && Number.isFinite(candidate.x)
     && typeof candidate.y === 'number'
@@ -29,25 +30,16 @@ function clamp01(value: number) {
   return Math.max(0, Math.min(1, value))
 }
 
-function channelName(sessionId: string, mediaId: string) {
-  return `teaching-media-laser:${sessionId}:${mediaId}`
-}
-
 function useMediaLaserCandidate(sessionId: string, mediaId: string) {
   const [state, setState] = useState<MediaLaserState | null>(null)
 
   useEffect(() => {
-    const channel = supabase.channel(channelName(sessionId, mediaId), { config: { broadcast: { self: false, ack: false } } })
-      .on('broadcast', { event: STATE_EVENT }, ({ payload }) => {
-        if (!isMediaLaserState(payload)) return
-        setState({ ...payload, x: clamp01(payload.x), y: clamp01(payload.y) })
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          void channel.send({ type: 'broadcast', event: REQUEST_EVENT, payload: { requestedAt: Date.now() } })
-        }
-      })
-    return () => { void supabase.removeChannel(channel) }
+    const unsubscribe = subscribeTeachingBroadcast(sessionId, STATE_EVENT, (payload) => {
+      if (!isMediaLaserState(payload, mediaId)) return
+      setState({ ...payload, x: clamp01(payload.x), y: clamp01(payload.y) })
+    })
+    void sendTeachingBroadcast(sessionId, REQUEST_EVENT, { mediaId, requestedAt: Date.now() })
+    return unsubscribe
   }, [sessionId, mediaId])
 
   return state
@@ -86,37 +78,30 @@ export function TeachingMediaLaserInstructorModal({
   imageUrl: string
   onClose: () => void
 }) {
-  const [pointer, setPointer] = useState<MediaLaserState>({ active: false, x: 0.5, y: 0.5, sentAt: Date.now() })
+  const [pointer, setPointer] = useState<MediaLaserState>({ active: false, x: 0.5, y: 0.5, sentAt: Date.now(), mediaId: media.id })
   const pointerRef = useRef(pointer)
-  const channelRef = useRef<RealtimeChannel | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const lastSentAt = useRef(0)
 
   useEffect(() => { pointerRef.current = pointer }, [pointer])
 
-  const send = useCallback((next: MediaLaserState, force = false, channel = channelRef.current) => {
-    if (!channel) return
+  const send = useCallback((next: MediaLaserState, force = false) => {
     const now = Date.now()
     if (!force && now - lastSentAt.current < 30) return
     lastSentAt.current = now
-    void channel.send({ type: 'broadcast', event: STATE_EVENT, payload: next })
-  }, [])
+    void sendTeachingBroadcast(sessionId, STATE_EVENT, next)
+  }, [sessionId])
 
   useEffect(() => {
-    const channel = supabase.channel(channelName(sessionId, media.id), { config: { broadcast: { self: false, ack: false } } })
-      .on('broadcast', { event: REQUEST_EVENT }, () => {
-        send(pointerRef.current, true, channel)
-      })
-      .subscribe()
-    channelRef.current = channel
+    const unsubscribe = subscribeTeachingBroadcast(sessionId, REQUEST_EVENT, (payload) => {
+      if (!payload || typeof payload !== 'object') return
+      const request = payload as { mediaId?: unknown }
+      if (request.mediaId !== media.id) return
+      send(pointerRef.current, true)
+    })
     return () => {
-      void channel.send({
-        type: 'broadcast',
-        event: STATE_EVENT,
-        payload: { active: false, x: pointerRef.current.x, y: pointerRef.current.y, sentAt: Date.now() } satisfies MediaLaserState,
-      })
-      channelRef.current = null
-      void supabase.removeChannel(channel)
+      send({ active: false, x: pointerRef.current.x, y: pointerRef.current.y, sentAt: Date.now(), mediaId: media.id }, true)
+      unsubscribe()
     }
   }, [media.id, send, sessionId])
 
@@ -133,13 +118,14 @@ export function TeachingMediaLaserInstructorModal({
       x: clamp01((event.clientX - rect.left) / rect.width),
       y: clamp01((event.clientY - rect.top) / rect.height),
       sentAt: Date.now(),
+      mediaId: media.id,
     }
     setPointer(next)
     send(next)
   }
 
   const hidePointer = () => {
-    const next = { ...pointerRef.current, active: false, sentAt: Date.now() }
+    const next = { ...pointerRef.current, active: false, sentAt: Date.now(), mediaId: media.id }
     setPointer(next)
     send(next, true)
   }
