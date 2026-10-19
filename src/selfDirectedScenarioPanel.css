@@ -1,0 +1,106 @@
+/* Scenario Builder v0.3.3 candidate active-scenario panel */
+.self-directed-scenario-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4998;
+  pointer-events: none;
+}
+
+.self-directed-scenario-modal {
+  position: fixed;
+  top: 86px;
+  right: 18px;
+  width: min(320px, 22vw);
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 104px);
+  overflow: auto;
+  box-sizing: border-box;
+  border: 2px solid #ef8a27;
+  border-radius: 16px;
+  background: #101b21;
+  color: #eef5f7;
+  box-shadow: 0 24px 70px rgba(0,0,0,.5);
+  pointer-events: auto;
+}
+
+.self-directed-scenario-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  background: #101b21;
+  border-bottom: 1px solid #344751;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.self-directed-scenario-header:active { cursor: grabbing; }
+.self-directed-scenario-header > div { display: grid; gap: 2px; min-width: 0; }
+.self-directed-scenario-header span {
+  color: #f0b06e;
+  font-size: .7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+.self-directed-scenario-header strong { display: none !important; }
+.self-directed-scenario-header button {
+  border: 1px solid #4a5d66;
+  border-radius: 999px;
+  background: #1b2a31;
+  color: #dfeaec;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.self-directed-scenario-body {
+  padding: 12px;
+  background: #071014;
+}
+
+.self-directed-scenario-continue {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: #ef8a27;
+  color: #111;
+  font-size: .95rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.self-directed-scenario-status { display: grid; gap: 4px; padding: 2px; }
+.self-directed-scenario-status strong { color: #eef5f7; font-size: .88rem; }
+.self-directed-scenario-status span { color: #9dafb7; font-size: .76rem; line-height: 1.35; }
+.self-directed-scenario-status.complete strong { color: #9ee9b3; }
+
+/* Tablet: never occupy more than a quarter of either screen dimension. */
+@media (min-width: 641px) and (max-width: 1199px) {
+  .self-directed-scenario-modal {
+    width: 25vw !important;
+    max-width: 25vw !important;
+    max-height: 25vh !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .self-directed-scenario-modal {
+    top: 74px;
+    right: 8px;
+    bottom: auto;
+    width: min(88vw, 300px);
+    max-width: calc(100vw - 16px);
+    max-height: 38dvh;
+    border-left: 2px solid #ef8a27;
+    border-right: 2px solid #ef8a27;
+    border-bottom: 2px solid #ef8a27;
+    border-radius: 16px;
+  }
+}
