@@ -29,19 +29,9 @@ export function selfDirectedAssignmentUrl(accessCode: string) {
   return url.toString()
 }
 
-/**
- * Self-directed v0.3 deliberately publishes the simulator/scenario state only.
- * Media, teaching prompts, questions and polling are deferred to a later schema.
- */
+/** Self-directed assignments are immutable snapshots, including stage media references and copied question content. */
 export function prepareSelfDirectedScenario(source: InstructorScenarioSnapshot): InstructorScenarioSnapshot {
-  const scenario = JSON.parse(JSON.stringify(source)) as InstructorScenarioSnapshot
-  scenario.mediaIds = []
-  scenario.stages = scenario.stages?.map((stage) => ({
-    ...stage,
-    snapshot: { ...stage.snapshot, mediaIds: [] },
-    apply: stage.apply ? { ...stage.apply, mediaIds: false } : stage.apply,
-  }))
-  return scenario
+  return JSON.parse(JSON.stringify(source)) as InstructorScenarioSnapshot
 }
 
 export async function createSelfDirectedAssignment(

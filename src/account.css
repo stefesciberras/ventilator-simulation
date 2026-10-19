@@ -424,3 +424,17 @@
 @media (max-width: 680px) {
   .self-directed-scenario-modal { top: auto; right: 12px; bottom: 12px; left: 12px; width: auto; }
 }
+
+
+/* Scenario Builder v0.4 self-directed media/question stages */
+.self-directed-scenario-modal.stage-media,.self-directed-scenario-modal.stage-question { width:min(440px,36vw); max-height:70dvh; }
+.self-directed-stage-media { display:grid; gap:10px; padding:10px; background:#071014; }
+.self-directed-stage-media img,.self-directed-stage-media video { display:block; width:100%; max-height:52dvh; object-fit:contain; border-radius:8px; background:#000; }
+.self-directed-stage-question { display:grid; gap:12px; padding:14px; background:#071014; }
+.self-directed-stage-question h3 { margin:0; color:#eef5f7; }
+.self-directed-stage-question p { margin:0; color:#d1dde1; line-height:1.45; white-space:pre-wrap; }
+.self-directed-question-options { display:grid; gap:7px; }
+.self-directed-question-options button { display:grid; grid-template-columns:32px 1fr; gap:8px; align-items:center; text-align:left; min-height:42px; border:1px solid #3b505b; border-radius:8px; background:#111c22; color:#dce8ec; }
+.self-directed-question-options button.selected { border-color:#69c5e4; background:#173443; }
+.self-directed-question-feedback { color:#ffc6b8; border:1px solid #75473c; background:#2b1714; padding:8px 10px; border-radius:7px; font-size:.8rem; }
+@media (min-width:641px) and (max-width:1199px) { .self-directed-scenario-modal.stage-media,.self-directed-scenario-modal.stage-question { width:25vw; min-width:240px; max-height:70dvh; } }
