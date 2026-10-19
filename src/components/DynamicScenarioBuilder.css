@@ -328,3 +328,21 @@
 .dynamic-stage-selected-content strong { color:#dff4fb; }
 .dynamic-stage-selected-content span { color:#a9bac1; font-size:12px; line-height:1.4; }
 .dynamic-stage-selected-content.question span { white-space:pre-wrap; }
+
+
+.dynamic-stage-transition-card { margin: 10px 0 12px; border: 1px solid rgba(112,144,156,.28); border-radius: 10px; background: rgba(11,22,28,.44); padding: 10px 12px; }
+.dynamic-stage-transition-main { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.dynamic-stage-transition-main > span { font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#91a8b2; }
+.dynamic-stage-transition-toggle { display:flex; gap:4px; }
+.dynamic-stage-transition-toggle button { min-height:30px; padding:5px 10px; border-radius:7px; }
+.dynamic-stage-transition-toggle button.selected { border-color:#e58b31; color:#ffb55e; background:rgba(229,139,49,.12); }
+.dynamic-stage-transition-main label { display:flex; align-items:center; gap:6px; margin-left:auto; }
+.dynamic-stage-transition-main input, .dynamic-stage-transition-override input { width:72px; }
+.dynamic-stage-transition-main em, .dynamic-stage-transition-override em { font-style:normal; color:#91a8b2; font-size:11px; }
+.dynamic-stage-transition-advanced { margin-top:9px; border-top:1px solid rgba(112,144,156,.18); padding-top:8px; }
+.dynamic-stage-transition-advanced summary { cursor:pointer; font-size:11px; font-weight:700; color:#b8c8cf; }
+.dynamic-stage-transition-advanced summary small { margin-left:8px; font-weight:400; color:#718792; }
+.dynamic-stage-transition-overrides { display:grid; gap:6px; margin-top:8px; }
+.dynamic-stage-transition-override { display:grid; grid-template-columns:minmax(150px,1fr) 150px 92px; gap:8px; align-items:center; font-size:11px; }
+.dynamic-stage-transition-override > label { display:flex; align-items:center; gap:4px; }
+@media (max-width: 900px) { .dynamic-stage-transition-override { grid-template-columns:minmax(120px,1fr) 132px; } .dynamic-stage-transition-override > label { grid-column:2; } }

@@ -25,6 +25,7 @@ import {
   type DynamicScenarioApplyMask,
   type DynamicScenarioMetric,
   type DynamicScenarioTrigger,
+  type DynamicScenarioStage,
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
@@ -58,7 +59,7 @@ interface InstructorAccountControlsProps {
   role: SessionRole
   sessionId: string | null
   currentScenario: InstructorScenarioSnapshot
-  onLoadScenario: (scenario: InstructorScenarioSnapshot, options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean }) => void
+  onLoadScenario: (scenario: InstructorScenarioSnapshot, options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean; stageTransition?: DynamicScenarioStage }) => void
   simulationPaused: boolean
   onSimulationPausedChange: (paused: boolean) => void
   physiologyMeasurements: PhysiologicalMeasurements
@@ -516,7 +517,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     if (!stages.length) return
     const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
     const nextScenario = applyDynamicStage(currentScenario, stages[nextIndex])
-    onLoadScenario(nextScenario, { pauseSimulation: false, resetScenarioClock: false })
+    onLoadScenario(nextScenario, { pauseSimulation: false, resetScenarioClock: false, stageTransition: nextIndex > 0 ? stages[nextIndex] : undefined })
     activateDynamicStage(preset, nextIndex, nextScenario, reason)
     if (selfDirected && selfDirectedRun) void updateSelfDirectedRun(selfDirectedRun.runId, nextIndex, nextIndex === stages.length - 1).catch(() => undefined)
   }
