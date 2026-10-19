@@ -590,6 +590,7 @@ export default function App() {
   const [teachingLaserMetrics, setTeachingLaserMetrics] = useState<TeachingMetricSnapshot[] | null>(null)
   const [dynamicScenarioRuntimeHost, setDynamicScenarioRuntimeHost] = useState<HTMLDivElement | null>(null)
   const [dynamicScenarioDiagnostic, setDynamicScenarioDiagnostic] = useState<DynamicScenarioDiagnosticContext | null>(null)
+  const [activeStaticScenarioName, setActiveStaticScenarioName] = useState<string | null>(null)
   const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
   const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
   const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1181px)').matches)
@@ -1626,7 +1627,8 @@ export default function App() {
             runtimeHost={dynamicScenarioRuntimeHost}
             onStartInstructorSession={startInstructorSession}
             onAccountConnectionChange={setInstructorAccountConnected}
-            onDynamicScenarioStarted={() => { setControlTab('teaching'); setMobileWorkspacePage('settings') }}
+            onDynamicScenarioStarted={() => { setActiveStaticScenarioName(null); setControlTab('teaching'); setMobileWorkspacePage('settings') }}
+            onStaticScenarioLoaded={(name) => { setActiveStaticScenarioName(name); setControlTab('teaching') }}
             onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
           />
           {teachingSession.role === 'candidate' && (
@@ -1952,6 +1954,20 @@ export default function App() {
                   onUpdatePolicy={teachingSession.updatePolicy}
                   onBroadcastNow={teachingSession.broadcastNow}
                 />
+                {teachingSession.role !== 'candidate' && (dynamicScenarioDiagnostic || activeStaticScenarioName) && (
+                  <section className="teaching-active-scenario" aria-label="Active scenario">
+                    <div className="teaching-active-scenario-heading">
+                      <span>Active scenario</span>
+                      <strong className={dynamicScenarioDiagnostic ? 'dynamic' : 'static'}>{dynamicScenarioDiagnostic ? 'Dynamic' : 'Static'}</strong>
+                    </div>
+                    <div className="teaching-active-scenario-body">
+                      <strong>{dynamicScenarioDiagnostic?.scenarioName ?? activeStaticScenarioName}</strong>
+                      {dynamicScenarioDiagnostic && (
+                        <span>Stage {dynamicScenarioDiagnostic.stageIndex + 1}: {dynamicScenarioDiagnostic.stageName}</span>
+                      )}
+                    </div>
+                  </section>
+                )}
                 <TeachingMediaInstructorPanel
                   role={teachingSession.role}
                   instructorAuthenticated={instructorAccountConnected}
