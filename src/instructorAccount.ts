@@ -33,6 +33,15 @@ export type DynamicScenarioTrigger =
 
 export type DynamicScenarioStageType = 'controls' | 'media' | 'question'
 
+export type DynamicScenarioTransition =
+  | { mode: 'immediate' }
+  | { mode: 'linear'; durationSeconds: number }
+
+export interface DynamicScenarioTransitionOverrides {
+  ventilator?: Partial<Record<keyof VentilatorSettings, DynamicScenarioTransition>>
+  patient?: Partial<Record<keyof PatientSettings, DynamicScenarioTransition>>
+}
+
 export interface DynamicScenarioStageMedia {
   mediaId: string
   title: string
@@ -70,6 +79,10 @@ export interface DynamicScenarioStage {
   stageType?: DynamicScenarioStageType
   media?: DynamicScenarioStageMedia
   question?: DynamicScenarioStageQuestion
+  /** Default transition inherited by numeric controls in this stage. */
+  transition?: DynamicScenarioTransition
+  /** Optional per-variable overrides. Discrete values always apply immediately. */
+  transitionOverrides?: DynamicScenarioTransitionOverrides
   snapshot: InstructorScenarioSnapshot
   /** Missing on v0.82.0 stages; absence means apply the complete snapshot. */
   apply?: DynamicScenarioApplyMask
@@ -168,10 +181,10 @@ export function asDynamicScenario(
   const firstStageSnapshot = asStaticScenario(current, '')
   return {
     ...firstStageSnapshot,
-    schemaVersion: 5,
+    schemaVersion: 7,
     kind: 'dynamic',
     description: description.trim(),
-    stages: [{ name: 'Stage 1', comment: '', stageType: 'controls', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
+    stages: [{ name: 'Stage 1', comment: '', stageType: 'controls', transition: { mode: 'immediate' }, transitionOverrides: {}, snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
   }
 }
 
@@ -211,6 +224,8 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
         stageType: stage.stageType ?? 'controls',
         media: stage.media,
         question: stage.question,
+        transition: stage.transition ?? { mode: 'immediate' },
+        transitionOverrides: stage.transitionOverrides ?? {},
         snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },
         apply: stage.apply,
         sourceName: stage.sourceName,

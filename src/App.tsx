@@ -15,7 +15,7 @@ import type { PatientSettings, Sample, VentilatorSettings } from './simulation/t
 import type { AlarmLimits, CandidateAlarmLevel } from './alarmTypes'
 import { useTeachingSession } from './session/useTeachingSession'
 import { recordSessionScenarioAction } from './session/supabase'
-import type { DynamicScenarioActionId, InstructorScenarioSnapshot } from './instructorAccount'
+import type { DynamicScenarioActionId, DynamicScenarioStage, DynamicScenarioTransition, InstructorScenarioSnapshot } from './instructorAccount'
 import { calculatePhysiologicalMeasurements } from './physiologyMeasurements'
 import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type ArdsSeverity, type PatientProfileName } from './patientProfiles'
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
@@ -690,7 +690,7 @@ export default function App() {
 
   const loadInstructorScenario = (
     scenario: InstructorScenarioSnapshot,
-    options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean },
+    options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean; stageTransition?: DynamicScenarioStage },
   ) => {
     const pauseSimulation = options?.pauseSimulation ?? true
     const resetScenarioClock = options?.resetScenarioClock ?? true
@@ -707,8 +707,77 @@ export default function App() {
       peep: scenario.ventilator.peep,
       mediaCount: scenario.mediaIds?.length ?? 0,
     })
-    setVentilator({ ...scenario.ventilator })
-    setPatient({ ...initialPatient, ...scenario.patient, vdVt: scenario.patient.vdVt ?? 0.4 })
+    if (scenarioStageTransitionTimerRef.current != null) {
+      window.clearInterval(scenarioStageTransitionTimerRef.current)
+      scenarioStageTransitionTimerRef.current = null
+    }
+    scenarioStageTransitionRunningRef.current = false
+
+    const transitionStage = options?.stageTransition
+    const transitionDefault = transitionStage?.transition ?? { mode: 'immediate' as const }
+    const transitionOverrides = transitionStage?.transitionOverrides ?? {}
+    const selectedVentilator = new Set((transitionStage?.apply?.ventilator ?? Object.keys(scenario.ventilator)).map(String))
+    const selectedPatient = new Set((transitionStage?.apply?.patient ?? Object.keys(scenario.patient)).map(String))
+    const fromVentilator = { ...ventilator }
+    const fromPatient = { ...effectivePatientRef.current }
+    const targetVentilator = { ...scenario.ventilator }
+    const targetPatient = { ...initialPatient, ...scenario.patient, vdVt: scenario.patient.vdVt ?? 0.4 }
+
+    const policyFor = (group: 'ventilator' | 'patient', key: string): DynamicScenarioTransition => {
+      const overrides = transitionOverrides[group] as Record<string, DynamicScenarioTransition> | undefined
+      return overrides?.[key] ?? transitionDefault
+    }
+    const canLinear = (from: unknown, to: unknown, policy: DynamicScenarioTransition) =>
+      policy.mode === 'linear' && policy.durationSeconds > 0 && typeof from === 'number' && typeof to === 'number' && Number.isFinite(from) && Number.isFinite(to)
+
+    const linearVentilatorKeys = Object.keys(targetVentilator).filter((key) => selectedVentilator.has(key) && canLinear((fromVentilator as unknown as Record<string, unknown>)[key], (targetVentilator as unknown as Record<string, unknown>)[key], policyFor('ventilator', key)))
+    const linearPatientKeys = Object.keys(targetPatient).filter((key) => selectedPatient.has(key) && canLinear((fromPatient as unknown as Record<string, unknown>)[key], (targetPatient as unknown as Record<string, unknown>)[key], policyFor('patient', key)))
+
+    if (!transitionStage || (!linearVentilatorKeys.length && !linearPatientKeys.length)) {
+      setVentilator(targetVentilator)
+      setPatient(targetPatient)
+    } else {
+      scenarioStageTransitionRunningRef.current = true
+      const initialVentilatorState = { ...targetVentilator } as unknown as Record<string, unknown>
+      const initialPatientState = { ...targetPatient } as unknown as Record<string, unknown>
+      for (const key of linearVentilatorKeys) initialVentilatorState[key] = (fromVentilator as unknown as Record<string, unknown>)[key]
+      for (const key of linearPatientKeys) initialPatientState[key] = (fromPatient as unknown as Record<string, unknown>)[key]
+      setVentilator(initialVentilatorState as unknown as VentilatorSettings)
+      setPatient(initialPatientState as unknown as PatientSettings)
+      const startedAt = simulationTimeRef.current
+
+      scenarioStageTransitionTimerRef.current = window.setInterval(() => {
+        const elapsed = Math.max(0, simulationTimeRef.current - startedAt)
+        let complete = true
+        const nextVentilator = { ...targetVentilator } as unknown as Record<string, unknown>
+        const nextPatient = { ...targetPatient } as unknown as Record<string, unknown>
+        for (const key of linearVentilatorKeys) {
+          const policy = policyFor('ventilator', key)
+          const duration = policy.mode === 'linear' ? Math.max(0.001, policy.durationSeconds) : 0.001
+          const fraction = Math.min(1, elapsed / duration)
+          const from = Number((fromVentilator as unknown as Record<string, unknown>)[key])
+          const to = Number((targetVentilator as unknown as Record<string, unknown>)[key])
+          nextVentilator[key] = from + (to - from) * fraction
+          if (fraction < 1) complete = false
+        }
+        for (const key of linearPatientKeys) {
+          const policy = policyFor('patient', key)
+          const duration = policy.mode === 'linear' ? Math.max(0.001, policy.durationSeconds) : 0.001
+          const fraction = Math.min(1, elapsed / duration)
+          const from = Number((fromPatient as unknown as Record<string, unknown>)[key])
+          const to = Number((targetPatient as unknown as Record<string, unknown>)[key])
+          nextPatient[key] = from + (to - from) * fraction
+          if (fraction < 1) complete = false
+        }
+        setVentilator(nextVentilator as unknown as VentilatorSettings)
+        setPatient(nextPatient as unknown as PatientSettings)
+        if (complete) {
+          if (scenarioStageTransitionTimerRef.current != null) window.clearInterval(scenarioStageTransitionTimerRef.current)
+          scenarioStageTransitionTimerRef.current = null
+          window.setTimeout(() => { scenarioStageTransitionRunningRef.current = false }, 0)
+        }
+      }, 200)
+    }
     setAlarmLimits({ ...scenario.alarmLimits })
     setPatientTransitionSeconds(scenario.patientTransitionSeconds)
     setWaveformDisplay({ ...scenario.waveformDisplay })
@@ -744,6 +813,8 @@ export default function App() {
   const simulationTimeRef = useRef(0)
   const effectivePatientRef = useRef<PatientSettings>({ ...patient })
   const patientTransitionRef = useRef<{ from: PatientSettings; to: PatientSettings; start: number; duration: number } | null>(null)
+  const scenarioStageTransitionTimerRef = useRef<number | null>(null)
+  const scenarioStageTransitionRunningRef = useRef(false)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
   const alarmSilenceLongPressTimeoutRef = useRef<number | null>(null)
   const alarmSilenceLongPressTriggeredRef = useRef(false)
@@ -778,6 +849,11 @@ export default function App() {
   }, [patientTransitionSeconds])
 
   useEffect(() => {
+    if (scenarioStageTransitionRunningRef.current) {
+      effectivePatientRef.current = { ...patient }
+      patientTransitionRef.current = null
+      return
+    }
     if (patientTransitionSeconds <= 0) {
       effectivePatientRef.current = { ...patient }
       patientTransitionRef.current = null
@@ -1192,6 +1268,7 @@ export default function App() {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
     if (alarmSilenceLongPressTimeoutRef.current != null) window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
     if (freezeLongPressTimeoutRef.current != null) window.clearTimeout(freezeLongPressTimeoutRef.current)
+    if (scenarioStageTransitionTimerRef.current != null) window.clearInterval(scenarioStageTransitionTimerRef.current)
     void audioContextRef.current?.close()
   }, [])
 

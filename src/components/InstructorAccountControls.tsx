@@ -25,6 +25,7 @@ import {
   type DynamicScenarioApplyMask,
   type DynamicScenarioMetric,
   type DynamicScenarioTrigger,
+  type DynamicScenarioStage,
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
@@ -58,7 +59,7 @@ interface InstructorAccountControlsProps {
   role: SessionRole
   sessionId: string | null
   currentScenario: InstructorScenarioSnapshot
-  onLoadScenario: (scenario: InstructorScenarioSnapshot, options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean }) => void
+  onLoadScenario: (scenario: InstructorScenarioSnapshot, options?: { pauseSimulation?: boolean; resetScenarioClock?: boolean; stageTransition?: DynamicScenarioStage }) => void
   simulationPaused: boolean
   onSimulationPausedChange: (paused: boolean) => void
   physiologyMeasurements: PhysiologicalMeasurements
@@ -213,6 +214,12 @@ function conditionMatches(actual: number, operator: 'lt' | 'eq' | 'gt', target: 
 function settingChanged(a: unknown, b: unknown) {
   if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) > 1e-6
   return a !== b
+}
+
+function stageTransitionDuration(stage: DynamicScenarioStage, group: 'ventilator' | 'patient', parameter: string): number {
+  const overrides = stage.transitionOverrides?.[group] as Record<string, { mode: 'immediate' } | { mode: 'linear'; durationSeconds: number }> | undefined
+  const policy = overrides?.[parameter] ?? stage.transition ?? { mode: 'immediate' as const }
+  return policy.mode === 'linear' ? Math.max(0, policy.durationSeconds) : 0
 }
 
 function formatStageTimer(seconds: number) {
@@ -516,7 +523,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     if (!stages.length) return
     const nextIndex = Math.max(0, Math.min(stages.length - 1, index))
     const nextScenario = applyDynamicStage(currentScenario, stages[nextIndex])
-    onLoadScenario(nextScenario, { pauseSimulation: false, resetScenarioClock: false })
+    onLoadScenario(nextScenario, { pauseSimulation: false, resetScenarioClock: false, stageTransition: nextIndex > 0 ? stages[nextIndex] : undefined })
     activateDynamicStage(preset, nextIndex, nextScenario, reason)
     if (selfDirected && selfDirectedRun) void updateSelfDirectedRun(selfDirectedRun.runId, nextIndex, nextIndex === stages.length - 1).catch(() => undefined)
   }
@@ -610,6 +617,8 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
         const correct = question?.correctOptionId ?? null
         shouldAdvance = Boolean(correct && (selfDirectedRun ? selfDirectedQuestionAnswer === correct : scenarioPromptRuntime.responses.some((response) => response.option_id === correct)))
       } else if (trigger.type === 'patient-change') {
+        const transitionDuration = stageTransitionDuration(stages[activeDynamicStage], 'patient', String(trigger.parameter))
+        if (scenarioElapsedSeconds - activeDynamicStageStartedAt < transitionDuration) continue
         if (selfDirectedRun) {
           if (trigger.actor === 'candidate' || trigger.actor === 'either') {
             const baseline=patientBaselineInstructorRef.current
@@ -643,6 +652,8 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
           }
         }
       } else if (trigger.type === 'action') {
+        const transitionDuration = stageTransitionDuration(stages[activeDynamicStage], 'ventilator', String(trigger.parameter))
+        if (scenarioElapsedSeconds - activeDynamicStageStartedAt < transitionDuration) continue
         if (selfDirectedRun) {
           if (trigger.actor === 'candidate' || trigger.actor === 'either') {
             const baseline=actionBaselineInstructorRef.current

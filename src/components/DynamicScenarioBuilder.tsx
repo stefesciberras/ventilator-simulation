@@ -11,6 +11,7 @@ import {
   type DynamicScenarioApplyMask,
   type DynamicScenarioMetric,
   type DynamicScenarioStage,
+  type DynamicScenarioTransition,
   type DynamicScenarioTrigger,
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
@@ -66,6 +67,8 @@ const CONDITION_METRICS: Array<{ value: DynamicScenarioMetric; label: string; un
 ]
 
 const defaultAdvanceTrigger = (): DynamicScenarioTrigger => ({ type: 'manual' })
+const immediateTransition = (): DynamicScenarioTransition => ({ mode: 'immediate' })
+const linearTransition = (durationSeconds = 60): DynamicScenarioTransition => ({ mode: 'linear', durationSeconds })
 const SCENARIO_FILE_SCHEMA = 'eduvent-scenario-file-v1'
 
 interface PortableScenarioFile {
@@ -702,7 +705,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       const base = asStaticScenario(cloneScenario(draft.stages[0]?.snapshot ?? currentScenario), '')
       const scenario: InstructorScenarioSnapshot = {
         ...base,
-        schemaVersion: 6,
+        schemaVersion: 7,
         kind: 'dynamic',
         description: draft.description.trim(),
         stages: draft.stages.map((stage) => {
@@ -756,7 +759,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       if (!parsed.scenario || parsed.scenario.kind !== 'dynamic') throw new Error('Only dynamic Scenario Builder files can be imported here.')
       if (!Array.isArray(parsed.scenario.stages) || parsed.scenario.stages.length === 0) throw new Error('The imported scenario has no stages.')
       const importedStages = parsed.scenario.stages.map((stage, index) => normaliseStage(stage, index))
-      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 6, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
+      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 7, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
       const saved = await createInstructorPreset(uniqueImportedName(parsed.name ?? 'Imported scenario', [...dynamicPresets, ...staticPresets]), scenario)
       await onRefresh(); replaceDraft(fromPreset(saved)); setMessage(`Imported “${saved.name}”.`)
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Unable to import scenario file.') }
@@ -923,6 +926,9 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
             const collapsed = collapsedStages.has(index)
             const stageType = stage.stageType ?? 'controls'
             const triggers = dynamicStageTriggers(stage)
+            const transition = stage.transition ?? immediateTransition()
+            const numericVentFields = ventFields.filter((field) => field.type !== 'select' && field.type !== 'boolean' && ventSelected.includes(field.key))
+            const numericPatientFields = [...PATIENT_FIELDS, ...PHYSIO_FIELDS].filter((field) => field.type !== 'select' && field.type !== 'boolean' && patientSelected.includes(field.key))
 
             return (
               <div className="dynamic-stage-shell" key={`${index}-${stage.name}`}>
@@ -970,6 +976,36 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                     {(['controls', 'media', 'question'] as const).map((type) => <button type="button" key={type} className={stageType === type ? 'selected' : ''} onClick={() => setStageType(index, type)}>{type === 'controls' ? 'Controls' : type === 'media' ? 'Media' : 'Question'}</button>)}
                   </div>
                   {stageType === 'controls' && <>
+                  <section className="dynamic-stage-transition-card">
+                    <div className="dynamic-stage-transition-main">
+                      <span>Transition</span>
+                      <div className="dynamic-stage-transition-toggle">
+                        <button type="button" className={transition.mode === 'immediate' ? 'selected' : ''} onClick={() => updateStage(index, (current) => ({ ...current, transition: immediateTransition() }))}>Immediate</button>
+                        <button type="button" disabled={index === 0} title={index === 0 ? 'The first stage establishes the starting state.' : undefined} className={transition.mode === 'linear' ? 'selected' : ''} onClick={() => updateStage(index, (current) => ({ ...current, transition: linearTransition(current.transition?.mode === 'linear' ? current.transition.durationSeconds : 60) }))}>Linear</button>
+                      </div>
+                      {transition.mode === 'linear' && index > 0 && <label><span>Duration</span><input type="number" min={1} max={3600} value={transition.durationSeconds} onChange={(event) => updateStage(index, (current) => ({ ...current, transition: linearTransition(Math.max(1, Number(event.target.value) || 1)) }))} /><em>s</em></label>}
+                    </div>
+                    {index > 0 && (numericVentFields.length > 0 || numericPatientFields.length > 0) && <details className="dynamic-stage-transition-advanced">
+                      <summary>Advanced transitions <small>Optional per-parameter overrides</small></summary>
+                      <div className="dynamic-stage-transition-overrides">
+                        {[...numericVentFields.map((field) => ({ group: 'ventilator' as const, field })), ...numericPatientFields.map((field) => ({ group: 'patient' as const, field }))].map(({ group, field }) => {
+                          const overrides = stage.transitionOverrides?.[group] as Record<string, DynamicScenarioTransition> | undefined
+                          const override = overrides?.[field.key]
+                          const value = override == null ? 'inherit' : override.mode
+                          return <div className="dynamic-stage-transition-override" key={`${group}-${field.key}`}><span>{field.label}</span><select value={value} onChange={(event) => updateStage(index, (current) => {
+                            const next = { ...(current.transitionOverrides ?? {}) }
+                            const groupOverrides = { ...((next[group] ?? {}) as Record<string, DynamicScenarioTransition>) }
+                            const choice = event.target.value
+                            if (choice === 'inherit') delete groupOverrides[field.key]
+                            else if (choice === 'immediate') groupOverrides[field.key] = immediateTransition()
+                            else groupOverrides[field.key] = linearTransition(override?.mode === 'linear' ? override.durationSeconds : (current.transition?.mode === 'linear' ? current.transition.durationSeconds : 60))
+                            next[group] = groupOverrides as never
+                            return { ...current, transitionOverrides: next }
+                          })}><option value="inherit">Inherit stage</option><option value="immediate">Immediate</option><option value="linear">Linear</option></select>{override?.mode === 'linear' && <label><input type="number" min={1} max={3600} value={override.durationSeconds} onChange={(event) => updateStage(index, (current) => { const next={ ...(current.transitionOverrides ?? {}) }; const groupOverrides={ ...((next[group] ?? {}) as Record<string, DynamicScenarioTransition>) }; groupOverrides[field.key]=linearTransition(Math.max(1,Number(event.target.value)||1)); next[group]=groupOverrides as never; return { ...current, transitionOverrides: next } })} /><em>s</em></label>}</div>
+                        })}
+                      </div>
+                    </details>}
+                  </section>
                   <label className="dynamic-stage-source-row">
                     <span>Start from</span>
                     <select
