@@ -1,0 +1,207 @@
+name: Scenario Builder v0.4 stage content
+
+on:
+  push:
+    branches:
+      - chatgpt/scenario-builder-v0.4.0-stage-content
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.4.0-stage-content
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Implement stage content types
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'{label}: anchor not found')
+              return text.replace(old, new, 1)
+
+          # ---------- instructorAccount.ts ----------
+          p = Path('src/instructorAccount.ts')
+          s = p.read_text()
+          s = replace_once(s,
+          "  | { type: 'action'; parameter: keyof VentilatorSettings; actor: 'candidate' | 'instructor' | 'either' }\n",
+          "  | { type: 'action'; parameter: keyof VentilatorSettings; actor: 'candidate' | 'instructor' | 'either' }\n  | { type: 'question-any' }\n  | { type: 'question-correct' }\n",
+          'trigger union')
+          marker = "export interface DynamicScenarioApplyMask {\n"
+          types = """export type DynamicScenarioStageType = 'controls' | 'media' | 'question'\n\nexport interface DynamicScenarioStageMedia {\n  mediaId: string\n  title: string\n  mediaKind: 'image' | 'video'\n  storagePath: string\n  mimeType: string\n}\n\nexport interface DynamicScenarioStageQuestionOption { id: string; text: string }\n\nexport interface DynamicScenarioStageQuestion {\n  libraryItemId?: string\n  kind: 'mcq' | 'poll'\n  title: string | null\n  body: string\n  options: DynamicScenarioStageQuestionOption[]\n  correctOptionId: string | null\n  explanation: string | null\n}\n\n"""
+          s = replace_once(s, marker, types + marker, 'stage content types')
+          s = replace_once(s,
+          "  /** Instructor-facing explanation of what should happen during this stage. */\n  comment?: string\n  snapshot: InstructorScenarioSnapshot\n",
+          "  /** Instructor-facing explanation of what should happen during this stage. */\n  comment?: string\n  /** v6 content model. Older stages default to controls. */\n  stageType?: DynamicScenarioStageType\n  media?: DynamicScenarioStageMedia\n  question?: DynamicScenarioStageQuestion\n  snapshot: InstructorScenarioSnapshot\n",
+          'stage fields')
+          s = replace_once(s,
+          "  const configured = stage.advanceTriggers?.length\n    ? stage.advanceTriggers\n    : [stage.advanceTrigger ?? { type: 'manual' as const }]\n",
+          "  const fallback: DynamicScenarioTrigger = (stage.stageType ?? 'controls') === 'question' ? { type: 'question-any' } : { type: 'manual' }\n  const configured = stage.advanceTriggers?.length\n    ? stage.advanceTriggers\n    : [stage.advanceTrigger ?? fallback]\n",
+          'trigger fallback')
+          s = replace_once(s,
+          "  return deduplicated.length ? deduplicated : [{ type: 'manual' }]\n",
+          "  return deduplicated.length ? deduplicated : [fallback]\n",
+          'trigger return fallback')
+          s = replace_once(s,
+          "export function applyDynamicStage(current: InstructorScenarioSnapshot, stage: DynamicScenarioStage): InstructorScenarioSnapshot {\n  const mask = stage.apply\n",
+          "export function applyDynamicStage(current: InstructorScenarioSnapshot, stage: DynamicScenarioStage): InstructorScenarioSnapshot {\n  if ((stage.stageType ?? 'controls') !== 'controls') {\n    return { ...current, schemaVersion: 2, kind: 'static', description: '', stages: undefined }\n  }\n  const mask = stage.apply\n",
+          'non-control apply')
+          s = replace_once(s,
+          "    stages: [{ name: 'Stage 1', comment: '', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],\n",
+          "    stages: [{ name: 'Stage 1', comment: '', stageType: 'controls', snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],\n",
+          'first stage type')
+          s = replace_once(s,
+          "        comment: stage.comment ?? '',\n        snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },\n",
+          "        comment: stage.comment ?? '',\n        stageType: stage.stageType ?? 'controls',\n        media: stage.media,\n        question: stage.question,\n        snapshot: { ...stage.snapshot, patient: normalisePatientSettings(stage.snapshot.patient), kind: 'static', stages: undefined },\n",
+          'normalise content')
+          p.write_text(s)
+
+          # ---------- DynamicScenarioBuilder.tsx ----------
+          p = Path('src/components/DynamicScenarioBuilder.tsx')
+          s = p.read_text()
+          s = replace_once(s,
+          "import { createSelfDirectedAssignment, selfDirectedAssignmentUrl, type SelfDirectedAssignmentCreated } from '../selfDirectedAssignments'\n",
+          "import { createSelfDirectedAssignment, selfDirectedAssignmentUrl, type SelfDirectedAssignmentCreated } from '../selfDirectedAssignments'\nimport { listInstructorCaseMedia, type CaseMediaRow } from '../caseMedia'\nimport { listTeachingLibraryItems } from '../teaching/repository'\nimport type { TeachingLibraryItem } from '../teaching/types'\n",
+          'builder imports')
+          s = replace_once(s,
+          "  if (type === 'condition') return { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 }\n  return { type: 'action', parameter: 'fio2', actor: 'either' }\n",
+          "  if (type === 'condition') return { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 }\n  if (type === 'question-any') return { type: 'question-any' }\n  if (type === 'question-correct') return { type: 'question-correct' }\n  return { type: 'action', parameter: 'fio2', actor: 'either' }\n",
+          'builder default trigger')
+          s = replace_once(s,
+          "  if (value.type === 'condition') {\n",
+          "  if (value.type === 'question-any') return 'Any answer submitted'\n  if (value.type === 'question-correct') return 'Correct answer submitted'\n  if (value.type === 'condition') {\n",
+          'trigger summary')
+          s = replace_once(s,
+          "    ...cloned,\n    name: stage.name || `Stage ${index + 1}`,\n",
+          "    ...cloned,\n    name: stage.name || `Stage ${index + 1}`,\n    stageType: stage.stageType ?? 'controls',\n",
+          'normalise stage type')
+          s = replace_once(s,
+          "    name: `Stage ${index + 1}`,\n    comment: '',\n    snapshot,\n",
+          "    name: `Stage ${index + 1}`,\n    comment: '',\n    stageType: 'controls',\n    snapshot,\n",
+          'new stage type')
+          state_anchor = "  const [assignmentResult, setAssignmentResult] = useState<SelfDirectedAssignmentCreated | null>(null)\n"
+          state_add = state_anchor + "  const [mediaLibrary, setMediaLibrary] = useState<CaseMediaRow[]>([])\n  const [questionLibrary, setQuestionLibrary] = useState<TeachingLibraryItem[]>([])\n  const [libraryError, setLibraryError] = useState<string | null>(null)\n"
+          s = replace_once(s, state_anchor, state_add, 'library state')
+          effect_anchor = "  useEffect(() => {\n    if (!wideScreen) return\n    onSimulationPausedChange(true)\n"
+          effect_add = """  useEffect(() => {\n    let cancelled = false\n    void Promise.all([listInstructorCaseMedia(), listTeachingLibraryItems()]).then(([media, questions]) => {\n      if (cancelled) return\n      setMediaLibrary(media)\n      setQuestionLibrary(questions.filter((item) => item.kind === 'mcq' || item.kind === 'poll'))\n      setLibraryError(null)\n    }).catch((cause) => { if (!cancelled) setLibraryError(cause instanceof Error ? cause.message : 'Unable to load scenario libraries.') })\n    return () => { cancelled = true }\n  }, [])\n\n""" + effect_anchor
+          s = replace_once(s, effect_anchor, effect_add, 'library effect')
+          insert_anchor = "  const selectStageSource = (index: number, presetId: string) => {\n"
+          helpers = """  const setStageType = (index: number, stageType: 'controls' | 'media' | 'question') => {\n    updateStage(index, (stage) => {\n      if (stageType === 'question') {\n        const trigger: DynamicScenarioTrigger = { type: 'question-any' }\n        return { ...stage, stageType, media: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }\n      }\n      const trigger: DynamicScenarioTrigger = { type: 'manual' }\n      return { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }\n    })\n    setTriggerMenuIndex(null)\n  }\n\n  const selectStageMedia = (index: number, mediaId: string) => {\n    const media = mediaLibrary.find((item) => item.id === mediaId)\n    if (!media) return\n    updateStage(index, (stage) => ({ ...stage, stageType: 'media', media: { mediaId: media.id, title: media.title, mediaKind: media.media_kind, storagePath: media.storage_path, mimeType: media.mime_type } }))\n  }\n\n  const selectStageQuestion = (index: number, questionId: string) => {\n    const item = questionLibrary.find((entry) => entry.id === questionId)\n    if (!item || (item.kind !== 'mcq' && item.kind !== 'poll')) return\n    const trigger: DynamicScenarioTrigger = { type: 'question-any' }\n    updateStage(index, (stage) => ({\n      ...stage, stageType: 'question', media: undefined,\n      question: { libraryItemId: item.id, kind: item.kind, title: item.title, body: item.body, options: item.options, correctOptionId: item.correct_option_id, explanation: item.explanation },\n      advanceTrigger: trigger, advanceTriggers: [trigger],\n    }))\n  }\n\n"""
+          s = replace_once(s, insert_anchor, helpers + insert_anchor, 'stage type helpers')
+          s = s.replace("        schemaVersion: 5,\n", "        schemaVersion: 6,\n", 1)
+          s = s.replace("The assignment is a snapshot of the scenario at publication time. Media, questions and polling are intentionally not included in v0.3.", "The assignment is a snapshot of the scenario at publication time, including stage media and question content.")
+          # Stage render calculations
+          s = replace_once(s,
+          "            const collapsed = collapsedStages.has(index)\n            const triggers = dynamicStageTriggers(stage)\n",
+          "            const collapsed = collapsedStages.has(index)\n            const stageType = stage.stageType ?? 'controls'\n            const triggers = dynamicStageTriggers(stage)\n",
+          'stage type render var')
+          # Insert type selector + condition controls
+          s = replace_once(s,
+          "                  {!collapsed && <>\n                  <label className=\"dynamic-stage-source-row\">\n",
+          """                  {!collapsed && <>\n                  <div className=\"dynamic-stage-type-tabs\" role=\"group\" aria-label={`Stage ${index + 1} type`}>\n                    {(['controls', 'media', 'question'] as const).map((type) => <button type=\"button\" key={type} className={stageType === type ? 'selected' : ''} onClick={() => setStageType(index, type)}>{type === 'controls' ? 'Controls' : type === 'media' ? 'Media' : 'Question'}</button>)}\n                  </div>\n                  {stageType === 'controls' && <>\n                  <label className=\"dynamic-stage-source-row\">\n""",
+          'stage type selector')
+          end_controls = """                  </div>\n                  </>}\n                </article>\n"""
+          replacement_end = """                  </div>\n                  </>}\n                  {stageType === 'media' && <div className=\"dynamic-stage-content-picker\">\n                    <div className=\"dynamic-stage-content-heading\"><strong>Media library</strong><span>Select the image or video presented during this stage.</span></div>\n                    <select value={stage.media?.mediaId ?? ''} onChange={(event) => selectStageMedia(index, event.target.value)}><option value=\"\">Select media…</option>{mediaLibrary.map((media) => <option key={media.id} value={media.id}>{media.title} · {media.media_kind === 'video' ? 'Video' : 'Image'}</option>)}</select>\n                    {stage.media && <div className=\"dynamic-stage-selected-content\"><strong>{stage.media.title}</strong><span>{stage.media.mediaKind === 'video' ? 'Video' : 'Image'} · simulator continues running while displayed.</span></div>}\n                    {!mediaLibrary.length && <small>No media are available in your media library.</small>}\n                  </div>}\n                  {stageType === 'question' && <div className=\"dynamic-stage-content-picker\">\n                    <div className=\"dynamic-stage-content-heading\"><strong>Question library</strong><span>Select a saved MCQ or poll. The question is copied into the scenario snapshot.</span></div>\n                    <select value={stage.question?.libraryItemId ?? ''} onChange={(event) => selectStageQuestion(index, event.target.value)}><option value=\"\">Select question…</option>{questionLibrary.map((item) => <option key={item.id} value={item.id}>{item.title || item.body.slice(0, 60)} · {item.kind.toUpperCase()}</option>)}</select>\n                    {stage.question && <div className=\"dynamic-stage-selected-content question\"><strong>{stage.question.title || 'Question'}</strong><span>{stage.question.body}</span><small>{stage.question.kind === 'mcq' ? (stage.question.correctOptionId ? 'MCQ · correct-answer trigger available' : 'MCQ · no correct answer marked') : 'Poll · any-answer or time trigger'}</small></div>}\n                    {!questionLibrary.length && <small>No MCQs or polls are available in your question library.</small>}\n                  </div>}\n                  {libraryError && <div className=\"account-error\">{libraryError}</div>}\n                  </>}\n                </article>\n"""
+          s = replace_once(s, end_controls, replacement_end, 'close controls and content pickers')
+          # Trigger menu: add question trigger vars and dynamic allowed types
+          s = replace_once(s,
+          "                    const actionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'action' }> => trigger.type === 'action')\n                    return <div className=\"dynamic-trigger-menu\">\n                      <div className=\"dynamic-trigger-types\">\n                        {(['manual', 'time', 'condition', 'action'] as const).map((type) => (\n                          <button type=\"button\" key={type} className={triggers.some((trigger) => trigger.type === type) ? 'selected' : ''} onClick={() => toggleTriggerType(index, type)}>\n                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : 'Action'}\n                          </button>\n                        ))}\n                      </div>\n                      <p>Any selected trigger can advance to the next stage (OR). Manual keeps the instructor trigger available while automatic triggers remain armed.</p>\n",
+          """                    const actionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'action' }> => trigger.type === 'action')\n                    const triggerTypes: DynamicScenarioTrigger['type'][] = stageType === 'question' ? ['question-any', 'question-correct', 'time'] : ['manual', 'time', 'condition', 'action']\n                    return <div className=\"dynamic-trigger-menu\">\n                      <div className=\"dynamic-trigger-types\">\n                        {triggerTypes.map((type) => (\n                          <button type=\"button\" key={type} disabled={type === 'question-correct' && !stage.question?.correctOptionId} className={triggers.some((trigger) => trigger.type === type) ? 'selected' : ''} onClick={() => toggleTriggerType(index, type)}>\n                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Condition' : type === 'action' ? 'Action' : type === 'question-correct' ? 'Correct answer' : 'Any answer'}\n                          </button>\n                        ))}\n                      </div>\n                      <p>{stageType === 'question' ? 'Any selected question trigger can advance to the next stage (OR).' : 'Any selected trigger can advance to the next stage (OR). Manual keeps the instructor trigger available while automatic triggers remain armed.'}</p>\n""",
+          'question trigger menu')
+          p.write_text(s)
+
+          # ---------- selfDirectedAssignments.ts ----------
+          p = Path('src/selfDirectedAssignments.ts')
+          s = p.read_text()
+          old = """/**\n * Self-directed v0.3 deliberately publishes the simulator/scenario state only.\n * Media, teaching prompts, questions and polling are deferred to a later schema.\n */\nexport function prepareSelfDirectedScenario(source: InstructorScenarioSnapshot): InstructorScenarioSnapshot {\n  const scenario = JSON.parse(JSON.stringify(source)) as InstructorScenarioSnapshot\n  scenario.mediaIds = []\n  scenario.stages = scenario.stages?.map((stage) => ({\n    ...stage,\n    snapshot: { ...stage.snapshot, mediaIds: [] },\n    apply: stage.apply ? { ...stage.apply, mediaIds: false } : stage.apply,\n  }))\n  return scenario\n}\n"""
+          new = """/** Self-directed assignments are immutable snapshots, including stage media references and copied question content. */\nexport function prepareSelfDirectedScenario(source: InstructorScenarioSnapshot): InstructorScenarioSnapshot {\n  return JSON.parse(JSON.stringify(source)) as InstructorScenarioSnapshot\n}\n"""
+          s = replace_once(s, old, new, 'self directed media stripping')
+          p.write_text(s)
+
+          # ---------- App.tsx ----------
+          p = Path('src/App.tsx')
+          s = p.read_text()
+          s = replace_once(s,
+          "            role={teachingSession.role}\n            currentScenario={currentInstructorScenario}\n",
+          "            role={teachingSession.role}\n            sessionId={teachingSession.session?.id ?? null}\n            currentScenario={currentInstructorScenario}\n",
+          'App session id prop')
+          p.write_text(s)
+
+          # ---------- InstructorAccountControls.tsx ----------
+          p = Path('src/components/InstructorAccountControls.tsx')
+          s = p.read_text()
+          s = replace_once(s,
+          "import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'\n",
+          "import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'\nimport { createCaseMediaSignedUrl, listCaseMediaByIds, releaseSessionCaseMedia } from '../caseMedia'\nimport { eduventTeachingHost, useTeachingPrompts } from '../teaching'\nimport { useTeachingMediaPresentation } from '../teaching/TeachingMediaPresentation'\n",
+          'runtime imports')
+          s = replace_once(s,
+          "interface InstructorAccountControlsProps {\n  role: SessionRole\n",
+          "interface InstructorAccountControlsProps {\n  role: SessionRole\n  sessionId: string | null\n",
+          'runtime session prop')
+          s = replace_once(s,
+          "export function InstructorAccountControls({ role, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange }: InstructorAccountControlsProps) {\n",
+          "export function InstructorAccountControls({ role, sessionId, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange }: InstructorAccountControlsProps) {\n",
+          'runtime destructure')
+          state_anchor = "  const [selfDirectedError, setSelfDirectedError] = useState<string | null>(null)\n"
+          state_new = state_anchor + "  const [selfDirectedStageMediaUrl, setSelfDirectedStageMediaUrl] = useState<string | null>(null)\n  const [selfDirectedQuestionSelected, setSelfDirectedQuestionSelected] = useState('')\n  const [selfDirectedQuestionAnswer, setSelfDirectedQuestionAnswer] = useState<string | null>(null)\n"
+          s = replace_once(s, state_anchor, state_new, 'runtime content state')
+          hook_anchor = "  const actionBaselineInstructorRef = useRef<VentilatorSettings | null>(null)\n"
+          hooks = "  const scenarioPromptRuntime = useTeachingPrompts(role, sessionId, eduventTeachingHost)\n  const scenarioMediaRuntime = useTeachingMediaPresentation(role, sessionId)\n" + hook_anchor
+          s = replace_once(s, hook_anchor, hooks, 'runtime content hooks')
+          # Add stage content effect before addDynamicStage
+          add_anchor = "  const addDynamicStage = async (preset: InstructorPresetRow) => {\n"
+          effect = """  useEffect(() => {\n    const stages = activeRuntimePreset?.scenario.stages ?? []\n    const stage = stages[Math.min(activeDynamicStage, Math.max(0, stages.length - 1))]\n    setSelfDirectedQuestionSelected('')\n    setSelfDirectedQuestionAnswer(null)\n    setSelfDirectedStageMediaUrl(null)\n    if (!stage || !activeRuntimePreset) return\n    const stageType = stage.stageType ?? 'controls'\n    if (selfDirectedRun) {\n      if (stageType === 'media' && stage.media?.mediaId) {\n        let cancelled = false\n        void listCaseMediaByIds([stage.media.mediaId]).then((rows) => {\n          const media = rows[0]\n          if (!media) throw new Error('Scenario media is no longer available.')\n          return createCaseMediaSignedUrl(media.storage_path, 3600)\n        }).then((url) => { if (!cancelled) setSelfDirectedStageMediaUrl(url) }).catch(() => { if (!cancelled) setSelfDirectedStageMediaUrl(null) })\n        return () => { cancelled = true }\n      }\n      return\n    }\n    if (role !== 'instructor' || !sessionId) return\n    if (stageType === 'media' && stage.media?.mediaId) {\n      void releaseSessionCaseMedia(sessionId, stage.media.mediaId).then(() => scenarioMediaRuntime.present(stage.media!.mediaId)).catch(() => undefined)\n    } else if (scenarioMediaRuntime.activePresentation) {\n      void scenarioMediaRuntime.close().catch(() => undefined)\n    }\n    if (stageType === 'question' && stage.question) {\n      void scenarioPromptRuntime.presentPrompt({ kind: stage.question.kind, title: stage.question.title ?? '', body: stage.question.body, options: stage.question.options, correctOptionId: stage.question.correctOptionId, explanation: stage.question.explanation }).catch(() => undefined)\n    } else if (scenarioPromptRuntime.activePrompt) {\n      void scenarioPromptRuntime.closePrompt().catch(() => undefined)\n    }\n  }, [activeRuntimePreset?.id, activeDynamicStage, selfDirectedRun?.runId, role, sessionId])\n\n"""
+          s = replace_once(s, add_anchor, effect + add_anchor, 'runtime stage content effect')
+          # Automatic triggers: add question handling before action branch
+          s = replace_once(s,
+          "      } else if (trigger.type === 'action') {\n",
+          """      } else if (trigger.type === 'question-any') {\n        shouldAdvance = selfDirectedRun ? selfDirectedQuestionAnswer != null : scenarioPromptRuntime.responses.length > 0\n      } else if (trigger.type === 'question-correct') {\n        const question = stages[activeDynamicStage].question\n        const correct = question?.correctOptionId ?? null\n        shouldAdvance = Boolean(correct && (selfDirectedRun ? selfDirectedQuestionAnswer === correct : scenarioPromptRuntime.responses.some((response) => response.option_id === correct)))\n      } else if (trigger.type === 'action') {\n""",
+          'runtime question triggers')
+          s = replace_once(s,
+          "  }, [role, activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers, selfDirectedRun])\n",
+          "  }, [role, activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, sessionMembers, selfDirectedRun, selfDirectedQuestionAnswer, scenarioPromptRuntime.responses])\n",
+          'runtime trigger deps')
+          # stage schema for legacy add stage
+          s = s.replace("scenario: { ...preset.scenario, schemaVersion: 5, kind: 'dynamic', stages }", "scenario: { ...preset.scenario, schemaVersion: 6, kind: 'dynamic', stages }")
+          # Replace self-directed overlay block entirely
+          start = s.index('      {selfDirectedRun && activeRuntimePreset && createPortal((() => {')
+          end = s.index('      {runtimeHost && selfDirectedError', start)
+          block = '''      {selfDirectedRun && activeRuntimePreset && createPortal((() => {\n        const stages = activeRuntimePreset.scenario.stages ?? []\n        const index = Math.min(activeDynamicStage, Math.max(0, stages.length - 1))\n        const stage = stages[index]\n        const stageType = stage?.stageType ?? 'controls'\n        const triggers: DynamicScenarioTrigger[] = stage ? dynamicStageTriggers(stage) : [{ type: 'manual' }]\n        const completed = index >= stages.length - 1\n        const manualTrigger = !completed && triggers.some((trigger) => trigger.type === 'manual')\n        const exitSelfDirectedScenario = () => {\n          setSelfDirectedRun(null); setActiveDynamicId(null); setActiveDynamicStage(0); setSelfDirectedPanelPosition({ x: 0, y: 0 })\n          const url = new URL(window.location.href); url.searchParams.delete('assignment'); window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)\n          setPresetMessage('Self-directed scenario closed.')\n        }\n        const startPanelDrag = (event: React.PointerEvent<HTMLDivElement>) => {\n          if ((event.target as HTMLElement).closest('button')) return\n          const panel = event.currentTarget.closest('.self-directed-scenario-modal') as HTMLElement | null; if (!panel) return\n          const rect = panel.getBoundingClientRect()\n          selfDirectedPanelDragRef.current = { pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,originX:selfDirectedPanelPosition.x,originY:selfDirectedPanelPosition.y,baseLeft:rect.left-selfDirectedPanelPosition.x,baseTop:rect.top-selfDirectedPanelPosition.y,width:rect.width,height:rect.height }\n          event.currentTarget.setPointerCapture?.(event.pointerId); event.preventDefault()\n        }\n        const movePanelDrag = (event: React.PointerEvent<HTMLDivElement>) => {\n          const drag=selfDirectedPanelDragRef.current; if(!drag||drag.pointerId!==event.pointerId)return; const margin=8\n          const x=drag.originX+event.clientX-drag.startX,y=drag.originY+event.clientY-drag.startY\n          setSelfDirectedPanelPosition({x:Math.max(margin-drag.baseLeft,Math.min(window.innerWidth-margin-drag.baseLeft-drag.width,x)),y:Math.max(margin-drag.baseTop,Math.min(window.innerHeight-margin-drag.baseTop-drag.height,y))}); event.preventDefault()\n        }\n        const endPanelDrag = (event: React.PointerEvent<HTMLDivElement>) => { if(selfDirectedPanelDragRef.current?.pointerId===event.pointerId)selfDirectedPanelDragRef.current=null; if(event.currentTarget.hasPointerCapture?.(event.pointerId))event.currentTarget.releasePointerCapture?.(event.pointerId) }\n        return <div className="teaching-media-overlay self-directed-scenario-overlay" role="presentation">\n          <section className={`teaching-media-modal self-directed-scenario-modal stage-${stageType}`} role="dialog" aria-modal="false" aria-label="Active scenario" style={{ transform:`translate(${selfDirectedPanelPosition.x}px, ${selfDirectedPanelPosition.y}px)` }}>\n            <div className="teaching-media-header self-directed-scenario-header" onPointerDown={startPanelDrag} onPointerMove={movePanelDrag} onPointerUp={endPanelDrag} onPointerCancel={endPanelDrag} title="Drag to move"><div><span>{stageType === 'media' ? 'Scenario media' : stageType === 'question' ? 'Scenario question' : 'Active scenario'}</span></div><button type="button" onClick={exitSelfDirectedScenario}>Exit</button></div>\n            {stageType === 'media' && stage?.media ? <div className="self-directed-stage-media">\n              {!selfDirectedStageMediaUrl ? <div className="teaching-media-loading">Loading media…</div> : stage.media.mediaKind === 'video' ? <video src={selfDirectedStageMediaUrl} controls playsInline autoPlay /> : <img src={selfDirectedStageMediaUrl} alt={stage.media.title} />}\n              {manualTrigger && !completed && <button type="button" className="self-directed-scenario-continue" onClick={() => loadDynamicStage(activeRuntimePreset,index+1)}>Continue</button>}\n            </div> : stageType === 'question' && stage?.question ? <div className="self-directed-stage-question">\n              {stage.question.title && <h3>{stage.question.title}</h3>}<p>{stage.question.body}</p>\n              <div className="self-directed-question-options">{stage.question.options.map((option, optionIndex) => <button type="button" key={option.id} className={selfDirectedQuestionSelected===option.id?'selected':''} onClick={() => setSelfDirectedQuestionSelected(option.id)}><strong>{String.fromCharCode(65+optionIndex)}</strong><span>{option.text}</span></button>)}</div>\n              {selfDirectedQuestionAnswer && stage.question.correctOptionId && selfDirectedQuestionAnswer !== stage.question.correctOptionId && triggers.some((trigger)=>trigger.type==='question-correct') && <div className="self-directed-question-feedback">Not correct. Select another answer and try again.</div>}\n              <button type="button" className="self-directed-scenario-continue" disabled={!selfDirectedQuestionSelected} onClick={() => setSelfDirectedQuestionAnswer(selfDirectedQuestionSelected)}>Submit answer</button>\n            </div> : <div className="self-directed-scenario-body">\n              {completed ? <div className="self-directed-scenario-status complete"><strong>Scenario complete</strong><span>You have reached the end of this scenario.</span></div> : manualTrigger ? <button type="button" className="self-directed-scenario-continue" onClick={() => loadDynamicStage(activeRuntimePreset,index+1)}>Continue</button> : <div className="self-directed-scenario-status"><strong>Scenario active</strong><span>Continue working with the simulator.</span></div>}\n            </div>}\n          </section>\n        </div>\n      })(), document.body)}\n'''
+          s = s[:start] + block + s[end:]
+          p.write_text(s)
+
+          # ---------- CSS ----------
+          p = Path('src/components/DynamicScenarioBuilder.css')
+          c = p.read_text()
+          c += '''\n\n/* Scenario Builder v0.4 stage content */\n.dynamic-stage-type-tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }\n.dynamic-stage-type-tabs button { min-height:42px; border:1px solid #3b505b; background:#111c22; color:#b9c9d0; border-radius:8px; font-weight:700; }\n.dynamic-stage-type-tabs button.selected { border-color:#69c5e4; background:#173443; color:#e8f9ff; }\n.dynamic-stage-content-picker { display:grid; gap:12px; padding:14px; border:1px solid #314650; border-radius:10px; background:#091419; }\n.dynamic-stage-content-heading { display:grid; gap:3px; }\n.dynamic-stage-content-heading strong { color:#edf5f7; }\n.dynamic-stage-content-heading span,.dynamic-stage-content-picker small { color:#8298a2; font-size:11px; }\n.dynamic-stage-content-picker select { min-height:42px; border:1px solid #3b505b; border-radius:8px; background:#0c171d; color:#e9f2f5; padding:8px 10px; }\n.dynamic-stage-selected-content { display:grid; gap:4px; padding:11px; border:1px solid #365160; border-radius:8px; background:#0d1b22; }\n.dynamic-stage-selected-content strong { color:#dff4fb; }\n.dynamic-stage-selected-content span { color:#a9bac1; font-size:12px; line-height:1.4; }\n.dynamic-stage-selected-content.question span { white-space:pre-wrap; }\n'''
+          p.write_text(c)
+
+          p = Path('src/account.css')
+          c = p.read_text()
+          c += '''\n\n/* Scenario Builder v0.4 self-directed media/question stages */\n.self-directed-scenario-modal.stage-media,.self-directed-scenario-modal.stage-question { width:min(440px,36vw); max-height:70dvh; }\n.self-directed-stage-media { display:grid; gap:10px; padding:10px; background:#071014; }\n.self-directed-stage-media img,.self-directed-stage-media video { display:block; width:100%; max-height:52dvh; object-fit:contain; border-radius:8px; background:#000; }\n.self-directed-stage-question { display:grid; gap:12px; padding:14px; background:#071014; }\n.self-directed-stage-question h3 { margin:0; color:#eef5f7; }\n.self-directed-stage-question p { margin:0; color:#d1dde1; line-height:1.45; white-space:pre-wrap; }\n.self-directed-question-options { display:grid; gap:7px; }\n.self-directed-question-options button { display:grid; grid-template-columns:32px 1fr; gap:8px; align-items:center; text-align:left; min-height:42px; border:1px solid #3b505b; border-radius:8px; background:#111c22; color:#dce8ec; }\n.self-directed-question-options button.selected { border-color:#69c5e4; background:#173443; }\n.self-directed-question-feedback { color:#ffc6b8; border:1px solid #75473c; background:#2b1714; padding:8px 10px; border-radius:7px; font-size:.8rem; }\n@media (min-width:641px) and (max-width:1199px) { .self-directed-scenario-modal.stage-media,.self-directed-scenario-modal.stage-question { width:25vw; min-width:240px; max-height:70dvh; } }\n'''
+          p.write_text(c)
+
+          # ---------- version ----------
+          p = Path('src/scenario-builder/version.ts')
+          v = p.read_text().replace("SCENARIO_BUILDER_VERSION = '0.3.3'", "SCENARIO_BUILDER_VERSION = '0.4.0'")
+          p.write_text(v)
+          PY
+      - run: npm ci
+      - run: npm run build
+      - name: Commit validated changes
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src/instructorAccount.ts src/components/DynamicScenarioBuilder.tsx src/components/DynamicScenarioBuilder.css src/components/InstructorAccountControls.tsx src/account.css src/selfDirectedAssignments.ts src/App.tsx src/scenario-builder/version.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Scenario Builder v0.4.0 stage media and questions"
+          git push origin HEAD:chatgpt/scenario-builder-v0.4.0-stage-content
