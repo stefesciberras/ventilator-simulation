@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
 import { generateMonitorSamples, measurementsFor, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
+import { AuxiliaryMonitorModal } from './AuxiliaryMonitorModal'
+import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
+import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type EdumonModuleDefinition } from './modules'
+import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
 import './edumon.css'
 
 const TRACE_WINDOW_SECONDS = 8
@@ -47,17 +51,11 @@ function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceS
     context.lineWidth = 1
     for (let column = 1; column < 8; column += 1) {
       const x = (width * column) / 8
-      context.beginPath()
-      context.moveTo(x, 0)
-      context.lineTo(x, height)
-      context.stroke()
+      context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke()
     }
     for (let row = 1; row < 4; row += 1) {
       const y = (height * row) / 4
-      context.beginPath()
-      context.moveTo(0, y)
-      context.lineTo(width, y)
-      context.stroke()
+      context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke()
     }
 
     if (!samples.length) return
@@ -71,8 +69,7 @@ function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceS
     context.beginPath()
     samples.forEach((sample, index) => {
       const x = (index / Math.max(1, samples.length - 1)) * width
-      const rawValue = sample[spec.key]
-      const y = Math.max(1, Math.min(height - 1, toY(rawValue)))
+      const y = Math.max(1, Math.min(height - 1, toY(sample[spec.key])))
       if (index === 0) context.moveTo(x, y)
       else context.lineTo(x, y)
     })
@@ -81,10 +78,7 @@ function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceS
 
   return (
     <div className={`edumon-trace edumon-trace-${spec.className}`}>
-      <div className="edumon-trace-label">
-        <strong>{spec.label}</strong>
-        {spec.unit && <span>{spec.unit}</span>}
-      </div>
+      <div className="edumon-trace-label"><strong>{spec.label}</strong>{spec.unit && <span>{spec.unit}</span>}</div>
       <canvas ref={canvasRef} aria-label={`${spec.label} waveform`} />
     </div>
   )
@@ -101,7 +95,69 @@ function ValuePanel({ label, value, unit, detail, className }: { label: string; 
   )
 }
 
-export function EdumonApp() {
+function EdumonLanding() {
+  return (
+    <main className="edumon-page edumon-landing">
+      <section className="edumon-module-picker">
+        <div className="edumon-module-picker-heading">
+          <span>EDUSIM monitoring platform</span>
+          <h1>EDUMON</h1>
+          <p>Select the clinical monitor environment. Both modules share the same patient, waveform, teaching and scenario foundations.</p>
+        </div>
+        <div className="edumon-module-cards">
+          {Object.values(EDUMON_MODULES).map((module) => (
+            <a key={module.id} className="edumon-module-card" href={`/edumon/${module.id}`}>
+              <span>{module.id === 'ana' ? 'ANA' : 'ICU'}</span>
+              <strong>{module.productName}</strong>
+              <p>{module.subtitle}</p>
+              <div>{module.id === 'ana' ? 'Anaesthetic gases · MAC · BIS / TOF' : 'ICP / CPP · CVP · advanced ICU monitoring'}</div>
+            </a>
+          ))}
+        </div>
+      </section>
+      <div className="edumon-version">EDUMON v0.1.0.0</div>
+    </main>
+  )
+}
+
+function GasMonitorPreview() {
+  return (
+    <div className="edumon-extra-monitor-grid edumon-gas-monitor">
+      <div><span>FiO₂</span><strong>50</strong><small>%</small></div>
+      <div><span>EtO₂</span><strong>44</strong><small>%</small></div>
+      <div><span>EtSevo</span><strong>1.8</strong><small>%</small></div>
+      <div><span>FiSevo</span><strong>2.0</strong><small>%</small></div>
+      <div className="wide"><span>MAC</span><strong>0.9</strong><small>age adjusted · preview</small></div>
+      <p className="wide">Gas physiology and live analyser waveforms are deliberately not implemented yet. This establishes the reusable Ana auxiliary-monitor surface.</p>
+    </div>
+  )
+}
+
+function NeuroMonitorPreview({ map }: { map: number | null }) {
+  const icp = 14
+  const cpp = map == null ? null : Math.max(0, map - icp)
+  return (
+    <div className="edumon-extra-monitor-grid edumon-neuro-monitor">
+      <div><span>ICP</span><strong>{icp}</strong><small>mmHg</small></div>
+      <div><span>CPP</span><strong>{cpp ?? '—'}</strong><small>mmHg</small></div>
+      <div className="wide edumon-placeholder-waveform" aria-label="ICP waveform placeholder"><i /><i /><i /><i /><i /><i /></div>
+      <p className="wide">CPP is derived from the current monitor MAP minus ICP. The dedicated ICP waveform engine will be added as the ICU monitoring model expands.</p>
+    </div>
+  )
+}
+
+function TrendsPreview() {
+  return (
+    <div className="edumon-trends-preview">
+      <div className="edumon-trend-line"><span>HR</span><i style={{ width: '72%' }} /></div>
+      <div className="edumon-trend-line"><span>MAP</span><i style={{ width: '64%' }} /></div>
+      <div className="edumon-trend-line"><span>SpO₂</span><i style={{ width: '91%' }} /></div>
+      <p>The modal is now reusable for extra monitor pages as well as teaching media. Trend persistence and time scales come later.</p>
+    </div>
+  )
+}
+
+function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [patientState, setPatientState] = useState<MonitorPatientState>(DEFAULT_MONITOR_STATE)
   const [elapsed, setElapsed] = useState(TRACE_WINDOW_SECONDS)
   const [frozen, setFrozen] = useState(false)
@@ -109,7 +165,7 @@ export function EdumonApp() {
   const [laserActive, setLaserActive] = useState(false)
   const [laserPoint, setLaserPoint] = useState({ x: 0.5, y: 0.25 })
   const [developerControls, setDeveloperControls] = useState(false)
-  const frozenAtRef = useRef<number | null>(null)
+  const [auxiliaryMonitor, setAuxiliaryMonitor] = useState<EdumonAuxiliaryMonitorId | null>(null)
 
   useEffect(() => {
     if (frozen) return
@@ -121,27 +177,23 @@ export function EdumonApp() {
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-    // Restarting from the current elapsed value after freeze is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frozen])
 
-  const liveSamples = useMemo(
-    () => generateMonitorSamples(patientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE),
-    [patientState, elapsed],
-  )
+  const liveSamples = useMemo(() => generateMonitorSamples(patientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE), [patientState, elapsed])
   const samples = frozenSamples ?? liveSamples
   const measurements = measurementsFor(patientState)
+  const teachingHost = module.id === 'ana' ? edumonAnaTeachingHost : edumonIcuTeachingHost
+  const selectedAuxiliary = module.auxiliaryMonitors.find((item) => item.id === auxiliaryMonitor) ?? null
 
   const toggleFreeze = () => {
     if (frozen) {
       setFrozen(false)
       setFrozenSamples(null)
-      frozenAtRef.current = null
       return
     }
     setFrozenSamples(liveSamples)
     setFrozen(true)
-    frozenAtRef.current = elapsed
   }
 
   const toggleLaser = () => {
@@ -150,7 +202,6 @@ export function EdumonApp() {
       if (next && !frozen) {
         setFrozenSamples(liveSamples)
         setFrozen(true)
-        frozenAtRef.current = elapsed
       }
       return next
     })
@@ -178,20 +229,16 @@ export function EdumonApp() {
   }
 
   return (
-    <main className="edumon-page">
-      <section className="edumon-console" aria-label="EDUMON patient monitor">
+    <main className={`edumon-page edumon-module-${module.id}`}>
+      <section className="edumon-console" aria-label={`${module.productName} patient monitor`}>
         <header className="edumon-console-header">
-          <div>
-            <div className="edumon-product-name">EDUMON</div>
-            <div className="edumon-product-subtitle">Patient monitor simulator</div>
+          <div className="edumon-product-block">
+            <a href="/edumon" className="edumon-back-link" aria-label="Choose EDUMON module">‹</a>
+            <div><div className="edumon-product-name">{module.productName}</div><div className="edumon-product-subtitle">{module.subtitle}</div></div>
           </div>
           <div className="edumon-teaching-actions">
-            <button type="button" className={frozen ? 'active' : ''} onClick={toggleFreeze}>
-              {frozen ? 'Resume' : 'Freeze'}
-            </button>
-            <button type="button" className={laserActive ? 'active laser' : ''} onClick={toggleLaser}>
-              Laser
-            </button>
+            <button type="button" className={frozen ? 'active' : ''} onClick={toggleFreeze}>{frozen ? 'Resume' : 'Freeze'}</button>
+            <button type="button" className={laserActive ? 'active laser' : ''} onClick={toggleLaser}>Laser</button>
           </div>
         </header>
 
@@ -199,84 +246,54 @@ export function EdumonApp() {
           <div className="edumon-waveform-area" onPointerMove={handleLaserMove} onPointerDown={handleLaserMove}>
             {TRACE_SPECS.map((spec) => <TraceCanvas key={spec.key} samples={samples} spec={spec} />)}
             {frozen && <div className="edumon-freeze-indicator">FROZEN</div>}
-            {laserActive && (
-              <div
-                className="edumon-laser-point"
-                style={{ left: `${laserPoint.x * 100}%`, top: `${laserPoint.y * 100}%` }}
-                aria-hidden="true"
-              />
-            )}
+            {laserActive && <div className="edumon-laser-point" style={{ left: `${laserPoint.x * 100}%`, top: `${laserPoint.y * 100}%` }} aria-hidden="true" />}
           </div>
 
           <aside className="edumon-measurements" aria-label="Measured values">
-            <ValuePanel
-              label="HR"
-              value={measurements.heartRate == null ? '—' : `${measurements.heartRate}`}
-              unit="bpm"
-              className="ecg"
-            />
-            <ValuePanel
-              label="ART"
-              value={measurements.systolicPressure == null ? '—/—' : `${measurements.systolicPressure}/${measurements.diastolicPressure}`}
-              unit="mmHg"
-              detail={measurements.meanPressure == null ? 'MAP —' : `MAP ${measurements.meanPressure}`}
-              className="art"
-            />
-            <ValuePanel
-              label="SpO₂"
-              value={measurements.spo2 == null ? '—' : `${measurements.spo2}`}
-              unit="%"
-              className="spo2"
-            />
+            <ValuePanel label="HR" value={measurements.heartRate == null ? '—' : `${measurements.heartRate}`} unit="bpm" className="ecg" />
+            <ValuePanel label="ART" value={measurements.systolicPressure == null ? '—/—' : `${measurements.systolicPressure}/${measurements.diastolicPressure}`} unit="mmHg" detail={measurements.meanPressure == null ? 'MAP —' : `MAP ${measurements.meanPressure}`} className="art" />
+            <ValuePanel label="SpO₂" value={measurements.spo2 == null ? '—' : `${measurements.spo2}`} unit="%" className="spo2" />
           </aside>
         </div>
 
         <div className="edumon-control-strip" aria-label="Monitor controls">
-          <button type="button" className="edumon-control-tile disabled" disabled title="NIBP will be enabled in a later EDUMON milestone">
-            <span>NIBP</span>
-            <strong>Inactive</strong>
-            <small>Manual / cycle</small>
-          </button>
-          <button type="button" className="edumon-control-tile" onClick={() => setDeveloperControls((visible) => !visible)}>
-            <span>Monitor</span>
-            <strong>{RHYTHM_LABELS[patientState.rhythm]}</strong>
-            <small>v0.1 rhythm test</small>
-          </button>
+          <button type="button" className="edumon-control-tile disabled" disabled title="NIBP will be enabled in a later EDUMON milestone"><span>NIBP</span><strong>Inactive</strong><small>Manual / cycle</small></button>
+          {module.auxiliaryMonitors.map((item) => (
+            <button key={item.id} type="button" className="edumon-control-tile" onClick={() => setAuxiliaryMonitor(item.id)}>
+              <span>Extra monitor</span><strong>{item.shortLabel}</strong><small>{item.description}</small>
+            </button>
+          ))}
+          <button type="button" className="edumon-control-tile" onClick={() => setDeveloperControls((visible) => !visible)}><span>Monitor</span><strong>{RHYTHM_LABELS[patientState.rhythm]}</strong><small>v0.1 rhythm test</small></button>
         </div>
 
         {developerControls && (
           <div className="edumon-overlay-panel">
             <div className="edumon-overlay-title">v0.1 monitor test controls</div>
-            <label>
-              <span>Rhythm</span>
-              <select value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>
-                {RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Heart rate <b>{patientState.heartRate}</b></span>
-              <input type="range" min="30" max="240" step="1" value={patientState.heartRate} onChange={(event) => setPatientState((current) => ({ ...current, heartRate: Number(event.target.value) }))} />
-            </label>
-            <label>
-              <span>ART systolic <b>{patientState.systolicPressure}</b></span>
-              <input type="range" min="50" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => setPatientState((current) => ({ ...current, systolicPressure: Number(event.target.value) }))} />
-            </label>
-            <label>
-              <span>ART diastolic <b>{patientState.diastolicPressure}</b></span>
-              <input type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => setPatientState((current) => ({ ...current, diastolicPressure: Number(event.target.value) }))} />
-            </label>
-            <label>
-              <span>SpO₂ <b>{patientState.spo2}%</b></span>
-              <input type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => setPatientState((current) => ({ ...current, spo2: Number(event.target.value) }))} />
-            </label>
-            <label>
-              <span>Pleth perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span>
-              <input type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => setPatientState((current) => ({ ...current, peripheralPerfusion: Number(event.target.value) }))} />
-            </label>
+            <label><span>Rhythm</span><select value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>{RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}</select></label>
+            <label><span>Heart rate <b>{patientState.heartRate}</b></span><input type="range" min="30" max="240" step="1" value={patientState.heartRate} onChange={(event) => setPatientState((current) => ({ ...current, heartRate: Number(event.target.value) }))} /></label>
+            <label><span>ART systolic <b>{patientState.systolicPressure}</b></span><input type="range" min="50" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => setPatientState((current) => ({ ...current, systolicPressure: Number(event.target.value) }))} /></label>
+            <label><span>ART diastolic <b>{patientState.diastolicPressure}</b></span><input type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => setPatientState((current) => ({ ...current, diastolicPressure: Number(event.target.value) }))} /></label>
+            <label><span>SpO₂ <b>{patientState.spo2}%</b></span><input type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => setPatientState((current) => ({ ...current, spo2: Number(event.target.value) }))} /></label>
+            <label><span>Pleth perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => setPatientState((current) => ({ ...current, peripheralPerfusion: Number(event.target.value) }))} /></label>
           </div>
         )}
+
+        {selectedAuxiliary && auxiliaryMonitor && (
+          <AuxiliaryMonitorModal title={selectedAuxiliary.label} onClose={() => setAuxiliaryMonitor(null)}>
+            {auxiliaryMonitor === 'ana-gases' && <GasMonitorPreview />}
+            {auxiliaryMonitor === 'icu-neuro' && <NeuroMonitorPreview map={measurements.meanPressure} />}
+            {auxiliaryMonitor === 'trends' && <TrendsPreview />}
+            {auxiliaryMonitor === 'teaching' && <EdumonTeachingLibraries host={teachingHost} />}
+          </AuxiliaryMonitorModal>
+        )}
       </section>
-      <div className="edumon-version">EDUMON v0.1.0.0</div>
+      <div className="edumon-version">{module.productName} v0.1.0.0</div>
     </main>
   )
+}
+
+export function EdumonApp() {
+  const moduleId = moduleFromPath(window.location.pathname)
+  if (!moduleId) return <EdumonLanding />
+  return <EdumonMonitor module={EDUMON_MODULES[moduleId]} />
 }
