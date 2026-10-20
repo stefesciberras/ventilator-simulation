@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { ScenarioBuilderApp } from './scenario-builder/ScenarioBuilderApp'
 import { EdumonApp } from './edumon/EdumonApp'
+import { installEdumonMobileWorkspace } from './edumon/edumonMobileWorkspace'
 import { installTabletResponsiveMode } from './tabletResponsiveRuntime'
 import { installSelfDirectedScenarioPanelDrag } from './selfDirectedScenarioPanel'
 import './styles.css'
@@ -19,7 +20,8 @@ const isEdumonRoute = window.location.pathname === '/edumon' || window.location.
 
 if (!isScenarioBuilderRoute) {
   installTabletResponsiveMode()
-  if (!isEdumonRoute) installSelfDirectedScenarioPanelDrag()
+  if (isEdumonRoute) installEdumonMobileWorkspace()
+  else installSelfDirectedScenarioPanelDrag()
 }
 
 createRoot(document.getElementById('root')!).render(
