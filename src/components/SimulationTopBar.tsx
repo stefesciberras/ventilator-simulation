@@ -35,6 +35,9 @@ interface SimulationTopBarProps {
   version?: string
   onAbout?: () => void
   className?: string
+  brandClassName?: string
+  statusClassName?: string
+  statusTextClassName?: string
 }
 
 export function SimulationTopBar({
@@ -52,12 +55,15 @@ export function SimulationTopBar({
   version,
   onAbout,
   className = '',
+  brandClassName = '',
+  statusClassName = '',
+  statusTextClassName = '',
 }: SimulationTopBarProps) {
   const clock = formatSimulationClock(elapsedSeconds)
 
   return (
     <header className={`topbar ${className}`.trim()}>
-      <div className="brand-block">
+      <div className={`brand-block ${brandClassName}`.trim()}>
         {brandLeading}
         <div><span className="brand-kicker">{brandKicker}</span><h1>{title}</h1></div>
       </div>
@@ -85,9 +91,9 @@ export function SimulationTopBar({
         </label>
       </div>
 
-      <div className="status-cluster">
+      <div className={`status-cluster ${statusClassName}`.trim()}>
         <span className={`status-dot ${simulationPaused ? 'paused' : ''}`} />
-        {statusText && <span className="simulation-status-text">{statusText}</span>}
+        {statusText && <span className={statusTextClassName || 'simulation-status-text'}>{statusText}</span>}
         {rightActions}
         {version && <span className="version">v{version}</span>}
         {onAbout && <button type="button" className="top-about-button" onClick={onAbout}>About</button>}
