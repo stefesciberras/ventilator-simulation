@@ -1,0 +1,375 @@
+.edumon-page {
+  min-height: 100vh;
+  background: #11161b;
+  color: #eef4f8;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+}
+
+.edumon-console {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #151c22 0%, #0d1216 100%);
+}
+
+.edumon-console-header {
+  min-height: 64px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(20, 27, 33, 0.96);
+}
+
+.edumon-product-name {
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.edumon-product-subtitle {
+  margin-top: 2px;
+  font-size: 0.76rem;
+  color: #8e9ba5;
+}
+
+.edumon-teaching-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edumon-teaching-actions button,
+.edumon-control-tile {
+  border: 1px solid rgba(255,255,255,0.13);
+  background: #222c34;
+  color: #dfe8ee;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.edumon-teaching-actions button {
+  min-width: 78px;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.edumon-teaching-actions button:hover,
+.edumon-control-tile:not(:disabled):hover {
+  background: #2a3741;
+  border-color: rgba(255,255,255,0.24);
+}
+
+.edumon-teaching-actions button.active {
+  border-color: #f0a03a;
+  box-shadow: inset 0 0 0 1px rgba(240,160,58,0.28);
+}
+
+.edumon-teaching-actions button.laser.active {
+  color: #ffc170;
+}
+
+.edumon-monitor-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(170px, 19vw, 245px);
+  background: #050809;
+}
+
+.edumon-waveform-area {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  touch-action: none;
+}
+
+.edumon-trace {
+  position: relative;
+  min-height: 130px;
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.01), transparent 70%);
+}
+
+.edumon-trace:last-child {
+  border-bottom: 0;
+}
+
+.edumon-trace canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.edumon-trace-ecg canvas,
+.edumon-value-ecg {
+  color: #67e77f;
+}
+
+.edumon-trace-art canvas,
+.edumon-value-art {
+  color: #f15151;
+}
+
+.edumon-trace-spo2 canvas,
+.edumon-value-spo2 {
+  color: #55c8f0;
+}
+
+.edumon-trace-label {
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  left: 9px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.72rem;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
+
+.edumon-trace-label strong {
+  font-size: 0.78rem;
+}
+
+.edumon-trace-label span {
+  color: #6f7c84;
+}
+
+.edumon-measurements {
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  border-left: 1px solid rgba(255,255,255,0.07);
+  background: #090d0f;
+}
+
+.edumon-value-panel {
+  position: relative;
+  min-height: 120px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.edumon-value-panel:last-child {
+  border-bottom: 0;
+}
+
+.edumon-value-label {
+  position: absolute;
+  top: 9px;
+  left: 11px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.edumon-value-main {
+  font-size: clamp(2rem, 4vw, 3.65rem);
+  line-height: 0.95;
+  font-weight: 760;
+  letter-spacing: -0.045em;
+}
+
+.edumon-value-art .edumon-value-main {
+  font-size: clamp(1.65rem, 3.3vw, 3rem);
+}
+
+.edumon-value-unit,
+.edumon-value-detail {
+  margin-top: 5px;
+  color: #93a0a8;
+  font-size: 0.72rem;
+}
+
+.edumon-value-detail {
+  color: currentColor;
+  opacity: 0.8;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.edumon-freeze-indicator {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  right: 10px;
+  padding: 4px 7px;
+  border: 1px solid rgba(240,160,58,0.45);
+  border-radius: 5px;
+  color: #f3ab4d;
+  background: rgba(28,20,10,0.78);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.edumon-laser-point {
+  position: absolute;
+  z-index: 8;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #ff2b2b;
+  box-shadow: 0 0 7px 2px rgba(255,43,43,0.92), 0 0 18px rgba(255,43,43,0.55);
+  pointer-events: none;
+}
+
+.edumon-control-strip {
+  position: relative;
+  z-index: 10;
+  min-height: 86px;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(255,255,255,0.09);
+  background: #141b20;
+}
+
+.edumon-control-tile {
+  min-width: 142px;
+  padding: 8px 12px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  text-align: left;
+}
+
+.edumon-control-tile span {
+  font-size: 0.69rem;
+  color: #8e9ca5;
+}
+
+.edumon-control-tile strong {
+  margin-top: 3px;
+  max-width: 210px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.92rem;
+}
+
+.edumon-control-tile small {
+  margin-top: 2px;
+  font-size: 0.64rem;
+  color: #6d7980;
+}
+
+.edumon-control-tile.disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.edumon-overlay-panel {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: 92px;
+  width: min(720px, calc(100vw - 30px));
+  transform: translateX(-50%);
+  padding: 14px 16px 16px;
+  border: 1px solid rgba(240,160,58,0.42);
+  border-radius: 12px;
+  background: rgba(20, 27, 32, 0.97);
+  box-shadow: 0 14px 38px rgba(0,0,0,0.52);
+}
+
+.edumon-overlay-title {
+  margin-bottom: 10px;
+  color: #f0a03a;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.edumon-overlay-panel label {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  color: #b8c3ca;
+  font-size: 0.76rem;
+}
+
+.edumon-overlay-panel label b {
+  color: #f0a03a;
+  font-size: 0.77rem;
+}
+
+.edumon-overlay-panel select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 7px;
+  background: #0e1418;
+  color: #ecf2f5;
+}
+
+.edumon-overlay-panel input[type='range'] {
+  width: 100%;
+  accent-color: #f0a03a;
+  touch-action: none;
+}
+
+.edumon-version {
+  position: fixed;
+  right: 8px;
+  bottom: 3px;
+  z-index: 30;
+  color: rgba(255,255,255,0.25);
+  font-size: 0.58rem;
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .edumon-console-header {
+    min-height: 56px;
+    padding: 8px 10px;
+  }
+
+  .edumon-product-subtitle {
+    display: none;
+  }
+
+  .edumon-monitor-body {
+    grid-template-columns: minmax(0, 1fr) 124px;
+  }
+
+  .edumon-value-panel {
+    padding: 8px;
+  }
+
+  .edumon-value-main,
+  .edumon-value-art .edumon-value-main {
+    font-size: clamp(1.45rem, 6.5vw, 2.2rem);
+  }
+
+  .edumon-control-strip {
+    min-height: 76px;
+  }
+
+  .edumon-control-tile {
+    min-width: 118px;
+    padding: 6px 9px;
+  }
+
+  .edumon-overlay-panel label {
+    grid-template-columns: 128px 1fr;
+  }
+}
