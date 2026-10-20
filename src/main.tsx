@@ -17,9 +17,9 @@ import './selfDirectedScenarioPanel.css'
 const isScenarioBuilderRoute = window.location.pathname === '/scenarios' || window.location.pathname.startsWith('/scenarios/')
 const isEdumonRoute = window.location.pathname === '/edumon' || window.location.pathname.startsWith('/edumon/')
 
-if (!isScenarioBuilderRoute && !isEdumonRoute) {
+if (!isScenarioBuilderRoute) {
   installTabletResponsiveMode()
-  installSelfDirectedScenarioPanelDrag()
+  if (!isEdumonRoute) installSelfDirectedScenarioPanelDrag()
 }
 
 createRoot(document.getElementById('root')!).render(
