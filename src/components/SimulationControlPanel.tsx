@@ -13,18 +13,30 @@ interface SimulationControlPanelProps<T extends string> {
   children: ReactNode
   ariaLabel?: string
   className?: string
+  tabsClassName?: string
+  bodyClassName?: string
 }
 
-export function SimulationControlPanel<T extends string>({ activeTab, tabs, onTabChange, profileStrip, children, ariaLabel = 'Simulation controls', className = '' }: SimulationControlPanelProps<T>) {
+export function SimulationControlPanel<T extends string>({
+  activeTab,
+  tabs,
+  onTabChange,
+  profileStrip,
+  children,
+  ariaLabel = 'Simulation controls',
+  className = '',
+  tabsClassName = '',
+  bodyClassName = '',
+}: SimulationControlPanelProps<T>) {
   return (
     <aside className={`control-panel ${className}`.trim()} aria-label={ariaLabel}>
       {profileStrip}
-      <div className="control-tabs edusim-control-tabs" role="tablist" aria-label="Control sections">
+      <div className={`control-tabs edusim-control-tabs ${tabsClassName}`.trim()} role="tablist" aria-label="Control sections">
         {tabs.map(({ id, label }) => (
           <button key={id} type="button" role="tab" aria-selected={activeTab === id} className={activeTab === id ? 'active' : ''} onClick={() => onTabChange(id)}>{label}</button>
         ))}
       </div>
-      <div className="edusim-control-panel-body">{children}</div>
+      <div className={`edusim-control-panel-body ${bodyClassName}`.trim()}>{children}</div>
     </aside>
   )
 }
