@@ -1,4 +1,5 @@
 import type { EdumonModuleDefinition } from './modules'
+import './EdumonTopBar.css'
 
 export type EdumonSimulationSpeed = 0.5 | 1 | 2 | 4
 
