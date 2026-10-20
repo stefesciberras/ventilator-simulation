@@ -3,6 +3,7 @@ import type { MonitorPatientState } from './types'
 import { RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
+import { SimulationControlPanel, SimulationProfileStrip, type SimulationControlTab } from '../components/SimulationControlPanel'
 import './edumon-rhythm-control.css'
 
 export type EdumonControlTab = 'actions' | 'patient' | 'physio' | 'teaching'
@@ -13,6 +14,13 @@ export const EDUMON_PATIENT_PROFILES: Record<EdumonPatientProfile, MonitorPatien
   Asleep: { heartRate: 62, rhythm: 'sinus', systolicPressure: 105, diastolicPressure: 60, spo2: 99, peripheralPerfusion: 0.9 },
   Paediatric: { heartRate: 110, rhythm: 'sinus', systolicPressure: 95, diastolicPressure: 55, spo2: 99, peripheralPerfusion: 1 },
 }
+
+const CONTROL_TABS: Array<SimulationControlTab<EdumonControlTab>> = [
+  { id: 'actions', label: 'ACTIONS' },
+  { id: 'patient', label: 'PATIENT' },
+  { id: 'physio', label: 'PHYSIO' },
+  { id: 'teaching', label: 'TEACHING' },
+]
 
 interface EdumonWorkspacePanelProps {
   patientState: MonitorPatientState
@@ -40,51 +48,55 @@ export function EdumonWorkspacePanel({ patientState, onPatientStateChange, teach
     onPatientStateChange({ ...patientState, rhythm, heartRate })
   }
 
+  const profileStrip = (
+    <SimulationProfileStrip
+      profiles={Object.keys(EDUMON_PATIENT_PROFILES) as EdumonPatientProfile[]}
+      activeProfile={profile}
+      onProfileChange={applyProfile}
+      className="edumon-profile-strip"
+    />
+  )
+
   return (
-    <aside className="control-panel edumon-side-panel" aria-label="EDUMON controls">
-      <div className="edumon-profile-strip" aria-label="Patient profiles">
-        {(Object.keys(EDUMON_PATIENT_PROFILES) as EdumonPatientProfile[]).map((name) => (
-          <button key={name} type="button" className={profile === name ? 'active' : ''} onClick={() => applyProfile(name)}>{name}</button>
-        ))}
-      </div>
-
-      <div className="control-tabs edumon-control-tabs" role="tablist" aria-label="Monitor control sections">
-        {([['actions', 'ACTIONS'], ['patient', 'PATIENT'], ['physio', 'PHYSIO'], ['teaching', 'TEACHING']] as Array<[EdumonControlTab, string]>).map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}</button>
-        ))}
-      </div>
-
-      <div className="edumon-side-panel-body">
-        {tab === 'actions' && <div className="edumon-empty-actions" aria-label="Actions" />}
-        {tab === 'patient' && (
-          <section className="control-section edumon-patient-controls">
-            <div className="control-section-title"><h2>Patient</h2><span className="edumon-profile-badge">{profile}</span></div>
-            <label className="edumon-rhythm-control">
-              <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
-              <select value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>
-                {RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}
-              </select>
-            </label>
-            <label><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => onPatientStateChange({ ...patientState, heartRate: Number(event.target.value) })} /></label>
-            <label><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => onPatientStateChange({ ...patientState, systolicPressure: Number(event.target.value) })} /></label>
-            <label><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => onPatientStateChange({ ...patientState, diastolicPressure: Number(event.target.value) })} /></label>
-            <label><span>SpO₂ <b>{Math.round(patientState.spo2)}%</b></span><input type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => onPatientStateChange({ ...patientState, spo2: Number(event.target.value) })} /></label>
-            <label><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => onPatientStateChange({ ...patientState, peripheralPerfusion: Number(event.target.value) })} /></label>
-          </section>
-        )}
-        {tab === 'physio' && (
-          <section className="control-section edumon-physio-panel">
-            <div className="control-section-title"><h2>Physiology</h2></div>
-            <div className="edumon-physio-grid">
-              <div><span>MAP</span><strong>{meanPressure ?? '—'}</strong><small>mmHg</small></div>
-              <div><span>Pulse pressure</span><strong>{Math.max(0, Math.round(patientState.systolicPressure - patientState.diastolicPressure))}</strong><small>mmHg</small></div>
-              <div><span>SpO₂ target</span><strong>{Math.round(patientState.spo2)}</strong><small>%</small></div>
-              <div><span>Perfusion</span><strong>{patientState.peripheralPerfusion.toFixed(1)}</strong><small>relative</small></div>
-            </div>
-          </section>
-        )}
-        {tab === 'teaching' && <div className="edumon-side-teaching"><EdumonTeachingLibraries host={teachingHost} /></div>}
-      </div>
-    </aside>
+    <SimulationControlPanel
+      activeTab={tab}
+      tabs={CONTROL_TABS}
+      onTabChange={setTab}
+      profileStrip={profileStrip}
+      ariaLabel="EDUMON controls"
+      className="edumon-side-panel"
+      tabsClassName="edumon-control-tabs"
+      bodyClassName="edumon-side-panel-body"
+    >
+      {tab === 'actions' && <div className="edumon-empty-actions" aria-label="Actions" />}
+      {tab === 'patient' && (
+        <section className="control-section edumon-patient-controls">
+          <div className="control-section-title"><h2>Patient</h2><span className="edumon-profile-badge">{profile}</span></div>
+          <label className="edumon-rhythm-control">
+            <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
+            <select value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>
+              {RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}
+            </select>
+          </label>
+          <label><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => onPatientStateChange({ ...patientState, heartRate: Number(event.target.value) })} /></label>
+          <label><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => onPatientStateChange({ ...patientState, systolicPressure: Number(event.target.value) })} /></label>
+          <label><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => onPatientStateChange({ ...patientState, diastolicPressure: Number(event.target.value) })} /></label>
+          <label><span>SpO₂ <b>{Math.round(patientState.spo2)}%</b></span><input type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => onPatientStateChange({ ...patientState, spo2: Number(event.target.value) })} /></label>
+          <label><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => onPatientStateChange({ ...patientState, peripheralPerfusion: Number(event.target.value) })} /></label>
+        </section>
+      )}
+      {tab === 'physio' && (
+        <section className="control-section edumon-physio-panel">
+          <div className="control-section-title"><h2>Physiology</h2></div>
+          <div className="edumon-physio-grid">
+            <div><span>MAP</span><strong>{meanPressure ?? '—'}</strong><small>mmHg</small></div>
+            <div><span>Pulse pressure</span><strong>{Math.max(0, Math.round(patientState.systolicPressure - patientState.diastolicPressure))}</strong><small>mmHg</small></div>
+            <div><span>SpO₂ target</span><strong>{Math.round(patientState.spo2)}</strong><small>%</small></div>
+            <div><span>Perfusion</span><strong>{patientState.peripheralPerfusion.toFixed(1)}</strong><small>relative</small></div>
+          </div>
+        </section>
+      )}
+      {tab === 'teaching' && <div className="edumon-side-teaching"><EdumonTeachingLibraries host={teachingHost} /></div>}
+    </SimulationControlPanel>
   )
 }
