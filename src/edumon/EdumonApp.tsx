@@ -9,6 +9,7 @@ import { EdumonWorkspacePanel } from './EdumonWorkspacePanel'
 import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type EdumonModuleDefinition } from './modules'
 import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
 import './edumon.css'
+import './edumon-console-parity.css'
 
 const TRACE_WINDOW_SECONDS = 8
 const SAMPLE_RATE = 100
@@ -406,15 +407,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         </AuxiliaryMonitorModal>
       )}
 
-      {topPanel === 'scenario' && (
-        <AuxiliaryMonitorModal title="Scenario" onClose={() => setTopPanel(null)}><div className="edumon-top-panel-content"><span>ACTIVE SCENARIO</span><strong>None</strong><p>EDUMON will use the shared EDUSIM Scenario Runtime and the same scenario workflow as EDUVENT.</p></div></AuxiliaryMonitorModal>
-      )}
-      {topPanel === 'account' && (
-        <AuxiliaryMonitorModal title="Instructor account" onClose={() => setTopPanel(null)}><EdumonTeachingLibraries host={teachingHost} /></AuxiliaryMonitorModal>
-      )}
-      {topPanel === 'about' && (
-        <AuxiliaryMonitorModal title={module.productName} onClose={() => setTopPanel(null)}><div className="edumon-top-panel-content"><span>EDUSIM MONITORING PLATFORM</span><strong>{module.subtitle}</strong><p>Version v0.1.0.0</p><p>Educational simulation only — not a medical device and not for clinical decision-making.</p></div></AuxiliaryMonitorModal>
-      )}
+      {topPanel === 'scenario' && <AuxiliaryMonitorModal title="Scenario" onClose={() => setTopPanel(null)}><div className="edumon-top-panel-content"><span>ACTIVE SCENARIO</span><strong>None</strong><p>EDUMON will use the shared EDUSIM Scenario Runtime and the same scenario workflow as EDUVENT.</p></div></AuxiliaryMonitorModal>}
+      {topPanel === 'account' && <AuxiliaryMonitorModal title="Instructor account" onClose={() => setTopPanel(null)}><EdumonTeachingLibraries host={teachingHost} /></AuxiliaryMonitorModal>}
+      {topPanel === 'about' && <AuxiliaryMonitorModal title={module.productName} onClose={() => setTopPanel(null)}><div className="edumon-top-panel-content"><span>EDUSIM MONITORING PLATFORM</span><strong>{module.subtitle}</strong><p>Version v0.1.0.0</p><p>Educational simulation only — not a medical device and not for clinical decision-making.</p></div></AuxiliaryMonitorModal>}
     </main>
   )
 }
