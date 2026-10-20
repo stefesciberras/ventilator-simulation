@@ -36,6 +36,7 @@ interface SimulationHardwareControlsProps {
   onAlarmSilence: (durationMs: number) => void
   children?: React.ReactNode
   className?: string
+  alarmTimerClassName?: string
 }
 
 const SHORT_ALARM_SILENCE_MS = 120_000
@@ -52,6 +53,7 @@ export function SimulationHardwareControls({
   onAlarmSilence,
   children,
   className = '',
+  alarmTimerClassName = '',
 }: SimulationHardwareControlsProps) {
   const longPressTimer = useRef<number | null>(null)
   const longPressTriggered = useRef(false)
@@ -97,7 +99,7 @@ export function SimulationHardwareControls({
         title={alarmSilenced && alarmLabel ? `Alarm silenced for ${alarmLabel}` : 'Silence alarms for 2 minutes; hold for 10 minutes'}
         aria-label={alarmSilenced && alarmLabel ? `Alarm silenced for ${alarmLabel}` : 'Alarm silence'}
       ><AlarmSilenceIcon /></button>
-      {alarmSilenced && alarmLabel && <span className="alarm-silence-timer">{alarmLabel}</span>}
+      {alarmSilenced && alarmLabel && <span className={`alarm-silence-timer ${alarmTimerClassName}`.trim()}>{alarmLabel}</span>}
       {children}
     </div>
   )
