@@ -4,6 +4,7 @@ import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } f
 import { generateMonitorSamples, measurementsFor, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import { AuxiliaryMonitorModal } from './AuxiliaryMonitorModal'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
+import { EdumonTopBar, type EdumonSimulationSpeed } from './EdumonTopBar'
 import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type EdumonModuleDefinition } from './modules'
 import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
 import './edumon.css'
@@ -152,7 +153,7 @@ function TrendsPreview() {
       <div className="edumon-trend-line"><span>HR</span><i style={{ width: '72%' }} /></div>
       <div className="edumon-trend-line"><span>MAP</span><i style={{ width: '64%' }} /></div>
       <div className="edumon-trend-line"><span>SpO₂</span><i style={{ width: '91%' }} /></div>
-      <p>The modal is now reusable for extra monitor pages as well as teaching media. Trend persistence and time scales come later.</p>
+      <p>The modal is reusable for extra monitor pages as well as teaching media. Trend persistence and time scales come later.</p>
     </div>
   )
 }
@@ -160,25 +161,29 @@ function TrendsPreview() {
 function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [patientState, setPatientState] = useState<MonitorPatientState>(DEFAULT_MONITOR_STATE)
   const [elapsed, setElapsed] = useState(TRACE_WINDOW_SECONDS)
+  const [simulationPaused, setSimulationPaused] = useState(false)
+  const [simulationSpeed, setSimulationSpeed] = useState<EdumonSimulationSpeed>(1)
   const [frozen, setFrozen] = useState(false)
   const [frozenSamples, setFrozenSamples] = useState<MonitorSample[] | null>(null)
   const [laserActive, setLaserActive] = useState(false)
   const [laserPoint, setLaserPoint] = useState({ x: 0.5, y: 0.25 })
   const [developerControls, setDeveloperControls] = useState(false)
   const [auxiliaryMonitor, setAuxiliaryMonitor] = useState<EdumonAuxiliaryMonitorId | null>(null)
+  const [topPanel, setTopPanel] = useState<'scenario' | 'account' | 'about' | null>(null)
 
   useEffect(() => {
-    if (frozen) return
+    if (frozen || simulationPaused) return
     let frame = 0
-    const origin = performance.now() - elapsed * 1000
+    let last = performance.now()
     const tick = (now: number) => {
-      setElapsed((now - origin) / 1000)
+      const deltaSeconds = Math.min(0.1, Math.max(0, (now - last) / 1000))
+      last = now
+      setElapsed((current) => current + deltaSeconds * simulationSpeed)
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frozen])
+  }, [frozen, simulationPaused, simulationSpeed])
 
   const liveSamples = useMemo(() => generateMonitorSamples(patientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE), [patientState, elapsed])
   const samples = frozenSamples ?? liveSamples
@@ -229,19 +234,20 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   }
 
   return (
-    <main className={`edumon-page edumon-module-${module.id}`}>
-      <section className="edumon-console" aria-label={`${module.productName} patient monitor`}>
-        <header className="edumon-console-header">
-          <div className="edumon-product-block">
-            <a href="/edumon" className="edumon-back-link" aria-label="Choose EDUMON module">‹</a>
-            <div><div className="edumon-product-name">{module.productName}</div><div className="edumon-product-subtitle">{module.subtitle}</div></div>
-          </div>
-          <div className="edumon-teaching-actions">
-            <button type="button" className={frozen ? 'active' : ''} onClick={toggleFreeze}>{frozen ? 'Resume' : 'Freeze'}</button>
-            <button type="button" className={laserActive ? 'active laser' : ''} onClick={toggleLaser}>Laser</button>
-          </div>
-        </header>
+    <main className={`app-shell edumon-app-shell edumon-module-${module.id}`}>
+      <EdumonTopBar
+        module={module}
+        simulationPaused={simulationPaused}
+        simulationSpeed={simulationSpeed}
+        elapsedSeconds={elapsed}
+        onPausedChange={setSimulationPaused}
+        onSpeedChange={setSimulationSpeed}
+        onScenario={() => setTopPanel('scenario')}
+        onAccount={() => setTopPanel('account')}
+        onAbout={() => setTopPanel('about')}
+      />
 
+      <section className="edumon-console" aria-label={`${module.productName} patient monitor`}>
         <div className="edumon-monitor-body">
           <div className="edumon-waveform-area" onPointerMove={handleLaserMove} onPointerDown={handleLaserMove}>
             {TRACE_SPECS.map((spec) => <TraceCanvas key={spec.key} samples={samples} spec={spec} />)}
@@ -257,6 +263,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         </div>
 
         <div className="edumon-control-strip" aria-label="Monitor controls">
+          <button type="button" className={`edumon-control-tile ${frozen ? 'active' : ''}`} onClick={toggleFreeze}><span>Waveforms</span><strong>{frozen ? 'Resume' : 'Freeze'}</strong><small>Local waveform freeze</small></button>
+          <button type="button" className={`edumon-control-tile ${laserActive ? 'active' : ''}`} onClick={toggleLaser}><span>Teaching</span><strong>Laser</strong><small>Waveform pointer</small></button>
           <button type="button" className="edumon-control-tile disabled" disabled title="NIBP will be enabled in a later EDUMON milestone"><span>NIBP</span><strong>Inactive</strong><small>Manual / cycle</small></button>
           {module.auxiliaryMonitors.map((item) => (
             <button key={item.id} type="button" className="edumon-control-tile" onClick={() => setAuxiliaryMonitor(item.id)}>
@@ -286,8 +294,30 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             {auxiliaryMonitor === 'teaching' && <EdumonTeachingLibraries host={teachingHost} />}
           </AuxiliaryMonitorModal>
         )}
+
+        {topPanel === 'scenario' && (
+          <AuxiliaryMonitorModal title="Scenario" onClose={() => setTopPanel(null)}>
+            <div className="edumon-top-panel-content">
+              <span>ACTIVE SCENARIO</span><strong>None</strong>
+              <p>EDUMON will use the shared EDUSIM Scenario Runtime and the same scenario workflow as EDUVENT. The top-bar control is now in its permanent location before scenario execution is connected.</p>
+            </div>
+          </AuxiliaryMonitorModal>
+        )}
+        {topPanel === 'account' && (
+          <AuxiliaryMonitorModal title="Instructor account" onClose={() => setTopPanel(null)}>
+            <EdumonTeachingLibraries host={teachingHost} />
+          </AuxiliaryMonitorModal>
+        )}
+        {topPanel === 'about' && (
+          <AuxiliaryMonitorModal title={module.productName} onClose={() => setTopPanel(null)}>
+            <div className="edumon-top-panel-content">
+              <span>EDUSIM MONITORING PLATFORM</span><strong>{module.subtitle}</strong>
+              <p>Version v0.1.0.0</p>
+              <p>Educational simulation only — not a medical device and not for clinical decision-making.</p>
+            </div>
+          </AuxiliaryMonitorModal>
+        )}
       </section>
-      <div className="edumon-version">{module.productName} v0.1.0.0</div>
     </main>
   )
 }
