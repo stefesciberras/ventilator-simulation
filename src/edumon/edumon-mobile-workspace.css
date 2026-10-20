@@ -1,0 +1,169 @@
+/* EDUMON uses the same hardware-button geometry as EDUVENT. */
+.edumon-console-top-actions {
+  min-height: auto !important;
+  padding: 12px !important;
+  gap: 10px !important;
+}
+
+.edumon-console-top-actions .hardware-button {
+  min-width: 0 !important;
+  min-height: 48px !important;
+  height: auto !important;
+  padding: 9px 12px !important;
+}
+
+.edumon-console-top-actions .icon-button {
+  width: 52px !important;
+  padding: 9px !important;
+}
+
+.edumon-console-top-actions .icon-button svg {
+  width: 25px !important;
+  height: 25px !important;
+}
+
+.edumon-mobile-workspace-switcher {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .edumon-app-shell {
+    display: flex !important;
+    flex-direction: column;
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  .edumon-topbar,
+  .edumon-mobile-workspace-switcher {
+    flex: 0 0 auto;
+  }
+
+  .edumon-mobile-workspace-switcher {
+    display: grid !important;
+  }
+
+  .edumon-workspace {
+    flex: 1 1 auto !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    touch-action: pan-y !important;
+  }
+
+  .edumon-workspace > .edumon-console,
+  .edumon-workspace > .edumon-side-panel {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor > .edumon-console {
+    display: flex !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor > .edumon-side-panel {
+    display: none !important;
+  }
+
+  .edumon-workspace.mobile-page-controls > .edumon-console {
+    display: none !important;
+  }
+
+  .edumon-workspace.mobile-page-controls > .edumon-side-panel {
+    display: flex !important;
+  }
+
+  .edumon-workspace.mobile-page-controls .edumon-side-panel-body {
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+  }
+}
+
+/* EDUVENT tablet mode deliberately compacts the hardware strip further. */
+@media (min-width: 681px) and (max-width: 1180px) {
+  .edumon-console-top-actions {
+    gap: 4px !important;
+  }
+
+  .edumon-console-top-actions .hardware-button {
+    min-height: 38px !important;
+    height: 38px !important;
+    padding: 5px 6px !important;
+  }
+
+  .edumon-console-top-actions .icon-button {
+    width: 38px !important;
+  }
+
+  .edumon-console-top-actions .icon-button svg {
+    width: 21px !important;
+    height: 21px !important;
+  }
+}
+
+body.eduvent-tablet-landscape .edumon-mobile-workspace-switcher {
+  display: grid !important;
+}
+
+body.eduvent-tablet-landscape .edumon-app-shell {
+  display: flex !important;
+  flex-direction: column;
+  height: 100dvh !important;
+  overflow: hidden !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace {
+  flex: 1 1 auto !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  touch-action: pan-y !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor > .edumon-console {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor > .edumon-side-panel {
+  display: none !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-controls > .edumon-console {
+  display: none !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-controls > .edumon-side-panel {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+body.eduvent-tablet-landscape .edumon-console-top-actions {
+  gap: 4px !important;
+}
+
+body.eduvent-tablet-landscape .edumon-console-top-actions .hardware-button {
+  min-width: 0 !important;
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 5px 6px !important;
+}
+
+body.eduvent-tablet-landscape .edumon-console-top-actions .icon-button {
+  width: 38px !important;
+}
+
+body.eduvent-tablet-landscape .edumon-console-top-actions .icon-button svg {
+  width: 21px !important;
+  height: 21px !important;
+}
