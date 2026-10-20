@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
-import { generateMonitorSamples, measurementsFor, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
+import { generateMonitorSamples, measurementsFor } from './monitorEngine'
 import { AuxiliaryMonitorModal } from './AuxiliaryMonitorModal'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonTopBar, type EdumonSimulationSpeed } from './EdumonTopBar'
 import { EdumonWorkspacePanel } from './EdumonWorkspacePanel'
 import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type EdumonModuleDefinition } from './modules'
 import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
+import { SimulationHardwareControls } from '../components/SimulationHardwareControls'
 import './edumon.css'
 import './edumon-console-parity.css'
 
@@ -30,32 +31,6 @@ const TRACE_SPECS: TraceSpec[] = [
   { key: 'arterialPressure', label: 'ART', unit: 'mmHg', min: 0, max: 180, className: 'art' },
   { key: 'pleth', label: 'SpO₂', unit: '', min: 0, max: 1.2, className: 'spo2' },
 ]
-
-function FreezeWaveformIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M2 9h4V5l5 7-5 7v-4H2zm20 0h-4V5l-5 7 5 7v-4h4zM11 3h2v18h-2z" fill="currentColor" />
-    </svg>
-  )
-}
-
-function LaserPointerIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="7" cy="17" r="2.2" fill="currentColor" />
-      <path d="M9 15l8.5-8.5M13.5 6.5l4 4M17.5 3.5l3 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function AlarmSilenceIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 9a7 7 0 0 1 11.8-5.1M18.7 7.2A7 7 0 0 1 19 9v4l2 3H8M10 20h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 3l18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  )
-}
 
 function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceSpec }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -195,14 +170,11 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [frozenSamples, setFrozenSamples] = useState<MonitorSample[] | null>(null)
   const [laserActive, setLaserActive] = useState(false)
   const [laserPoint, setLaserPoint] = useState({ x: 0.5, y: 0.25 })
-  const [developerControls, setDeveloperControls] = useState(false)
   const [auxiliaryMonitor, setAuxiliaryMonitor] = useState<EdumonAuxiliaryMonitorId | null>(null)
   const [topPanel, setTopPanel] = useState<'scenario' | 'account' | 'about' | null>(null)
   const [alarmSilencedUntil, setAlarmSilencedUntil] = useState<number | null>(null)
   const [alarmSilenceRemaining, setAlarmSilenceRemaining] = useState(0)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
-  const alarmSilenceLongPressTimeoutRef = useRef<number | null>(null)
-  const alarmSilenceLongPressTriggeredRef = useRef(false)
 
   useEffect(() => {
     if (frozen || simulationPaused) return
@@ -235,7 +207,6 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   useEffect(() => () => {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
-    if (alarmSilenceLongPressTimeoutRef.current != null) window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
   }, [])
 
   const liveSamples = useMemo(() => generateMonitorSamples(patientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE), [patientState, elapsed])
@@ -265,7 +236,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     })
   }
 
-  const silenceAlarm = (durationMs = 120000) => {
+  const silenceAlarm = (durationMs: number) => {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
     const until = Date.now() + durationMs
     setAlarmSilencedUntil(until)
@@ -273,32 +244,6 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       setAlarmSilencedUntil(null)
       alarmSilenceTimeoutRef.current = null
     }, durationMs)
-  }
-
-  const clearAlarmSilenceLongPress = () => {
-    if (alarmSilenceLongPressTimeoutRef.current != null) {
-      window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
-      alarmSilenceLongPressTimeoutRef.current = null
-    }
-  }
-
-  const startAlarmSilenceLongPress = () => {
-    clearAlarmSilenceLongPress()
-    alarmSilenceLongPressTriggeredRef.current = false
-    alarmSilenceLongPressTimeoutRef.current = window.setTimeout(() => {
-      alarmSilenceLongPressTriggeredRef.current = true
-      alarmSilenceLongPressTimeoutRef.current = null
-      silenceAlarm(600000)
-    }, 800)
-  }
-
-  const finishAlarmSilencePress = () => clearAlarmSilenceLongPress()
-  const handleAlarmSilenceClick = () => {
-    if (alarmSilenceLongPressTriggeredRef.current) {
-      alarmSilenceLongPressTriggeredRef.current = false
-      return
-    }
-    silenceAlarm()
   }
 
   const handleLaserMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -310,21 +255,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     })
   }
 
-  const updateRhythm = (rhythm: MonitorPatientState['rhythm']) => {
-    setPatientState((current) => {
-      let heartRate = current.heartRate
-      if (rhythm === 'sinus-bradycardia' && heartRate >= 60) heartRate = 48
-      if (rhythm === 'sinus-tachycardia' && heartRate <= 100) heartRate = 125
-      if (rhythm === 'svt' && heartRate < 140) heartRate = 180
-      if (rhythm === 'ventricular-tachycardia' && heartRate < 110) heartRate = 160
-      if (rhythm === 'sinus' && (heartRate < 60 || heartRate > 100)) heartRate = 78
-      return { ...current, rhythm, heartRate }
-    })
-  }
-
   const alarmMinutes = Math.floor(alarmSilenceRemaining / 60)
   const alarmSeconds = alarmSilenceRemaining % 60
-  const alarmSilenceLabel = alarmSilenceRemaining > 0 ? `${alarmMinutes}:${String(alarmSeconds).padStart(2, '0')}` : 'Alarm silence'
+  const alarmSilenceLabel = alarmSilenceRemaining > 0 ? `${alarmMinutes}:${String(alarmSeconds).padStart(2, '0')}` : undefined
 
   return (
     <main className={`app-shell edumon-app-shell edumon-module-${module.id}`}>
@@ -342,23 +275,17 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
       <div className="workspace edumon-workspace">
         <section className="ventilator-console edumon-console" aria-label={`${module.productName} patient monitor`}>
-          <div className="action-bar console-top-actions edumon-console-top-actions" aria-label="Monitor actions">
-            <button type="button" className={`hardware-button icon-button teaching-laser-console-button ${laserActive ? 'active' : ''}`} onClick={toggleLaser} title="Laser pointer" aria-label="Laser pointer" aria-pressed={laserActive}><LaserPointerIcon /></button>
-            <button type="button" className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={toggleFreeze} title={frozen ? 'Resume waveforms' : 'Freeze waveforms'} aria-label={frozen ? 'Resume waveforms' : 'Freeze waveforms'}><FreezeWaveformIcon /></button>
-            <button
-              type="button"
-              className={`hardware-button icon-button alarm-button ${alarmSilenceRemaining > 0 ? 'active' : ''}`}
-              onClick={handleAlarmSilenceClick}
-              onPointerDown={startAlarmSilenceLongPress}
-              onPointerUp={finishAlarmSilencePress}
-              onPointerCancel={finishAlarmSilencePress}
-              onPointerLeave={finishAlarmSilencePress}
-              onContextMenu={(event) => event.preventDefault()}
-              title={alarmSilenceRemaining > 0 ? `Alarm silenced for ${alarmSilenceLabel}` : 'Silence alarms for 2 minutes; hold for 10 minutes'}
-              aria-label={alarmSilenceRemaining > 0 ? `Alarm silenced for ${alarmSilenceLabel}` : 'Alarm silence'}
-            ><AlarmSilenceIcon /></button>
-            {alarmSilenceRemaining > 0 && <span className="edumon-alarm-silence-timer">{alarmSilenceLabel}</span>}
-          </div>
+          <SimulationHardwareControls
+            className="edumon-console-top-actions"
+            laserActive={laserActive}
+            onLaserToggle={toggleLaser}
+            frozen={frozen}
+            onFreezeToggle={toggleFreeze}
+            alarmSilenced={alarmSilenceRemaining > 0}
+            alarmLabel={alarmSilenceLabel}
+            onAlarmSilence={silenceAlarm}
+            alarmTimerClassName="edumon-alarm-silence-timer"
+          />
 
           <div className="edumon-monitor-body">
             <div className="edumon-waveform-area" onPointerMove={handleLaserMove} onPointerDown={handleLaserMove}>
@@ -379,20 +306,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             {module.auxiliaryMonitors.map((item) => (
               <button key={item.id} type="button" className="edumon-control-tile" onClick={() => setAuxiliaryMonitor(item.id)}><span>Extra monitor</span><strong>{item.shortLabel}</strong><small>{item.description}</small></button>
             ))}
-            <button type="button" className="edumon-control-tile" onClick={() => setDeveloperControls((visible) => !visible)}><span>Monitor</span><strong>{RHYTHM_LABELS[patientState.rhythm]}</strong><small>v0.1 rhythm test</small></button>
           </div>
-
-          {developerControls && (
-            <div className="edumon-overlay-panel">
-              <div className="edumon-overlay-title">v0.1 monitor test controls</div>
-              <label><span>Rhythm</span><select value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>{RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}</select></label>
-              <label><span>Heart rate <b>{patientState.heartRate}</b></span><input type="range" min="30" max="240" step="1" value={patientState.heartRate} onChange={(event) => setPatientState((current) => ({ ...current, heartRate: Number(event.target.value) }))} /></label>
-              <label><span>ART systolic <b>{patientState.systolicPressure}</b></span><input type="range" min="50" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => setPatientState((current) => ({ ...current, systolicPressure: Number(event.target.value) }))} /></label>
-              <label><span>ART diastolic <b>{patientState.diastolicPressure}</b></span><input type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => setPatientState((current) => ({ ...current, diastolicPressure: Number(event.target.value) }))} /></label>
-              <label><span>SpO₂ <b>{patientState.spo2}%</b></span><input type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => setPatientState((current) => ({ ...current, spo2: Number(event.target.value) }))} /></label>
-              <label><span>Pleth perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => setPatientState((current) => ({ ...current, peripheralPerfusion: Number(event.target.value) }))} /></label>
-            </div>
-          )}
         </section>
 
         <EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} teachingHost={teachingHost} meanPressure={measurements.meanPressure} />
