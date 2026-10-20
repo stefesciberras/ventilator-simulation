@@ -239,6 +239,7 @@
   padding: 8px 10px 10px;
   border-top: 1px solid rgba(255,255,255,0.09);
   background: #141b20;
+  overflow-x: auto;
 }
 
 .edumon-control-tile {
@@ -337,6 +338,264 @@
   pointer-events: none;
 }
 
+.edumon-product-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edumon-back-link {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: #d9e2e7;
+  text-decoration: none;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.edumon-landing {
+  min-height: 100vh;
+  justify-content: center;
+  padding: clamp(24px, 5vw, 64px);
+  background: radial-gradient(circle at 50% 10%, rgba(55,74,86,0.26), transparent 48%), #10161b;
+}
+
+.edumon-module-picker {
+  width: min(980px, 100%);
+  margin: 0 auto;
+}
+
+.edumon-module-picker-heading {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.edumon-module-picker-heading > span {
+  color: #f0a03a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.edumon-module-picker-heading h1 {
+  margin: 7px 0 9px;
+  font-size: clamp(2rem, 6vw, 4rem);
+  letter-spacing: 0.12em;
+}
+
+.edumon-module-picker-heading p {
+  max-width: 700px;
+  margin: 0 auto;
+  color: #93a1aa;
+  line-height: 1.55;
+}
+
+.edumon-module-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.edumon-module-card {
+  min-height: 220px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(37,49,58,0.95), rgba(19,27,32,0.96));
+  color: #eef4f8;
+  text-decoration: none;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.22);
+}
+
+.edumon-module-card:hover {
+  border-color: rgba(240,160,58,0.52);
+  transform: translateY(-1px);
+}
+
+.edumon-module-card > span {
+  align-self: flex-start;
+  margin-bottom: auto;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(240,160,58,0.14);
+  color: #f0a03a;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
+.edumon-module-card strong {
+  font-size: 1.55rem;
+}
+
+.edumon-module-card p {
+  margin: 5px 0 16px;
+  color: #aab5bb;
+}
+
+.edumon-module-card div {
+  color: #71808a;
+  font-size: 0.78rem;
+}
+
+.edumon-aux-overlay {
+  z-index: 1200;
+}
+
+.edumon-aux-modal {
+  width: min(860px, calc(100vw - 28px));
+  max-height: min(86vh, 760px);
+}
+
+.edumon-aux-stage {
+  display: block;
+  overflow: auto;
+  background: #080c0f;
+}
+
+.edumon-extra-monitor-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: rgba(255,255,255,0.07);
+}
+
+.edumon-extra-monitor-grid > div,
+.edumon-extra-monitor-grid > p {
+  min-height: 130px;
+  margin: 0;
+  padding: 18px;
+  background: #0a1013;
+}
+
+.edumon-extra-monitor-grid > div {
+  display: grid;
+  align-content: center;
+  justify-items: end;
+}
+
+.edumon-extra-monitor-grid span {
+  justify-self: start;
+  color: #8f9da5;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.edumon-extra-monitor-grid strong {
+  font-size: clamp(2.3rem, 6vw, 4.2rem);
+  line-height: 0.95;
+  color: #f0c35a;
+}
+
+.edumon-extra-monitor-grid small {
+  color: #79868e;
+}
+
+.edumon-extra-monitor-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.edumon-extra-monitor-grid p,
+.edumon-trends-preview p {
+  min-height: auto;
+  color: #8d9aa2;
+  line-height: 1.5;
+  font-size: 0.8rem;
+}
+
+.edumon-neuro-monitor strong {
+  color: #e7cf58;
+}
+
+.edumon-placeholder-waveform {
+  min-height: 190px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-around !important;
+  overflow: hidden;
+}
+
+.edumon-placeholder-waveform i {
+  width: 14%;
+  height: 48px;
+  border-top: 4px solid #e7cf58;
+  border-radius: 50% 50% 0 0;
+  transform: skewX(-12deg);
+  opacity: 0.92;
+}
+
+.edumon-trends-preview {
+  padding: 18px;
+}
+
+.edumon-trend-line {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.edumon-trend-line span {
+  color: #8e9ba4;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.edumon-trend-line::after {
+  content: '';
+  grid-column: 2;
+  grid-row: 1;
+  height: 34px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.edumon-trend-line i {
+  z-index: 2;
+  grid-column: 2;
+  grid-row: 1;
+  height: 2px;
+  background: #55c8f0;
+  box-shadow: 60px -8px 0 -0.5px #55c8f0, 120px 7px 0 -0.5px #55c8f0, 180px -4px 0 -0.5px #55c8f0;
+}
+
+.edumon-teaching-library-stage {
+  width: 100%;
+  min-height: 360px;
+  padding: 12px;
+  background: #11171b;
+}
+
+.edumon-teaching-library-intro {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.025);
+}
+
+.edumon-teaching-library-intro strong {
+  font-size: 0.82rem;
+}
+
+.edumon-teaching-library-intro span {
+  color: #87949c;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 @media (max-width: 760px) {
   .edumon-console-header {
     min-height: 56px;
@@ -371,5 +630,18 @@
 
   .edumon-overlay-panel label {
     grid-template-columns: 128px 1fr;
+  }
+
+  .edumon-module-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .edumon-landing {
+    padding: 20px 14px;
+  }
+
+  .edumon-aux-modal {
+    width: calc(100vw - 12px);
+    max-height: 92vh;
   }
 }
