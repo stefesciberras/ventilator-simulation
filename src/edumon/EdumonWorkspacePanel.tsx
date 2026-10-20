@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { MonitorPatientState } from './types'
+import { RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
+import './edumon-rhythm-control.css'
 
 export type EdumonControlTab = 'actions' | 'patient' | 'physio' | 'teaching'
 export type EdumonPatientProfile = 'Awake' | 'Asleep' | 'Paediatric'
@@ -28,6 +30,16 @@ export function EdumonWorkspacePanel({ patientState, onPatientStateChange, teach
     onPatientStateChange({ ...EDUMON_PATIENT_PROFILES[nextProfile] })
   }
 
+  const updateRhythm = (rhythm: MonitorPatientState['rhythm']) => {
+    let heartRate = patientState.heartRate
+    if (rhythm === 'sinus-bradycardia' && heartRate >= 60) heartRate = 48
+    if (rhythm === 'sinus-tachycardia' && heartRate <= 100) heartRate = 125
+    if (rhythm === 'svt' && heartRate < 140) heartRate = 180
+    if (rhythm === 'ventricular-tachycardia' && heartRate < 110) heartRate = 160
+    if (rhythm === 'sinus' && (heartRate < 60 || heartRate > 100)) heartRate = 78
+    onPatientStateChange({ ...patientState, rhythm, heartRate })
+  }
+
   return (
     <aside className="control-panel edumon-side-panel" aria-label="EDUMON controls">
       <div className="edumon-profile-strip" aria-label="Patient profiles">
@@ -47,6 +59,12 @@ export function EdumonWorkspacePanel({ patientState, onPatientStateChange, teach
         {tab === 'patient' && (
           <section className="control-section edumon-patient-controls">
             <div className="control-section-title"><h2>Patient</h2><span className="edumon-profile-badge">{profile}</span></div>
+            <label className="edumon-rhythm-control">
+              <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
+              <select value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>
+                {RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}
+              </select>
+            </label>
             <label><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => onPatientStateChange({ ...patientState, heartRate: Number(event.target.value) })} /></label>
             <label><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => onPatientStateChange({ ...patientState, systolicPressure: Number(event.target.value) })} /></label>
             <label><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => onPatientStateChange({ ...patientState, diastolicPressure: Number(event.target.value) })} /></label>
