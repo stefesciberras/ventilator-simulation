@@ -2,11 +2,23 @@ import { useState } from 'react'
 import { TeachingInstructorWorkspace } from '../teaching/TeachingWorkspace'
 import { TeachingMediaInstructorPanel } from '../teaching/TeachingMediaPanel'
 import { useTeachingPrompts, useTeachingQuestionLibrary } from '../teaching/useTeachingInteractions'
-import type { TeachingHostAdapter } from '../teaching/types'
+import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 
-export function EdumonTeachingLibraries({ host }: { host: TeachingHostAdapter }) {
+interface EdumonTeachingLibrariesProps {
+  host: TeachingHostAdapter
+  role?: TeachingRole
+  sessionId?: string | null
+  candidateCount?: number
+}
+
+export function EdumonTeachingLibraries({
+  host,
+  role = 'standalone',
+  sessionId = null,
+  candidateCount = 0,
+}: EdumonTeachingLibrariesProps) {
   const [scenarioMediaIds, setScenarioMediaIds] = useState<string[]>([])
-  const prompts = useTeachingPrompts('standalone', null, host)
+  const prompts = useTeachingPrompts(role, sessionId, host)
   const library = useTeachingQuestionLibrary(host)
   const instructorAuthenticated = Boolean(library.author)
 
@@ -14,24 +26,24 @@ export function EdumonTeachingLibraries({ host }: { host: TeachingHostAdapter })
     <div className="edumon-teaching-library-stage">
       <div className="edumon-teaching-library-intro">
         <strong>Shared teaching library</strong>
-        <span>EDUMON uses the same media and Questions & Polls infrastructure as EDUVENT. Session presentation will use these same components when EDUMON instructor/candidate sessions are connected.</span>
+        <span>EDUMON uses the same media and Questions & Polls infrastructure as EDUVENT, including live instructor/candidate sessions.</span>
       </div>
 
       <TeachingMediaInstructorPanel
-        role="standalone"
+        role={role}
         instructorAuthenticated={instructorAuthenticated}
-        sessionId={null}
+        sessionId={sessionId}
         scenarioMediaIds={scenarioMediaIds}
         onScenarioMediaIdsChange={setScenarioMediaIds}
       />
 
       <TeachingInstructorWorkspace
-        role="standalone"
+        role={role}
         instructorAuthenticated={instructorAuthenticated}
         host={host}
         activePrompt={prompts.activePrompt}
         responses={prompts.responses}
-        candidateCount={0}
+        candidateCount={candidateCount}
         promptBusy={prompts.busy}
         promptError={prompts.error}
         libraryItems={library.items}
