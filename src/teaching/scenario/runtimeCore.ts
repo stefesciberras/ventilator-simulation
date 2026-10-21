@@ -33,6 +33,8 @@ export interface TeachingScenarioStage<TSnapshot, TTrigger> {
   id: string
   name: string
   snapshot: TSnapshot
+  /** Product variable IDs explicitly applied on entry. Missing means legacy/full snapshot. */
+  appliedVariableIds?: string[]
   /** Default transition for numeric values when this stage is entered. */
   transition?: TeachingScenarioTransition
   /** Optional per-variable transition overrides keyed by product variable ID. */

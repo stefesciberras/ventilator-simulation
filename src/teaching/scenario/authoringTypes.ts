@@ -16,6 +16,8 @@ export type SharedScenarioAuthoringTrigger =
   | { id: string; type: 'action'; parameter: string; actor: SharedScenarioActor }
   | { id: string; type: 'question-any' }
   | { id: string; type: 'question-correct' }
+  | { id: string; type: 'media-ended' }
+  | { id: string; type: 'media-acknowledged' }
 
 export interface SharedScenarioMediaContent {
   mediaId?: string

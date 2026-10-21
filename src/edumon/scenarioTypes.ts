@@ -25,6 +25,8 @@ export type EdumonScenarioTrigger =
   | { type: 'patient-change'; parameter: keyof MonitorPatientState; actor?: SharedScenarioActor }
   | { type: 'question-any' }
   | { type: 'question-correct' }
+  | { type: 'media-ended' }
+  | { type: 'media-acknowledged' }
 
 export interface EdumonStoredScenario {
   schemaVersion: 1 | 2

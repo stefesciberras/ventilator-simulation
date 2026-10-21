@@ -11,6 +11,9 @@ export interface EdumonScenarioRuntimeContext {
   measurements: MonitorMeasurements
   questionAnswered?: boolean
   questionCorrect?: boolean
+  mediaEnded?: boolean
+  mediaAcknowledged?: boolean
+  stageBaselinePatient?: EdumonScenarioSnapshot['patient']
 }
 
 function numericMetric(context: EdumonScenarioRuntimeContext, metric: EdumonScenarioMetric): number | null {
@@ -53,12 +56,15 @@ export function createEdumonScenarioRuntimeAdapter(
       if (trigger.type === 'manual') return false
       if (trigger.type === 'question-any') return context.questionAnswered === true
       if (trigger.type === 'question-correct') return context.questionAnswered === true && context.questionCorrect === true
+      if (trigger.type === 'media-ended') return context.mediaEnded === true
+      if (trigger.type === 'media-acknowledged') return context.mediaAcknowledged === true
       if (trigger.type === 'time') return context.simulationTime - stage.stageStartedSimulationTime >= Math.max(0, trigger.seconds)
       if (trigger.type === 'condition') {
         const actual = numericMetric(context, trigger.metric)
         return actual != null && Number.isFinite(actual) && conditionMatches(actual, trigger.operator, trigger.value)
       }
-      return changed(context.state.patient[trigger.parameter], stage.stage.snapshot.patient[trigger.parameter])
+      const baseline = context.stageBaselinePatient ?? stage.stage.snapshot.patient
+      return changed(context.state.patient[trigger.parameter], baseline[trigger.parameter])
     },
   }
 }

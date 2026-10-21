@@ -29,6 +29,7 @@ interface SharedScenarioRuntimePanelProps {
   completionMessage?: string
   selfDirected?: boolean
   onQuestionResult?: (answered: boolean, correct: boolean) => void
+  onMediaEvent?: (event: 'ended' | 'acknowledged') => void
   onClose?: () => void
 }
 
@@ -50,15 +51,18 @@ export function SharedScenarioRuntimePanel({
   completionMessage = 'You have reached the end of this scenario.',
   selfDirected = false,
   onQuestionResult,
+  onMediaEvent,
   onClose,
 }: SharedScenarioRuntimePanelProps) {
   const [answerId, setAnswerId] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [resolvedMediaUrl, setResolvedMediaUrl] = useState<string | null>(null)
+  const [mediaAcknowledged, setMediaAcknowledged] = useState(false)
 
   useEffect(() => {
     setAnswerId(null)
     setSubmitted(false)
+    setMediaAcknowledged(false)
     onQuestionResult?.(false, false)
   }, [stageNumber])
 
@@ -105,9 +109,11 @@ export function SharedScenarioRuntimePanel({
       <strong>{media.title || 'Scenario media'}</strong>
       {resolvedMediaUrl ? (
         media.mediaKind === 'video'
-          ? <video controls playsInline src={resolvedMediaUrl} />
+          ? <video controls playsInline src={resolvedMediaUrl} onEnded={() => onMediaEvent?.('ended')} />
           : <img src={resolvedMediaUrl} alt={media.title || 'Scenario media'} />
       ) : <small>{media.mediaId ? 'Loading scenario media…' : `Teaching media reference: ${media.storagePath || 'not selected'}`}</small>}
+      {!mediaAcknowledged && <button type="button" className="scenario-builder-primary" onClick={() => { setMediaAcknowledged(true); onMediaEvent?.('acknowledged') }}>Acknowledge media</button>}
+      {mediaAcknowledged && <small>Media acknowledged.</small>}
     </div>}
     {question && !complete && <div className="shared-scenario-runtime-question">
       {question.title && <strong>{question.title}</strong>}

@@ -90,6 +90,8 @@ function defaultTriggerForType(type: DynamicScenarioTrigger['type']): DynamicSce
   if (type === 'condition') return { type: 'condition', metric: 'oxygenSaturation', operator: 'lt', value: 90 }
   if (type === 'question-any') return { type: 'question-any' }
   if (type === 'question-correct') return { type: 'question-correct' }
+  if (type === 'media-ended') return { type: 'media-ended' }
+  if (type === 'media-acknowledged') return { type: 'media-acknowledged' }
   if (type === 'patient-change') return { type: 'patient-change', parameter: 'compliance', actor: 'either' }
   if (type === 'device-action') return { type: 'device-action', action: 'freeze-waveform', actor: 'either' }
   return { type: 'action', parameter: 'fio2', actor: 'either' }
@@ -100,6 +102,8 @@ function singleTriggerSummary(value: DynamicScenarioTrigger) {
   if (value.type === 'time') return `After ${value.seconds}s in stage`
   if (value.type === 'question-any') return 'Any answer submitted'
   if (value.type === 'question-correct') return 'Correct answer submitted'
+  if (value.type === 'media-ended') return 'Video finished'
+  if (value.type === 'media-acknowledged') return 'Media acknowledged'
   if (value.type === 'condition') {
     const metric = CONDITION_METRICS.find((item) => item.value === value.metric)
     const operator = value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='
