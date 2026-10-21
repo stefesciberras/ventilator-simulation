@@ -77,18 +77,9 @@ function replaceOnce(text, from, to, label) {
   const newState = `  const accountChangeLocked = role !== 'standalone'\n  const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })\n  const account = accountAuth.account\n  useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])\n  const [settingsOpen, setSettingsOpen] = useState(false)\n  const [scenarioOpen, setScenarioOpen] = useState(false)\n`
   text = replaceOnce(text, oldState, newState, 'EDUVENT auth state')
 
-  const authStart = text.indexOf("  useEffect(() => {\n    let active = true\n    void getInstructorAccount()")
-  const authEndMarker = "  const staticPresets = useMemo"
-  const authEnd = text.indexOf(authEndMarker, authStart)
-  if (authStart < 0 || authEnd < 0) throw new Error('Unable to locate EDUVENT legacy account lifecycle')
-  // Preserve refreshPresets, which sits before the legacy lifecycle block.
-  const lifecycleStart = authStart
-  const lifecycleBlock = text.slice(lifecycleStart, authEnd)
-  const refreshIndex = lifecycleBlock.indexOf('  const refreshPresets = async')
-  if (refreshIndex < 0) throw new Error('refreshPresets not found in auth lifecycle block')
-  const refreshText = lifecycleBlock.slice(refreshIndex, lifecycleBlock.indexOf("  useEffect(() => {\n    let active = true", refreshIndex))
-  text = text.slice(0, lifecycleStart) + refreshText + `  useEffect(() => {\n    if (account) void refreshPresets(account)\n    else setPresets([])\n  }, [account])\n\n` + text.slice(authEnd)
-  text = text.replace("\n  const accountChangeLocked = role !== 'standalone'\n", '\n')
+  const legacyLifecycle = /  useEffect\(\(\) => \{\n    let active = true\n    void getInstructorAccount\(\)[\s\S]*?\n  const logout = async \(\) => \{[\s\S]*?\n  \}\n\n/
+  if (!legacyLifecycle.test(text)) throw new Error('Unable to locate EDUVENT legacy account lifecycle')
+  text = text.replace(legacyLifecycle, `  useEffect(() => {\n    if (account) void refreshPresets(account)\n    else setPresets([])\n  }, [account])\n\n`)
 
   const buttonStart = text.indexOf('      <button\n        type="button"\n        className={`top-account-button ${account ? \'connected\' : \'\'}`}')
   const scenarioButton = text.indexOf("      {role !== 'candidate' && (", buttonStart)
