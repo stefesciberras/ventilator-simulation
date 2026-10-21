@@ -1,6 +1,7 @@
 import type { EdumonSimulationSpeed } from './EdumonTopBar'
 import type { MonitorPatientState } from './types'
 import type { TeachingScenarioDefinition } from '../teaching/scenario/runtimeCore'
+import type { SharedScenarioActor } from '../teaching/scenario/authoringTypes'
 
 export interface EdumonScenarioSnapshot {
   patient: MonitorPatientState
@@ -21,10 +22,12 @@ export type EdumonScenarioTrigger =
   | { type: 'manual' }
   | { type: 'time'; seconds: number }
   | { type: 'condition'; metric: EdumonScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
-  | { type: 'patient-change'; parameter: keyof MonitorPatientState }
+  | { type: 'patient-change'; parameter: keyof MonitorPatientState; actor?: SharedScenarioActor }
+  | { type: 'question-any' }
+  | { type: 'question-correct' }
 
 export interface EdumonStoredScenario {
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   kind: 'static' | 'dynamic'
   description: string
   definition: TeachingScenarioDefinition<EdumonScenarioSnapshot, EdumonScenarioTrigger>
@@ -39,7 +42,8 @@ export function createStaticEdumonScenario(id: string, name: string, snapshot: E
       id,
       name,
       description,
-      stages: [{ id: `${id}-stage-1`, name: 'Initial state', snapshot, triggers: [{ type: 'manual' }] }],
+      stages: [{ id: `${id}-stage-1`, name: 'Initial state', snapshot, triggers: [{ type: 'manual' }], content: { kind: 'state' } }],
+      branches: [],
     },
   }
 }
