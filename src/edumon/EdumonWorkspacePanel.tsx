@@ -3,7 +3,7 @@ import type { MonitorPatientState } from './types'
 import { RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
-import { SimulationControlPanel, SimulationProfileStrip, type SimulationControlTab } from '../components/SimulationControlPanel'
+import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
 import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
 import './edumon-rhythm-control.css'
 
@@ -15,13 +15,6 @@ export const EDUMON_PATIENT_PROFILES: Record<EdumonPatientProfile, MonitorPatien
   Asleep: { heartRate: 62, rhythm: 'sinus', systolicPressure: 105, diastolicPressure: 60, spo2: 99, peripheralPerfusion: 0.9 },
   Paediatric: { heartRate: 110, rhythm: 'sinus', systolicPressure: 95, diastolicPressure: 55, spo2: 99, peripheralPerfusion: 1 },
 }
-
-const CONTROL_TABS: Array<SimulationControlTab<EdumonControlTab>> = [
-  { id: 'actions', label: 'ACTIONS' },
-  { id: 'patient', label: 'PATIENT' },
-  { id: 'physio', label: 'PHYSIO' },
-  { id: 'teaching', label: 'TEACHING' },
-]
 
 interface EdumonWorkspacePanelProps {
   patientState: MonitorPatientState
@@ -75,33 +68,27 @@ export function EdumonWorkspacePanel({
     onPatientStateChange({ ...patientState, ...patch })
   }
 
-  const profileStrip = (
-    <SimulationProfileStrip
-      profiles={Object.keys(EDUMON_PATIENT_PROFILES) as EdumonPatientProfile[]}
-      activeProfile={profile}
-      onProfileChange={applyProfile}
-      disabled={controlsLocked}
-      className="edumon-profile-strip"
-    />
-  )
+  const profiles: Array<SimulationControlProfileDefinition<EdumonPatientProfile>> = (Object.keys(EDUMON_PATIENT_PROFILES) as EdumonPatientProfile[]).map((candidate) => ({
+    id: candidate,
+    label: candidate,
+    active: profile === candidate,
+    disabled: controlsLocked,
+    className: profile === candidate ? 'profile-selected' : '',
+    title: controlsLocked ? 'Patient profile controlled by instructor' : `Apply ${candidate} profile`,
+    onSelect: applyProfile,
+  }))
 
-  return (
-    <SimulationControlPanel
-      activeTab={tab}
-      tabs={CONTROL_TABS}
-      onTabChange={setTab}
-      profileStrip={profileStrip}
-      ariaLabel="EDUMON controls"
-      className="edumon-side-panel"
-      tabsClassName="edumon-control-tabs"
-      bodyClassName="edumon-side-panel-body"
-    >
-      {tab === 'actions' && <div className="edumon-empty-actions" aria-label="Actions" />}
-      {tab === 'patient' && (
+  const tabs: Array<SimulationControlTabDefinition<EdumonControlTab>> = [
+    { id: 'actions', label: 'ACTIONS', content: <div className="edumon-empty-actions" aria-label="Actions" /> },
+    {
+      id: 'patient',
+      label: 'PATIENT',
+      locked: controlsLocked,
+      content: (
         <section className="control-section edumon-patient-controls">
           <div className="control-section-title"><h2>Patient</h2><span className="edumon-profile-badge">{controlsLocked ? 'Instructor controlled' : profile}</span></div>
           <div className="patient-transition-control">
-            <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} />
+            <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} showValue={false} />
           </div>
           <label className="edumon-rhythm-control">
             <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
@@ -115,8 +102,13 @@ export function EdumonWorkspacePanel({
           <label><span>SpO₂ <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
           <label><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input disabled={controlsLocked} type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => updatePatient({ peripheralPerfusion: Number(event.target.value) })} /></label>
         </section>
-      )}
-      {tab === 'physio' && (
+      ),
+    },
+    {
+      id: 'physio',
+      label: 'PHYSIO',
+      locked: controlsLocked,
+      content: (
         <section className="control-section edumon-physio-panel">
           <div className="control-section-title"><h2>Physiology</h2></div>
           <div className="edumon-physio-grid">
@@ -126,8 +118,12 @@ export function EdumonWorkspacePanel({
             <div><span>Perfusion</span><strong>{patientState.peripheralPerfusion.toFixed(1)}</strong><small>relative</small></div>
           </div>
         </section>
-      )}
-      {tab === 'teaching' && (
+      ),
+    },
+    {
+      id: 'teaching',
+      label: 'TEACHING',
+      content: (
         <div className="edumon-side-teaching">
           <EdumonTeachingLibraries
             host={teachingHost}
@@ -137,7 +133,21 @@ export function EdumonWorkspacePanel({
             sessionPanel={sessionPanel}
           />
         </div>
-      )}
-    </SimulationControlPanel>
+      ),
+    },
+  ]
+
+  return (
+    <SimulationControlFramework
+      activeTab={tab}
+      tabs={tabs}
+      onTabChange={setTab}
+      profiles={profiles}
+      ariaLabel="EDUMON controls"
+      className="edumon-side-panel"
+      tabsClassName="edumon-control-tabs"
+      bodyClassName="edumon-side-panel-body"
+      profileClassName="edumon-profile-strip"
+    />
   )
 }

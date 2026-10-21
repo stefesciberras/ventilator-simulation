@@ -13,6 +13,7 @@ import { SimulationAboutDialog } from './components/SimulationAboutDialog'
 import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from './components/SimulationDiagnosticsMenu'
 import { SimulationConsoleShell } from './components/SimulationConsoleShell'
 import { SimulationWorkspaceShell } from './components/SimulationWorkspaceShell'
+import { SimulationControlFramework } from './components/SimulationControlFramework'
 import { useSimulationDisplayControls } from './components/useSimulationDisplayControls'
 import { InteractiveVentilatorStrip, VentilatorModeControl } from './components/InteractiveVentilatorStrip'
 import { Waveform } from './components/Waveform'
@@ -30,6 +31,7 @@ import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
 import { useTeachingSharedOxygenFlush } from './teaching/useTeachingSharedOxygenFlush'
+import { createSimulationPersistence } from './core/SimulationPersistence'
 import './session.css'
 import './physiology.css'
 
@@ -96,18 +98,13 @@ const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
 const DT = 0.01
 const TICK_STEPS = 10
+const eduventPersistence = createSimulationPersistence('eduvent')
 
 function loadStoredSettings<T extends object>(key: string, defaults: T): T {
-  if (typeof window === 'undefined') return { ...defaults }
-  try {
-    const stored = window.localStorage.getItem(key)
-    if (!stored) return { ...defaults }
-    const parsed = JSON.parse(stored)
-    if (!parsed || typeof parsed !== 'object') return { ...defaults }
-    return { ...defaults, ...(parsed as Partial<T>) }
-  } catch {
-    return { ...defaults }
-  }
+  const name = key.startsWith('eduvent.') ? key.slice('eduvent.'.length) : key
+  const parsed = eduventPersistence.readJson<Partial<T> | null>(name, null, [key])
+  if (!parsed || typeof parsed !== 'object') return { ...defaults }
+  return { ...defaults, ...parsed }
 }
 
 
@@ -416,18 +413,18 @@ export default function App() {
   })
   const [selectedPatientProfile, setSelectedPatientProfile] = useState<PatientProfileName | null>(() => {
     if (typeof window === 'undefined') return null
-    const stored = window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY)
+    const stored = eduventPersistence.readString('patient-preset', '', [PATIENT_PROFILE_STORAGE_KEY])
     return PATIENT_PROFILE_NAMES.includes(stored as PatientProfileName) ? stored as PatientProfileName : null
   })
   const [ardsSeverity, setArdsSeverity] = useState<ArdsSeverity | 'off'>(() => {
     if (typeof window === 'undefined') return 'off'
-    const stored = window.localStorage.getItem(ARDS_SEVERITY_STORAGE_KEY)
+    const stored = eduventPersistence.readString('ards-severity', '', [ARDS_SEVERITY_STORAGE_KEY])
     if (stored && ARDS_SEVERITIES.includes(stored as ArdsSeverity)) return stored as ArdsSeverity
-    return window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY) === 'ARDS' ? 'moderate' : 'off'
+    return eduventPersistence.readString('patient-preset', '', [PATIENT_PROFILE_STORAGE_KEY]) === 'ARDS' ? 'moderate' : 'off'
   })
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
-    const stored = Number(window.localStorage.getItem(PATIENT_TRANSITION_STORAGE_KEY) ?? 0)
+    const stored = eduventPersistence.readNumber('patient-transition-seconds', 0, [PATIENT_TRANSITION_STORAGE_KEY])
     return [0, 5, 10, 30, 60].includes(stored) ? stored : 0
   })
   const [alarmLimits, setAlarmLimits] = useState<AlarmLimits>(() => {
@@ -468,7 +465,7 @@ export default function App() {
   const [scenarioMediaIds, setScenarioMediaIds] = useState<string[]>(() => {
     if (typeof window === 'undefined') return []
     try {
-      const parsed = JSON.parse(window.localStorage.getItem(SCENARIO_MEDIA_STORAGE_KEY) ?? '[]')
+      const parsed = eduventPersistence.readJson<unknown>('scenario-media-ids', [], [SCENARIO_MEDIA_STORAGE_KEY])
       return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string' && id.length > 0) : []
     } catch {
       return []
@@ -476,7 +473,7 @@ export default function App() {
   })
   const [alarmDialogOpen, setAlarmDialogOpen] = useState(false)
   const [measurementsOpen, setMeasurementsOpen] = useState(false)
-  const [showPatientEffort, setShowPatientEffort] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem(SHOW_PATIENT_EFFORT_STORAGE_KEY) === 'true')
+  const [showPatientEffort, setShowPatientEffort] = useState(() => eduventPersistence.readString('show-patient-effort', 'false', [SHOW_PATIENT_EFFORT_STORAGE_KEY]) === 'true')
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [oxygenBoostSecondsRemaining, setOxygenBoostSecondsRemaining] = useState(0)
   const [nebuliser, setNebuliser] = useState(false)
@@ -747,15 +744,15 @@ export default function App() {
   })
 
   useEffect(() => {
-    window.localStorage.setItem(VENTILATOR_STORAGE_KEY, JSON.stringify(ventilator))
+    eduventPersistence.writeJson('ventilator-settings', ventilator)
   }, [ventilator])
 
   useEffect(() => {
-    window.localStorage.setItem(PATIENT_STORAGE_KEY, JSON.stringify(patient))
+    eduventPersistence.writeJson('patient-settings', patient)
   }, [patient])
 
   useEffect(() => {
-    window.localStorage.setItem(PATIENT_TRANSITION_STORAGE_KEY, String(patientTransitionSeconds))
+    eduventPersistence.writeNumber('patient-transition-seconds', patientTransitionSeconds)
   }, [patientTransitionSeconds])
 
   useEffect(() => {
@@ -778,7 +775,7 @@ export default function App() {
   }, [patient, patientTransitionSeconds])
 
   useEffect(() => {
-    window.localStorage.setItem(ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
+    eduventPersistence.writeJson('alarm-limits', alarmLimits)
   }, [alarmLimits])
 
   useEffect(() => {
@@ -786,15 +783,15 @@ export default function App() {
   }, [teachingSession.candidateAlarmsLocked])
 
   useEffect(() => {
-    window.localStorage.setItem(WAVEFORM_STORAGE_KEY, JSON.stringify(waveformDisplay))
+    eduventPersistence.writeJson('waveform-display', waveformDisplay)
   }, [waveformDisplay])
 
   useEffect(() => {
-    window.localStorage.setItem(SCENARIO_MEDIA_STORAGE_KEY, JSON.stringify(scenarioMediaIds))
+    eduventPersistence.writeJson('scenario-media-ids', scenarioMediaIds)
   }, [scenarioMediaIds])
 
   useEffect(() => {
-    window.localStorage.setItem(SHOW_PATIENT_EFFORT_STORAGE_KEY, String(showPatientEffort))
+    eduventPersistence.writeString('show-patient-effort', String(showPatientEffort))
   }, [showPatientEffort])
 
   useEffect(() => {
@@ -1374,11 +1371,11 @@ export default function App() {
     : false
   const persistPatientProfile = (profile: PatientProfileName) => {
     setSelectedPatientProfile(profile)
-    try { window.localStorage.setItem(PATIENT_PROFILE_STORAGE_KEY, profile) } catch { /* optional UI preference */ }
+    try { eduventPersistence.writeString('patient-preset', profile) } catch { /* optional UI preference */ }
   }
   const setArdsSeverityAndPersist = (severity: ArdsSeverity | 'off') => {
     setArdsSeverity(severity)
-    try { window.localStorage.setItem(ARDS_SEVERITY_STORAGE_KEY, severity) } catch { /* optional UI preference */ }
+    try { eduventPersistence.writeString('ards-severity', severity) } catch { /* optional UI preference */ }
   }
   const applyPatientProfile = (profile: PatientProfileName) => {
     if (profile === 'ARDS') {
@@ -1723,43 +1720,53 @@ export default function App() {
         />
         )}
         controls={(
-        <aside className="control-panel tabbed-control-panel">
-          <div className="control-navigation-stack">
-            <div className="patient-profile-strip" role="group" aria-label="Patient profiles">
-              {PATIENT_PROFILE_NAMES.map((profile) => {
-                const selected = selectedPatientProfile === profile
-                const stateClass = selected ? (selectedPatientProfileModified ? 'profile-modified' : 'profile-selected') : ''
-                return (
-                  <button
-                    key={profile}
-                    type="button"
-                    className={stateClass}
-                    disabled={teachingSession.candidatePatientLocked}
-                    aria-pressed={selected}
-                    title={profile === 'ARDS'
-                      ? `ARDS ${ardsSeverity === 'off' ? 'off' : ardsSeverity} · click for ${ardsSeverity === 'off' ? 'mild' : ardsSeverity === 'mild' ? 'moderate' : ardsSeverity === 'moderate' ? 'severe' : 'off'}`
-                      : selected && selectedPatientProfileModified ? `${profile} selected · settings modified` : `Apply ${profile} profile`}
-                    onClick={() => applyPatientProfile(profile)}
-                  >{profile === 'ARDS' ? `ARDS · ${ardsSeverity === 'off' ? 'Off' : ardsSeverity[0].toUpperCase() + ardsSeverity.slice(1)}` : profile}</button>
-                )
-              })}
-            </div>
-            <nav className="control-tabs" role="tablist" aria-label="Simulator controls">
-              {(['vent', 'patient', 'physio', 'teaching'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={controlTab === tab}
-                  className={controlTab === tab ? 'active' : ''}
-                  onClick={() => setControlTab(tab)}
-                >{tab === 'teaching' ? 'Teaching' : tab === 'vent' ? 'Vent' : tab === 'patient' ? 'Patient' : 'Physio'}</button>
-              ))}
-            </nav>
-          </div>
-          <div className="control-tab-content">
-            {controlTab === 'teaching' && (
-              <div className="control-tab-pane teaching-tab-pane" role="tabpanel">
+        <SimulationControlFramework
+          activeTab={controlTab}
+          onTabChange={setControlTab}
+          ariaLabel="EDUVENT controls"
+          className="tabbed-control-panel"
+          profiles={PATIENT_PROFILE_NAMES.map((profile) => {
+            const selected = selectedPatientProfile === profile
+            const stateClass = selected ? (selectedPatientProfileModified ? 'profile-modified' : 'profile-selected') : ''
+            return {
+              id: profile,
+              label: profile === 'ARDS' ? `ARDS · ${ardsSeverity === 'off' ? 'Off' : ardsSeverity[0].toUpperCase() + ardsSeverity.slice(1)}` : profile,
+              active: selected,
+              className: stateClass,
+              disabled: teachingSession.candidatePatientLocked,
+              title: profile === 'ARDS'
+                ? `ARDS ${ardsSeverity === 'off' ? 'off' : ardsSeverity} · click for ${ardsSeverity === 'off' ? 'mild' : ardsSeverity === 'mild' ? 'moderate' : ardsSeverity === 'moderate' ? 'severe' : 'off'}`
+                : selected && selectedPatientProfileModified ? `${profile} selected · settings modified` : `Apply ${profile} profile`,
+              onSelect: applyPatientProfile,
+            }
+          })}
+          tabs={[
+            {
+              id: 'vent' as const,
+              label: 'Vent',
+              locked: teachingSession.candidateVentilatorLocked,
+              lockClassName: 'ventilator-settings-fieldset',
+              content: <VentilatorControls collapsible={false} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoostActive} />,
+            },
+            {
+              id: 'patient' as const,
+              label: 'Patient',
+              locked: teachingSession.candidatePatientLocked,
+              lockClassName: 'patient-settings-fieldset',
+              content: <PatientControls view="patient" collapsible={false} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />,
+            },
+            {
+              id: 'physio' as const,
+              label: 'Physio',
+              locked: teachingSession.candidatePatientLocked,
+              lockClassName: 'patient-settings-fieldset',
+              content: <PatientControls view="physiology" collapsible={false} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />,
+            },
+            {
+              id: 'teaching' as const,
+              label: 'Teaching',
+              panelClassName: 'teaching-tab-pane',
+              content: (
                 <SharedTeachingTab
                   role={teachingSession.role}
                   instructorAuthenticated={instructorAccountConnected}
@@ -1814,27 +1821,11 @@ export default function App() {
                   runtimeHost={<div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />}
                   liveRoom={<InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />}
                 />
-              </div>
-            )}
-            {controlTab === 'vent' && (
-              <div className="control-tab-pane" role="tabpanel">
-                <fieldset className={`session-lock-fieldset ventilator-settings-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
-                  {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-                  <VentilatorControls collapsible={false} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoostActive} />
-                </fieldset>
-              </div>
-            )}
-            {(controlTab === 'patient' || controlTab === 'physio') && (
-              <div className="control-tab-pane" role="tabpanel">
-                <fieldset className={`session-lock-fieldset patient-settings-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
-                  {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-                  <PatientControls view={controlTab === 'physio' ? 'physiology' : 'patient'} collapsible={false} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />
-                </fieldset>
-              </div>
-            )}
-          </div>
-          <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
-        </aside>
+              ),
+            },
+          ]}
+          footer={<div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>}
+        />
         )}
       />
     </main>

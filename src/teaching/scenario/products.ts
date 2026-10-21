@@ -1,4 +1,7 @@
-export type ScenarioProductId = 'eduvent' | 'edumon-ana' | 'edumon-icu'
+import { EDUSIM_PRODUCTS } from '../../core/products'
+import type { SimulationProductId } from '../../core/SimulationProductAdapter'
+
+export type ScenarioProductId = SimulationProductId
 
 export interface ScenarioProductDefinition {
   id: ScenarioProductId
@@ -7,9 +10,9 @@ export interface ScenarioProductDefinition {
 }
 
 export const SCENARIO_PRODUCTS: Record<ScenarioProductId, ScenarioProductDefinition> = {
-  eduvent: { id: 'eduvent', label: 'EDUVENT', route: '/eduvent' },
-  'edumon-ana': { id: 'edumon-ana', label: 'EDUMON-Ana', route: '/edumon/ana' },
-  'edumon-icu': { id: 'edumon-icu', label: 'EDUMON-ICU', route: '/edumon/icu' },
+  eduvent: { id: 'eduvent', label: EDUSIM_PRODUCTS.eduvent.label, route: EDUSIM_PRODUCTS.eduvent.route },
+  'edumon-ana': { id: 'edumon-ana', label: EDUSIM_PRODUCTS['edumon-ana'].label, route: EDUSIM_PRODUCTS['edumon-ana'].route },
+  'edumon-icu': { id: 'edumon-icu', label: EDUSIM_PRODUCTS['edumon-icu'].label, route: EDUSIM_PRODUCTS['edumon-icu'].route },
 }
 
 export function scenarioProductForEdumonModule(moduleId: 'ana' | 'icu'): ScenarioProductId {
