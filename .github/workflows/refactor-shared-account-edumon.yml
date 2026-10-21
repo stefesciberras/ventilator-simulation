@@ -1,0 +1,33 @@
+name: Refactor shared account and EDUMON scenarios
+
+on:
+  push:
+    branches:
+      - edusim/shared-account-and-edumon-scenarios
+    paths:
+      - scripts/refactor-shared-account-edumon.mjs
+      - .github/workflows/refactor-shared-account-edumon.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: edusim/shared-account-and-edumon-scenarios
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/refactor-shared-account-edumon.mjs
+      - name: Commit refactor and remove temporary tooling
+        run: |
+          rm scripts/refactor-shared-account-edumon.mjs .github/workflows/refactor-shared-account-edumon.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Reuse shared instructor account and wire EDUMON scenario core"
+          git push origin HEAD:edusim/shared-account-and-edumon-scenarios
