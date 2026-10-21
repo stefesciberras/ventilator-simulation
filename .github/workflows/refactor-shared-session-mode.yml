@@ -1,0 +1,29 @@
+name: Refactor shared session mode
+on:
+  push:
+    branches: [edusim/shared-session-mode-version]
+permissions:
+  contents: write
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: edusim/shared-session-mode-version
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/refactor-shared-session-mode.mjs
+      - run: npm ci
+      - run: npm run build
+      - name: Commit refactor and remove temporary tooling
+        if: success()
+        run: |
+          rm -f scripts/refactor-shared-session-mode.mjs .github/workflows/refactor-shared-session-mode.yml
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add -A
+          git commit -m "Share teaching session mode and bump simulator versions"
+          git push origin HEAD:edusim/shared-session-mode-version
