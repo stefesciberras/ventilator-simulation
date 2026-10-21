@@ -6,6 +6,8 @@ export interface SimulationControlTabDefinition<TTab extends string> {
   content: ReactNode
   locked?: boolean
   lockLabel?: string
+  lockClassName?: string
+  panelClassName?: string
   disabled?: boolean
 }
 
@@ -48,7 +50,7 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
 
   return (
     <aside className={`control-panel edusim-control-framework ${className}`.trim()} aria-label={ariaLabel}>
-      <div className="edusim-control-navigation-stack">
+      <div className="edusim-control-navigation-stack control-navigation-stack">
         {profiles.length > 0 && (
           <div className={`patient-profile-strip edusim-profile-strip ${profileClassName}`.trim()} role="group" aria-label="Patient profiles">
             {profiles.map((profile) => (
@@ -81,9 +83,9 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
 
       <div className={`edusim-control-panel-body control-tab-content ${bodyClassName}`.trim()}>
         {selected && (
-          <div className="control-tab-pane edusim-control-tab-pane" role="tabpanel">
+          <div className={`control-tab-pane edusim-control-tab-pane ${selected.panelClassName ?? ''}`.trim()} role="tabpanel">
             {selected.locked ? (
-              <fieldset className="session-lock-fieldset locked edusim-control-lock" disabled>
+              <fieldset className={`session-lock-fieldset locked edusim-control-lock ${selected.lockClassName ?? ''}`.trim()} disabled>
                 <div className="session-control-lock-label">{selected.lockLabel ?? 'Instructor controlled'}</div>
                 {selected.content}
               </fieldset>
