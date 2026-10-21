@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPointerSurface, TeachingMediaInstructorPanel, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
+import { SharedTeachingTab, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -2008,80 +2008,60 @@ export default function App() {
           <div className="control-tab-content">
             {controlTab === 'teaching' && (
               <div className="control-tab-pane teaching-tab-pane" role="tabpanel">
-                <SessionPanel
+                <SharedTeachingTab
                   role={teachingSession.role}
                   instructorAuthenticated={instructorAccountConnected}
-                  simulatorExpanded={teachingSession.role === 'instructor'}
-                  onSimulatorExpandedChange={() => undefined}
-                  connection={teachingSession.connection}
-                  localRuntimeConnection={teachingSession.localRuntimeConnection}
-                  localRuntimeUrl={teachingSession.localRuntimeUrl}
-                  runtimeTransportKind={teachingSession.runtimeTransportKind}
-                  session={teachingSession.session}
-                  simulationPaused={simulationPaused}
-                  onSimulationPausedChange={setSimulationPaused}
-                  members={teachingSession.members}
-                  error={teachingSession.error}
-                  recoverableInstructor={teachingSession.recoverableInstructor}
-                  recoverableCandidate={teachingSession.recoverableCandidate}
-                  currentScenario={currentInstructorScenario}
-                  onLoadScenario={loadInstructorScenario}
-                  onStartInstructor={startInstructorSession}
-                  onResumeInstructor={teachingSession.resumeInstructor}
-                  onJoinCandidate={teachingSession.joinCandidate}
-                  onResumeCandidate={teachingSession.resumeCandidate}
-                  onLeaveSession={teachingSession.leaveSession}
-                  onEndInstructorSession={teachingSession.endInstructorSession}
-                  onUpdatePolicy={teachingSession.updatePolicy}
-                  onBroadcastNow={teachingSession.broadcastNow}
-                />
-                {teachingSession.role !== 'candidate' && (dynamicScenarioDiagnostic || activeStaticScenarioName) && (
-                  <section className="teaching-active-scenario" aria-label="Active scenario">
-                    <div className="teaching-active-scenario-heading">
-                      <span>Active scenario</span>
-                      <strong className={dynamicScenarioDiagnostic ? 'dynamic' : 'static'}>{dynamicScenarioDiagnostic ? 'Dynamic' : 'Static'}</strong>
-                    </div>
-                    <div className="teaching-active-scenario-body">
-                      <strong>{dynamicScenarioDiagnostic?.scenarioName ?? activeStaticScenarioName}</strong>
-                      {dynamicScenarioDiagnostic && (
-                        <span>Stage {dynamicScenarioDiagnostic.stageIndex + 1}: {dynamicScenarioDiagnostic.stageName}</span>
-                      )}
-                    </div>
-                  </section>
-                )}
-                {teachingSession.role !== 'candidate' && !instructorAccountConnected ? (
-                  <div className="teaching-more-features-note">Instructor account needed for more features</div>
-                ) : (
-                  <>
-                    <TeachingMediaInstructorPanel
+                  host={eduventTeachingHost}
+                  sessionId={teachingSession.session?.id ?? null}
+                  candidateCount={teachingSession.members.filter((member) => member.role === 'candidate').length}
+                  sessionPanel={(
+                    <SessionPanel
                       role={teachingSession.role}
                       instructorAuthenticated={instructorAccountConnected}
-                      sessionId={teachingSession.session?.id ?? null}
-                      scenarioMediaIds={scenarioMediaIds}
-                      onScenarioMediaIdsChange={setScenarioMediaIds}
+                      simulatorExpanded={teachingSession.role === 'instructor'}
+                      onSimulatorExpandedChange={() => undefined}
+                      connection={teachingSession.connection}
+                      localRuntimeConnection={teachingSession.localRuntimeConnection}
+                      localRuntimeUrl={teachingSession.localRuntimeUrl}
+                      runtimeTransportKind={teachingSession.runtimeTransportKind}
+                      session={teachingSession.session}
+                      simulationPaused={simulationPaused}
+                      onSimulationPausedChange={setSimulationPaused}
+                      members={teachingSession.members}
+                      error={teachingSession.error}
+                      recoverableInstructor={teachingSession.recoverableInstructor}
+                      recoverableCandidate={teachingSession.recoverableCandidate}
+                      currentScenario={currentInstructorScenario}
+                      onLoadScenario={loadInstructorScenario}
+                      onStartInstructor={startInstructorSession}
+                      onResumeInstructor={teachingSession.resumeInstructor}
+                      onJoinCandidate={teachingSession.joinCandidate}
+                      onResumeCandidate={teachingSession.resumeCandidate}
+                      onLeaveSession={teachingSession.leaveSession}
+                      onEndInstructorSession={teachingSession.endInstructorSession}
+                      onUpdatePolicy={teachingSession.updatePolicy}
+                      onBroadcastNow={teachingSession.broadcastNow}
                     />
-      <TeachingInstructorWorkspace
-        role={teachingSession.role}
-        instructorAuthenticated={instructorAccountConnected}
-        host={eduventTeachingHost}
-        activePrompt={teachingPrompts.activePrompt}
-        responses={teachingPrompts.responses}
-        candidateCount={teachingSession.members.filter((member) => member.role === 'candidate').length}
-        promptBusy={teachingPrompts.busy}
-        promptError={teachingPrompts.error}
-        libraryItems={teachingLibrary.items}
-        libraryAvailable={Boolean(teachingLibrary.author)}
-        libraryBusy={teachingLibrary.busy}
-        libraryError={teachingLibrary.error}
-        onPresent={teachingPrompts.presentPrompt}
-        onClose={teachingPrompts.closePrompt}
-                      onReleaseAnswer={teachingPrompts.releaseAnswer}
-        onSaveLibrary={teachingLibrary.save}
-      />
-                  </>
-                )}
-                <div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />
-                <InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />
+                  )}
+                  scenarioMediaIds={scenarioMediaIds}
+                  onScenarioMediaIdsChange={setScenarioMediaIds}
+                  prompts={teachingPrompts}
+                  library={teachingLibrary}
+                  activeScenario={(dynamicScenarioDiagnostic || activeStaticScenarioName) ? (
+                    <section className="teaching-active-scenario" aria-label="Active scenario">
+                      <div className="teaching-active-scenario-heading">
+                        <span>Active scenario</span>
+                        <strong className={dynamicScenarioDiagnostic ? 'dynamic' : 'static'}>{dynamicScenarioDiagnostic ? 'Dynamic' : 'Static'}</strong>
+                      </div>
+                      <div className="teaching-active-scenario-body">
+                        <strong>{dynamicScenarioDiagnostic?.scenarioName ?? activeStaticScenarioName}</strong>
+                        {dynamicScenarioDiagnostic && <span>Stage {dynamicScenarioDiagnostic.stageIndex + 1}: {dynamicScenarioDiagnostic.stageName}</span>}
+                      </div>
+                    </section>
+                  ) : null}
+                  runtimeHost={<div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />}
+                  liveRoom={<InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />}
+                />
               </div>
             )}
             {controlTab === 'vent' && (

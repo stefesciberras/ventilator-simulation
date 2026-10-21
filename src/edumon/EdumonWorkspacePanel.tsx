@@ -121,8 +121,13 @@ export function EdumonWorkspacePanel({
       )}
       {tab === 'teaching' && (
         <div className="edumon-side-teaching">
-          {sessionPanel}
-          <EdumonTeachingLibraries host={teachingHost} role={teachingRole} sessionId={teachingSessionId} candidateCount={candidateCount} />
+          <EdumonTeachingLibraries
+            host={teachingHost}
+            role={teachingRole}
+            sessionId={teachingSessionId}
+            candidateCount={candidateCount}
+            sessionPanel={sessionPanel}
+          />
         </div>
       )}
     </SimulationControlPanel>
