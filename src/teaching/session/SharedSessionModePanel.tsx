@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { SharedCandidateInvitation } from './SharedCandidateInvitation'
+import { SharedInstructorLiveRoom } from './SharedInstructorLiveRoom'
 import type {
   RecoverableTeachingCandidate,
   RecoverableTeachingInstructor,
@@ -200,6 +202,10 @@ interface SharedBasicSessionPanelProps extends SharedSessionLauncherProps {
   title?: string
   instructorStart?: SharedInstructorStartConfig
   footer?: ReactNode
+  productId?: string
+  productLabel?: string
+  productDescription?: string
+  renderCandidateTelemetry?: (member: SharedTeachingMemberRow) => ReactNode
 }
 
 /** Compact product-neutral session surface used by simulators that do not need
@@ -214,10 +220,22 @@ export function SharedBasicSessionPanel({
   title = 'Session mode',
   instructorStart,
   footer,
+  productId = 'edusim',
+  productLabel = 'EDUSIM',
+  productDescription = 'interactive clinical simulation',
+  renderCandidateTelemetry,
   ...launcherProps
 }: SharedBasicSessionPanelProps) {
   const [startWizardOpen, setStartWizardOpen] = useState(false)
   const candidateCount = members.filter((member) => member.role === 'candidate').length
+  const candidateJoinUrl = useMemo(() => {
+    if (!session?.session_key || typeof window === 'undefined') return ''
+    const url = new URL(window.location.href)
+    url.search = ''
+    url.hash = ''
+    url.searchParams.set('session', session.session_key)
+    return url.toString()
+  }, [session?.session_key])
 
   return (
     <section className="session-panel standalone-session-panel">
@@ -234,7 +252,11 @@ export function SharedBasicSessionPanel({
             <ConnectionBadge connection={connection} />
             {session?.session_key && <span className="session-key-display"><small>SESSION</small><strong>{session.session_key}</strong></span>}
           </div>
-          {role === 'instructor' && <p>{candidateCount} candidate{candidateCount === 1 ? '' : 's'} joined.</p>}
+          {role === 'instructor' && <>
+            <p>{candidateCount} candidate{candidateCount === 1 ? '' : 's'} joined.</p>
+            {session?.id && session.session_key && candidateJoinUrl && <SharedCandidateInvitation sessionId={session.id} sessionKey={session.session_key} joinUrl={candidateJoinUrl} productId={productId} productLabel={productLabel} productDescription={productDescription} />}
+            <SharedInstructorLiveRoom role={role} members={members} renderTelemetry={renderCandidateTelemetry} storageKey={`${productId}-instructor-live-room`} />
+          </>}
           {role === 'candidate' && <p>Connected to the instructor's teaching session.</p>}
           <div className="session-launch-actions">
             {role === 'instructor'
