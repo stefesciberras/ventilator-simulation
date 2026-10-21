@@ -29,7 +29,20 @@ jobs:
           new = "s = s.replace(\"    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)\\n\", '')"
           if old not in s:
               raise SystemExit('timeout assertion patch not found')
-          p.write_text(s.replace(old, new, 1))
+          s = s.replace(old, new, 1)
+          anchor = "  const alarmLabels = alarmController.labels\n`"
+          metrics = """  const alarmLabels = alarmController.labels
+  const ppeakMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('pressureLimit', 'pressure') ? 'yellow' : null
+  const tidalVolumeMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('tidalVolumeLow', 'tidalVolumeHigh') ? 'yellow' : null
+  const minuteVentilationMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('minuteVentilationLow', 'minuteVentilationHigh') ? 'yellow' : null
+  const respiratoryRateMetricAlarm: MetricAlarmLevel = apneaAlarmActive && !alarmLifecycle.apnea?.acknowledged
+    ? 'red'
+    : measurementAlarmNeedsAttention('respiratoryRateLow', 'respiratoryRateHigh') ? 'yellow' : null
+  const spo2MetricAlarm: MetricAlarmLevel = latestSample?.spo2 != null && latestSample.spo2 < 85 ? 'red' : null
+`"""
+          if anchor not in s:
+              raise SystemExit('alarm metric insertion anchor not found')
+          p.write_text(s.replace(anchor, metrics, 1))
           PY
           node scripts/refactor-shared-runtime-alarms.mjs
       - run: npm ci
