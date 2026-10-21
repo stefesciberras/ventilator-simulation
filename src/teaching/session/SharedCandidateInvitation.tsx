@@ -58,7 +58,7 @@ export function SharedCandidateInvitation({ sessionId, sessionKey, joinUrl, prod
 
     setSending(true); setStatus(null); setToast(null)
     try {
-      const { data, error } = await supabase.functions.invoke<{ sent?: number; error?: string }>('send-candidate-invite', {
+      const { data, error } = await supabase.functions.invoke<{ sent?: number; error?: string }>('send-edusim-candidate-invite', {
         body: { sessionId, recipients, joinUrl, productId, productLabel, productDescription },
       })
       if (error) throw error
