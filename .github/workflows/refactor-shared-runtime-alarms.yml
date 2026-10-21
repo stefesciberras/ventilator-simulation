@@ -19,7 +19,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: node scripts/refactor-shared-runtime-alarms.mjs
+      - name: Apply refactor
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/refactor-shared-runtime-alarms.mjs')
+          s = p.read_text()
+          old = "s = replaceOnce(s, \"    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)\\n\", '', 'App cleanup alarm timeout')"
+          new = "s = s.replace(\"    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)\\n\", '')"
+          if old not in s:
+              raise SystemExit('timeout assertion patch not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          node scripts/refactor-shared-runtime-alarms.mjs
       - run: npm ci
       - run: npm run build
       - name: Commit refactor and remove temporary tooling
