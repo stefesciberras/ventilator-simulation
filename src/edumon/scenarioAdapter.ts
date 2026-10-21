@@ -9,6 +9,8 @@ export interface EdumonScenarioRuntimeContext {
   simulationTime: number
   state: EdumonScenarioSnapshot
   measurements: MonitorMeasurements
+  questionAnswered?: boolean
+  questionCorrect?: boolean
 }
 
 function numericMetric(context: EdumonScenarioRuntimeContext, metric: EdumonScenarioMetric): number | null {
@@ -49,9 +51,9 @@ export function createEdumonScenarioRuntimeAdapter(
     applyStage: applySnapshot,
     triggerMatches: (trigger, context, stage) => {
       if (trigger.type === 'manual') return false
-      if (trigger.type === 'time') {
-        return context.simulationTime - stage.stageStartedSimulationTime >= Math.max(0, trigger.seconds)
-      }
+      if (trigger.type === 'question-any') return context.questionAnswered === true
+      if (trigger.type === 'question-correct') return context.questionAnswered === true && context.questionCorrect === true
+      if (trigger.type === 'time') return context.simulationTime - stage.stageStartedSimulationTime >= Math.max(0, trigger.seconds)
       if (trigger.type === 'condition') {
         const actual = numericMetric(context, trigger.metric)
         return actual != null && Number.isFinite(actual) && conditionMatches(actual, trigger.operator, trigger.value)

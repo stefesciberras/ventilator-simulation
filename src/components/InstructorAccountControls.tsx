@@ -11,11 +11,7 @@ import {
   asDynamicScenario,
   asStaticScenario,
   createFullDynamicStageApplyMask,
-  createInstructorPreset,
-  deleteInstructorPreset,
   dynamicStageTriggers,
-  listInstructorPresets,
-  updateInstructorPreset,
   type DynamicScenarioActionId,
   type DynamicScenarioApplyMask,
   type DynamicScenarioBranch,
@@ -36,7 +32,8 @@ import { DynamicScenarioRuntimeLibrary } from './DynamicScenarioRuntimeLibrary'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from './InstructorAccountAuth'
 import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'
 import { createCaseMediaSignedUrl, listCaseMediaByIds, releaseSessionCaseMedia } from '../caseMedia'
-import { eduventTeachingHost, useScenarioLibraryManager, useTeachingPrompts } from '../teaching'
+import { eduventTeachingHost, useTeachingPrompts } from '../teaching'
+import { useEduventScenarioLibrary } from '../teaching/scenario/useEduventScenarioLibrary'
 import { resolveTeachingScenarioTransition } from '../teaching/scenario/runtimeCore'
 import { useTeachingMediaPresentation } from '../teaching/TeachingMediaPresentation'
 import '../account.css'
@@ -243,8 +240,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [scenarioOpen, setScenarioOpen] = useState(false)
-  const scenarioLibraryRepository = useMemo(() => ({ list: () => listInstructorPresets(), create: (name: string, scenario: InstructorScenarioSnapshot) => createInstructorPreset(name, scenario), update: (id: string, updates: { name?: string; scenario?: InstructorScenarioSnapshot }) => updateInstructorPreset(id, updates), remove: (id: string) => deleteInstructorPreset(id) }), [])
-  const scenarioLibrary = useScenarioLibraryManager<InstructorPresetRow, InstructorScenarioSnapshot>({ enabled: Boolean(account), repository: scenarioLibraryRepository })
+  const scenarioLibrary = useEduventScenarioLibrary(Boolean(account))
   const presets = scenarioLibrary.items
   const [presetName, setPresetName] = useState('')
   const [presetDescription, setPresetDescription] = useState('')
@@ -379,7 +375,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     setPresetMessage(null)
     try {
       const dynamicSource = scenarioForStageSource(dynamicCreateSourceId)
-      const created = await createInstructorPreset(
+      const created = await scenarioLibrary.create(
         presetName,
         scenarioType === 'dynamic'
           ? asDynamicScenario(dynamicSource, presetDescription, dynamicCreateMask, nameForStageSource(dynamicCreateSourceId))
@@ -656,7 +652,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     })
     setPresetBusy(true)
     try {
-      await updateInstructorPreset(preset.id, { scenario: { ...preset.scenario, schemaVersion: 6, kind: 'dynamic', stages } })
+      await scenarioLibrary.update(preset.id, { scenario: { ...preset.scenario, schemaVersion: 6, kind: 'dynamic', stages } })
       setPresetMessage(`Added Stage ${stageNumber} to “${preset.name}”.`)
       setStageBuilderPresetId(null)
       setStageBuilderSourceId('current')
@@ -679,7 +675,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     setPresetBusy(true)
     setPresetMessage(null)
     try {
-      await updateInstructorPreset(preset.id, {
+      await scenarioLibrary.update(preset.id, {
         scenario: asStaticScenario(currentScenario, preset.scenario.description ?? ''),
       })
       setPresetMessage(`Updated “${preset.name}” from the current simulator state.`)
@@ -696,7 +692,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     setPresetBusy(true)
     setPresetMessage(null)
     try {
-      const created = await createInstructorPreset(nextCopyName(preset.name, presets), preset.scenario)
+      const created = await scenarioLibrary.create(nextCopyName(preset.name, presets), preset.scenario)
       setPresetMessage(`Duplicated as “${created.name}”.`)
       await refreshPresets(account)
     } catch (cause) {
@@ -718,7 +714,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     setPresetBusy(true)
     setPresetMessage(null)
     try {
-      const updated = await updateInstructorPreset(preset.id, {
+      const updated = await scenarioLibrary.update(preset.id, {
         name: editName,
         scenario: asStaticScenario(preset.scenario, editDescription),
       })
@@ -737,7 +733,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     setPresetBusy(true)
     setPresetMessage(null)
     try {
-      await deleteInstructorPreset(preset.id)
+      await scenarioLibrary.remove(preset.id)
       if (editingPresetId === preset.id) setEditingPresetId(null)
       setPresetMessage(`Deleted “${preset.name}”.`)
       await refreshPresets(account)

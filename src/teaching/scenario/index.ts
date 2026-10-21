@@ -1,3 +1,7 @@
 export * from './runtimeCore'
 export * from './products'
 export * from './productLibrary'
+export * from './authoringTypes'
+export * from './useProductScenarioLibrary'
+export * from './useEduventScenarioLibrary'
+export * from './SharedScenarioRuntimePanel'
