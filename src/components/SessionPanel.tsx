@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CandidateInvitation } from './CandidateInvitation'
+import { SharedSessionLauncher } from '../teaching/session'
 import type { RuntimeTransportKind, SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { LocalRuntimeConnection } from '../session/localRuntimeTransport'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
@@ -189,12 +190,6 @@ export function SessionPanel({
   onUpdatePolicy,
   onBroadcastNow,
 }: SessionPanelProps) {
-  const [joinMode, setJoinMode] = useState(false)
-  const [sessionKey, setSessionKey] = useState('')
-  const [displayName, setDisplayName] = useState('')
-  const candidateNameInputRef = useRef<HTMLInputElement | null>(null)
-  const [selfDirectedJoinMode, setSelfDirectedJoinMode] = useState(false)
-  const [assignmentCode, setAssignmentCode] = useState('')
   const [sessionControlsExpanded, setSessionControlsExpanded] = useState(false)
   const [candidateCollapsed, setCandidateCollapsed] = useState(true)
   const [dashboardCollapsed, setDashboardCollapsed] = useState(() => loadPanelCollapsed('instructor-dashboard'))
@@ -211,24 +206,6 @@ export function SessionPanel({
   const [startPresetsBusy, setStartPresetsBusy] = useState(false)
   const [startPresetMessage, setStartPresetMessage] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (role !== 'standalone') return
-    const rawKey = new URLSearchParams(window.location.search).get('session') ?? ''
-    const deepLinkKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
-    if (deepLinkKey.length !== 6) return
-    setSessionKey(deepLinkKey)
-    setJoinMode(true)
-    window.setTimeout(() => {
-      candidateNameInputRef.current?.focus()
-      candidateNameInputRef.current?.select()
-    }, 80)
-  }, [role])
-
-  useEffect(() => {
-    if (!recoverableCandidate) return
-    setSessionKey(recoverableCandidate.sessionKey)
-    setDisplayName(recoverableCandidate.displayName)
-  }, [recoverableCandidate])
 
   useEffect(() => {
     if (role === 'candidate') setCandidateCollapsed(true)
@@ -333,115 +310,67 @@ export function SessionPanel({
           <div><span className="session-kicker">Teaching</span><h2>Session mode</h2></div>
           <span className="session-role-pill">Standalone</span>
         </div>
-        {!joinMode && !selfDirectedJoinMode ? (
-          startWizardOpen ? (
-            <div className="session-start-wizard">
-              <div className="session-start-wizard-heading">
-                <div><span>Instructor session</span><strong>Choose starting state</strong></div>
-                <button type="button" className="session-start-close" onClick={() => setStartWizardOpen(false)} aria-label="Close session setup">×</button>
+        {startWizardOpen ? (
+          <div className="session-start-wizard">
+            <div className="session-start-wizard-heading">
+              <div><span>Instructor session</span><strong>Choose starting state</strong></div>
+              <button type="button" className="session-start-close" onClick={() => setStartWizardOpen(false)} aria-label="Close session setup">×</button>
+            </div>
+            <div className="session-start-source-tabs" role="tablist" aria-label="Instructor session starting state">
+              <button type="button" className={startSource === 'current' ? 'selected' : ''} onClick={() => setStartSource('current')}>Current setup</button>
+              <button type="button" className={startSource === 'scenario' ? 'selected' : ''} disabled={startPresetsBusy || !startPresets.length} onClick={() => setStartSource('scenario')}>Saved scenario</button>
+            </div>
+            {startSource === 'current' ? (
+              <div className="session-start-current-card">
+                <span>Current standalone setup</span>
+                <strong>{currentScenario.ventilator.mode} · FiO₂ {Math.round(currentScenario.ventilator.fio2 * 100)}% · PEEP {currentScenario.ventilator.peep}</strong>
+                <div className="session-start-summary-chips">{summaryFor(currentScenario).map((item) => <em key={item}>{item}</em>)}</div>
+                <small>You can configure the patient and ventilator in standalone mode before opening the room.</small>
               </div>
-              <div className="session-start-source-tabs" role="tablist" aria-label="Instructor session starting state">
-                <button type="button" className={startSource === 'current' ? 'selected' : ''} onClick={() => setStartSource('current')}>Current setup</button>
-                <button type="button" className={startSource === 'scenario' ? 'selected' : ''} disabled={startPresetsBusy || !startPresets.length} onClick={() => setStartSource('scenario')}>Saved scenario</button>
-              </div>
-              {startSource === 'current' ? (
-                <div className="session-start-current-card">
-                  <span>Current standalone setup</span>
-                  <strong>{currentScenario.ventilator.mode} · FiO₂ {Math.round(currentScenario.ventilator.fio2 * 100)}% · PEEP {currentScenario.ventilator.peep}</strong>
-                  <div className="session-start-summary-chips">{summaryFor(currentScenario).map((item) => <em key={item}>{item}</em>)}</div>
-                  <small>You can configure the patient and ventilator in standalone mode before opening the room.</small>
+            ) : (
+              <div className="session-start-scenarios">
+                <div className="session-start-scenario-list">
+                  {startPresets.map((preset) => (
+                    <button type="button" key={preset.id} className={`session-start-scenario-option ${selectedStartPresetId === preset.id ? 'selected' : ''}`} onClick={() => setSelectedStartPresetId(preset.id)}>
+                      <strong>{preset.name}</strong>
+                      <small>{preset.scenario.description || 'Static scenario'}</small>
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div className="session-start-scenarios">
-                  <div className="session-start-scenario-list">
-                    {startPresets.map((preset) => (
-                      <button type="button" key={preset.id} className={`session-start-scenario-option ${selectedStartPresetId === preset.id ? 'selected' : ''}`} onClick={() => setSelectedStartPresetId(preset.id)}>
-                        <strong>{preset.name}</strong>
-                        <small>{preset.scenario.description || 'Static scenario'}</small>
-                      </button>
-                    ))}
+                {selectedStartPreset && (
+                  <div className="session-start-scenario-preview">
+                    <span>Selected scenario</span>
+                    <strong>{selectedStartPreset.name}</strong>
+                    {selectedStartPreset.scenario.description && <p>{selectedStartPreset.scenario.description}</p>}
+                    <div className="session-start-summary-chips">{summaryFor(selectedStartPreset.scenario).map((item) => <em key={item}>{item}</em>)}</div>
+                    <button type="button" className="session-secondary-button" onClick={loadSelectedScenarioIntoStandalone}>Load into standalone to adjust</button>
                   </div>
-                  {selectedStartPreset && (
-                    <div className="session-start-scenario-preview">
-                      <span>Selected scenario</span>
-                      <strong>{selectedStartPreset.name}</strong>
-                      {selectedStartPreset.scenario.description && <p>{selectedStartPreset.scenario.description}</p>}
-                      <div className="session-start-summary-chips">{summaryFor(selectedStartPreset.scenario).map((item) => <em key={item}>{item}</em>)}</div>
-                      <button type="button" className="session-secondary-button" onClick={loadSelectedScenarioIntoStandalone}>Load into standalone to adjust</button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {startPresetsBusy && <div className="session-start-note">Loading saved scenarios…</div>}
-              {startPresetMessage && <div className="session-start-note">{startPresetMessage}</div>}
-              <div className="session-start-actions">
-                <button type="button" className="session-primary-button" disabled={!instructorAuthenticated || connection === 'connecting' || (startSource === 'scenario' && !selectedStartPreset)} onClick={() => void startInstructorFromWizard()}>
-                  {startSource === 'scenario' && selectedStartPreset ? `Start with ${selectedStartPreset.name}` : 'Start with current setup'}
-                </button>
-                <button type="button" className="session-secondary-button" onClick={() => setStartWizardOpen(false)}>Cancel</button>
+                )}
               </div>
+            )}
+            {startPresetsBusy && <div className="session-start-note">Loading saved scenarios…</div>}
+            {startPresetMessage && <div className="session-start-note">{startPresetMessage}</div>}
+            <div className="session-start-actions">
+              <button type="button" className="session-primary-button" disabled={!instructorAuthenticated || connection === 'connecting' || (startSource === 'scenario' && !selectedStartPreset)} onClick={() => void startInstructorFromWizard()}>
+                {startSource === 'scenario' && selectedStartPreset ? `Start with ${selectedStartPreset.name}` : 'Start with current setup'}
+              </button>
+              <button type="button" className="session-secondary-button" onClick={() => setStartWizardOpen(false)}>Cancel</button>
             </div>
-          ) : (
-            <div className="session-launch-actions">
-              <button type="button" className="session-primary-button" disabled={!instructorAuthenticated || connection === 'connecting'} title={!instructorAuthenticated ? 'Sign in to an instructor account first' : undefined} onClick={() => void openInstructorStart()}>Start instructor session</button>
-              <button type="button" className="session-secondary-button" onClick={() => setJoinMode(true)}>Join as candidate</button>
-              <button type="button" className="session-secondary-button" onClick={() => setSelfDirectedJoinMode(true)}>Run self-directed scenario</button>
-              {recoverableCandidate && onResumeCandidate && (<button type="button" className="session-secondary-button" disabled={connection === 'connecting'} onClick={() => void onResumeCandidate()}>Rejoin candidate {recoverableCandidate.sessionKey}</button>)}
-              {recoverableInstructor && onResumeInstructor && (<button type="button" className="session-secondary-button" disabled={!instructorAuthenticated} title={!instructorAuthenticated ? 'Sign in to an instructor account first' : undefined} onClick={() => void onResumeInstructor(recoverableInstructor.sessionId)}>Rejoin instructor {recoverableInstructor.sessionKey}</button>)}
-              {!instructorAuthenticated && <div className="session-instructor-signin-note">Sign in to an instructor account to start or resume an instructor teaching session. Joining as a candidate does not require an account.</div>}
-            </div>
-          )
-        ) : selfDirectedJoinMode ? (
-          <form className="candidate-join-form" onSubmit={(event) => {
-            event.preventDefault()
-            const code = assignmentCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
-            if (code.length !== 8) return
-            const url = new URL(window.location.href)
-            url.search = ''
-            url.hash = ''
-            url.searchParams.set('assignment', code)
-            window.location.assign(url.toString())
-          }}>
-            <label>
-              <span>Self-directed session code</span>
-              <input value={assignmentCode} onChange={(event) => setAssignmentCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} placeholder="A1B2C3D4" autoCapitalize="characters" autoComplete="off" maxLength={8} required />
-            </label>
-            <p className="session-start-note">This scenario runs independently on your device. No instructor needs to be online.</p>
-            <div className="session-launch-actions">
-              <button type="submit" className="session-primary-button" disabled={assignmentCode.length < 8}>Start scenario</button>
-              <button type="button" className="session-secondary-button" onClick={() => setSelfDirectedJoinMode(false)}>Cancel</button>
-            </div>
-          </form>
+          </div>
         ) : (
-          <form className="candidate-join-form" onSubmit={(event) => {
-            event.preventDefault()
-            if (!sessionKey.trim()) return
-            void onJoinCandidate(sessionKey, displayName)
-          }}>
-            <label>
-              <span>Session key</span>
-              <input
-                value={sessionKey}
-                onChange={(event) => setSessionKey(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
-                placeholder="K7D4Q9"
-                autoCapitalize="characters"
-                autoComplete="off"
-                maxLength={6}
-                required
-              />
-            </label>
-            <label>
-              <span>Name <small>(optional)</small></span>
-              <input ref={candidateNameInputRef} className="candidate-name-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={60} placeholder="Candidate" />
-            </label>
-            <div className="session-launch-actions">
-              <button type="submit" className="session-primary-button" disabled={connection === 'connecting' || sessionKey.length < 6}>Join session</button>
-              <button type="button" className="session-secondary-button" onClick={() => setJoinMode(false)}>Cancel</button>
-            </div>
-          </form>
+          <SharedSessionLauncher
+            instructorAuthenticated={instructorAuthenticated}
+            connection={connection}
+            error={error}
+            recoverableInstructor={recoverableInstructor}
+            recoverableCandidate={recoverableCandidate}
+            onStartInstructor={() => void openInstructorStart()}
+            onResumeInstructor={onResumeInstructor}
+            onJoinCandidate={onJoinCandidate}
+            onResumeCandidate={onResumeCandidate}
+          />
         )}
         {connection === 'connecting' && <ConnectionBadge connection={connection} />}
-        {error && <div className="session-error" role="alert">{error}</div>}
       </section>
     )
   }
