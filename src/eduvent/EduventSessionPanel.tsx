@@ -10,6 +10,8 @@ import { useEduventScenarioLibrary } from '../teaching/scenario/useEduventScenar
 interface EduventSessionPanelProps {
   role: SessionRole
   instructorAuthenticated: boolean
+  simulatorExpanded?: boolean
+  onSimulatorExpandedChange?: (expanded: boolean) => void
   connection: SessionConnection
   localRuntimeConnection: LocalRuntimeConnection
   localRuntimeUrl: string | null
