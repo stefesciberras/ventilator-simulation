@@ -20,14 +20,16 @@ jobs:
         with:
           node-version: 22
       - name: Apply refactor
-        run: node scripts/refactor-product-aware-scenarios.mjs
+        run: |
+          node scripts/refactor-product-aware-scenarios.mjs
+          node scripts/fix-product-aware-scenarios.mjs
       - run: npm ci
       - run: npm run build
       - name: Commit refactor and remove temporary tooling
         run: |
           git config user.name "stefesciberras"
           git config user.email "43134239+stefesciberras@users.noreply.github.com"
-          git rm scripts/refactor-product-aware-scenarios.mjs .github/workflows/refactor-product-aware-scenarios.yml
+          git rm scripts/refactor-product-aware-scenarios.mjs scripts/fix-product-aware-scenarios.mjs .github/workflows/refactor-product-aware-scenarios.yml .product-scenario-refactor-trigger
           git add -A
           git commit -m "Make saved scenarios product-aware"
           git push origin HEAD:edusim/product-aware-scenarios
