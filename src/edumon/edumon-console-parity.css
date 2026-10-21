@@ -275,36 +275,31 @@
   }
 
   .edumon-workspace {
-    display: flex;
+    display: block;
     width: 100vw;
     height: calc(100dvh - 104px);
     min-height: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    touch-action: pan-x;
+    overflow: hidden;
+    touch-action: pan-y;
   }
-
-  .edumon-workspace::-webkit-scrollbar { display: none; }
 
   .edumon-console,
   .edumon-side-panel {
-    flex: 0 0 100vw;
     width: 100vw;
     height: 100%;
     min-width: 0;
     min-height: 0;
     max-height: none;
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
   }
+
+  .edumon-workspace.mobile-page-monitor > .edumon-console { display: flex; }
+  .edumon-workspace.mobile-page-monitor > .edumon-side-panel { display: none; }
+  .edumon-workspace.mobile-page-controls > .edumon-console { display: none; }
+  .edumon-workspace.mobile-page-controls > .edumon-side-panel { display: flex; }
 
   .edumon-console { overflow: hidden; }
   .edumon-side-panel { overflow: hidden; box-sizing: border-box; }
+  .edumon-waveform-area { touch-action: pan-x; }
   .edumon-side-panel-body { overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y; }
   .edumon-monitor-body { min-height: 0; flex: 1 1 auto; }
 
@@ -336,35 +331,29 @@ body.eduvent-tablet-landscape .edumon-app-shell {
 }
 
 body.eduvent-tablet-landscape .edumon-workspace {
-  display: flex;
+  display: block;
   width: 100vw;
   height: calc(100dvh - 104px);
   min-height: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  touch-action: pan-x;
+  overflow: hidden;
+  touch-action: pan-y;
 }
-
-body.eduvent-tablet-landscape .edumon-workspace::-webkit-scrollbar { display: none; }
 
 body.eduvent-tablet-landscape .edumon-console,
 body.eduvent-tablet-landscape .edumon-side-panel {
-  flex: 0 0 100vw;
   width: 100vw;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
 }
 
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor > .edumon-console { display: flex; }
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor > .edumon-side-panel { display: none; }
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-controls > .edumon-console { display: none; }
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-controls > .edumon-side-panel { display: flex; }
 body.eduvent-tablet-landscape .edumon-console { overflow: hidden; }
 body.eduvent-tablet-landscape .edumon-side-panel { overflow: hidden; box-sizing: border-box; }
+body.eduvent-tablet-landscape .edumon-waveform-area { touch-action: pan-x; }
 body.eduvent-tablet-landscape .edumon-side-panel-body { overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y; }
 
 body.eduvent-tablet-landscape .edumon-console-top-actions .hardware-button {
