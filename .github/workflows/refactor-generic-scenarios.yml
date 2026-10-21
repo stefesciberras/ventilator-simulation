@@ -17,7 +17,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: python scripts/refactor_generic_scenarios.py
+      - run: |
+          python scripts/refactor_generic_scenarios.py
+          python scripts/fix_generic_scenario_build.py
       - run: npm ci
       - run: npm run build
       - name: Commit generated refactor
