@@ -29,11 +29,14 @@ export function AlarmSilenceIcon() {
 interface SimulationHardwareControlsProps {
   laserActive: boolean
   onLaserToggle: () => void
+  laserDisabled?: boolean
   frozen: boolean
   onFreezeToggle: () => void
+  freezeDisabled?: boolean
   alarmSilenced?: boolean
   alarmLabel?: string
   onAlarmSilence: (durationMs: number) => void
+  alarmDisabled?: boolean
   children?: React.ReactNode
   className?: string
   alarmTimerClassName?: string
@@ -46,11 +49,14 @@ const LONG_PRESS_MS = 800
 export function SimulationHardwareControls({
   laserActive,
   onLaserToggle,
+  laserDisabled = false,
   frozen,
   onFreezeToggle,
+  freezeDisabled = false,
   alarmSilenced = false,
   alarmLabel,
   onAlarmSilence,
+  alarmDisabled = false,
   children,
   className = '',
   alarmTimerClassName = '',
@@ -66,6 +72,7 @@ export function SimulationHardwareControls({
   }
 
   const startLongPress = () => {
+    if (alarmDisabled) return
     clearLongPress()
     longPressTriggered.current = false
     longPressTimer.current = window.setTimeout(() => {
@@ -76,6 +83,7 @@ export function SimulationHardwareControls({
   }
 
   const handleAlarmClick = () => {
+    if (alarmDisabled) return
     if (longPressTriggered.current) {
       longPressTriggered.current = false
       return
@@ -85,10 +93,11 @@ export function SimulationHardwareControls({
 
   return (
     <div className={`action-bar console-top-actions ${className}`.trim()} aria-label="Display actions">
-      <button type="button" className={`hardware-button icon-button teaching-laser-console-button ${laserActive ? 'active' : ''}`} onClick={onLaserToggle} title="Laser pointer" aria-label="Laser pointer" aria-pressed={laserActive}><LaserPointerIcon /></button>
-      <button type="button" className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={onFreezeToggle} title={frozen ? 'Resume waveforms' : 'Freeze waveforms'} aria-label={frozen ? 'Resume waveforms' : 'Freeze waveforms'}><FreezeWaveformIcon /></button>
+      <button type="button" disabled={laserDisabled} className={`hardware-button icon-button teaching-laser-console-button ${laserActive ? 'active' : ''}`} onClick={onLaserToggle} title={laserDisabled ? 'Laser pointer controlled by instructor' : 'Laser pointer'} aria-label={laserDisabled ? 'Laser pointer controlled by instructor' : 'Laser pointer'} aria-pressed={laserActive}><LaserPointerIcon /></button>
+      <button type="button" disabled={freezeDisabled} className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={onFreezeToggle} title={freezeDisabled ? 'Waveform freeze controlled by instructor' : (frozen ? 'Resume waveforms' : 'Freeze waveforms')} aria-label={freezeDisabled ? 'Waveform freeze controlled by instructor' : (frozen ? 'Resume waveforms' : 'Freeze waveforms')}><FreezeWaveformIcon /></button>
       <button
         type="button"
+        disabled={alarmDisabled}
         className={`hardware-button icon-button alarm-button ${alarmSilenced ? 'active' : ''}`}
         onClick={handleAlarmClick}
         onPointerDown={startLongPress}
@@ -96,8 +105,8 @@ export function SimulationHardwareControls({
         onPointerCancel={clearLongPress}
         onPointerLeave={clearLongPress}
         onContextMenu={(event) => event.preventDefault()}
-        title={alarmSilenced && alarmLabel ? `Alarm silenced for ${alarmLabel}` : 'Silence alarms for 2 minutes; hold for 10 minutes'}
-        aria-label={alarmSilenced && alarmLabel ? `Alarm silenced for ${alarmLabel}` : 'Alarm silence'}
+        title={alarmDisabled ? 'Alarm silence controlled by instructor' : (alarmSilenced && alarmLabel ? `Alarm silenced for ${alarmLabel}` : 'Silence alarms for 2 minutes; hold for 10 minutes')}
+        aria-label={alarmDisabled ? 'Alarm silence controlled by instructor' : (alarmSilenced && alarmLabel ? `Alarm silenced for ${alarmLabel}` : 'Alarm silence')}
       ><AlarmSilenceIcon /></button>
       {alarmSilenced && alarmLabel && <span className={`alarm-silence-timer ${alarmTimerClassName}`.trim()}>{alarmLabel}</span>}
       {children}
