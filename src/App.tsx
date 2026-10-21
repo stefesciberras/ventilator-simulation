@@ -13,6 +13,7 @@ import { SimulationAboutDialog } from './components/SimulationAboutDialog'
 import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from './components/SimulationDiagnosticsMenu'
 import { SimulationConsoleShell } from './components/SimulationConsoleShell'
 import { SimulationWorkspaceShell } from './components/SimulationWorkspaceShell'
+import { SimulationControlFramework } from './components/SimulationControlFramework'
 import { useSimulationDisplayControls } from './components/useSimulationDisplayControls'
 import { InteractiveVentilatorStrip, VentilatorModeControl } from './components/InteractiveVentilatorStrip'
 import { Waveform } from './components/Waveform'
@@ -1723,43 +1724,53 @@ export default function App() {
         />
         )}
         controls={(
-        <aside className="control-panel tabbed-control-panel">
-          <div className="control-navigation-stack">
-            <div className="patient-profile-strip" role="group" aria-label="Patient profiles">
-              {PATIENT_PROFILE_NAMES.map((profile) => {
-                const selected = selectedPatientProfile === profile
-                const stateClass = selected ? (selectedPatientProfileModified ? 'profile-modified' : 'profile-selected') : ''
-                return (
-                  <button
-                    key={profile}
-                    type="button"
-                    className={stateClass}
-                    disabled={teachingSession.candidatePatientLocked}
-                    aria-pressed={selected}
-                    title={profile === 'ARDS'
-                      ? `ARDS ${ardsSeverity === 'off' ? 'off' : ardsSeverity} · click for ${ardsSeverity === 'off' ? 'mild' : ardsSeverity === 'mild' ? 'moderate' : ardsSeverity === 'moderate' ? 'severe' : 'off'}`
-                      : selected && selectedPatientProfileModified ? `${profile} selected · settings modified` : `Apply ${profile} profile`}
-                    onClick={() => applyPatientProfile(profile)}
-                  >{profile === 'ARDS' ? `ARDS · ${ardsSeverity === 'off' ? 'Off' : ardsSeverity[0].toUpperCase() + ardsSeverity.slice(1)}` : profile}</button>
-                )
-              })}
-            </div>
-            <nav className="control-tabs" role="tablist" aria-label="Simulator controls">
-              {(['vent', 'patient', 'physio', 'teaching'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={controlTab === tab}
-                  className={controlTab === tab ? 'active' : ''}
-                  onClick={() => setControlTab(tab)}
-                >{tab === 'teaching' ? 'Teaching' : tab === 'vent' ? 'Vent' : tab === 'patient' ? 'Patient' : 'Physio'}</button>
-              ))}
-            </nav>
-          </div>
-          <div className="control-tab-content">
-            {controlTab === 'teaching' && (
-              <div className="control-tab-pane teaching-tab-pane" role="tabpanel">
+        <SimulationControlFramework
+          activeTab={controlTab}
+          onTabChange={setControlTab}
+          ariaLabel="EDUVENT controls"
+          className="tabbed-control-panel"
+          profiles={PATIENT_PROFILE_NAMES.map((profile) => {
+            const selected = selectedPatientProfile === profile
+            const stateClass = selected ? (selectedPatientProfileModified ? 'profile-modified' : 'profile-selected') : ''
+            return {
+              id: profile,
+              label: profile === 'ARDS' ? `ARDS · ${ardsSeverity === 'off' ? 'Off' : ardsSeverity[0].toUpperCase() + ardsSeverity.slice(1)}` : profile,
+              active: selected,
+              className: stateClass,
+              disabled: teachingSession.candidatePatientLocked,
+              title: profile === 'ARDS'
+                ? `ARDS ${ardsSeverity === 'off' ? 'off' : ardsSeverity} · click for ${ardsSeverity === 'off' ? 'mild' : ardsSeverity === 'mild' ? 'moderate' : ardsSeverity === 'moderate' ? 'severe' : 'off'}`
+                : selected && selectedPatientProfileModified ? `${profile} selected · settings modified` : `Apply ${profile} profile`,
+              onSelect: applyPatientProfile,
+            }
+          })}
+          tabs={[
+            {
+              id: 'vent' as const,
+              label: 'Vent',
+              locked: teachingSession.candidateVentilatorLocked,
+              lockClassName: 'ventilator-settings-fieldset',
+              content: <VentilatorControls collapsible={false} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoostActive} />,
+            },
+            {
+              id: 'patient' as const,
+              label: 'Patient',
+              locked: teachingSession.candidatePatientLocked,
+              lockClassName: 'patient-settings-fieldset',
+              content: <PatientControls view="patient" collapsible={false} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />,
+            },
+            {
+              id: 'physio' as const,
+              label: 'Physio',
+              locked: teachingSession.candidatePatientLocked,
+              lockClassName: 'patient-settings-fieldset',
+              content: <PatientControls view="physiology" collapsible={false} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />,
+            },
+            {
+              id: 'teaching' as const,
+              label: 'Teaching',
+              panelClassName: 'teaching-tab-pane',
+              content: (
                 <SharedTeachingTab
                   role={teachingSession.role}
                   instructorAuthenticated={instructorAccountConnected}
@@ -1814,27 +1825,11 @@ export default function App() {
                   runtimeHost={<div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />}
                   liveRoom={<InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />}
                 />
-              </div>
-            )}
-            {controlTab === 'vent' && (
-              <div className="control-tab-pane" role="tabpanel">
-                <fieldset className={`session-lock-fieldset ventilator-settings-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
-                  {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-                  <VentilatorControls collapsible={false} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoostActive} />
-                </fieldset>
-              </div>
-            )}
-            {(controlTab === 'patient' || controlTab === 'physio') && (
-              <div className="control-tab-pane" role="tabpanel">
-                <fieldset className={`session-lock-fieldset patient-settings-fieldset ${teachingSession.candidatePatientLocked ? 'locked' : ''}`} disabled={teachingSession.candidatePatientLocked}>
-                  {teachingSession.candidatePatientLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-                  <PatientControls view={controlTab === 'physio' ? 'physiology' : 'patient'} collapsible={false} settings={patient} onChange={setPatient} onReset={resetPatientRespiratory} onResetPhysiology={resetPatientPhysiology} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} showPatientEffort={patientEffortVisible} onShowPatientEffortChange={teachingSession.role === 'candidate' ? () => undefined : setShowPatientEffort} patientEffortLocked={teachingSession.role === 'candidate'} showSpO2Ceiling={teachingSession.role !== 'candidate'} />
-                </fieldset>
-              </div>
-            )}
-          </div>
-          <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
-        </aside>
+              ),
+            },
+          ]}
+          footer={<div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>}
+        />
         )}
       />
     </main>
