@@ -18,12 +18,13 @@ import { useScreenWakeLock } from '../useScreenWakeLock'
 import { SharedBasicSessionPanel, useProductTeachingSession } from '../teaching/session'
 import { useSharedAlarmController } from '../alarms/useSharedAlarmController'
 import { SharedAlarmBanner } from '../alarms/SharedAlarmBanner'
-import { evaluateEdumonAlarms } from './alarmDefinitions'
+import { DEFAULT_EDUMON_ALARM_LIMITS, evaluateEdumonAlarms, type EdumonAlarmLimits } from './alarmDefinitions'
+import { EdumonAlarmLimitsDialog } from './EdumonAlarmLimitsDialog'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from '../components/InstructorAccountAuth'
 import { useTeachingScenarioRuntime } from '../teaching/scenario/runtimeCore'
 import { createEdumonScenarioRuntimeAdapter } from './scenarioAdapter'
 import type { EdumonStoredScenario } from './scenarioTypes'
-import { TeachingLaserPointerSurface } from '../teaching'
+import { TeachingCandidateOverlay, TeachingLaserPointerSurface, TeachingMediaCandidateOverlay, useTeachingMediaPresentation, useTeachingPrompts } from '../teaching'
 import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
 import { SharedScenarioRuntimePanel } from '../teaching/scenario/SharedScenarioRuntimePanel'
 import { useSharedSelfDirectedScenario } from '../teaching/scenario/useSharedSelfDirectedScenario'
@@ -33,11 +34,31 @@ import './edumon-console-parity.css'
 
 const TRACE_WINDOW_SECONDS = 8
 const SAMPLE_RATE = 100
+const EDUMON_ALARM_STORAGE_KEY = 'edumon.alarm-limits'
+
+function loadEdumonAlarmLimits(): EdumonAlarmLimits {
+  if (typeof window === 'undefined') return { ...DEFAULT_EDUMON_ALARM_LIMITS }
+  try {
+    const raw = window.localStorage.getItem(EDUMON_ALARM_STORAGE_KEY)
+    if (!raw) return { ...DEFAULT_EDUMON_ALARM_LIMITS }
+    const stored = JSON.parse(raw) as Partial<EdumonAlarmLimits>
+    return {
+      heartRateLow: Number.isFinite(stored.heartRateLow) ? Number(stored.heartRateLow) : DEFAULT_EDUMON_ALARM_LIMITS.heartRateLow,
+      heartRateHigh: Number.isFinite(stored.heartRateHigh) ? Number(stored.heartRateHigh) : DEFAULT_EDUMON_ALARM_LIMITS.heartRateHigh,
+      mapLow: Number.isFinite(stored.mapLow) ? Number(stored.mapLow) : DEFAULT_EDUMON_ALARM_LIMITS.mapLow,
+      mapHigh: Number.isFinite(stored.mapHigh) ? Number(stored.mapHigh) : DEFAULT_EDUMON_ALARM_LIMITS.mapHigh,
+      spo2Low: Number.isFinite(stored.spo2Low) ? Number(stored.spo2Low) : DEFAULT_EDUMON_ALARM_LIMITS.spo2Low,
+    }
+  } catch {
+    return { ...DEFAULT_EDUMON_ALARM_LIMITS }
+  }
+}
 
 interface EdumonTeachingState {
   patient: MonitorPatientState
   simulationPaused: boolean
   simulationSpeed: EdumonSimulationSpeed
+  alarmLimits: EdumonAlarmLimits
 }
 
 type TraceKey = 'ecg' | 'arterialPressure' | 'pleth'
@@ -199,6 +220,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [selectedSavedScenarioId, setSelectedSavedScenarioId] = useState('')
   const launchedScenarioRef = useRef<string | null>(null)
   const [scenarioQuestionState, setScenarioQuestionState] = useState({ answered: false, correct: false })
+  const [alarmLimits, setAlarmLimits] = useState<EdumonAlarmLimits>(loadEdumonAlarmLimits)
+  const [alarmLimitsOpen, setAlarmLimitsOpen] = useState(false)
   const screenWakeLock = useScreenWakeLock()
 
   useEffect(() => {
@@ -220,7 +243,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const samples = frozenSamples ?? liveSamples
   const measurements = measurementsFor(patientState)
   const teachingHost = module.id === 'ana' ? edumonAnaTeachingHost : edumonIcuTeachingHost
-  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, simulationPaused, simulationSpeed }), [patientState, simulationPaused, simulationSpeed])
+  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, simulationPaused, simulationSpeed, alarmLimits }), [patientState, simulationPaused, simulationSpeed, alarmLimits])
   const teachingSession = useProductTeachingSession<EdumonTeachingState>({
     productId: teachingHost.appId,
     state: sharedTeachingState,
@@ -228,8 +251,11 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       setPatientState(next.patient)
       setSimulationPaused(next.simulationPaused)
       setSimulationSpeed(next.simulationSpeed)
+      setAlarmLimits(next.alarmLimits ?? DEFAULT_EDUMON_ALARM_LIMITS)
     },
   })
+  const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, teachingHost)
+  const liveTeachingMedia = useTeachingMediaPresentation(teachingSession.role, teachingSession.session?.id ?? null)
   const candidateCount = teachingSession.members.filter((member) => member.role === 'candidate').length
   const candidateLocked = teachingSession.role === 'candidate'
   const accountChangeLocked = teachingSession.role !== 'standalone'
@@ -260,7 +286,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     setSimulationSpeed(snapshot.simulationSpeed)
   }), [])
   const scenarioRuntime = useTeachingScenarioRuntime(edumonScenarioAdapter)
-  const edumonAlarmEvaluations = useMemo(() => evaluateEdumonAlarms(patientState, measurements.meanPressure), [patientState, measurements.meanPressure])
+  const edumonAlarmEvaluations = useMemo(() => evaluateEdumonAlarms(patientState, measurements.meanPressure, alarmLimits), [patientState, measurements.meanPressure, alarmLimits])
   const alarmController = useSharedAlarmController({
     role: teachingSession.role,
     sessionId: teachingSession.session?.id ?? null,
@@ -268,6 +294,14 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     evaluations: edumonAlarmEvaluations,
     paused: simulationPaused,
   })
+
+  useEffect(() => {
+    window.localStorage.setItem(EDUMON_ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
+  }, [alarmLimits])
+
+  useEffect(() => {
+    if (alarmController.candidateLocked) setAlarmLimitsOpen(false)
+  }, [alarmController.candidateLocked])
 
   const loadSavedScenario = async (id: string) => {
     const row = savedScenarios.find((item) => item.id === id)
@@ -368,6 +402,15 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   return (
     <main className={`app-shell edumon-app-shell edumon-module-${module.id}`}>
+      <TeachingCandidateOverlay
+        role={teachingSession.role}
+        prompt={teachingPrompts.activePrompt}
+        myResponse={teachingPrompts.myResponse}
+        busy={teachingPrompts.busy}
+        error={teachingPrompts.error}
+        onSubmit={teachingPrompts.submitResponse}
+      />
+      <TeachingMediaCandidateOverlay role={teachingSession.role} presentation={liveTeachingMedia.activePresentation} />
       <EdumonTopBar
         module={module}
         simulationPaused={simulationPaused}
@@ -417,6 +460,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             </div>
 
             <aside className="edumon-measurements metrics-panel" aria-label="Measured values">
+              <div className="metrics-actions">
+                <button className="metrics-alarm-limits" type="button" disabled={alarmController.candidateLocked} onClick={() => setAlarmLimitsOpen(true)} title={alarmController.candidateLocked ? 'Alarm limits controlled by instructor' : 'Set alarm limits'}>Alarm limits</button>
+              </div>
               <ValuePanel label="HR" value={measurements.heartRate == null ? '—' : `${measurements.heartRate}`} unit="bpm" className="ecg" />
               <ValuePanel label="ART" value={measurements.systolicPressure == null ? '—/—' : `${measurements.systolicPressure}/${measurements.diastolicPressure}`} unit="mmHg" detail={measurements.meanPressure == null ? 'MAP —' : `MAP ${measurements.meanPressure}`} className="art" />
               <ValuePanel label="SpO₂" value={measurements.spo2 == null ? '—' : `${measurements.spo2}`} unit="%" className="spo2" />
@@ -451,6 +497,14 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           onClose={() => { if (selfDirected.active) selfDirected.clear(); else scenarioRuntime.stop() }}
         />
       )}
+
+      <EdumonAlarmLimitsDialog
+        open={alarmLimitsOpen}
+        limits={alarmLimits}
+        disabled={alarmController.candidateLocked}
+        onChange={setAlarmLimits}
+        onClose={() => setAlarmLimitsOpen(false)}
+      />
 
       {selectedAuxiliary && auxiliaryMonitor && (
         <AuxiliaryMonitorModal title={selectedAuxiliary.label} onClose={() => setAuxiliaryMonitor(null)}>
