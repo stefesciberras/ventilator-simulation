@@ -1,0 +1,32 @@
+name: Apply EDUMON alarm scope and transition fix
+on:
+  push:
+    branches: [fix/edumon-alarm-scope-patient-transition]
+    paths:
+      - 'scripts/apply-edumon-alarm-transition-fix.mjs'
+      - '.github/workflows/apply-edumon-alarm-transition-fix.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/edumon-alarm-scope-patient-transition
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/apply-edumon-alarm-transition-fix.mjs
+      - run: npm ci
+      - run: npm run build
+      - name: Commit implementation and remove temporary tooling
+        run: |
+          rm scripts/apply-edumon-alarm-transition-fix.mjs
+          rm .github/workflows/apply-edumon-alarm-transition-fix.yml
+          git config user.name 'stefesciberras'
+          git config user.email '43134239+stefesciberras@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix EDUMON alarm scope and patient transitions'
+          git push origin HEAD:fix/edumon-alarm-scope-patient-transition
