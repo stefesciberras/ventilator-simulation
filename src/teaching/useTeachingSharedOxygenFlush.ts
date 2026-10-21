@@ -16,60 +16,69 @@ function isState(value: unknown): value is SharedOxygenFlushState {
   return typeof candidate.active === 'boolean' && typeof candidate.sentAt === 'number'
 }
 
-/**
- * Instructor-authoritative oxygen flush state carried over the common teaching bus.
- * It deliberately does not own each client's local oxygen-flush state: shared OFF
- * only releases the instructor-imposed flush and never clears a candidate's local flush.
- */
 export function useTeachingSharedOxygenFlush(role: TeachingRole, sessionId: string | null) {
   const [active, setActiveState] = useState(false)
-  const stateRef = useRef<SharedOxygenFlushState>({ active: false, sentAt: Date.now() })
+  const activeRef = useRef(false)
 
-  const publish = useCallback((next: SharedOxygenFlushState) => {
+  useEffect(() => { activeRef.current = active }, [active])
+
+  const broadcastState = useCallback((next: boolean) => {
     if (role !== 'instructor' || !sessionId) return
-    void sendTeachingBroadcast(sessionId, STATE_EVENT, next)
+    void sendTeachingBroadcast(sessionId, STATE_EVENT, {
+      active: next,
+      sentAt: Date.now(),
+    } satisfies SharedOxygenFlushState)
   }, [role, sessionId])
 
   useEffect(() => {
-    const reset = { active: false, sentAt: Date.now() }
-    stateRef.current = reset
+    activeRef.current = false
     setActiveState(false)
     if (!sessionId || role === 'standalone') return
 
-    const unsubState = subscribeTeachingBroadcast(sessionId, STATE_EVENT, (payload) => {
+    const unsubscribeState = subscribeTeachingBroadcast(sessionId, STATE_EVENT, (payload) => {
       if (role !== 'candidate' || !isState(payload)) return
-      stateRef.current = payload
+      activeRef.current = payload.active
       setActiveState(payload.active)
     })
-    const unsubRequest = subscribeTeachingBroadcast(sessionId, REQUEST_EVENT, () => {
-      if (role === 'instructor') publish({ ...stateRef.current, sentAt: Date.now() })
+
+    const unsubscribeRequest = subscribeTeachingBroadcast(sessionId, REQUEST_EVENT, () => {
+      if (role !== 'instructor') return
+      broadcastState(activeRef.current)
     })
 
-    if (role === 'candidate') void sendTeachingBroadcast(sessionId, REQUEST_EVENT, { requestedAt: Date.now() })
+    if (role === 'candidate') {
+      void sendTeachingBroadcast(sessionId, REQUEST_EVENT, { requestedAt: Date.now() })
+    }
 
     return () => {
-      unsubState()
-      unsubRequest()
-      if (role === 'candidate') setActiveState(false)
-      if (role === 'instructor' && stateRef.current.active) publish({ active: false, sentAt: Date.now() })
+      unsubscribeState()
+      unsubscribeRequest()
+      if (role === 'instructor') broadcastState(false)
+      if (role === 'candidate') {
+        activeRef.current = false
+        setActiveState(false)
+      }
     }
-  }, [publish, role, sessionId])
+  }, [broadcastState, role, sessionId])
 
   useEffect(() => {
     if (role !== 'instructor' || !sessionId) return
     const timer = window.setInterval(() => {
-      if (stateRef.current.active) publish({ ...stateRef.current, sentAt: Date.now() })
+      if (activeRef.current) broadcastState(true)
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [publish, role, sessionId])
+  }, [broadcastState, role, sessionId])
 
-  const setActive = useCallback((nextActive: boolean) => {
+  const setActive = useCallback((next: boolean) => {
     if (role !== 'instructor' || !sessionId) return
-    const next = { active: nextActive, sentAt: Date.now() }
-    stateRef.current = next
-    setActiveState(nextActive)
-    publish(next)
-  }, [publish, role, sessionId])
+    activeRef.current = next
+    setActiveState(next)
+    broadcastState(next)
+    if (!next) {
+      window.setTimeout(() => broadcastState(false), 120)
+      window.setTimeout(() => broadcastState(false), 400)
+    }
+  }, [broadcastState, role, sessionId])
 
   return { active, setActive }
 }
