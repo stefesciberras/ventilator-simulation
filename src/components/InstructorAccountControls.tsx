@@ -948,7 +948,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
               <div className="scenario-signin-card">
                 <strong>Cloud account required</strong>
                 <p>Static scenarios are saved privately to your instructor account so they are available on any device.</p>
-                <button type="button" className="account-primary-button" onClick={() => { setScenarioOpen(false); setAccountOpen(true) }}>Sign in to instructor account</button>
+                <button type="button" className="account-primary-button" onClick={() => { setScenarioOpen(false); accountAuth.setOpen(true) }}>Sign in to instructor account</button>
               </div>
             )}
             {presetMessage && <div className="account-message">{presetMessage}</div>}
