@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import type {
   RecoverableTeachingCandidate,
   RecoverableTeachingInstructor,
@@ -149,6 +150,47 @@ export function SharedSessionLauncher({
   )
 }
 
+export interface SharedInstructorStartOption {
+  id: string
+  title: string
+  summary?: string
+  chips?: readonly string[]
+}
+
+export interface SharedInstructorStartConfig {
+  currentTitle: string
+  currentSummary: string
+  currentChips?: readonly string[]
+  savedOptions?: readonly SharedInstructorStartOption[]
+  selectedSavedId?: string
+  onSelectedSavedIdChange?: (id: string) => void
+  savedBusy?: boolean
+  savedMessage?: string | null
+  onStartCurrent: () => void | Promise<unknown>
+  onStartSaved?: (id: string) => void | Promise<unknown>
+  onLoadSaved?: (id: string) => void | Promise<unknown>
+}
+
+export function SharedInstructorStartWizard({ config, onClose }: { config: SharedInstructorStartConfig; onClose: () => void }) {
+  const [source, setSource] = useState<'current' | 'scenario'>('current')
+  const savedOptions = config.savedOptions ?? []
+  const selectedSavedId = config.selectedSavedId ?? savedOptions[0]?.id ?? ''
+  const selected = savedOptions.find((option) => option.id === selectedSavedId) ?? null
+  return (
+    <div className="session-start-wizard">
+      <div className="session-start-wizard-heading"><div><span>Instructor session</span><strong>Choose starting state</strong></div><button type="button" className="session-start-close" onClick={onClose} aria-label="Close session setup">×</button></div>
+      <div className="session-start-source-tabs" role="tablist" aria-label="Instructor session starting state">
+        <button type="button" className={source === 'current' ? 'selected' : ''} onClick={() => setSource('current')}>Current setup</button>
+        <button type="button" className={source === 'scenario' ? 'selected' : ''} disabled={config.savedBusy || !savedOptions.length} onClick={() => setSource('scenario')}>Saved scenario</button>
+      </div>
+      {source === 'current' ? <div className="session-start-current-card"><span>Current standalone setup</span><strong>{config.currentTitle}</strong>{config.currentChips?.length ? <div className="session-start-summary-chips">{config.currentChips.map((item) => <em key={item}>{item}</em>)}</div> : null}<small>{config.currentSummary}</small></div> : <div className="session-start-scenarios"><div className="session-start-scenario-list">{savedOptions.map((option) => <button type="button" key={option.id} className={`session-start-scenario-option ${selectedSavedId === option.id ? 'selected' : ''}`} onClick={() => config.onSelectedSavedIdChange?.(option.id)}><strong>{option.title}</strong>{option.summary && <small>{option.summary}</small>}{option.chips?.length ? <div className="session-start-summary-chips">{option.chips.map((item) => <em key={item}>{item}</em>)}</div> : null}</button>)}</div>{selected && config.onLoadSaved && <button type="button" className="session-secondary-button" onClick={() => void config.onLoadSaved?.(selected.id)}>Load into standalone first</button>}</div>}
+      {config.savedMessage && <p className="session-start-note">{config.savedMessage}</p>}
+      <button type="button" className="session-primary-button session-start-primary" disabled={source === 'scenario' && !selected} onClick={() => void (source === 'current' ? config.onStartCurrent() : selected && config.onStartSaved?.(selected.id))}>{source === 'current' ? 'Start with current setup' : 'Start with saved scenario'}</button>
+      <button type="button" className="session-secondary-button session-start-cancel" onClick={onClose}>Cancel</button>
+    </div>
+  )
+}
+
 interface SharedBasicSessionPanelProps extends SharedSessionLauncherProps {
   role: SharedTeachingRole
   session: SharedTeachingSessionRow | null
@@ -156,6 +198,8 @@ interface SharedBasicSessionPanelProps extends SharedSessionLauncherProps {
   onLeaveSession: () => void | Promise<unknown>
   onEndInstructorSession: () => void | Promise<unknown>
   title?: string
+  instructorStart?: SharedInstructorStartConfig
+  footer?: ReactNode
 }
 
 /** Compact product-neutral session surface used by simulators that do not need
@@ -168,8 +212,11 @@ export function SharedBasicSessionPanel({
   onLeaveSession,
   onEndInstructorSession,
   title = 'Session mode',
+  instructorStart,
+  footer,
   ...launcherProps
 }: SharedBasicSessionPanelProps) {
+  const [startWizardOpen, setStartWizardOpen] = useState(false)
   const candidateCount = members.filter((member) => member.role === 'candidate').length
 
   return (
@@ -180,7 +227,7 @@ export function SharedBasicSessionPanel({
       </div>
 
       {role === 'standalone' ? (
-        <SharedSessionLauncher connection={connection} {...launcherProps} />
+        startWizardOpen && instructorStart ? <SharedInstructorStartWizard config={instructorStart} onClose={() => setStartWizardOpen(false)} /> : <SharedSessionLauncher connection={connection} {...launcherProps} onStartInstructor={instructorStart ? () => setStartWizardOpen(true) : launcherProps.onStartInstructor} />
       ) : (
         <div className="session-active-summary">
           <div className="session-status-row">
@@ -196,6 +243,7 @@ export function SharedBasicSessionPanel({
           </div>
         </div>
       )}
+      {footer}
     </section>
   )
 }
