@@ -35,6 +35,40 @@ export interface TeachingScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext> {
   triggerMatches: (trigger: TTrigger, context: TContext, stage: TeachingScenarioStageContext<TSnapshot, TTrigger>) => boolean
 }
 
+export interface TeachingScenarioBranch<TTrigger> {
+  toStageId: string
+  trigger: TTrigger
+  priority?: number
+  enabled?: boolean
+}
+
+export type TeachingScenarioTransitionResolution =
+  | { kind: 'branch'; toStageId: string }
+  | { kind: 'advance' }
+  | null
+
+/**
+ * Shared transition resolver used by product adapters. Branches take priority
+ * over linear advancement. Manual triggers can be excluded by the product's
+ * trigger matcher, leaving this resolver unaware of trigger vocabulary.
+ */
+export function resolveTeachingScenarioTransition<TTrigger>({
+  stageTriggers,
+  branches = [],
+  triggerMatches,
+}: {
+  stageTriggers: readonly TTrigger[]
+  branches?: readonly TeachingScenarioBranch<TTrigger>[]
+  triggerMatches: (trigger: TTrigger) => boolean
+}): TeachingScenarioTransitionResolution {
+  const matchedBranch = [...branches]
+    .filter((branch) => branch.enabled !== false)
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+    .find((branch) => triggerMatches(branch.trigger))
+  if (matchedBranch) return { kind: 'branch', toStageId: matchedBranch.toStageId }
+  return stageTriggers.some(triggerMatches) ? { kind: 'advance' } : null
+}
+
 /**
  * Product-neutral scenario sequencer. Simulation products provide only two
  * adapters: how a stage snapshot is applied, and how their trigger vocabulary
