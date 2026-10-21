@@ -14,6 +14,7 @@ import './teaching/TeachingSharedWaveform.css'
 import './tablet-responsive.css'
 import './tablet-runtime.css'
 import './selfDirectedScenarioPanel.css'
+import './edumon/mobile-display-fixes.css'
 
 const pathname = window.location.pathname
 const isLandingRoute = pathname === '/'
