@@ -110,7 +110,6 @@ export function VerticalDualAlarmSlider({
         {safeHigh} <small>{unit}</small>
       </strong>
       <div className="vertical-dual-slider-wrap">
-        <em className="upper-limit-label">{max}</em>
         <div
           className="vertical-dual-range"
           onPointerDown={start}
@@ -148,7 +147,6 @@ export function VerticalDualAlarmSlider({
             onKeyDown={(event) => key('low', safeLow, event)}
           />
         </div>
-        <em className="lower-limit-label">{min}</em>
       </div>
       <strong className="shared-alarm-current-limit shared-alarm-current-limit-low">
         {safeLow} <small>{unit}</small>
