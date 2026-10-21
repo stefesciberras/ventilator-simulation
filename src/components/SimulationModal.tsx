@@ -1,15 +1,34 @@
-import { useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
+
+export type SimulationModalSize = 'compact' | 'standard' | 'wide' | 'monitor'
 
 interface SimulationModalProps {
   title: string
   eyebrow?: string
   children: ReactNode
   onClose: () => void
+  open?: boolean
   className?: string
   stageClassName?: string
+  size?: SimulationModalSize
+  ariaModal?: boolean
+  closeOnBackdrop?: boolean
+  draggable?: boolean
 }
 
-export function SimulationModal({ title, eyebrow = 'EDUSIM', children, onClose, className = '', stageClassName = '' }: SimulationModalProps) {
+export function SimulationModal({
+  title,
+  eyebrow = 'EDUSIM',
+  children,
+  onClose,
+  open = true,
+  className = '',
+  stageClassName = '',
+  size = 'standard',
+  ariaModal = false,
+  closeOnBackdrop = true,
+  draggable = true,
+}: SimulationModalProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const dragRef = useRef<{
     pointerId: number
@@ -23,8 +42,23 @@ export function SimulationModal({ title, eyebrow = 'EDUSIM', children, onClose, 
     height: number
   } | null>(null)
 
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, onClose])
+
+  useEffect(() => {
+    if (!open) setPosition({ x: 0, y: 0 })
+  }, [open])
+
+  if (!open) return null
+
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (window.innerWidth < 900 || (event.target as HTMLElement).closest('button, input, select, textarea, video')) return
+    if (!draggable || window.innerWidth < 900 || (event.target as HTMLElement).closest('button, input, select, textarea, video')) return
     const panel = event.currentTarget.closest('.teaching-media-modal') as HTMLElement | null
     if (!panel) return
     const rect = panel.getBoundingClientRect()
@@ -61,13 +95,21 @@ export function SimulationModal({ title, eyebrow = 'EDUSIM', children, onClose, 
   }
 
   return (
-    <div className="teaching-media-overlay" role="presentation">
-      <section className={`teaching-media-modal ${className}`.trim()} role="dialog" aria-modal="false" aria-label={title} style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
-        <div className="teaching-media-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title="Drag to move on wide screens">
+    <div className="teaching-media-overlay edusim-modal-overlay" role="presentation" onPointerDown={(event) => {
+      if (closeOnBackdrop && event.target === event.currentTarget) onClose()
+    }}>
+      <section
+        className={`teaching-media-modal edusim-modal edusim-modal-${size} ${className}`.trim()}
+        role="dialog"
+        aria-modal={ariaModal}
+        aria-label={title}
+        style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+      >
+        <div className="teaching-media-header edusim-modal-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title={draggable ? 'Drag to move on wide screens' : undefined}>
           <div><span>{eyebrow}</span><strong>{title}</strong></div>
           <button type="button" onClick={onClose}>Close</button>
         </div>
-        <div className={`teaching-media-stage ${stageClassName}`.trim()}>{children}</div>
+        <div className={`teaching-media-stage edusim-modal-stage ${stageClassName}`.trim()}>{children}</div>
       </section>
     </div>
   )
