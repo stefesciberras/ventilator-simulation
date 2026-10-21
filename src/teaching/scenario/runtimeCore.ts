@@ -48,9 +48,10 @@ export type TeachingScenarioTransitionResolution =
   | null
 
 /**
- * Shared transition resolver used by product adapters. Branches take priority
- * over linear advancement. Manual triggers can be excluded by the product's
- * trigger matcher, leaving this resolver unaware of trigger vocabulary.
+ * Shared transition resolver used by every EDUSIM product adapter. Branches
+ * take priority over linear advancement. Manual triggers can be excluded by
+ * the product's trigger matcher, leaving this resolver unaware of trigger
+ * vocabulary or simulator-specific state.
  */
 export function resolveTeachingScenarioTransition<TTrigger>({
   stageTriggers,
