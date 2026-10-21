@@ -36,7 +36,7 @@ import { DynamicScenarioRuntimeLibrary } from './DynamicScenarioRuntimeLibrary'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from './InstructorAccountAuth'
 import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'
 import { createCaseMediaSignedUrl, listCaseMediaByIds, releaseSessionCaseMedia } from '../caseMedia'
-import { eduventTeachingHost, useTeachingPrompts } from '../teaching'
+import { eduventTeachingHost, useScenarioLibraryManager, useTeachingPrompts } from '../teaching'
 import { resolveTeachingScenarioTransition } from '../teaching/scenario/runtimeCore'
 import { useTeachingMediaPresentation } from '../teaching/TeachingMediaPresentation'
 import '../account.css'
@@ -243,7 +243,9 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [scenarioOpen, setScenarioOpen] = useState(false)
-  const [presets, setPresets] = useState<InstructorPresetRow[]>([])
+  const scenarioLibraryRepository = useMemo(() => ({ list: () => listInstructorPresets(), create: (name: string, scenario: InstructorScenarioSnapshot) => createInstructorPreset(name, scenario), update: (id: string, updates: { name?: string; scenario?: InstructorScenarioSnapshot }) => updateInstructorPreset(id, updates), remove: (id: string) => deleteInstructorPreset(id) }), [])
+  const scenarioLibrary = useScenarioLibraryManager<InstructorPresetRow, InstructorScenarioSnapshot>({ enabled: Boolean(account), repository: scenarioLibraryRepository })
+  const presets = scenarioLibrary.items
   const [presetName, setPresetName] = useState('')
   const [presetDescription, setPresetDescription] = useState('')
   const [scenarioType, setScenarioType] = useState<'static' | 'dynamic'>('static')
@@ -357,22 +359,9 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const nameForStageSource = (sourceId: string) => sourceId === 'current' ? 'Current simulator state' : (staticPresets.find((preset) => preset.id === sourceId)?.name ?? 'Current simulator state')
   const resetMaskForSource = (sourceId: string, setter: (mask: DynamicScenarioApplyMask) => void) => setter(createFullDynamicStageApplyMask(scenarioForStageSource(sourceId)))
 
-  const refreshPresets = async (nextAccount: User | null = account) => {
-    if (!nextAccount) {
-      setPresets([])
-      return
-    }
-    try {
-      setPresets(await listInstructorPresets())
-    } catch (cause) {
-      setPresetMessage(cause instanceof Error ? cause.message : 'Unable to load instructor scenarios.')
-    }
-  }
+  const refreshPresets = async (_nextAccount: User | null = account) => { await scenarioLibrary.refresh() }
 
-  useEffect(() => {
-    if (account) void refreshPresets(account)
-    else setPresets([])
-  }, [account])
+  useEffect(() => { if (scenarioLibrary.message) setPresetMessage(scenarioLibrary.message) }, [scenarioLibrary.message])
 
   const openScenarios = () => {
     setScenarioOpen(true)
