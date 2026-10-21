@@ -9,6 +9,9 @@ import { EdumonWorkspacePanel } from './EdumonWorkspacePanel'
 import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type EdumonModuleDefinition } from './modules'
 import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
 import { SimulationHardwareControls } from '../components/SimulationHardwareControls'
+import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
+import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from '../components/SimulationDiagnosticsMenu'
+import { useScreenWakeLock } from '../useScreenWakeLock'
 import { SharedBasicSessionPanel, useProductTeachingSession } from '../teaching/session'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from '../components/InstructorAccountAuth'
 import { useTeachingScenarioRuntime } from '../teaching/scenario/runtimeCore'
@@ -185,6 +188,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [alarmSilencedUntil, setAlarmSilencedUntil] = useState<number | null>(null)
   const [alarmSilenceRemaining, setAlarmSilenceRemaining] = useState(0)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
+  const screenWakeLock = useScreenWakeLock()
 
   useEffect(() => {
     if (frozen || simulationPaused) return
@@ -314,6 +318,17 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const alarmSeconds = alarmSilenceRemaining % 60
   const alarmSilenceLabel = alarmSilenceRemaining > 0 ? `${alarmMinutes}:${String(alarmSeconds).padStart(2, '0')}` : undefined
 
+  const copyEdumonMonitorDiagnostics = async () => {
+    await navigator.clipboard.writeText(JSON.stringify({ product: module.productName, simulationTime: elapsed, patient: patientState, measurements, simulationPaused, simulationSpeed }, null, 2))
+  }
+  const copyEdumonSessionDiagnostics = async () => {
+    await navigator.clipboard.writeText(JSON.stringify({ product: module.productName, role: teachingSession.role, session: teachingSession.session, members: teachingSession.members, scenarioRuntime: scenarioRuntime.runtimeSnapshot }, null, 2))
+  }
+  const edumonDiagnosticActions: SimulationDiagnosticAction[] = [
+    { id: 'monitor', label: 'Monitor State', description: 'Patient settings, measurements and timing', onSelect: copyEdumonMonitorDiagnostics },
+    { id: 'session', label: 'Session / Scenario State', description: 'Teaching session and scenario runtime state', onSelect: copyEdumonSessionDiagnostics },
+  ]
+
   return (
     <main className={`app-shell edumon-app-shell edumon-module-${module.id}`}>
       <EdumonTopBar
@@ -326,6 +341,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         simulationControlsLocked={candidateLocked}
         onScenario={() => setTopPanel('scenario')}
         accountAction={<InstructorAccountButton auth={accountAuth} />}
+        diagnosticsAction={<SimulationDiagnosticsMenu actions={edumonDiagnosticActions} />}
         onAbout={() => setTopPanel('about')}
       />
 
@@ -379,7 +395,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
       {topPanel === 'scenario' && <AuxiliaryMonitorModal title="Scenarios and sessions" onClose={() => setTopPanel(null)}>{sessionPanel}</AuxiliaryMonitorModal>}
       <InstructorAccountDialog auth={accountAuth} locked={accountChangeLocked} />
-      {topPanel === 'about' && <AuxiliaryMonitorModal title={module.productName} onClose={() => setTopPanel(null)}><div className="edumon-top-panel-content"><span>EDUSIM MONITORING PLATFORM</span><strong>{module.subtitle}</strong><p>Version v0.1.0.0</p><p>Educational simulation only — not a medical device and not for clinical decision-making.</p></div></AuxiliaryMonitorModal>}
+      <SimulationAboutDialog open={topPanel === 'about'} productLabel={module.productName} title={module.subtitle} description="An interactive patient-monitor simulator for anaesthesia, acute care and intensive-care education." version="0.1.0.0" onClose={() => setTopPanel(null)} wakeLock={screenWakeLock} diagnostics={edumonDiagnosticActions} />
     </main>
   )
 }

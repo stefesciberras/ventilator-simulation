@@ -7,6 +7,8 @@ import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
 import { SimulationTopBar } from './components/SimulationTopBar'
+import { SimulationAboutDialog } from './components/SimulationAboutDialog'
+import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from './components/SimulationDiagnosticsMenu'
 import { InteractiveVentilatorStrip, VentilatorModeControl } from './components/InteractiveVentilatorStrip'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
@@ -1637,6 +1639,12 @@ export default function App() {
     setMobileWorkspacePage(deltaX > 0 ? 'ventilator' : 'settings')
   }
 
+  const eduventDiagnosticActions: SimulationDiagnosticAction[] = [
+    { id: 'simulation', label: 'Simulation Logs', description: 'Settings, alarms and visible waveform', onSelect: copyDiagnostics },
+    { id: 'snapshot', label: 'Scenario Debug Snapshot', description: 'Complete scenario, current stage/state and recent events', onSelect: copyScenarioSnapshotDiagnostics },
+    { id: 'scenario', label: 'Scenario Logs', description: 'Teaching-session and scenario runtime events', onSelect: copyScenarioDiagnostics },
+  ]
+
   return (
     <main className="app-shell">
       <TeachingCandidateOverlay
@@ -1648,30 +1656,16 @@ export default function App() {
         onSubmit={teachingPrompts.submitResponse}
       />
       <PhysiologyMeasurementsDialog open={measurementsOpen} measurements={displayedPhysiologyMeasurements} oesophagealEnabled={oesophagealMonitoringEnabled} onClose={() => setMeasurementsOpen(false)} />
-      {aboutOpen && (
-        <div className="about-backdrop" onMouseDown={() => setAboutOpen(false)}>
-          <section className="about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="about-dialog-heading">
-              <div><span>EDUVENT</span><h2 id="about-title">Mechanical Ventilation Simulator</h2></div>
-              <button type="button" onClick={() => setAboutOpen(false)} aria-label="Close About">×</button>
-            </div>
-            <p>An interactive mechanical ventilation simulator for education and training.</p>
-            <div className="about-version-row"><span>Version</span><strong>v{APP_VERSION}</strong></div>
-            <label className="about-wake-row">
-              <span><strong>Keep screen awake</strong><small>{screenWakeLock.supported ? (screenWakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
-              <input type="checkbox" checked={screenWakeLock.enabled} disabled={!screenWakeLock.supported} onChange={(event) => screenWakeLock.setEnabled(event.target.checked)} />
-            </label>
-            <div className="about-diagnostics">
-              <span className="about-section-label">Diagnostics</span>
-              <div className="about-diagnostic-actions">
-                <button type="button" onClick={() => void copyDiagnostics()}>Simulation Logs</button>
-                <button type="button" onClick={() => void copyScenarioSnapshotDiagnostics()}>Scenario Debug Snapshot</button>
-              </div>
-            </div>
-            <p className="about-disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</p>
-          </section>
-        </div>
-      )}
+      <SimulationAboutDialog
+        open={aboutOpen}
+        productLabel="EDUVENT"
+        title="Mechanical Ventilation Simulator"
+        description="An interactive mechanical ventilation simulator for education and training."
+        version={APP_VERSION}
+        onClose={() => setAboutOpen(false)}
+        wakeLock={screenWakeLock}
+        diagnostics={eduventDiagnosticActions}
+      />
       <SimulationTopBar
         brandKicker="EDUVENT"
         title="Mechanical Ventilation Simulator"
@@ -1681,15 +1675,7 @@ export default function App() {
         onPausedChange={setSimulationPaused}
         onSpeedChange={(speed) => setSimulationSpeed(speed as SimulationSpeed)}
         speedOptions={SIMULATION_SPEEDS}
-        pauseDisabled={teachingSession.role === 'candidate'}
-        speedDisabled={teachingSession.role === 'candidate'}
-        pauseTitle={teachingSession.role === 'candidate'
-          ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor')
-          : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
-        pauseAriaLabel={teachingSession.role === 'candidate'
-          ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor')
-          : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
-        speedTitle={teachingSession.role === 'candidate' ? 'Simulation speed controlled by instructor' : 'Simulation speed'}
+        controlsControlledByInstructor={teachingSession.role === 'candidate'}
         statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
         version={APP_VERSION}
         onAbout={() => setAboutOpen(true)}
@@ -1721,30 +1707,7 @@ export default function App() {
                 onScenarioMediaIdsChange={setScenarioMediaIds}
               />
             )}
-            <div className="top-diagnostic-menu">
-              <button
-                className={`top-diagnostic-button ${diagnosticMenuOpen ? 'active' : ''} ${diagnosticCopied ? 'copied' : ''}`}
-                type="button"
-                onClick={() => setDiagnosticMenuOpen((open) => !open)}
-                title={diagnosticCopied ? `${diagnosticCopied === 'simulation' ? 'Simulation' : 'Scenario'} logs copied` : 'Diagnostics'}
-                aria-label="Open diagnostics menu"
-                aria-haspopup="menu"
-                aria-expanded={diagnosticMenuOpen}
-              ><DiagnosticIcon copied={Boolean(diagnosticCopied)} /></button>
-              {diagnosticMenuOpen && (
-                <div className="top-diagnostic-dropdown" role="menu" aria-label="Copy diagnostics">
-                  <button type="button" role="menuitem" onClick={() => void copyDiagnostics()}>
-                    <strong>Simulation Logs</strong><small>Settings, alarms and visible waveform</small>
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => void copyScenarioSnapshotDiagnostics()}>
-                    <strong>Scenario Debug Snapshot</strong><small>Complete scenario, current stage/state and recent events</small>
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => void copyScenarioDiagnostics()}>
-                    <strong>Scenario Logs</strong><small>Teaching-session and scenario runtime events</small>
-                  </button>
-                </div>
-              )}
-            </div>
+            <SimulationDiagnosticsMenu actions={eduventDiagnosticActions} />
           </>
         )}
       />
