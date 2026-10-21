@@ -16,6 +16,7 @@ import type {
   SharedScenarioAuthoringTrigger,
   SharedScenarioEditorAdapter,
 } from '../../../teaching/scenario/authoringTypes'
+import type { SharedScenarioTransition } from '../../../teaching/scenario/authoringTypes'
 
 function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T }
 
@@ -107,6 +108,23 @@ function variableIdsFromApplyMask(stage: { apply?: { ventilator: Array<string | 
     ...stage.apply.ventilator.map((key) => `ventilator.${String(key)}`),
     ...stage.apply.patient.map((key) => `patient.${String(key)}`),
   ]
+}
+
+function sharedTransitionOverrides(stage: { transitionOverrides?: { ventilator?: Record<string, import('../../../instructorAccount').DynamicScenarioTransition>; patient?: Record<string, import('../../../instructorAccount').DynamicScenarioTransition> } }) {
+  const overrides: Record<string, SharedScenarioTransition> = {}
+  Object.entries(stage.transitionOverrides?.ventilator ?? {}).forEach(([key, value]) => { overrides[`ventilator.${key}`] = value })
+  Object.entries(stage.transitionOverrides?.patient ?? {}).forEach(([key, value]) => { overrides[`patient.${key}`] = value })
+  return overrides
+}
+
+function dynamicTransitionOverrides(overrides: Record<string, SharedScenarioTransition> | undefined) {
+  const ventilator: Record<string, SharedScenarioTransition> = {}
+  const patient: Record<string, SharedScenarioTransition> = {}
+  Object.entries(overrides ?? {}).forEach(([id, value]) => {
+    if (id.startsWith('ventilator.')) ventilator[id.slice('ventilator.'.length)] = value
+    if (id.startsWith('patient.')) patient[id.slice('patient.'.length)] = value
+  })
+  return { ventilator, patient }
 }
 
 function applyMaskFromVariableIds(snapshot: InstructorScenarioSnapshot, ids: readonly string[]) {
@@ -202,6 +220,7 @@ export function createVentilatorAuthoringAdapter(seed: InstructorScenarioSnapsho
       { id: 'device.nebulisation', label: 'Nebulisation' },
     ],
     defaultAppliedVariableIds: () => allWritableVariableIds(),
+    transitionVariables: (snapshot) => writable.filter((variable) => variable.type === 'number' && isVentilatorVariableRelevant(variable, snapshot)).map((variable) => ({ id: variable.id, label: variable.label })),
     renderSnapshotEditor: (snapshot, onChange, options): ReactNode => <SnapshotEditor snapshot={snapshot} onChange={onChange} appliedVariableIds={options?.appliedVariableIds} onAppliedVariableIdsChange={options?.onAppliedVariableIdsChange} />,
     toDocument: (name, scenario) => {
       const dynamic = (scenario.kind ?? 'static') === 'dynamic' && scenario.stages?.length
@@ -213,6 +232,8 @@ export function createVentilatorAuthoringAdapter(seed: InstructorScenarioSnapsho
         kind: (stage.stageType ?? 'controls') === 'controls' ? 'state' as const : stage.stageType as 'media' | 'question',
         snapshot: stage.snapshot,
         appliedVariableIds: variableIdsFromApplyMask(stage),
+        transition: stage.transition ?? { mode: 'immediate' as const },
+        transitionOverrides: sharedTransitionOverrides(stage),
         triggers: [] as SharedScenarioAuthoringTrigger[],
         media: stage.media ? { ...stage.media, mediaId: stage.media.mediaId ?? stage.media.storagePath } : undefined,
         question: stage.question,
@@ -249,8 +270,8 @@ export function createVentilatorAuthoringAdapter(seed: InstructorScenarioSnapsho
           stageType: stage.kind === 'state' ? 'controls' : stage.kind,
           media: stage.media ? { ...stage.media, mediaId: stage.media.mediaId ?? stage.media.storagePath } : undefined,
           question: stage.question,
-          transition: { mode: 'immediate' },
-          transitionOverrides: {},
+          transition: stage.transition ?? { mode: 'immediate' },
+          transitionOverrides: dynamicTransitionOverrides(stage.transitionOverrides),
           snapshot: clone(stage.snapshot),
           apply: applyMaskFromVariableIds(stage.snapshot, stage.appliedVariableIds ?? allWritableVariableIds()),
           advanceTrigger: { type: 'manual' },

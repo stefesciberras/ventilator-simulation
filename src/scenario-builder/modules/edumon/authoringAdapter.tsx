@@ -12,21 +12,36 @@ import type { TeachingScenarioStageContent } from '../../../teaching/scenario/ru
 
 const RHYTHMS = Object.keys(RHYTHM_LABELS) as CardiacRhythm[]
 
-function SnapshotEditor({ snapshot, onChange }: { snapshot: EdumonScenarioSnapshot; onChange: (snapshot: EdumonScenarioSnapshot) => void }) {
-  const patient = snapshot.patient
-  const setPatient = (patch: Partial<typeof patient>) => onChange({ ...snapshot, patient: { ...patient, ...patch } })
-  return <div className="scenario-builder-field-grid shared-scenario-edumon-snapshot">
-    <label><span>Rhythm</span><select value={patient.rhythm} onChange={(event) => setPatient({ rhythm: event.target.value as CardiacRhythm })}>{RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}</select></label>
-    <label><span>Heart rate</span><input type="number" min={0} max={250} value={patient.heartRate} onChange={(event) => setPatient({ heartRate: Number(event.target.value) || 0 })} /></label>
-    <label><span>Systolic pressure</span><input type="number" min={0} max={260} value={patient.systolicPressure} onChange={(event) => setPatient({ systolicPressure: Number(event.target.value) || 0 })} /></label>
-    <label><span>Diastolic pressure</span><input type="number" min={0} max={180} value={patient.diastolicPressure} onChange={(event) => setPatient({ diastolicPressure: Number(event.target.value) || 0 })} /></label>
-    <label><span>SpO₂</span><input type="number" min={0} max={100} value={patient.spo2} onChange={(event) => setPatient({ spo2: Number(event.target.value) || 0 })} /></label>
-    <label><span>Peripheral perfusion</span><input type="number" min={0} max={2} step={0.05} value={patient.peripheralPerfusion} onChange={(event) => setPatient({ peripheralPerfusion: Number(event.target.value) || 0 })} /></label>
-    <label><span>Simulation</span><select value={snapshot.simulationPaused ? 'paused' : 'running'} onChange={(event) => onChange({ ...snapshot, simulationPaused: event.target.value === 'paused' })}><option value="running">Running</option><option value="paused">Paused</option></select></label>
-    <label><span>Speed</span><select value={snapshot.simulationSpeed} onChange={(event) => onChange({ ...snapshot, simulationSpeed: Number(event.target.value) as EdumonScenarioSnapshot['simulationSpeed'] })}><option value={0.5}>×0.5</option><option value={1}>×1</option><option value={1.5}>×1.5</option><option value={2}>×2</option><option value={4}>×4</option></select></label>
+function EdumonSlider({ label, value, min, max, step = 1, displayValue, onChange }: { label: string; value: number; min: number; max: number; step?: number; displayValue?: string; onChange: (value: number) => void }) {
+  return <div className="shared-scenario-variable-row slider">
+    <div className="shared-scenario-variable-heading"><span>{label}</span><strong>{displayValue ?? value}</strong></div>
+    <input className="shared-scenario-control-slider" type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
   </div>
 }
 
+function EdumonSelect({ label, value, children, onChange }: { label: string; value: string | number; children: ReactNode; onChange: (value: string) => void }) {
+  return <div className="shared-scenario-variable-row"><div className="shared-scenario-variable-heading"><span>{label}</span></div><select value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></div>
+}
+
+function SnapshotEditor({ snapshot, onChange }: { snapshot: EdumonScenarioSnapshot; onChange: (snapshot: EdumonScenarioSnapshot) => void }) {
+  const patient = snapshot.patient
+  const setPatient = (patch: Partial<typeof patient>) => onChange({ ...snapshot, patient: { ...patient, ...patch } })
+  return <div className="shared-scenario-eduvent-snapshot shared-scenario-edumon-snapshot">
+    <section className="shared-scenario-control-group monitor">
+      <h3>Monitor patient state</h3>
+      <div className="shared-scenario-slider-grid">
+        <EdumonSelect label="Rhythm" value={patient.rhythm} onChange={(value) => setPatient({ rhythm: value as CardiacRhythm })}>{RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}</EdumonSelect>
+        <EdumonSlider label="Heart rate" value={patient.heartRate} min={0} max={250} displayValue={`${patient.heartRate} /min`} onChange={(heartRate) => setPatient({ heartRate })} />
+        <EdumonSlider label="Systolic pressure" value={patient.systolicPressure} min={0} max={260} displayValue={`${patient.systolicPressure} mmHg`} onChange={(systolicPressure) => setPatient({ systolicPressure })} />
+        <EdumonSlider label="Diastolic pressure" value={patient.diastolicPressure} min={0} max={180} displayValue={`${patient.diastolicPressure} mmHg`} onChange={(diastolicPressure) => setPatient({ diastolicPressure })} />
+        <EdumonSlider label="SpO₂" value={patient.spo2} min={0} max={100} displayValue={`${patient.spo2}%`} onChange={(spo2) => setPatient({ spo2 })} />
+        <EdumonSlider label="Peripheral perfusion" value={patient.peripheralPerfusion} min={0} max={2} step={0.05} displayValue={patient.peripheralPerfusion.toFixed(2)} onChange={(peripheralPerfusion) => setPatient({ peripheralPerfusion })} />
+        <EdumonSelect label="Simulation" value={snapshot.simulationPaused ? 'paused' : 'running'} onChange={(value) => onChange({ ...snapshot, simulationPaused: value === 'paused' })}><option value="running">Running</option><option value="paused">Paused</option></EdumonSelect>
+        <EdumonSelect label="Speed" value={snapshot.simulationSpeed} onChange={(value) => onChange({ ...snapshot, simulationSpeed: Number(value) as EdumonScenarioSnapshot['simulationSpeed'] })}><option value={0.5}>×0.5</option><option value={1}>×1</option><option value={1.5}>×1.5</option><option value={2}>×2</option><option value={4}>×4</option></EdumonSelect>
+      </div>
+    </section>
+  </div>
+}
 function toSharedTrigger(trigger: EdumonScenarioTrigger): SharedScenarioAuthoringTrigger {
   const id = crypto.randomUUID()
   if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct') return { id, type: trigger.type }

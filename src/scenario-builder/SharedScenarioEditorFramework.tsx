@@ -10,6 +10,7 @@ import {
   type SharedScenarioAuthoringTrigger,
   type SharedScenarioEditorAdapter,
   type SharedScenarioQuestionContent,
+  type SharedScenarioTransition,
 } from '../teaching/scenario/authoringTypes'
 import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
 import type { ProductScenarioRow } from '../teaching/scenario/productLibrary'
@@ -95,6 +96,65 @@ function TriggerEditor({
     </>}
     {onDelete && <button type="button" className="scenario-builder-danger shared-scenario-trash-button" onClick={onDelete} aria-label="Remove condition" title="Remove condition"><TrashIcon /></button>}
   </div>
+}
+
+function StageTransitionEditor<TScenario, TSnapshot>({
+  stage,
+  stageIndex,
+  adapter,
+  onChange,
+}: {
+  stage: SharedScenarioAuthoringStage<TSnapshot>
+  stageIndex: number
+  adapter: SharedScenarioEditorAdapter<TScenario, TSnapshot>
+  onChange: (patch: Partial<SharedScenarioAuthoringStage<TSnapshot>>) => void
+}) {
+  if (!adapter.transitionVariables) return null
+  const transition = stage.transition ?? { mode: 'immediate' as const }
+  const allVariables = adapter.transitionVariables(stage.snapshot)
+  const applied = stage.appliedVariableIds ? new Set(stage.appliedVariableIds) : null
+  const variables = applied ? allVariables.filter((variable) => applied.has(variable.id)) : allVariables
+  const overrides = stage.transitionOverrides ?? {}
+
+  const setDefaultMode = (mode: SharedScenarioTransition['mode']) => {
+    onChange({ transition: mode === 'linear' ? { mode, durationSeconds: transition.mode === 'linear' ? Math.max(0.1, transition.durationSeconds) : 30 } : { mode } })
+  }
+  const setOverride = (id: string, value: 'inherit' | SharedScenarioTransition['mode']) => {
+    const next = { ...overrides }
+    if (value === 'inherit') delete next[id]
+    else if (value === 'linear') {
+      const current = overrides[id]
+      next[id] = { mode: 'linear', durationSeconds: current?.mode === 'linear' ? Math.max(0.1, current.durationSeconds) : (transition.mode === 'linear' ? transition.durationSeconds : 30) }
+    } else next[id] = { mode: 'immediate' }
+    onChange({ transitionOverrides: next })
+  }
+  const setOverrideDuration = (id: string, seconds: number) => {
+    onChange({ transitionOverrides: { ...overrides, [id]: { mode: 'linear', durationSeconds: Math.max(0.1, seconds || 0.1) } } })
+  }
+
+  if (stageIndex === 0) return <section className="shared-scenario-transition-card initial"><div><span>Transition into this stage</span><strong>Immediate</strong><small>Stage 1 establishes the starting state, so it is applied immediately.</small></div></section>
+
+  return <section className="shared-scenario-transition-card">
+    <div className="shared-scenario-transition-heading">
+      <div><span>Transition into this stage</span><strong>Stage transition</strong><small>Numeric values inherit this transition unless overridden below. Discrete settings always change immediately.</small></div>
+      <label><span>Transition</span><select value={transition.mode} onChange={(event) => setDefaultMode(event.target.value as SharedScenarioTransition['mode'])}><option value="immediate">Immediate</option><option value="linear">Linear</option></select></label>
+      {transition.mode === 'linear' && <label className="compact"><span>Duration</span><div className="shared-scenario-duration-input"><input type="number" min={0.1} step={0.5} value={transition.durationSeconds} onChange={(event) => onChange({ transition: { mode: 'linear', durationSeconds: Math.max(0.1, Number(event.target.value) || 0.1) } })} /><em>s</em></div></label>}
+    </div>
+    {!!variables.length && <details className="shared-scenario-transition-advanced">
+      <summary>Advanced transitions <small>Override individual applied numeric parameters</small></summary>
+      <div className="shared-scenario-transition-overrides">
+        {variables.map((variable) => {
+          const override = overrides[variable.id]
+          const choice = override?.mode ?? 'inherit'
+          return <div key={variable.id} className="shared-scenario-transition-override-row">
+            <span>{variable.label}</span>
+            <select value={choice} onChange={(event) => setOverride(variable.id, event.target.value as 'inherit' | SharedScenarioTransition['mode'])}><option value="inherit">Inherit stage</option><option value="immediate">Immediate</option><option value="linear">Linear</option></select>
+            {override?.mode === 'linear' ? <div className="shared-scenario-duration-input"><input type="number" min={0.1} step={0.5} value={override.durationSeconds} onChange={(event) => setOverrideDuration(variable.id, Number(event.target.value))} /><em>s</em></div> : <span className="shared-scenario-transition-effective">{!override ? (transition.mode === 'linear' ? `${transition.durationSeconds}s` : 'Immediate') : 'Immediate'}</span>}
+          </div>
+        })}
+      </div>
+    </details>}
+  </section>
 }
 
 export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, enabled = true, onStartScenario }: SharedScenarioEditorFrameworkProps<TScenario, TSnapshot>) {
@@ -320,6 +380,8 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
             <button type="button" disabled={document.stages.length <= 1} className="scenario-builder-danger" onClick={deleteStage}>Delete stage</button>
           </div>
           <label className="shared-scenario-notes"><span>Instructor notes</span><textarea rows={2} value={selectedStage.notes} onChange={(event) => updateStage({ notes: event.target.value })} /></label>
+
+          {selectedStage.kind === 'state' && <StageTransitionEditor stage={selectedStage} stageIndex={document.stages.findIndex((stage) => stage.id === selectedStage.id)} adapter={adapter} onChange={updateStage} />}
 
           {selectedStage.kind === 'state' && <div className="shared-scenario-snapshot-editor">{adapter.renderSnapshotEditor(
             selectedStage.snapshot,

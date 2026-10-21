@@ -5,6 +5,10 @@ export type SharedScenarioStageKind = 'state' | 'media' | 'question'
 export type SharedScenarioActor = 'candidate' | 'instructor' | 'either'
 export type SharedScenarioOperator = 'lt' | 'eq' | 'gt'
 
+export type SharedScenarioTransition =
+  | { mode: 'immediate' }
+  | { mode: 'linear'; durationSeconds: number }
+
 export type SharedScenarioAuthoringTrigger =
   | { id: string; type: 'manual' }
   | { id: string; type: 'time'; seconds: number }
@@ -44,6 +48,10 @@ export interface SharedScenarioAuthoringStage<TSnapshot> {
   snapshot: TSnapshot
   /** Product variable IDs explicitly applied when this state stage is entered. */
   appliedVariableIds?: string[]
+  /** Default transition inherited by numeric values applied on stage entry. */
+  transition?: SharedScenarioTransition
+  /** Optional product-variable transition overrides, keyed by product variable ID. */
+  transitionOverrides?: Record<string, SharedScenarioTransition>
   triggers: SharedScenarioAuthoringTrigger[]
   media?: SharedScenarioMediaContent
   question?: SharedScenarioQuestionContent
@@ -90,6 +98,8 @@ export interface SharedScenarioEditorAdapter<TScenario, TSnapshot> {
     options?: { appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void },
   ) => ReactNode
   defaultAppliedVariableIds?: (snapshot: TSnapshot) => string[]
+  /** Numeric variables eligible for gradual stage transitions. Omit for products without transition runtime support. */
+  transitionVariables?: (snapshot: TSnapshot) => readonly SharedScenarioTriggerChoice[]
   conditionMetrics: readonly SharedScenarioTriggerChoice[]
   actionParameters: readonly SharedScenarioTriggerChoice[]
 }
