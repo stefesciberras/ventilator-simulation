@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { EdumonModuleDefinition } from './modules'
 import { SimulationTopBar, type SharedSimulationSpeed } from '../components/SimulationTopBar'
+import { EDUMON_APP_VERSION } from './appVersion'
 import './EdumonTopBar.css'
 
 export type EdumonSimulationSpeed = SharedSimulationSpeed
@@ -47,7 +48,7 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
       controlsControlledByInstructor={simulationControlsLocked}
       rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button><a className="top-account-button edumon-module-menu-button" href="/edumon" title="EDUMON modules" aria-label="Choose EDUMON module"><MenuIcon /></a>{diagnosticsAction}</>}
       statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
-      version="0.1.0.0"
+      version={EDUMON_APP_VERSION}
       onAbout={onAbout}
       className="edumon-topbar"
       brandClassName="edumon-topbar-brand"

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CandidateInvitation } from './CandidateInvitation'
-import { SharedSessionLauncher } from '../teaching/session'
+import { SharedInstructorStartWizard, SharedSessionLauncher } from '../teaching/session'
 import type { RuntimeTransportKind, SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { LocalRuntimeConnection } from '../session/localRuntimeTransport'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
@@ -200,7 +200,6 @@ export function SessionPanel({
   })
   const [now, setNow] = useState(() => Date.now())
   const [startWizardOpen, setStartWizardOpen] = useState(false)
-  const [startSource, setStartSource] = useState<'current' | 'scenario'>('current')
   const [startPresets, setStartPresets] = useState<InstructorPresetRow[]>([])
   const [selectedStartPresetId, setSelectedStartPresetId] = useState('')
   const [startPresetsBusy, setStartPresetsBusy] = useState(false)
@@ -256,7 +255,6 @@ export function SessionPanel({
   const openInstructorStart = async () => {
     if (!instructorAuthenticated) return
     setStartWizardOpen(true)
-    setStartSource('current')
     setSelectedStartPresetId('')
     setStartPresets([])
     setStartPresetMessage(null)
@@ -278,18 +276,10 @@ export function SessionPanel({
     }
   }
 
-  const startInstructorFromWizard = async () => {
-    if (!instructorAuthenticated) return
-    const scenario = startSource === 'scenario' ? selectedStartPreset?.scenario : undefined
-    if (startSource === 'scenario' && !scenario) return
-    await onStartInstructor(scenario)
-  }
-
   const loadSelectedScenarioIntoStandalone = () => {
     if (!selectedStartPreset) return
     onLoadScenario(selectedStartPreset.scenario)
     setStartWizardOpen(false)
-    setStartSource('current')
   }
 
   const summaryFor = (scenario: InstructorScenarioSnapshot) => [
@@ -311,52 +301,7 @@ export function SessionPanel({
           <span className="session-role-pill">Standalone</span>
         </div>
         {startWizardOpen ? (
-          <div className="session-start-wizard">
-            <div className="session-start-wizard-heading">
-              <div><span>Instructor session</span><strong>Choose starting state</strong></div>
-              <button type="button" className="session-start-close" onClick={() => setStartWizardOpen(false)} aria-label="Close session setup">×</button>
-            </div>
-            <div className="session-start-source-tabs" role="tablist" aria-label="Instructor session starting state">
-              <button type="button" className={startSource === 'current' ? 'selected' : ''} onClick={() => setStartSource('current')}>Current setup</button>
-              <button type="button" className={startSource === 'scenario' ? 'selected' : ''} disabled={startPresetsBusy || !startPresets.length} onClick={() => setStartSource('scenario')}>Saved scenario</button>
-            </div>
-            {startSource === 'current' ? (
-              <div className="session-start-current-card">
-                <span>Current standalone setup</span>
-                <strong>{currentScenario.ventilator.mode} · FiO₂ {Math.round(currentScenario.ventilator.fio2 * 100)}% · PEEP {currentScenario.ventilator.peep}</strong>
-                <div className="session-start-summary-chips">{summaryFor(currentScenario).map((item) => <em key={item}>{item}</em>)}</div>
-                <small>You can configure the patient and ventilator in standalone mode before opening the room.</small>
-              </div>
-            ) : (
-              <div className="session-start-scenarios">
-                <div className="session-start-scenario-list">
-                  {startPresets.map((preset) => (
-                    <button type="button" key={preset.id} className={`session-start-scenario-option ${selectedStartPresetId === preset.id ? 'selected' : ''}`} onClick={() => setSelectedStartPresetId(preset.id)}>
-                      <strong>{preset.name}</strong>
-                      <small>{preset.scenario.description || 'Static scenario'}</small>
-                    </button>
-                  ))}
-                </div>
-                {selectedStartPreset && (
-                  <div className="session-start-scenario-preview">
-                    <span>Selected scenario</span>
-                    <strong>{selectedStartPreset.name}</strong>
-                    {selectedStartPreset.scenario.description && <p>{selectedStartPreset.scenario.description}</p>}
-                    <div className="session-start-summary-chips">{summaryFor(selectedStartPreset.scenario).map((item) => <em key={item}>{item}</em>)}</div>
-                    <button type="button" className="session-secondary-button" onClick={loadSelectedScenarioIntoStandalone}>Load into standalone to adjust</button>
-                  </div>
-                )}
-              </div>
-            )}
-            {startPresetsBusy && <div className="session-start-note">Loading saved scenarios…</div>}
-            {startPresetMessage && <div className="session-start-note">{startPresetMessage}</div>}
-            <div className="session-start-actions">
-              <button type="button" className="session-primary-button" disabled={!instructorAuthenticated || connection === 'connecting' || (startSource === 'scenario' && !selectedStartPreset)} onClick={() => void startInstructorFromWizard()}>
-                {startSource === 'scenario' && selectedStartPreset ? `Start with ${selectedStartPreset.name}` : 'Start with current setup'}
-              </button>
-              <button type="button" className="session-secondary-button" onClick={() => setStartWizardOpen(false)}>Cancel</button>
-            </div>
-          </div>
+          <SharedInstructorStartWizard config={{ currentTitle: `${currentScenario.ventilator.mode} · FiO₂ ${Math.round(currentScenario.ventilator.fio2 * 100)}% · PEEP ${currentScenario.ventilator.peep}`, currentSummary: 'Configure the patient and ventilator in standalone mode before opening the room.', currentChips: summaryFor(currentScenario), savedOptions: startPresets.map((preset) => ({ id: preset.id, title: preset.name, summary: summaryFor(preset.scenario).slice(0, 3).join(' · '), chips: summaryFor(preset.scenario) })), selectedSavedId: selectedStartPresetId, onSelectedSavedIdChange: setSelectedStartPresetId, savedBusy: startPresetsBusy, savedMessage: startPresetMessage, onStartCurrent: () => onStartInstructor(), onStartSaved: async (id) => { const preset = startPresets.find((item) => item.id === id); if (preset) await onStartInstructor(preset.scenario) }, onLoadSaved: (id) => { const preset = startPresets.find((item) => item.id === id); if (preset) { onLoadScenario(preset.scenario); setStartWizardOpen(false) } } }} onClose={() => setStartWizardOpen(false)} />
         ) : (
           <SharedSessionLauncher
             instructorAuthenticated={instructorAuthenticated}

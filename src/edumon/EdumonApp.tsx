@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { EDUMON_APP_VERSION } from './appVersion'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
-import { generateMonitorSamples, measurementsFor } from './monitorEngine'
+import { generateMonitorSamples, measurementsFor, RHYTHM_LABELS } from './monitorEngine'
 import { AuxiliaryMonitorModal } from './AuxiliaryMonitorModal'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonTopBar, type EdumonSimulationSpeed } from './EdumonTopBar'
@@ -271,6 +272,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       onResumeCandidate={teachingSession.resumeCandidate}
       onLeaveSession={teachingSession.leaveSession}
       onEndInstructorSession={teachingSession.endInstructorSession}
+      instructorStart={{ currentTitle: `${RHYTHM_LABELS[patientState.rhythm]} · HR ${patientState.heartRate} · ${patientState.systolicPressure}/${patientState.diastolicPressure} · SpO₂ ${patientState.spo2}%`, currentSummary: 'Configure the patient monitor in standalone mode before opening the room.', currentChips: [RHYTHM_LABELS[patientState.rhythm], `HR ${patientState.heartRate}`, `MAP ${measurements.meanPressure ?? "—"}`, `SpO₂ ${patientState.spo2}%`], savedMessage: 'Saved EDUMON scenarios will appear here once product-aware scenario persistence is enabled.', onStartCurrent: teachingSession.startInstructor }}
     />
   )
 
@@ -395,7 +397,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
       {topPanel === 'scenario' && <AuxiliaryMonitorModal title="Scenarios and sessions" onClose={() => setTopPanel(null)}>{sessionPanel}</AuxiliaryMonitorModal>}
       <InstructorAccountDialog auth={accountAuth} locked={accountChangeLocked} />
-      <SimulationAboutDialog open={topPanel === 'about'} productLabel={module.productName} title={module.subtitle} description="An interactive patient-monitor simulator for anaesthesia, acute care and intensive-care education." version="0.1.0.0" onClose={() => setTopPanel(null)} wakeLock={screenWakeLock} diagnostics={edumonDiagnosticActions} />
+      <SimulationAboutDialog open={topPanel === 'about'} productLabel={module.productName} title={module.subtitle} description="An interactive patient-monitor simulator for anaesthesia, acute care and intensive-care education." version={EDUMON_APP_VERSION} onClose={() => setTopPanel(null)} wakeLock={screenWakeLock} diagnostics={edumonDiagnosticActions} />
     </main>
   )
 }
