@@ -7,7 +7,7 @@ import {
   type InstructorPresetRow,
   type InstructorScenarioSnapshot,
 } from '../../instructorAccount'
-import { useScenarioLibraryManager } from './useScenarioLibraryManager'
+import { useScenarioLibraryManager, type ScenarioLibraryRepository } from './useScenarioLibraryManager'
 
 /**
  * Compatibility adapter for legacy EDUVENT presets. Keeping normalisation here
@@ -15,11 +15,11 @@ import { useScenarioLibraryManager } from './useScenarioLibraryManager'
  * persistence API back into InstructorAccountControls.
  */
 export function useEduventScenarioLibrary(enabled: boolean) {
-  const repository = useMemo(() => ({
+  const repository = useMemo<ScenarioLibraryRepository<InstructorPresetRow, InstructorScenarioSnapshot>>(() => ({
     list: () => listInstructorPresets('eduvent'),
-    create: (name: string, scenario: InstructorScenarioSnapshot) => createInstructorPreset(name, scenario, 'eduvent'),
-    update: (id: string, updates: { name?: string; scenario?: InstructorScenarioSnapshot }) => updateInstructorPreset(id, updates, 'eduvent'),
-    remove: (id: string) => deleteInstructorPreset(id, 'eduvent'),
+    create: (name, scenario) => createInstructorPreset(name, scenario, 'eduvent'),
+    update: (id, updates) => updateInstructorPreset(id, updates, 'eduvent'),
+    remove: (id) => deleteInstructorPreset(id, 'eduvent'),
   }), [])
 
   return useScenarioLibraryManager<InstructorPresetRow, InstructorScenarioSnapshot>({ enabled, repository })
