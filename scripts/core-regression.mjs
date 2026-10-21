@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 
+// Keep the shared EDUSIM architecture boundaries executable in the normal build.
 const read = (path) => fs.readFileSync(path, 'utf8')
 const assert = (condition, message) => {
   if (!condition) {
