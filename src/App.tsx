@@ -6,6 +6,7 @@ import { TeachingCandidateOverlay, TeachingInstructorWorkspace, TeachingLaserPoi
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
+import { SimulationTopBar } from './components/SimulationTopBar'
 import { InteractiveVentilatorStrip, VentilatorModeControl } from './components/InteractiveVentilatorStrip'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
@@ -102,15 +103,6 @@ function loadStoredSettings<T extends object>(key: string, defaults: T): T {
   }
 }
 
-function formatSimulationClock(seconds: number): string {
-  const totalSeconds = Math.max(0, Math.floor(seconds))
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const secs = totalSeconds % 60
-  return hours > 0
-    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-    : `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-}
 
 type MetricAlarmLevel = 'yellow' | 'red' | null
 
@@ -229,13 +221,6 @@ function interpolatePatientSettings(from: PatientSettings, to: PatientSettings, 
   }
 }
 
-function PauseIcon({ paused }: { paused: boolean }) {
-  return paused ? (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
-  ) : (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z" fill="currentColor" /></svg>
-  )
-}
 
 function FreezeWaveformIcon() {
   return (
@@ -1687,94 +1672,82 @@ export default function App() {
           </section>
         </div>
       )}
-      <header className="topbar">
-        <div className="brand-block"><span className="brand-kicker">EDUVENT</span><h1>Mechanical Ventilation Simulator</h1></div>
-        <div className="top-simulation-controls">
-          <button
-            className={`top-simulation-pause ${simulationPaused ? 'paused' : ''}`}
-            type="button"
-            onClick={() => setSimulationPaused((paused) => !paused)}
-            disabled={teachingSession.role === 'candidate'}
-            aria-label={teachingSession.role === 'candidate' ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor') : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
-            title={teachingSession.role === 'candidate' ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor') : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
-          >
-            <PauseIcon paused={simulationPaused} />
-            <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
-          </button>
-          <div className={`simulation-clock ${simulationPaused ? 'paused' : ''}`} aria-label={`Simulation time ${formatSimulationClock(displayedScenarioElapsedTime)}`}>
-            <span>TIME</span>
-            <strong>{formatSimulationClock(displayedScenarioElapsedTime)}</strong>
-          </div>
-          <label className={`simulation-speed-control ${simulationPaused ? 'paused' : ''}`}>
-            <span>SPEED</span>
-            <select
-              value={simulationSpeed}
-              disabled={teachingSession.role === 'candidate'}
-              onChange={(event) => setSimulationSpeed(Number(event.target.value) as SimulationSpeed)}
-              aria-label="Simulation speed"
-              title={teachingSession.role === 'candidate' ? 'Simulation speed controlled by instructor' : 'Simulation speed'}
-            >
-              {SIMULATION_SPEEDS.map((speed) => <option key={speed} value={speed}>×{speed}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="status-cluster">
-          <span className={`status-dot ${simulationPaused ? 'paused' : ''}`} />
-          <span>{simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}</span>
-          <InstructorAccountControls
-            role={teachingSession.role}
-            sessionId={teachingSession.session?.id ?? null}
-            currentScenario={currentInstructorScenario}
-            onLoadScenario={loadInstructorScenario}
-            simulationPaused={simulationPaused}
-            onSimulationPausedChange={setSimulationPaused}
-            physiologyMeasurements={physiologyMeasurements}
-            scenarioElapsedSeconds={displayedScenarioElapsedTime}
-            sessionMembers={teachingSession.members}
-            runtimeHost={dynamicScenarioRuntimeHost}
-            onStartInstructorSession={startInstructorSession}
-            onAccountConnectionChange={setInstructorAccountConnected}
-            onDynamicScenarioStarted={() => { setActiveStaticScenarioName(null); setControlTab('teaching'); setMobileWorkspacePage('settings') }}
-            onStaticScenarioLoaded={(name) => { setActiveStaticScenarioName(name); setControlTab('teaching') }}
-            onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
-            scenarioActionEvent={scenarioActionEvent}
-          />
-          {teachingSession.role === 'candidate' && (
-            <CaseMediaPanel
+      <SimulationTopBar
+        brandKicker="EDUVENT"
+        title="Mechanical Ventilation Simulator"
+        simulationPaused={simulationPaused}
+        simulationSpeed={simulationSpeed}
+        elapsedSeconds={displayedScenarioElapsedTime}
+        onPausedChange={setSimulationPaused}
+        onSpeedChange={(speed) => setSimulationSpeed(speed as SimulationSpeed)}
+        speedOptions={SIMULATION_SPEEDS}
+        pauseDisabled={teachingSession.role === 'candidate'}
+        speedDisabled={teachingSession.role === 'candidate'}
+        pauseTitle={teachingSession.role === 'candidate'
+          ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor')
+          : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
+        pauseAriaLabel={teachingSession.role === 'candidate'
+          ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor')
+          : (simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation')}
+        speedTitle={teachingSession.role === 'candidate' ? 'Simulation speed controlled by instructor' : 'Simulation speed'}
+        statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
+        version={APP_VERSION}
+        onAbout={() => setAboutOpen(true)}
+        rightActions={(
+          <>
+            <InstructorAccountControls
               role={teachingSession.role}
               sessionId={teachingSession.session?.id ?? null}
-              scenarioMediaIds={scenarioMediaIds}
-              onScenarioMediaIdsChange={setScenarioMediaIds}
+              currentScenario={currentInstructorScenario}
+              onLoadScenario={loadInstructorScenario}
+              simulationPaused={simulationPaused}
+              onSimulationPausedChange={setSimulationPaused}
+              physiologyMeasurements={physiologyMeasurements}
+              scenarioElapsedSeconds={displayedScenarioElapsedTime}
+              sessionMembers={teachingSession.members}
+              runtimeHost={dynamicScenarioRuntimeHost}
+              onStartInstructorSession={startInstructorSession}
+              onAccountConnectionChange={setInstructorAccountConnected}
+              onDynamicScenarioStarted={() => { setActiveStaticScenarioName(null); setControlTab('teaching'); setMobileWorkspacePage('settings') }}
+              onStaticScenarioLoaded={(name) => { setActiveStaticScenarioName(name); setControlTab('teaching') }}
+              onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
+              scenarioActionEvent={scenarioActionEvent}
             />
-          )}
-          <div className="top-diagnostic-menu">
-            <button
-              className={`top-diagnostic-button ${diagnosticMenuOpen ? 'active' : ''} ${diagnosticCopied ? 'copied' : ''}`}
-              type="button"
-              onClick={() => setDiagnosticMenuOpen((open) => !open)}
-              title={diagnosticCopied ? `${diagnosticCopied === 'simulation' ? 'Simulation' : 'Scenario'} logs copied` : 'Diagnostics'}
-              aria-label="Open diagnostics menu"
-              aria-haspopup="menu"
-              aria-expanded={diagnosticMenuOpen}
-            ><DiagnosticIcon copied={Boolean(diagnosticCopied)} /></button>
-            {diagnosticMenuOpen && (
-              <div className="top-diagnostic-dropdown" role="menu" aria-label="Copy diagnostics">
-                <button type="button" role="menuitem" onClick={() => void copyDiagnostics()}>
-                  <strong>Simulation Logs</strong><small>Settings, alarms and visible waveform</small>
-                </button>
-                <button type="button" role="menuitem" onClick={() => void copyScenarioSnapshotDiagnostics()}>
-                  <strong>Scenario Debug Snapshot</strong><small>Complete scenario, current stage/state and recent events</small>
-                </button>
-                <button type="button" role="menuitem" onClick={() => void copyScenarioDiagnostics()}>
-                  <strong>Scenario Logs</strong><small>Teaching-session and scenario runtime events</small>
-                </button>
-              </div>
+            {teachingSession.role === 'candidate' && (
+              <CaseMediaPanel
+                role={teachingSession.role}
+                sessionId={teachingSession.session?.id ?? null}
+                scenarioMediaIds={scenarioMediaIds}
+                onScenarioMediaIdsChange={setScenarioMediaIds}
+              />
             )}
-          </div>
-          <span className="version">v{APP_VERSION}</span>
-          <button type="button" className="top-about-button" onClick={() => setAboutOpen(true)}>About</button>
-        </div>
-      </header>
+            <div className="top-diagnostic-menu">
+              <button
+                className={`top-diagnostic-button ${diagnosticMenuOpen ? 'active' : ''} ${diagnosticCopied ? 'copied' : ''}`}
+                type="button"
+                onClick={() => setDiagnosticMenuOpen((open) => !open)}
+                title={diagnosticCopied ? `${diagnosticCopied === 'simulation' ? 'Simulation' : 'Scenario'} logs copied` : 'Diagnostics'}
+                aria-label="Open diagnostics menu"
+                aria-haspopup="menu"
+                aria-expanded={diagnosticMenuOpen}
+              ><DiagnosticIcon copied={Boolean(diagnosticCopied)} /></button>
+              {diagnosticMenuOpen && (
+                <div className="top-diagnostic-dropdown" role="menu" aria-label="Copy diagnostics">
+                  <button type="button" role="menuitem" onClick={() => void copyDiagnostics()}>
+                    <strong>Simulation Logs</strong><small>Settings, alarms and visible waveform</small>
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => void copyScenarioSnapshotDiagnostics()}>
+                    <strong>Scenario Debug Snapshot</strong><small>Complete scenario, current stage/state and recent events</small>
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => void copyScenarioDiagnostics()}>
+                    <strong>Scenario Logs</strong><small>Teaching-session and scenario runtime events</small>
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      />
 
       <nav className={`mobile-workspace-switcher ${candidateControlsVisible ? '' : 'candidate-controls-hidden'}`} aria-label="Mobile workspace pages">
         <button type="button" className={mobileWorkspacePage === 'ventilator' ? 'active' : ''} aria-current={mobileWorkspacePage === 'ventilator' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('ventilator')}>Ventilator</button>
