@@ -189,3 +189,6 @@
     display: none;
   }
 }
+
+
+.scenario-builder-edumon-editor{display:grid;grid-template-columns:minmax(220px,.75fr) minmax(0,2fr);gap:16px}.scenario-builder-edumon-library,.scenario-builder-edumon-form{border:1px solid rgba(116,171,190,.28);border-radius:16px;background:rgba(12,24,30,.72);padding:18px}.scenario-builder-edumon-library{display:flex;flex-direction:column;gap:10px}.scenario-builder-edumon-library>button{display:flex;flex-direction:column;gap:4px;text-align:left;padding:12px;border:1px solid rgba(116,171,190,.25);border-radius:10px;background:rgba(18,32,39,.8);color:inherit}.scenario-builder-edumon-library>button.selected{border-color:#5ccde8;box-shadow:0 0 0 1px rgba(92,205,232,.35)}.scenario-builder-edumon-library small{opacity:.7}.scenario-builder-edumon-form{display:flex;flex-direction:column;gap:14px}.scenario-builder-edumon-form>label,.scenario-builder-field-grid label{display:flex;flex-direction:column;gap:6px}.scenario-builder-edumon-form input,.scenario-builder-edumon-form textarea,.scenario-builder-edumon-form select{width:100%;box-sizing:border-box}.scenario-builder-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.scenario-builder-editor-actions{display:flex;flex-wrap:wrap;gap:10px}@media(max-width:760px){.scenario-builder-edumon-editor,.scenario-builder-field-grid{grid-template-columns:1fr}}

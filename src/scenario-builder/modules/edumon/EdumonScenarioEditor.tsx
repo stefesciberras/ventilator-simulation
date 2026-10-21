@@ -76,7 +76,7 @@ export function EdumonScenarioEditor({ product, onStartScenario }: EdumonScenari
     } finally { setBusy(false) }
   }
 
-  const updatePatient = <K extends keyof MonitorPatientState>(key: K, value: MonitorPatientState[K]) => setPatient((current) => ({ ...current, [key]: value }))
+  const updatePatient = <K extends keyof MonitorPatientState,>(key: K, value: MonitorPatientState[K]) => setPatient((current) => ({ ...current, [key]: value }))
 
   return (
     <div className="scenario-builder-edumon-editor">

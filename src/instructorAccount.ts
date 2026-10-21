@@ -4,6 +4,7 @@ import type { PatientSettings, VentilatorSettings } from './simulation/types'
 import { calculatePredictedBodyWeight } from './patientMetrics'
 import { supabase } from './session/supabase'
 import { createBranchId, createStageId } from './scenario-builder/ids'
+import type { ScenarioProductId } from './teaching/scenario/products'
 
 export type ScenarioWaveform = 'volume' | 'co2' | 'oesophagealPressure'
 export type InstructorScenarioKind = 'static' | 'dynamic'
@@ -141,6 +142,7 @@ export interface InstructorScenarioSnapshot {
 export interface InstructorPresetRow {
   id: string
   instructor_id: string
+  product?: ScenarioProductId
   name: string
   scenario: InstructorScenarioSnapshot
   created_at: string
@@ -259,7 +261,7 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
 }
 
 function normalisePreset(row: InstructorPresetRow): InstructorPresetRow {
-  return { ...row, scenario: normaliseScenario(row.scenario) }
+  return { ...row, product: row.product ?? 'eduvent', scenario: normaliseScenario(row.scenario) }
 }
 
 export function isPermanentInstructor(user: User | null | undefined): user is User {
@@ -327,18 +329,19 @@ async function requirePermanentInstructor() {
   return user
 }
 
-export async function listInstructorPresets(): Promise<InstructorPresetRow[]> {
+export async function listInstructorPresets(product: ScenarioProductId = 'eduvent'): Promise<InstructorPresetRow[]> {
   const user = await requirePermanentInstructor()
   const { data, error } = await supabase
     .from('instructor_presets')
     .select('*')
     .eq('instructor_id', user.id)
+    .eq('product', product)
     .order('updated_at', { ascending: false })
   if (error) throw error
   return ((data ?? []) as InstructorPresetRow[]).map(normalisePreset)
 }
 
-export async function createInstructorPreset(name: string, scenario: InstructorScenarioSnapshot) {
+export async function createInstructorPreset(name: string, scenario: InstructorScenarioSnapshot, product: ScenarioProductId = 'eduvent') {
   const user = await requirePermanentInstructor()
   const cleanName = name.trim()
   if (!cleanName) throw new Error('Enter a scenario name.')
@@ -347,6 +350,7 @@ export async function createInstructorPreset(name: string, scenario: InstructorS
     .from('instructor_presets')
     .insert({
       instructor_id: user.id,
+      product,
       name: cleanName,
       scenario: normaliseScenario(scenario),
       updated_at: now,
@@ -363,6 +367,7 @@ export async function createInstructorPreset(name: string, scenario: InstructorS
 export async function updateInstructorPreset(
   id: string,
   updates: { name?: string; scenario?: InstructorScenarioSnapshot },
+  product: ScenarioProductId = 'eduvent',
 ) {
   const user = await requirePermanentInstructor()
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -378,6 +383,7 @@ export async function updateInstructorPreset(
     .update(payload)
     .eq('id', id)
     .eq('instructor_id', user.id)
+    .eq('product', product)
     .select('*')
     .single()
   if (error) {
@@ -387,12 +393,13 @@ export async function updateInstructorPreset(
   return normalisePreset(data as InstructorPresetRow)
 }
 
-export async function deleteInstructorPreset(id: string) {
+export async function deleteInstructorPreset(id: string, product: ScenarioProductId = 'eduvent') {
   const user = await requirePermanentInstructor()
   const { error } = await supabase
     .from('instructor_presets')
     .delete()
     .eq('id', id)
     .eq('instructor_id', user.id)
+    .eq('product', product)
   if (error) throw error
 }
