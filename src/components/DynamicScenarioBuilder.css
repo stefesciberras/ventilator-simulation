@@ -42,9 +42,9 @@
   letter-spacing: .12em;
 }
 
-.dynamic-control-column.vent .dynamic-column-title { color: #75cbe7; }
-.dynamic-control-column.patient .dynamic-column-title { color: #8dd5a0; }
-.dynamic-control-column.physio .dynamic-column-title { color: #c0a5e5; }
+.dynamic-control-column.vent .dynamic-column-title { color: #61bedd; }
+.dynamic-control-column.patient .dynamic-column-title { color: #70c584; }
+.dynamic-control-column.physio .dynamic-column-title { color: #a66ddd; }
 
 .dynamic-column-title small {
   opacity: .7;
@@ -127,20 +127,20 @@
   margin: 0;
 }
 
-.dynamic-control-column.vent .dynamic-control-slider { accent-color: #75cbe7 !important; }
-.dynamic-control-column.patient .dynamic-control-slider { accent-color: #8dd5a0 !important; }
-.dynamic-control-column.physio .dynamic-control-slider { accent-color: #c0a5e5 !important; }
+.dynamic-control-column.vent .dynamic-control-slider { accent-color: #61bedd !important; }
+.dynamic-control-column.patient .dynamic-control-slider { accent-color: #70c584 !important; }
+.dynamic-control-column.physio .dynamic-control-slider { accent-color: #a66ddd !important; }
 
-.dynamic-control-column.vent .dynamic-control-slider::-webkit-slider-thumb { background: #75cbe7; border-color: #75cbe7; }
-.dynamic-control-column.patient .dynamic-control-slider::-webkit-slider-thumb { background: #8dd5a0; border-color: #8dd5a0; }
-.dynamic-control-column.physio .dynamic-control-slider::-webkit-slider-thumb { background: #c0a5e5; border-color: #c0a5e5; }
-.dynamic-control-column.vent .dynamic-control-slider::-moz-range-thumb { background: #75cbe7; border-color: #75cbe7; }
-.dynamic-control-column.patient .dynamic-control-slider::-moz-range-thumb { background: #8dd5a0; border-color: #8dd5a0; }
-.dynamic-control-column.physio .dynamic-control-slider::-moz-range-thumb { background: #c0a5e5; border-color: #c0a5e5; }
+.dynamic-control-column.vent .dynamic-control-slider::-webkit-slider-thumb { background: #61bedd; border-color: #61bedd; }
+.dynamic-control-column.patient .dynamic-control-slider::-webkit-slider-thumb { background: #70c584; border-color: #70c584; }
+.dynamic-control-column.physio .dynamic-control-slider::-webkit-slider-thumb { background: #a66ddd; border-color: #a66ddd; }
+.dynamic-control-column.vent .dynamic-control-slider::-moz-range-thumb { background: #61bedd; border-color: #61bedd; }
+.dynamic-control-column.patient .dynamic-control-slider::-moz-range-thumb { background: #70c584; border-color: #70c584; }
+.dynamic-control-column.physio .dynamic-control-slider::-moz-range-thumb { background: #a66ddd; border-color: #a66ddd; }
 
-.dynamic-control-column.vent .dynamic-control-slider::-moz-range-progress { background: #75cbe7; }
-.dynamic-control-column.patient .dynamic-control-slider::-moz-range-progress { background: #8dd5a0; }
-.dynamic-control-column.physio .dynamic-control-slider::-moz-range-progress { background: #c0a5e5; }
+.dynamic-control-column.vent .dynamic-control-slider::-moz-range-progress { background: #61bedd; }
+.dynamic-control-column.patient .dynamic-control-slider::-moz-range-progress { background: #70c584; }
+.dynamic-control-column.physio .dynamic-control-slider::-moz-range-progress { background: #a66ddd; }
 
 .dynamic-control-slider:disabled {
   cursor: not-allowed;
@@ -416,3 +416,48 @@
 
 /* v0.6.0 branching */
 .dynamic-branch-builder{margin-top:10px;padding:10px;border:1px solid #334851;border-radius:10px;background:#0b151a}.dynamic-branch-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.dynamic-branch-heading>div{display:grid;gap:2px}.dynamic-branch-heading span{color:#8fa4ad;font-size:.72rem}.dynamic-branch-heading button{min-height:32px}.dynamic-branch-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0;border-top:1px solid #24363e}.dynamic-branch-row:first-of-type{border-top:0}.dynamic-branch-row select,.dynamic-branch-row input{min-height:34px;background:#101b21;color:#dce8eb;border:1px solid #40545e;border-radius:6px}.dynamic-branch-label{min-width:150px;flex:1}.dynamic-branch-row input[type=number]{width:88px}
+
+
+/* Scenario Builder v0.8.0 — simulator-matched controls and unified paths */
+.dynamic-control-row.control-row { margin: 0; min-height: 76px; padding: 11px 10px; }
+.dynamic-control-row .dynamic-control-body { align-self: center; }
+.dynamic-control-row .control-heading { margin-bottom: 6px; }
+.dynamic-control-row .control-heading span { font-size: 12px; }
+.dynamic-control-row .control-heading strong { font-size: 12px; font-weight: 600; }
+.dynamic-control-slider { width: 100%; min-height: 18px; margin: 0; }
+.dynamic-control-column.vent .dynamic-control-slider { accent-color: #61bedd !important; }
+.dynamic-control-column.patient .dynamic-control-slider { accent-color: #70c584 !important; }
+.dynamic-control-column.physio .dynamic-control-slider { accent-color: #a66ddd !important; }
+.dynamic-control-column.vent .dynamic-column-title { color: #61bedd; }
+.dynamic-control-column.patient .dynamic-column-title { color: #70c584; }
+.dynamic-control-column.physio .dynamic-column-title { color: #a66ddd; }
+.dynamic-control-column.patient { border-color: rgba(113,188,127,.42); background: linear-gradient(180deg, rgba(62,102,70,.12), rgba(35,63,42,.06)); }
+.dynamic-control-column.physio { border-color: rgba(166,109,221,.42); background: linear-gradient(180deg, rgba(102,61,128,.16), rgba(55,34,72,.08)); }
+.dynamic-control-column.vent { border-color: rgba(97,190,221,.42); background: linear-gradient(180deg, rgba(45,102,122,.14), rgba(27,63,77,.07)); }
+.dynamic-control-column.patient .dynamic-control-heading span { color: #aac9b0; }
+.dynamic-control-column.physio .dynamic-control-heading span { color: #c1a4d3; }
+.dynamic-control-column.vent .dynamic-control-heading span { color: #9fc7d5; }
+
+.dynamic-path-builder { display: grid; gap: 10px; margin-top: 10px; }
+.dynamic-path-card { display: grid; gap: 10px; padding: 12px; border: 1px solid #334a55; background: #0a151a; }
+.dynamic-path-head { display: grid; grid-template-columns: minmax(150px,1.2fr) minmax(190px,1.4fr) 86px 34px; gap: 8px; align-items: end; }
+.dynamic-path-head label, .dynamic-path-condition label { display: grid; gap: 4px; color: #8fa4ad; font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.dynamic-path-head input, .dynamic-path-head select, .dynamic-path-condition input, .dynamic-path-condition select { width: 100%; min-height: 34px; padding: 5px 7px; border: 1px solid #3b515b; border-radius: 0; background: #081116; color: #e4eff2; font: inherit; font-size: 10px; }
+.dynamic-path-logic { display: flex; align-items: center; gap: 8px; min-height: 30px; color: #99abb3; }
+.dynamic-path-logic > strong { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.dynamic-path-logic > small { color: #71868f; }
+.dynamic-path-mode { display: flex; gap: 4px; }
+.dynamic-path-mode button { min-width: 52px; min-height: 28px; padding: 4px 7px; border-radius: 0; font-size: 9px; font-weight: 800; }
+.dynamic-path-mode button.selected { border-color: #61bedd; background: #163642; color: #e7f9ff; }
+.dynamic-path-conditions { display: grid; gap: 7px; }
+.dynamic-path-condition { display: grid; grid-template-columns: minmax(135px,1fr) repeat(3,minmax(100px,1fr)) 32px; gap: 7px; align-items: end; padding: 8px; border: 1px solid #263b44; background: #081217; }
+.dynamic-path-condition-type { align-self: end; }
+.dynamic-path-condition-summary { align-self: center; grid-column: span 3; color: #afc2ca; font-size: 10px; }
+.dynamic-path-condition-remove { width: 32px; height: 34px; min-width: 32px; padding: 0; border-radius: 0; }
+.dynamic-path-add-condition { justify-self: start; min-height: 32px; padding: 5px 10px; border-radius: 0; color: #a9e8ba; border-color: #477458; background: #102219; font-size: 9px; }
+.dynamic-path-empty { padding: 10px 12px; border: 1px dashed #344a54; color: #748992; font-size: 10px; background: #091217; }
+@media (max-width: 1180px) {
+  .dynamic-path-head { grid-template-columns: 1fr 1fr 80px 34px; }
+  .dynamic-path-condition { grid-template-columns: 1fr 1fr 1fr 32px; }
+  .dynamic-path-condition-summary { grid-column: span 2; }
+}
