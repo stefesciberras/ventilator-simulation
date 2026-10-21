@@ -38,7 +38,11 @@ export interface TeachingScenarioBranch<TTrigger> {
   id?: string
   fromStageId?: string
   toStageId: string
+  /** Legacy single trigger. */
   trigger: TTrigger
+  /** Multiple path conditions. Defaults to ANY semantics. */
+  triggers?: TTrigger[]
+  triggerMode?: 'any' | 'all'
   priority?: number
   label?: string
   enabled?: boolean
@@ -91,7 +95,11 @@ export function resolveTeachingScenarioTransition<TTrigger>({
   const matchedBranch = [...branches]
     .filter((branch) => branch.enabled !== false)
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-    .find((branch) => triggerMatches(branch.trigger))
+    .find((branch) => {
+      const triggers = branch.triggers?.length ? branch.triggers : branch.trigger != null ? [branch.trigger] : []
+      if (!triggers.length) return false
+      return branch.triggerMode === 'all' ? triggers.every(triggerMatches) : triggers.some(triggerMatches)
+    })
   if (matchedBranch) return { kind: 'branch', toStageId: matchedBranch.toStageId }
   return stageTriggers.some(triggerMatches) ? { kind: 'advance' } : null
 }

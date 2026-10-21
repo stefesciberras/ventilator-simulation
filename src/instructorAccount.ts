@@ -96,14 +96,29 @@ export interface DynamicScenarioStage {
   advanceTriggers?: DynamicScenarioTrigger[]
 }
 
+export type DynamicScenarioTriggerMode = 'any' | 'all'
+
 export interface DynamicScenarioBranch {
   id: string
   fromStageId: string
   toStageId: string
+  /** Legacy single trigger retained for schema <= 8 compatibility. */
   trigger: DynamicScenarioTrigger
+  /** Schema v9 path conditions. */
+  triggers?: DynamicScenarioTrigger[]
+  triggerMode?: DynamicScenarioTriggerMode
   priority: number
   label?: string
   enabled?: boolean
+}
+
+export function dynamicBranchTriggers(branch: DynamicScenarioBranch): DynamicScenarioTrigger[] {
+  if (branch.triggers?.length) return branch.triggers
+  return [branch.trigger ?? { type: 'manual' }]
+}
+
+export function dynamicBranchTriggerMode(branch: DynamicScenarioBranch): DynamicScenarioTriggerMode {
+  return branch.triggerMode === 'all' ? 'all' : 'any'
 }
 
 
@@ -197,7 +212,7 @@ export function asDynamicScenario(
   const firstStageSnapshot = asStaticScenario(current, '')
   return {
     ...firstStageSnapshot,
-    schemaVersion: 7,
+    schemaVersion: 9,
     kind: 'dynamic',
     description: description.trim(),
     stages: [{ id: createStageId(), name: 'Stage 1', comment: '', stageType: 'controls', transition: { mode: 'immediate' }, transitionOverrides: {}, snapshot: firstStageSnapshot, apply, sourceName, advanceTrigger: { type: 'manual' }, advanceTriggers: [{ type: 'manual' }] }],
@@ -251,12 +266,18 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
         advanceTriggers: triggers,
       }
     }) : undefined,
-    branches: scenario.kind === 'dynamic' ? (scenario.branches ?? []).map((branch, index) => ({
-      ...branch,
-      id: branch.id || createBranchId(),
-      priority: Number.isFinite(branch.priority) ? branch.priority : index,
-      enabled: branch.enabled !== false,
-    })) : undefined,
+    branches: scenario.kind === 'dynamic' ? (scenario.branches ?? []).map((branch, index) => {
+      const triggers = dynamicBranchTriggers(branch)
+      return {
+        ...branch,
+        id: branch.id || createBranchId(),
+        trigger: triggers[0],
+        triggers,
+        triggerMode: dynamicBranchTriggerMode(branch),
+        priority: Number.isFinite(branch.priority) ? branch.priority : index,
+        enabled: branch.enabled !== false,
+      }
+    }) : undefined,
   }
 }
 

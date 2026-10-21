@@ -6,12 +6,15 @@ import {
   asStaticScenario,
   createInstructorPreset,
   deleteInstructorPreset,
+  dynamicBranchTriggers,
+  dynamicBranchTriggerMode,
   dynamicStageTriggers,
   updateInstructorPreset,
   type DynamicScenarioApplyMask,
   type DynamicScenarioBranch,
   type DynamicScenarioMetric,
   type DynamicScenarioStage,
+  type DynamicScenarioStageType,
   type DynamicScenarioTransition,
   type DynamicScenarioTrigger,
   type InstructorPresetRow,
@@ -309,13 +312,34 @@ function newDraft(base: InstructorScenarioSnapshot): ScenarioDraft {
 }
 
 function fromPreset(preset: InstructorPresetRow): ScenarioDraft {
-  return {
-    id: preset.id,
-    name: preset.name,
-    description: preset.scenario.description ?? '',
-    stages: (preset.scenario.stages ?? []).map(normaliseStage),
-    branches: (preset.scenario.branches ?? []).map((branch, index) => ({ ...branch, id: branch.id || createBranchId(), priority: Number.isFinite(branch.priority) ? branch.priority : index, enabled: branch.enabled !== false })),
+  const stages = (preset.scenario.stages ?? []).map(normaliseStage)
+  const branches: DynamicScenarioBranch[] = (preset.scenario.branches ?? []).map((branch, index) => {
+    const triggers = dynamicBranchTriggers(branch)
+    return { ...branch, id: branch.id || createBranchId(), trigger: triggers[0], triggers, triggerMode: dynamicBranchTriggerMode(branch), priority: Number.isFinite(branch.priority) ? branch.priority : index, enabled: branch.enabled !== false }
+  })
+
+  // Schema <= 8 stored ordinary next-stage progression separately from branches.
+  // Convert it into an explicit path so editing immediately uses the unified graph model.
+  if ((preset.scenario.schemaVersion ?? 0) < 9) {
+    stages.slice(0, -1).forEach((stage, index) => {
+      const next = stages[index + 1]
+      if (!stage.id || !next?.id) return
+      const triggers = dynamicStageTriggers(stage)
+      branches.push({
+        id: createBranchId(),
+        fromStageId: stage.id,
+        toStageId: next.id,
+        trigger: triggers[0],
+        triggers,
+        triggerMode: 'any',
+        priority: 1000 + index,
+        label: 'Continue',
+        enabled: true,
+      })
+    })
   }
+
+  return { id: preset.id, name: preset.name, description: preset.scenario.description ?? '', stages, branches }
 }
 
 function serialise(draft: ScenarioDraft) {
@@ -360,7 +384,6 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   const baselineRef = useRef(serialise(initial))
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [triggerMenuIndex, setTriggerMenuIndex] = useState<number | null>(null)
   const [collapsedStages, setCollapsedStages] = useState<Set<number>>(() => new Set())
   const [draggedStageIndex, setDraggedStageIndex] = useState<number | null>(null)
   const [dragOverStageIndex, setDragOverStageIndex] = useState<number | null>(null)
@@ -426,17 +449,29 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     setCollapsedStages(new Set())
     setDraft((current) => {
       const stages = [...current.stages]
-      const base = stages[index]?.snapshot ?? currentScenario
-      stages.splice(index + 1, 0, newStage(base, index + 1))
-      return { ...current, stages }
+      const from = stages[index]
+      const oldNext = stages[index + 1]
+      const base = from?.snapshot ?? currentScenario
+      const inserted = newStage(base, index + 1)
+      stages.splice(index + 1, 0, inserted)
+      if (!from?.id || !inserted.id) return { ...current, stages }
+
+      let branches = [...current.branches]
+      const outgoing = branches.filter((branch) => branch.fromStageId === from.id && branch.enabled !== false)
+      if (oldNext?.id && outgoing.length === 1 && outgoing[0].toStageId === oldNext.id) {
+        branches = branches.map((branch) => branch.id === outgoing[0].id ? { ...branch, toStageId: inserted.id! } : branch)
+        branches.push({ id: createBranchId(), fromStageId: inserted.id, toStageId: oldNext.id, trigger: { type: 'manual' }, triggers: [{ type: 'manual' }], triggerMode: 'any', priority: 0, label: 'Continue', enabled: true })
+      } else {
+        branches.push({ id: createBranchId(), fromStageId: from.id, toStageId: inserted.id, trigger: { type: 'manual' }, triggers: [{ type: 'manual' }], triggerMode: 'any', priority: outgoing.length, label: 'Continue', enabled: true })
+        if (oldNext?.id) branches.push({ id: createBranchId(), fromStageId: inserted.id, toStageId: oldNext.id, trigger: { type: 'manual' }, triggers: [{ type: 'manual' }], triggerMode: 'any', priority: 0, label: 'Continue', enabled: true })
+      }
+      return { ...current, stages, branches }
     })
-    setTriggerMenuIndex(null)
   }
 
   const moveStage = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= draft.stages.length || toIndex >= draft.stages.length) return
     setCollapsedStages(new Set())
-    setTriggerMenuIndex(null)
     setDraft((current) => {
       const stages = [...current.stages]
       const [moved] = stages.splice(fromIndex, 1)
@@ -458,35 +493,39 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
     setDragOverStageIndex(null)
   }
 
-  const setAdvanceTriggers = (index: number, advanceTriggers: DynamicScenarioTrigger[]) => {
-    const next = advanceTriggers.length ? advanceTriggers : [defaultAdvanceTrigger()]
-    updateStage(index, (stage) => ({ ...stage, advanceTrigger: next[0], advanceTriggers: next }))
-  }
-  const updateAdvanceTrigger = (index: number, nextTrigger: DynamicScenarioTrigger) => {
-    const stage = draft.stages[index]; if (!stage) return
-    setAdvanceTriggers(index, dynamicStageTriggers(stage).map((trigger) => trigger.type === nextTrigger.type ? nextTrigger : trigger))
-  }
-  const toggleTriggerType = (index: number, type: DynamicScenarioTrigger['type']) => {
-    const stage = draft.stages[index]; if (!stage) return
-    const triggers = dynamicStageTriggers(stage)
-    const selected = triggers.some((trigger) => trigger.type === type)
-    if (selected) {
-      if (triggers.length === 1) return
-      setAdvanceTriggers(index, triggers.filter((trigger) => trigger.type !== type)); return
-    }
-    setAdvanceTriggers(index, [...triggers, defaultTriggerForType(type)])
-  }
-
   const addBranch = (stageIndex: number) => {
     const from = draft.stages[stageIndex]
     if (!from?.id || draft.stages.length < 2) return
     const fallback = draft.stages[Math.min(stageIndex + 1, draft.stages.length - 1)]
     const target = fallback?.id === from.id ? draft.stages.find((stage) => stage.id !== from.id) : fallback
     if (!target?.id) return
-    setDraft((current) => ({ ...current, branches: [...current.branches, { id: createBranchId(), fromStageId: from.id!, toStageId: target.id!, trigger: { type: 'manual' }, priority: current.branches.filter((branch) => branch.fromStageId === from.id).length, label: '', enabled: true }] }))
+    const trigger: DynamicScenarioTrigger = { type: 'manual' }
+    setDraft((current) => ({ ...current, branches: [...current.branches, { id: createBranchId(), fromStageId: from.id!, toStageId: target.id!, trigger, triggers: [trigger], triggerMode: 'any', priority: current.branches.filter((branch) => branch.fromStageId === from.id).length, label: 'Continue', enabled: true }] }))
   }
   const updateBranch = (branchId: string, updates: Partial<DynamicScenarioBranch>) => setDraft((current) => ({ ...current, branches: current.branches.map((branch) => branch.id === branchId ? { ...branch, ...updates } : branch) }))
   const removeBranch = (branchId: string) => setDraft((current) => ({ ...current, branches: current.branches.filter((branch) => branch.id !== branchId) }))
+  const setBranchTriggers = (branchId: string, triggers: DynamicScenarioTrigger[]) => {
+    const next = triggers.length ? triggers : [{ type: 'manual' } as DynamicScenarioTrigger]
+    updateBranch(branchId, { trigger: next[0], triggers: next })
+  }
+  const addBranchTrigger = (branchId: string, stageType: DynamicScenarioStage['stageType']) => {
+    const branch = draft.branches.find((item) => item.id === branchId)
+    if (!branch) return
+    const next = (stageType ?? 'controls') === 'question' ? defaultTriggerForType('question-any') : defaultTriggerForType('condition')
+    setBranchTriggers(branchId, [...dynamicBranchTriggers(branch), next])
+  }
+  const updateBranchTrigger = (branchId: string, triggerIndex: number, trigger: DynamicScenarioTrigger) => {
+    const branch = draft.branches.find((item) => item.id === branchId)
+    if (!branch) return
+    setBranchTriggers(branchId, dynamicBranchTriggers(branch).map((item, index) => index === triggerIndex ? trigger : item))
+  }
+  const removeBranchTrigger = (branchId: string, triggerIndex: number) => {
+    const branch = draft.branches.find((item) => item.id === branchId)
+    if (!branch) return
+    const triggers = dynamicBranchTriggers(branch)
+    if (triggers.length <= 1) return
+    setBranchTriggers(branchId, triggers.filter((_, index) => index !== triggerIndex))
+  }
 
   const removeStage = (index: number) => {
     if (draft.stages.length <= 1) return
@@ -505,21 +544,14 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       else next.add(index)
       return next
     })
-    setTriggerMenuIndex((current) => current === index ? null : current)
   }
 
   const setStageType = (index: number, stageType: 'controls' | 'media' | 'question') => {
-    updateStage(index, (stage) => {
-      if (stageType === 'question') {
-        const trigger: DynamicScenarioTrigger = { type: 'question-any' }
-        return { ...stage, stageType, media: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
-      }
-      const trigger: DynamicScenarioTrigger = { type: 'manual' }
-      return stageType === 'controls'
-        ? { ...stage, stageType, media: undefined, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
-        : { ...stage, stageType, question: undefined, advanceTrigger: trigger, advanceTriggers: [trigger] }
-    })
-    setTriggerMenuIndex(null)
+    updateStage(index, (stage) => stageType === 'controls'
+      ? { ...stage, stageType, media: undefined, question: undefined }
+      : stageType === 'media'
+        ? { ...stage, stageType, question: undefined }
+        : { ...stage, stageType, media: undefined })
   }
 
   const selectStageMedia = (index: number, mediaId: string) => {
@@ -531,11 +563,9 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   const selectStageQuestion = (index: number, questionId: string) => {
     const item = questionLibrary.find((entry) => entry.id === questionId)
     if (!item || (item.kind !== 'mcq' && item.kind !== 'poll')) return
-    const trigger: DynamicScenarioTrigger = { type: 'question-any' }
     updateStage(index, (stage) => ({
       ...stage, stageType: 'question', media: undefined,
       question: { libraryItemId: item.id, kind: item.kind as 'mcq' | 'poll', title: item.title, body: item.body, options: item.options, correctOptionId: item.correct_option_id, explanation: item.explanation },
-      advanceTrigger: trigger, advanceTriggers: [trigger],
     }))
   }
 
@@ -686,7 +716,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
 
     return (
       <>
-        <div className="dynamic-control-heading">
+        <div className="control-heading dynamic-control-heading">
           <span>{field.label}</span>
           <strong>{displayValue(field, value)}</strong>
         </div>
@@ -713,7 +743,7 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
   ) => {
     const enabled = selected.includes(field.key)
     return (
-      <div className={`dynamic-control-row ${enabled ? 'enabled' : 'disabled'}`} key={field.key}>
+      <div className={`control-row dynamic-control-row ${enabled ? 'enabled' : 'disabled'}`} key={field.key}>
         <label className="dynamic-control-apply" title={enabled ? 'This value will be pushed at this stage' : 'Leave this value unchanged at this stage'}>
           <input
             type="checkbox"
@@ -724,12 +754,30 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
         </label>
         <div className="dynamic-control-body">
           {field.type === 'select' || field.type === 'boolean'
-            ? <div className="dynamic-control-heading"><span>{field.label}</span><strong>{displayValue(field, values[field.key])}</strong></div>
+            ? <div className="control-heading dynamic-control-heading"><span>{field.label}</span><strong>{displayValue(field, values[field.key])}</strong></div>
             : null}
           {renderEditor(index, field, values[field.key], enabled, group)}
         </div>
       </div>
     )
+  }
+
+  const renderPathTrigger = (branch: DynamicScenarioBranch, trigger: DynamicScenarioTrigger, triggerIndex: number, stageType: DynamicScenarioStageType) => {
+    const triggerTypes: DynamicScenarioTrigger['type'][] = stageType === 'question'
+      ? ['manual', 'question-any', 'question-correct', 'time', 'condition', 'action', 'patient-change', 'device-action']
+      : ['manual', 'time', 'condition', 'action', 'patient-change', 'device-action']
+    return <div className="dynamic-path-condition" key={`${branch.id}-${triggerIndex}`}>
+      <select className="dynamic-path-condition-type" value={trigger.type} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, defaultTriggerForType(event.target.value as DynamicScenarioTrigger['type']))}>
+        {triggerTypes.map((type) => <option key={type} value={type} disabled={type === 'question-correct' && !draft.stages.find((stage) => stage.id === branch.fromStageId)?.question?.correctOptionId}>{type === 'manual' ? 'Instructor choice' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Measured value' : type === 'action' ? 'Ventilator change' : type === 'patient-change' ? 'Patient change' : type === 'device-action' ? 'Action' : type === 'question-correct' ? 'Correct answer' : 'Any answer'}</option>)}
+      </select>
+      {trigger.type === 'time' && <label><span>Seconds</span><input type="number" min={1} max={3600} value={trigger.seconds} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, seconds: Math.max(1, Number(event.target.value) || 1) })} /></label>}
+      {trigger.type === 'condition' && <><label><span>Measured value</span><select value={trigger.metric} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, metric: event.target.value as DynamicScenarioMetric })}>{CONDITION_METRICS.map((metric) => <option key={metric.value} value={metric.value}>{metric.label}</option>)}</select></label><label><span>Comparison</span><select value={trigger.operator} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, operator: event.target.value as 'lt' | 'eq' | 'gt' })}><option value="lt">Less than (&lt;)</option><option value="eq">Equal to (=)</option><option value="gt">Greater than (&gt;)</option></select></label><label><span>Value</span><input type="number" step="0.1" value={trigger.value} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, value: Number(event.target.value) || 0 })} /></label></>}
+      {trigger.type === 'action' && <><label><span>Ventilator</span><select value={String(trigger.parameter)} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, parameter: event.target.value as keyof VentilatorSettings })}>{VENT_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label><label><span>Changed by</span><select value={trigger.actor} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Either</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label></>}
+      {trigger.type === 'patient-change' && <><label><span>Patient / physiology</span><select value={String(trigger.parameter)} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, parameter: event.target.value as keyof PatientSettings })}>{[...PATIENT_FIELDS, ...PHYSIO_FIELDS].map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label><label><span>Changed by</span><select value={trigger.actor} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Either</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label></>}
+      {trigger.type === 'device-action' && <><label><span>Action</span><select value={trigger.action} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, action: event.target.value as typeof trigger.action })}><option value="freeze-waveform">Freeze waveform</option><option value="inspiratory-hold">Inspiratory hold</option><option value="expiratory-hold">Expiratory hold</option><option value="oxygen-flush">Oxygen flush</option><option value="nebulisation">Nebulisation</option></select></label><label><span>Performed by</span><select value={trigger.actor} onChange={(event) => updateBranchTrigger(branch.id, triggerIndex, { ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Either</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label></>}
+      {(trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct') && <span className="dynamic-path-condition-summary">{singleTriggerSummary(trigger)}</span>}
+      <button type="button" className="dynamic-path-condition-remove" disabled={dynamicBranchTriggers(branch).length <= 1} onClick={() => removeBranchTrigger(branch.id, triggerIndex)} aria-label="Remove condition">×</button>
+    </div>
   }
 
   const reset = () => {
@@ -750,19 +798,19 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       const base = asStaticScenario(cloneScenario(draft.stages[0]?.snapshot ?? currentScenario), '')
       const scenario: InstructorScenarioSnapshot = {
         ...base,
-        schemaVersion: 8,
+        schemaVersion: 9,
         kind: 'dynamic',
         description: draft.description.trim(),
-        branches: draft.branches.map((branch, index) => ({ ...branch, priority: Number.isFinite(branch.priority) ? branch.priority : index, enabled: branch.enabled !== false })),
+        branches: draft.branches.map((branch, index) => { const triggers = dynamicBranchTriggers(branch); return { ...branch, trigger: triggers[0], triggers, triggerMode: dynamicBranchTriggerMode(branch), priority: Number.isFinite(branch.priority) ? branch.priority : index, enabled: branch.enabled !== false } }),
         stages: draft.stages.map((stage) => {
           const snapshot = asStaticScenario(cloneScenario(stage.snapshot), '')
           const relevant = new Set(ventKeysFor(snapshot.ventilator).map(String))
-          const triggers = dynamicStageTriggers(stage)
+          const legacyTrigger: DynamicScenarioTrigger = { type: 'manual' }
           return {
             ...stage,
             sourcePresetId: undefined,
-            advanceTrigger: triggers[0],
-            advanceTriggers: triggers,
+            advanceTrigger: legacyTrigger,
+            advanceTriggers: [legacyTrigger],
             snapshot,
             apply: {
               ...(stage.apply ?? defaultMask(snapshot)),
@@ -805,7 +853,10 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
       if (!parsed.scenario || parsed.scenario.kind !== 'dynamic') throw new Error('Only dynamic Scenario Builder files can be imported here.')
       if (!Array.isArray(parsed.scenario.stages) || parsed.scenario.stages.length === 0) throw new Error('The imported scenario has no stages.')
       const importedStages = parsed.scenario.stages.map((stage, index) => normaliseStage(stage, index))
-      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 8, kind: 'dynamic', stages: importedStages.map((stage) => { const triggers = dynamicStageTriggers(stage); return { ...stage, sourcePresetId: undefined, advanceTrigger: triggers[0], advanceTriggers: triggers } }) }
+      const importedBranches: DynamicScenarioBranch[] = (parsed.scenario.branches ?? []).map((branch, index) => { const triggers=dynamicBranchTriggers(branch); return { ...branch, id:branch.id||createBranchId(), trigger:triggers[0], triggers, triggerMode:dynamicBranchTriggerMode(branch), priority:Number.isFinite(branch.priority)?branch.priority:index, enabled:branch.enabled!==false } })
+      if ((parsed.scenario.schemaVersion ?? 0) < 9) importedStages.slice(0,-1).forEach((stage,index)=>{ const next=importedStages[index+1]; if(!stage.id||!next?.id)return; const triggers=dynamicStageTriggers(stage); importedBranches.push({id:createBranchId(),fromStageId:stage.id,toStageId:next.id,trigger:triggers[0],triggers,triggerMode:'any',priority:1000+index,label:'Continue',enabled:true}) })
+      const legacyTrigger: DynamicScenarioTrigger = { type:'manual' }
+      const scenario: InstructorScenarioSnapshot = { ...cloneScenario(parsed.scenario), schemaVersion: 9, kind: 'dynamic', branches: importedBranches, stages: importedStages.map((stage) => ({ ...stage, sourcePresetId: undefined, advanceTrigger: legacyTrigger, advanceTriggers: [legacyTrigger] })) }
       const saved = await createInstructorPreset(uniqueImportedName(parsed.name ?? 'Imported scenario', [...dynamicPresets, ...staticPresets]), scenario)
       await onRefresh(); replaceDraft(fromPreset(saved)); setMessage(`Imported “${saved.name}”.`)
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Unable to import scenario file.') }
@@ -1205,83 +1256,27 @@ export function DynamicScenarioBuilder(props: DynamicScenarioBuilderProps) {
                   </>}
                 </article>
 
-                <div className="dynamic-branch-builder">
-                  <div className="dynamic-branch-heading"><div><strong>Branches from this stage</strong><span>Optional alternate paths. Branch triggers are evaluated before the normal next-stage trigger.</span></div><button type="button" disabled={draft.stages.length < 2} onClick={() => addBranch(index)}>＋ Add branch</button></div>
+                <div className="dynamic-branch-builder dynamic-path-builder">
+                  <div className="dynamic-branch-heading"><div><strong>Paths from this stage</strong><span>Every route to another stage lives here. Add multiple conditions and choose whether ANY or ALL must match.</span></div><button type="button" disabled={draft.stages.length < 2} onClick={() => addBranch(index)}>＋ Add path</button></div>
                   {draft.branches.filter((branch) => branch.fromStageId === stage.id).sort((a,b)=>a.priority-b.priority).map((branch) => {
-                    const trigger = branch.trigger
-                    return <div className="dynamic-branch-row" key={branch.id}>
-                      <input className="dynamic-branch-label" value={branch.label ?? ''} placeholder="Branch label (optional)" onChange={(event)=>updateBranch(branch.id,{label:event.target.value})} />
-                      <select value={branch.toStageId} onChange={(event)=>updateBranch(branch.id,{toStageId:event.target.value})}>{draft.stages.filter((candidate)=>candidate.id!==stage.id).map((candidate,stageIndex)=><option key={candidate.id} value={candidate.id}>Stage {stageIndex+1}: {candidate.name}</option>)}</select>
-                      <select value={trigger.type} onChange={(event)=>updateBranch(branch.id,{trigger:defaultTriggerForType(event.target.value as DynamicScenarioTrigger['type'])})}>
-                        {(stageType==='question'?['question-any','question-correct','time','manual']:['manual','time','condition','action','patient-change','device-action'] as DynamicScenarioTrigger['type'][]).map((type)=><option key={type} value={type}>{type==='manual'?'Instructor choice':type==='time'?'Time passed':type==='condition'?'Measured value':type==='action'?'Ventilator change':type==='patient-change'?'Patient change':type==='device-action'?'Action':type==='question-correct'?'Correct answer':'Any answer'}</option>)}
-                      </select>
-                      {trigger.type==='time'&&<input type="number" min={1} max={3600} value={trigger.seconds} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,seconds:Math.max(1,Number(event.target.value)||1)}})} />}
-                      {trigger.type==='condition'&&<><select value={trigger.metric} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,metric:event.target.value as DynamicScenarioMetric}})}>{CONDITION_METRICS.map((metric)=><option key={metric.value} value={metric.value}>{metric.label}</option>)}</select><select value={trigger.operator} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,operator:event.target.value as 'lt'|'eq'|'gt'}})}><option value="lt">&lt;</option><option value="eq">=</option><option value="gt">&gt;</option></select><input type="number" step="0.1" value={trigger.value} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,value:Number(event.target.value)||0}})} /></>}
-                      {trigger.type==='action'&&<><select value={String(trigger.parameter)} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,parameter:event.target.value as keyof VentilatorSettings}})}>{VENT_FIELDS.map((field)=><option key={field.key} value={field.key}>{field.label}</option>)}</select><select value={trigger.actor} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,actor:event.target.value as 'candidate'|'instructor'|'either'}})}><option value="either">Either</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></>}
-                      {trigger.type==='patient-change'&&<><select value={String(trigger.parameter)} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,parameter:event.target.value as keyof PatientSettings}})}>{[...PATIENT_FIELDS,...PHYSIO_FIELDS].map((field)=><option key={field.key} value={field.key}>{field.label}</option>)}</select><select value={trigger.actor} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,actor:event.target.value as 'candidate'|'instructor'|'either'}})}><option value="either">Either</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></>}
-                      {trigger.type==='device-action'&&<><select value={trigger.action} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,action:event.target.value as typeof trigger.action}})}><option value="freeze-waveform">Freeze waveform</option><option value="inspiratory-hold">Inspiratory hold</option><option value="expiratory-hold">Expiratory hold</option><option value="oxygen-flush">Oxygen flush</option><option value="nebulisation">Nebulisation</option></select><select value={trigger.actor} onChange={(event)=>updateBranch(branch.id,{trigger:{...trigger,actor:event.target.value as 'candidate'|'instructor'|'either'}})}><option value="either">Either</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></>}
-                      <button type="button" className="dynamic-stage-remove" onClick={()=>removeBranch(branch.id)} aria-label="Remove branch">×</button>
-                    </div>
-                  })}
-                </div>
-
-                <div className="dynamic-transition-builder">
-                  <div className="dynamic-trigger-row" aria-label={`Triggers after Stage ${index + 1}`}>
-                    <div className="dynamic-trigger-list">
-                      {triggers.map((trigger, triggerIndex) => (
-                        <div className="dynamic-trigger-item" key={`${trigger.type}-${triggerIndex}`}>
-                          {triggerIndex > 0 && <span className="dynamic-trigger-or">OR</span>}
-                          <button type="button" className="dynamic-trigger-chip" onClick={() => setTriggerMenuIndex(index)} title="Edit triggers">{singleTriggerSummary(trigger)}</button>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className="dynamic-trigger-add"
-                      onClick={() => setTriggerMenuIndex((current) => current === index ? null : index)}
-                      aria-label={`Add or edit triggers after Stage ${index + 1}`}
-                      title="Add or edit triggers"
-                    >＋</button>
-                  </div>
-                  {triggerMenuIndex === index && (() => {
-                    const manualTrigger = triggers.find((trigger) => trigger.type === 'manual')
-                    const timeTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'time' }> => trigger.type === 'time')
-                    const conditionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'condition' }> => trigger.type === 'condition')
-                    const actionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'action' }> => trigger.type === 'action')
-                    const patientTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'patient-change' }> => trigger.type === 'patient-change')
-                    const deviceActionTrigger = triggers.find((trigger): trigger is Extract<DynamicScenarioTrigger, { type: 'device-action' }> => trigger.type === 'device-action')
-                    const triggerTypes: DynamicScenarioTrigger['type'][] = stageType === 'question' ? ['question-any', 'question-correct', 'time'] : ['manual', 'time', 'condition', 'action', 'patient-change', 'device-action']
-                    return <div className="dynamic-trigger-menu">
-                      <div className="dynamic-trigger-types">
-                        {triggerTypes.map((type) => (
-                          <button type="button" key={type} disabled={type === 'question-correct' && !stage.question?.correctOptionId} className={triggers.some((trigger) => trigger.type === type) ? 'selected' : ''} onClick={() => toggleTriggerType(index, type)}>
-                            {type === 'manual' ? 'Manual' : type === 'time' ? 'Time passed' : type === 'condition' ? 'Measured value' : type === 'action' ? 'Ventilator change' : type === 'patient-change' ? 'Patient change' : type === 'device-action' ? 'Action' : type === 'question-correct' ? 'Correct answer' : 'Any answer'}
-                          </button>
-                        ))}
+                    const pathTriggers = dynamicBranchTriggers(branch)
+                    return <section className="dynamic-path-card" key={branch.id}>
+                      <div className="dynamic-path-head">
+                        <label><span>Path name</span><input className="dynamic-branch-label" value={branch.label ?? ''} placeholder="e.g. Continue / Deteriorates / Responds" onChange={(event)=>updateBranch(branch.id,{label:event.target.value})} /></label>
+                        <label><span>Destination</span><select value={branch.toStageId} onChange={(event)=>updateBranch(branch.id,{toStageId:event.target.value})}>{draft.stages.filter((candidate)=>candidate.id!==stage.id).map((candidate)=>{const stageIndex=draft.stages.findIndex((item)=>item.id===candidate.id);return <option key={candidate.id} value={candidate.id}>Stage {stageIndex+1}: {candidate.name}</option>})}</select></label>
+                        <label><span>Priority</span><input type="number" min={0} max={9999} value={branch.priority} onChange={(event)=>updateBranch(branch.id,{priority:Math.max(0,Number(event.target.value)||0)})} /></label>
+                        <button type="button" className="dynamic-stage-remove" onClick={()=>removeBranch(branch.id)} aria-label="Remove path">×</button>
                       </div>
-                      <p>{stageType === 'question' ? 'Any selected question trigger can advance to the next stage (OR).' : 'Any selected trigger can advance to the next stage (OR). Manual keeps the instructor trigger available while automatic triggers remain armed.'}</p>
-                      {manualTrigger && <p>Manual: instructor advances from the Teaching tab. Back remains available during the scenario.</p>}
-                      {timeTrigger && <label className="dynamic-trigger-field"><span>Time in stage</span><div><input type="number" min={1} max={3600} step={1} value={timeTrigger.seconds} onChange={(event) => updateAdvanceTrigger(index, { ...timeTrigger, seconds: Math.max(1, Number(event.target.value) || 1) })} /><em>seconds</em></div></label>}
-                      {conditionTrigger && <div className="dynamic-trigger-condition">
-                        <label><span>Measured value</span><select value={conditionTrigger.metric} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, metric: event.target.value as DynamicScenarioMetric })}>{CONDITION_METRICS.map((metric) => <option key={metric.value} value={metric.value}>{metric.label}</option>)}</select></label>
-                        <label><span>Comparison</span><select value={conditionTrigger.operator} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, operator: event.target.value as 'lt' | 'eq' | 'gt' })}><option value="lt">Less than (&lt;)</option><option value="eq">Equal to (=)</option><option value="gt">Greater than (&gt;)</option></select></label>
-                        <label><span>Value</span><input type="number" step="0.1" value={conditionTrigger.value} onChange={(event) => updateAdvanceTrigger(index, { ...conditionTrigger, value: Number(event.target.value) || 0 })} /></label>
-                      </div>}
-                      {actionTrigger && <div className="dynamic-trigger-condition">
-                        <label><span>Ventilator parameter</span><select value={String(actionTrigger.parameter)} onChange={(event) => updateAdvanceTrigger(index, { ...actionTrigger, parameter: event.target.value as keyof VentilatorSettings })}>{VENT_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
-                        <label><span>Changed by</span><select value={actionTrigger.actor} onChange={(event) => updateAdvanceTrigger(index, { ...actionTrigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Candidate or instructor</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label>
-                      </div>}
-                      {patientTrigger && <div className="dynamic-trigger-condition">
-                        <label><span>Patient / physiology parameter</span><select value={String(patientTrigger.parameter)} onChange={(event) => updateAdvanceTrigger(index, { ...patientTrigger, parameter: event.target.value as keyof PatientSettings })}>{[...PATIENT_FIELDS, ...PHYSIO_FIELDS].map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
-                        <label><span>Changed by</span><select value={patientTrigger.actor} onChange={(event) => updateAdvanceTrigger(index, { ...patientTrigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Candidate or instructor</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label>
-                      </div>}
-                      {deviceActionTrigger && <div className="dynamic-trigger-condition">
-                        <label><span>Action</span><select value={deviceActionTrigger.action} onChange={(event) => updateAdvanceTrigger(index, { ...deviceActionTrigger, action: event.target.value as typeof deviceActionTrigger.action })}><option value="freeze-waveform">Freeze waveform</option><option value="inspiratory-hold">Inspiratory hold</option><option value="expiratory-hold">Expiratory hold</option><option value="oxygen-flush">Oxygen flush</option><option value="nebulisation">Nebulisation</option></select></label>
-                        <label><span>Performed by</span><select value={deviceActionTrigger.actor} onChange={(event) => updateAdvanceTrigger(index, { ...deviceActionTrigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="either">Candidate or instructor</option><option value="candidate">Candidate</option><option value="instructor">Instructor</option></select></label>
-                      </div>}
-                      <div className="dynamic-trigger-actions"><button type="button" onClick={() => setTriggerMenuIndex(null)}>Close</button>{index === draft.stages.length - 1 && <button type="button" className="account-primary-button" onClick={() => insertStage(index)}>Add next stage</button>}</div>
-                    </div>
-                  })()}
+                      <div className="dynamic-path-logic">
+                        <strong>When</strong>
+                        {pathTriggers.length > 1 && <div className="dynamic-path-mode" role="group" aria-label="Path condition logic"><button type="button" className={dynamicBranchTriggerMode(branch)==='any'?'selected':''} onClick={()=>updateBranch(branch.id,{triggerMode:'any'})}>ANY</button><button type="button" className={dynamicBranchTriggerMode(branch)==='all'?'selected':''} onClick={()=>updateBranch(branch.id,{triggerMode:'all'})}>ALL</button></div>}
+                        <small>{pathTriggers.length > 1 ? (dynamicBranchTriggerMode(branch)==='all' ? 'all conditions are true' : 'any condition is true') : 'this condition is met'}</small>
+                      </div>
+                      <div className="dynamic-path-conditions">{pathTriggers.map((trigger,triggerIndex)=>renderPathTrigger(branch,trigger,triggerIndex,stageType))}</div>
+                      <button type="button" className="dynamic-path-add-condition" onClick={()=>addBranchTrigger(branch.id,stageType)}>＋ Add condition</button>
+                    </section>
+                  })}
+                  {!draft.branches.some((branch)=>branch.fromStageId===stage.id) && <div className="dynamic-path-empty">No outgoing path. This stage is an endpoint until the instructor jumps elsewhere.</div>}
                 </div>
 
                 <div className="dynamic-stage-insert-row" aria-label={index < draft.stages.length - 1 ? `Insert stage between Stage ${index + 1} and Stage ${index + 2}` : 'Add stage'}>
