@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type SharedSimulationSpeed = 0.5 | 1 | 2 | 4
+export type SharedSimulationSpeed = 0.5 | 1 | 1.5 | 2 | 4
 
 function PauseIcon({ paused }: { paused: boolean }) {
   return paused ? (
@@ -29,7 +29,13 @@ interface SimulationTopBarProps {
   elapsedSeconds: number
   onPausedChange: (paused: boolean) => void
   onSpeedChange: (speed: SharedSimulationSpeed) => void
+  speedOptions?: readonly SharedSimulationSpeed[]
   pauseDisabled?: boolean
+  speedDisabled?: boolean
+  pauseTitle?: string
+  pauseAriaLabel?: string
+  speedTitle?: string
+  speedAriaLabel?: string
   rightActions?: ReactNode
   statusText?: string
   version?: string
@@ -40,6 +46,8 @@ interface SimulationTopBarProps {
   statusTextClassName?: string
 }
 
+const DEFAULT_SPEED_OPTIONS: readonly SharedSimulationSpeed[] = [0.5, 1, 2, 4]
+
 export function SimulationTopBar({
   brandKicker,
   title,
@@ -49,7 +57,13 @@ export function SimulationTopBar({
   elapsedSeconds,
   onPausedChange,
   onSpeedChange,
+  speedOptions = DEFAULT_SPEED_OPTIONS,
   pauseDisabled = false,
+  speedDisabled = false,
+  pauseTitle,
+  pauseAriaLabel,
+  speedTitle,
+  speedAriaLabel = 'Simulation speed',
   rightActions,
   statusText,
   version,
@@ -60,6 +74,7 @@ export function SimulationTopBar({
   statusTextClassName = '',
 }: SimulationTopBarProps) {
   const clock = formatSimulationClock(elapsedSeconds)
+  const defaultPauseLabel = simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation'
 
   return (
     <header className={`topbar ${className}`.trim()}>
@@ -74,8 +89,8 @@ export function SimulationTopBar({
           type="button"
           onClick={() => onPausedChange(!simulationPaused)}
           disabled={pauseDisabled}
-          aria-label={simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation'}
-          title={simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation'}
+          aria-label={pauseAriaLabel ?? defaultPauseLabel}
+          title={pauseTitle ?? defaultPauseLabel}
         >
           <PauseIcon paused={simulationPaused} />
           <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
@@ -85,8 +100,14 @@ export function SimulationTopBar({
         </div>
         <label className={`simulation-speed-control ${simulationPaused ? 'paused' : ''}`}>
           <span>SPEED</span>
-          <select value={simulationSpeed} onChange={(event) => onSpeedChange(Number(event.target.value) as SharedSimulationSpeed)} aria-label="Simulation speed">
-            <option value={0.5}>×0.5</option><option value={1}>×1</option><option value={2}>×2</option><option value={4}>×4</option>
+          <select
+            value={simulationSpeed}
+            disabled={speedDisabled}
+            onChange={(event) => onSpeedChange(Number(event.target.value) as SharedSimulationSpeed)}
+            aria-label={speedAriaLabel}
+            title={speedTitle}
+          >
+            {speedOptions.map((speed) => <option key={speed} value={speed}>×{speed}</option>)}
           </select>
         </label>
       </div>
