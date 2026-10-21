@@ -47,6 +47,7 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
   profileClassName = '',
 }: SimulationControlFrameworkProps<TTab, TProfile>) {
   const selected = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]
+  const wrapSelectedInLockFieldset = Boolean(selected?.locked || selected?.lockClassName)
 
   return (
     <aside className={`control-panel edusim-control-framework ${className}`.trim()} aria-label={ariaLabel}>
@@ -84,9 +85,9 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
       <div className={`edusim-control-panel-body control-tab-content ${bodyClassName}`.trim()}>
         {selected && (
           <div className={`control-tab-pane edusim-control-tab-pane ${selected.panelClassName ?? ''}`.trim()} role="tabpanel">
-            {selected.locked ? (
-              <fieldset className={`session-lock-fieldset locked edusim-control-lock ${selected.lockClassName ?? ''}`.trim()} disabled>
-                <div className="session-control-lock-label">{selected.lockLabel ?? 'Instructor controlled'}</div>
+            {wrapSelectedInLockFieldset ? (
+              <fieldset className={`session-lock-fieldset ${selected.locked ? 'locked' : ''} edusim-control-lock ${selected.lockClassName ?? ''}`.trim()} disabled={selected.locked}>
+                {selected.locked && <div className="session-control-lock-label">{selected.lockLabel ?? 'Instructor controlled'}</div>}
                 {selected.content}
               </fieldset>
             ) : selected.content}
