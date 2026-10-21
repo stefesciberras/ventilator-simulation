@@ -15,7 +15,7 @@ export interface SelfDirectedAssignmentCreated {
   product: ScenarioProductId
 }
 
-export interface SelfDirectedRunStart<TScenario = unknown> {
+export interface SelfDirectedRunStart<TScenario = InstructorScenarioSnapshot> {
   runId: string
   assignmentId: string
   accessCode: string
@@ -82,7 +82,6 @@ export async function resolveSelfDirectedAssignmentProduct(accessCode: string): 
   await ensureAnonymousSession()
   const { data, error } = await supabase.rpc('resolve_self_directed_assignment_product', { p_access_code: code })
   if (error) {
-    // Backwards compatibility while a deployment is between app and migration versions.
     if (String(error.message ?? '').includes('resolve_self_directed_assignment_product')) return 'eduvent'
     throw error
   }
@@ -104,9 +103,7 @@ export async function startSelfDirectedRun<TScenario = InstructorScenarioSnapsho
   const { data, error } = await supabase.rpc('start_self_directed_run', { p_access_code: code })
   if (error) throw error
   const result = Array.isArray(data) ? data[0] : data
-  if (!result?.run_id || !result?.assignment_id || !result?.scenario) {
-    throw new Error('Unable to start this self-directed scenario.')
-  }
+  if (!result?.run_id || !result?.assignment_id || !result?.scenario) throw new Error('Unable to start this self-directed scenario.')
 
   const stored = result.scenario as unknown
   const envelope = isEnvelope(stored)
