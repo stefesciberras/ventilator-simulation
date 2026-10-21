@@ -16,18 +16,7 @@ function ScenarioIcon() {
 }
 
 function MenuIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></svg>
-  )
-}
-
-function MonitorIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="4" y="4.5" width="16" height="15" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M6.5 13h2.2l1.4-4 2.1 7 1.6-4h3.7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></svg>
 }
 
 interface EdumonTopBarProps {
@@ -40,21 +29,11 @@ interface EdumonTopBarProps {
   simulationControlsLocked?: boolean
   onScenario: () => void
   accountAction: ReactNode
+  diagnosticsAction: ReactNode
   onAbout: () => void
 }
 
-export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, onAbout }: EdumonTopBarProps) {
-  const actions = (
-    <>
-      {accountAction}
-      <button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button>
-      <a className="top-account-button edumon-module-menu-button" href="/edumon" title="EDUMON modules" aria-label="Choose EDUMON module"><MenuIcon /></a>
-      <button type="button" className="top-diagnostic-button" onClick={onAbout} title="EDUMON information" aria-label="Open EDUMON information"><MonitorIcon /></button>
-    </>
-  )
-
-  const controlledTitle = simulationControlsLocked ? 'Simulation timing is controlled by the instructor' : undefined
-
+export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, diagnosticsAction, onAbout }: EdumonTopBarProps) {
   return (
     <SimulationTopBar
       brandKicker={module.productName}
@@ -65,11 +44,8 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
       elapsedSeconds={elapsedSeconds}
       onPausedChange={onPausedChange}
       onSpeedChange={onSpeedChange}
-      pauseDisabled={simulationControlsLocked}
-      speedDisabled={simulationControlsLocked}
-      pauseTitle={controlledTitle}
-      speedTitle={controlledTitle}
-      rightActions={actions}
+      controlsControlledByInstructor={simulationControlsLocked}
+      rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button><a className="top-account-button edumon-module-menu-button" href="/edumon" title="EDUMON modules" aria-label="Choose EDUMON module"><MenuIcon /></a>{diagnosticsAction}</>}
       statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
       version="0.1.0.0"
       onAbout={onAbout}
