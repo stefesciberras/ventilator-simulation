@@ -51,7 +51,12 @@ export interface SharedScenarioAuthoringBranch {
   id: string
   fromStageId: string
   toStageId: string
+  /** First condition retained for backwards-compatible serialization. */
   trigger: SharedScenarioAuthoringTrigger
+  /** Path conditions. */
+  triggers?: SharedScenarioAuthoringTrigger[]
+  /** ANY is the default; ALL requires every condition to match. */
+  triggerMode?: 'any' | 'all'
   priority: number
   label?: string
   enabled?: boolean
@@ -100,6 +105,6 @@ export function createAuthoringStage<TSnapshot>(name: string, snapshot: TSnapsho
     notes: '',
     kind: 'state',
     snapshot,
-    triggers: [defaultAuthoringTrigger()],
+    triggers: [],
   }
 }
