@@ -21,26 +21,28 @@
 
 .edumon-console-top-actions {
   flex: 0 0 auto;
-  min-height: 84px;
-  padding: 10px 14px;
-  gap: 12px;
-  justify-content: flex-start;
+  min-height: 72px;
+  padding: 12px;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .edumon-console-top-actions .hardware-button {
-  min-width: 82px;
-  min-height: 64px;
-  height: 64px;
+  min-width: 0;
+  min-height: 48px;
+  height: 48px;
 }
 
 .edumon-console-top-actions .icon-button {
-  width: 82px;
-  padding: 10px;
+  width: 52px;
+  min-width: 52px;
+  padding: 9px;
 }
 
 .edumon-console-top-actions .icon-button svg {
-  width: 34px;
-  height: 34px;
+  width: 25px;
+  height: 25px;
 }
 
 .edumon-console-top-actions .teaching-laser-console-button.active {
@@ -305,23 +307,26 @@
 
   .edumon-console-top-actions {
     min-height: 72px;
-    padding: 8px 12px;
-    gap: 8px;
+    padding: 12px;
+    gap: 10px;
+    justify-content: flex-end;
   }
 
   .edumon-console-top-actions .hardware-button {
-    min-width: 64px;
-    min-height: 54px;
-    height: 54px;
+    min-width: 0;
+    min-height: 48px;
+    height: 48px;
   }
 
   .edumon-console-top-actions .icon-button {
-    width: 64px;
+    width: 52px;
+    min-width: 52px;
+    padding: 9px;
   }
 
   .edumon-console-top-actions .icon-button svg {
-    width: 29px;
-    height: 29px;
+    width: 25px;
+    height: 25px;
   }
 }
 
@@ -356,15 +361,19 @@ body.eduvent-tablet-landscape .edumon-side-panel { overflow: hidden; box-sizing:
 body.eduvent-tablet-landscape .edumon-waveform-area { touch-action: pan-x; }
 body.eduvent-tablet-landscape .edumon-side-panel-body { overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y; }
 
+body.eduvent-tablet-landscape .edumon-console-top-actions {
+  justify-content: flex-end;
+}
+
 body.eduvent-tablet-landscape .edumon-console-top-actions .hardware-button {
-  min-width: 64px !important;
-  width: 64px !important;
-  min-height: 54px !important;
-  height: 54px !important;
-  padding: 8px !important;
+  min-width: 0 !important;
+  width: 52px !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  padding: 9px !important;
 }
 
 body.eduvent-tablet-landscape .edumon-console-top-actions .icon-button svg {
-  width: 29px !important;
-  height: 29px !important;
+  width: 25px !important;
+  height: 25px !important;
 }
