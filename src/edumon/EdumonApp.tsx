@@ -21,7 +21,7 @@ import { SharedAlarmBanner } from '../alarms/SharedAlarmBanner'
 import { DEFAULT_EDUMON_ALARM_LIMITS, evaluateEdumonAlarms, type EdumonAlarmLimits } from './alarmDefinitions'
 import { EdumonAlarmLimitsDialog } from './EdumonAlarmLimitsDialog'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from '../components/InstructorAccountAuth'
-import { useTeachingScenarioRuntime } from '../teaching/scenario/runtimeCore'
+import { useTeachingScenarioRuntime, type TeachingScenarioTransition } from '../teaching/scenario/runtimeCore'
 import { createEdumonScenarioRuntimeAdapter } from './scenarioAdapter'
 import type { EdumonStoredScenario } from './scenarioTypes'
 import { TeachingCandidateOverlay, TeachingLaserPointerSurface, TeachingMediaCandidateOverlay, useTeachingMediaPresentation, useTeachingPrompts } from '../teaching'
@@ -225,6 +225,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   })
   const effectivePatientRef = useRef<MonitorPatientState>({ ...DEFAULT_MONITOR_STATE })
   const patientTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; duration: number } | null>(null)
+  const scenarioTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; defaultPolicy: TeachingScenarioTransition; overrides: Record<string, TeachingScenarioTransition> } | null>(null)
   const [elapsed, setElapsed] = useState(TRACE_WINDOW_SECONDS)
   const [simulationPaused, setSimulationPaused] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState<EdumonSimulationSpeed>(1)
@@ -256,6 +257,22 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
 
   const effectivePatientState = (() => {
+    const scenarioTransition = scenarioTransitionRef.current
+    if (scenarioTransition) {
+      const keys: Array<keyof Pick<MonitorPatientState, 'heartRate' | 'systolicPressure' | 'diastolicPressure' | 'spo2' | 'peripheralPerfusion'>> = ['heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion']
+      const next: MonitorPatientState = { ...scenarioTransition.to, rhythm: scenarioTransition.to.rhythm }
+      let running = false
+      for (const key of keys) {
+        const policy = scenarioTransition.overrides[key] ?? scenarioTransition.defaultPolicy
+        if (policy.mode !== 'linear' || policy.durationSeconds <= 0) { next[key] = scenarioTransition.to[key]; continue }
+        const progress = Math.max(0, Math.min(1, (elapsed - scenarioTransition.start) / Math.max(policy.durationSeconds, 0.001)))
+        next[key] = scenarioTransition.from[key] + (scenarioTransition.to[key] - scenarioTransition.from[key]) * progress
+        if (progress < 1) running = true
+      }
+      effectivePatientRef.current = next
+      if (!running) scenarioTransitionRef.current = null
+      return next
+    }
     const transition = patientTransitionRef.current
     if (!transition) { effectivePatientRef.current = { ...patientState }; return patientState }
     const progress = (elapsed - transition.start) / Math.max(transition.duration, 0.001)
@@ -306,8 +323,29 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     setLaserEnabled: setLaserActive,
   })
 
-  const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRuntimeAdapter((snapshot) => {
-    setPatientState(snapshot.patient)
+  const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRuntimeAdapter((snapshot, stageContext) => {
+    const stage = stageContext.stage
+    const targetPatient = { ...snapshot.patient }
+    const transition = stage.transition ?? { mode: 'immediate' as const }
+    const overrides = stage.transitionOverrides ?? {}
+    const hasLinear = ['heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion'].some((key) => {
+      const policy = overrides[key] ?? transition
+      return policy.mode === 'linear' && policy.durationSeconds > 0
+    })
+    patientTransitionRef.current = null
+    if (hasLinear) {
+      scenarioTransitionRef.current = {
+        from: { ...effectivePatientRef.current },
+        to: targetPatient,
+        start: stageContext.stageStartedSimulationTime,
+        defaultPolicy: transition,
+        overrides,
+      }
+    } else {
+      scenarioTransitionRef.current = null
+      effectivePatientRef.current = { ...targetPatient }
+    }
+    setPatientState(targetPatient)
     setSimulationPaused(snapshot.simulationPaused)
     setSimulationSpeed(snapshot.simulationSpeed)
   }), [])
@@ -327,6 +365,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   useEffect(() => { window.localStorage.setItem(EDUMON_PATIENT_TRANSITION_STORAGE_KEY, String(patientTransitionSeconds)) }, [patientTransitionSeconds])
   useEffect(() => {
+    if (scenarioTransitionRef.current) return
     if (patientTransitionSeconds <= 0) { effectivePatientRef.current = { ...patientState }; patientTransitionRef.current = null; return }
     patientTransitionRef.current = { from: { ...effectivePatientRef.current }, to: { ...patientState }, start: elapsed, duration: patientTransitionSeconds }
   }, [patientState, patientTransitionSeconds])

@@ -25,10 +25,18 @@ export type TeachingScenarioStageContent =
   | { kind: 'media'; media: TeachingScenarioMediaContent }
   | { kind: 'question'; question: TeachingScenarioQuestionContent }
 
+export type TeachingScenarioTransition =
+  | { mode: 'immediate' }
+  | { mode: 'linear'; durationSeconds: number }
+
 export interface TeachingScenarioStage<TSnapshot, TTrigger> {
   id: string
   name: string
   snapshot: TSnapshot
+  /** Default transition for numeric values when this stage is entered. */
+  transition?: TeachingScenarioTransition
+  /** Optional per-variable transition overrides keyed by product variable ID. */
+  transitionOverrides?: Record<string, TeachingScenarioTransition>
   triggers: TTrigger[]
   notes?: string
   content?: TeachingScenarioStageContent
