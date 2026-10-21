@@ -59,7 +59,11 @@ function changed(a: unknown, b: unknown) {
   return a !== b
 }
 
-/** Product adapter for the shared EDUSIM scenario sequencer. */
+/**
+ * Product adapter for the shared EDUSIM scenario sequencer. EDUMON owns only
+ * monitor-specific snapshots and trigger interpretation; stage sequencing stays
+ * in the shared runtime core.
+ */
 export function createEdumonScenarioRuntimeAdapter(
   applySnapshot: (
     snapshot: EdumonScenarioSnapshot,
