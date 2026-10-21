@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App'
 import { EdusimLanding } from './EdusimLanding'
+import { EduventApp } from './eduvent/EduventApp'
 import { ScenarioBuilderApp } from './scenario-builder/ScenarioBuilderApp'
 import { EdumonApp } from './edumon/EdumonApp'
 import { installEdumonMobileWorkspace } from './edumon/edumonMobileWorkspace'
@@ -31,7 +31,7 @@ if (isEduventRoute || isEdumonRoute) {
 function RoutedApp() {
   if (isScenarioBuilderRoute) return <ScenarioBuilderApp />
   if (isEdumonRoute) return <EdumonApp />
-  if (isEduventRoute) return <App />
+  if (isEduventRoute) return <EduventApp />
   if (isLandingRoute) return <EdusimLanding />
   return <EdusimLanding />
 }
