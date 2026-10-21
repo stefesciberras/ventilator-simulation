@@ -1,0 +1,30 @@
+name: Scenario Builder v0.8.3 transitions and EDUMON sliders
+
+on:
+  push:
+    branches: [chatgpt/scenario-builder-v0.8.3-transitions-edumon-sliders]
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/scenario-builder-v0.8.3-transitions-edumon-sliders
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python3 scripts/apply-scenario-builder-v083.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit implementation
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src
+          git commit -m "Scenario Builder v0.8.3 transitions and EDUMON sliders" || exit 0
+          git push
