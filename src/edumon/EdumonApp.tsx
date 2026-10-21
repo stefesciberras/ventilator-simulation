@@ -48,6 +48,7 @@ function loadEdumonAlarmLimits(): EdumonAlarmLimits {
       mapLow: Number.isFinite(stored.mapLow) ? Number(stored.mapLow) : DEFAULT_EDUMON_ALARM_LIMITS.mapLow,
       mapHigh: Number.isFinite(stored.mapHigh) ? Number(stored.mapHigh) : DEFAULT_EDUMON_ALARM_LIMITS.mapHigh,
       spo2Low: Number.isFinite(stored.spo2Low) ? Number(stored.spo2Low) : DEFAULT_EDUMON_ALARM_LIMITS.spo2Low,
+      spo2High: Number.isFinite(stored.spo2High) ? Number(stored.spo2High) : DEFAULT_EDUMON_ALARM_LIMITS.spo2High,
     }
   } catch {
     return { ...DEFAULT_EDUMON_ALARM_LIMITS }

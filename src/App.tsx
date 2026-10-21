@@ -4,6 +4,7 @@ import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
 import { SharedTeachingTab, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
 import { useSharedAlarmController, type SharedAlarmEvaluation } from './alarms/useSharedAlarmController'
 import { SharedAlarmBanner } from './alarms/SharedAlarmBanner'
+import { VerticalDualAlarmSlider } from './alarms/SharedAlarmLimits'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -126,76 +127,6 @@ function GasMetric({ etco2, spo2, spo2AlarmLevel = null }: { etco2: string; spo2
       <div className={`gas-metric-item spo2 ${spo2AlarmLevel ? `metric-alarm-${spo2AlarmLevel}` : ''}`}>
         <span>SpO₂</span>
         <div><strong>{spo2}</strong><small>%</small></div>
-      </div>
-    </div>
-  )
-}
-
-function VerticalDualAlarmSlider({ label, unit, min, max, step, low, high, onLowChange, onHighChange }: { label: string; unit: string; min: number; max: number; step: number; low: number; high: number; onLowChange: (value: number) => void; onHighChange: (value: number) => void }) {
-  const span = Math.max(0.0001, max - min)
-  const lowPct = ((low - min) / span) * 100
-  const highPct = ((high - min) / span) * 100
-  const dragging = useRef<'low' | 'high' | null>(null)
-  const sliderHeight = 190
-  const handleSize = 20
-  const travel = sliderHeight - handleSize
-  const lowTop = (1 - lowPct / 100) * travel
-  const highTop = (1 - highPct / 100) * travel
-  const precision = step < 1 ? Math.max(0, Math.ceil(-Math.log10(step))) : 0
-
-  const quantise = (value: number) => {
-    const stepped = min + Math.round((value - min) / step) * step
-    return Number(Math.min(max, Math.max(min, stepped)).toFixed(precision))
-  }
-  const setHandleValue = (handle: 'low' | 'high', value: number) => {
-    const next = quantise(value)
-    if (handle === 'low') onLowChange(Math.min(next, high))
-    else onHighChange(Math.max(next, low))
-  }
-  const valueFromPointer = (clientY: number, track: HTMLDivElement) => {
-    const rect = track.getBoundingClientRect()
-    const usableTop = rect.top + handleSize / 2
-    const usableHeight = Math.max(1, rect.height - handleSize)
-    const fraction = Math.min(1, Math.max(0, (usableTop + usableHeight - clientY) / usableHeight))
-    return quantise(min + fraction * span)
-  }
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    const value = valueFromPointer(event.clientY, event.currentTarget)
-    const handle: 'low' | 'high' = Math.abs(value - low) <= Math.abs(value - high) ? 'low' : 'high'
-    dragging.current = handle
-    event.currentTarget.setPointerCapture(event.pointerId)
-    setHandleValue(handle, value)
-  }
-  const continueDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return
-    event.preventDefault()
-    setHandleValue(dragging.current, valueFromPointer(event.clientY, event.currentTarget))
-  }
-  const stopDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    dragging.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-  const onHandleKey = (handle: 'low' | 'high', value: number, event: React.KeyboardEvent<HTMLDivElement>) => {
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : event.key === 'ArrowDown' || event.key === 'ArrowLeft' ? -1 : 0
-    if (!direction) return
-    event.preventDefault()
-    setHandleValue(handle, value + direction * step)
-  }
-
-  return (
-    <div className="alarm-slider-card vertical-dual-card">
-      <span>{label}</span>
-      <strong>{low}–{high} <small>{unit}</small></strong>
-      <div className="vertical-dual-slider-wrap">
-        <em>{max}</em>
-        <div className="vertical-dual-range" onPointerDown={startDrag} onPointerMove={continueDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
-          <div className="vertical-dual-track" />
-          <div className="vertical-dual-active" style={{ bottom: `${10 + lowPct * 1.7}px`, height: `${Math.max(0, highPct - lowPct) * 1.7}px` }} />
-          <div className="vertical-dual-handle low" style={{ top: `${lowTop}px` }} role="slider" tabIndex={0} aria-label={`${label} minimum alarm limit`} aria-valuemin={min} aria-valuemax={high} aria-valuenow={low} onKeyDown={(event) => onHandleKey('low', low, event)} />
-          <div className="vertical-dual-handle high" style={{ top: `${highTop}px` }} role="slider" tabIndex={0} aria-label={`${label} maximum alarm limit`} aria-valuemin={low} aria-valuemax={max} aria-valuenow={high} onKeyDown={(event) => onHandleKey('high', high, event)} />
-        </div>
-        <em>{min}</em>
       </div>
     </div>
   )
