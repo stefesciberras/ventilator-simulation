@@ -15,7 +15,7 @@ import {
   type InstructorScenarioSnapshot,
 } from '../instructorAccount'
 import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'
-import { createCaseMediaSignedUrl, listCaseMediaByIds, releaseSessionCaseMedia } from '../caseMedia'
+import { releaseSessionCaseMedia } from '../caseMedia'
 import { eduventTeachingHost, useTeachingPrompts } from '../teaching'
 import { useTeachingMediaPresentation } from '../teaching/TeachingMediaPresentation'
 import { SharedScenarioRuntimePanel, type SharedScenarioBranchAction } from '../teaching/scenario/SharedScenarioRuntimePanel'
@@ -145,7 +145,6 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
   const [activePreset, setActivePreset] = useState<InstructorPresetRow | null>(null)
   const [selfDirectedRun, setSelfDirectedRun] = useState<SelfDirectedRunStart | null>(null)
   const [selfDirectedError, setSelfDirectedError] = useState<string | null>(null)
-  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
   const [questionState, setQuestionState] = useState({ answered: false, correct: false })
   const prompts = useTeachingPrompts(options.role, options.sessionId, eduventTeachingHost)
   const mediaPresentation = useTeachingMediaPresentation(options.role, options.sessionId)
@@ -266,21 +265,10 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
   useEffect(() => {
     const stage = runtime.stage?.snapshot
     setQuestionState({ answered: false, correct: false })
-    setMediaUrl(null)
     if (!stage) return
     const type = stage.stageType ?? 'controls'
-    if (selfDirectedRun && type === 'media' && stage.media?.mediaId) {
-      let cancelled = false
-      void listCaseMediaByIds([stage.media.mediaId])
-        .then((rows) => {
-          if (!rows[0]) throw new Error('Scenario media is no longer available.')
-          return createCaseMediaSignedUrl(rows[0].storage_path, 3600)
-        })
-        .then((url) => { if (!cancelled) setMediaUrl(url) })
-        .catch(() => undefined)
-      return () => { cancelled = true }
-    }
-    if (!selfDirectedRun && options.role === 'instructor' && options.sessionId) {
+    if (selfDirectedRun) return
+    if (options.role === 'instructor' && options.sessionId) {
       if (type === 'media' && stage.media?.mediaId) {
         void releaseSessionCaseMedia(options.sessionId, stage.media.mediaId)
           .then(() => mediaPresentation.present(stage.media!.mediaId))
@@ -397,7 +385,10 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
     stageNumber={runtime.stageIndex + 1}
     stageCount={runtime.scenario?.stages.length ?? 0}
     notes={runtime.stage.notes}
-    content={runtime.stage.content?.kind === 'media' && mediaUrl ? contentFor(runtime.stage.snapshot, mediaUrl) : runtime.stage.content}
+    content={runtime.stage.content}
+    selfDirected={Boolean(selfDirectedRun)}
+    complete={Boolean(selfDirectedRun) && finalStage}
+    completionMessage="You have reached an endpoint in this scenario."
     manualAdvanceAvailable={!pathDriven && !finalStage && runtime.stage.triggers.some((trigger) => trigger.type === 'manual')}
     onAdvance={async () => { await runtime.advance(options.scenarioElapsedSeconds) }}
     previousAvailable={Boolean(previousStage) && options.role === 'instructor'}

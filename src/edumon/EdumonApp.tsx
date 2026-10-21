@@ -15,7 +15,10 @@ import { SimulationWorkspaceShell } from '../components/SimulationWorkspaceShell
 import { SimulationConsoleShell } from '../components/SimulationConsoleShell'
 import { useSimulationDisplayControls } from '../components/useSimulationDisplayControls'
 import { useScreenWakeLock } from '../useScreenWakeLock'
-import { SharedBasicSessionPanel, deriveAlarmSessionSemantics, useProductTeachingSession, useTeachingAlarmSync } from '../teaching/session'
+import { SharedBasicSessionPanel, useProductTeachingSession } from '../teaching/session'
+import { useSharedAlarmController } from '../alarms/useSharedAlarmController'
+import { SharedAlarmBanner } from '../alarms/SharedAlarmBanner'
+import { evaluateEdumonAlarms } from './alarmDefinitions'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from '../components/InstructorAccountAuth'
 import { useTeachingScenarioRuntime } from '../teaching/scenario/runtimeCore'
 import { createEdumonScenarioRuntimeAdapter } from './scenarioAdapter'
@@ -23,7 +26,7 @@ import type { EdumonStoredScenario } from './scenarioTypes'
 import { TeachingLaserPointerSurface } from '../teaching'
 import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
 import { SharedScenarioRuntimePanel } from '../teaching/scenario/SharedScenarioRuntimePanel'
-import { selfDirectedAssignmentUrl, startSelfDirectedRun, updateSelfDirectedRun } from '../selfDirectedAssignments'
+import { useSharedSelfDirectedScenario } from '../teaching/scenario/useSharedSelfDirectedScenario'
 import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import './edumon.css'
 import './edumon-console-parity.css'
@@ -193,14 +196,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [laserActive, setLaserActive] = useState(false)
   const [auxiliaryMonitor, setAuxiliaryMonitor] = useState<EdumonAuxiliaryMonitorId | null>(null)
   const [topPanel, setTopPanel] = useState<'scenario' | 'about' | null>(null)
-  const [alarmSilencedUntil, setAlarmSilencedUntil] = useState<number | null>(null)
-  const [alarmSilenceRemaining, setAlarmSilenceRemaining] = useState(0)
   const [selectedSavedScenarioId, setSelectedSavedScenarioId] = useState('')
   const launchedScenarioRef = useRef<string | null>(null)
-  const launchedAssignmentRef = useRef<string | null>(null)
-  const [selfDirectedRunId, setSelfDirectedRunId] = useState<string | null>(null)
   const [scenarioQuestionState, setScenarioQuestionState] = useState({ answered: false, correct: false })
-  const alarmSilenceTimeoutRef = useRef<number | null>(null)
   const screenWakeLock = useScreenWakeLock()
 
   useEffect(() => {
@@ -217,24 +215,6 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     return () => cancelAnimationFrame(frame)
   }, [frozen, simulationPaused, simulationSpeed])
 
-  useEffect(() => {
-    if (alarmSilencedUntil == null) {
-      setAlarmSilenceRemaining(0)
-      return
-    }
-    const update = () => {
-      const remaining = Math.max(0, Math.ceil((alarmSilencedUntil - Date.now()) / 1000))
-      setAlarmSilenceRemaining(remaining)
-      if (remaining <= 0) setAlarmSilencedUntil(null)
-    }
-    update()
-    const timer = window.setInterval(update, 250)
-    return () => window.clearInterval(timer)
-  }, [alarmSilencedUntil])
-
-  useEffect(() => () => {
-    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
-  }, [])
 
   const liveSamples = useMemo(() => generateMonitorSamples(patientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE), [patientState, elapsed])
   const samples = frozenSamples ?? liveSamples
@@ -273,8 +253,6 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     laserEnabled: laserActive,
     setLaserEnabled: setLaserActive,
   })
-  const alarmSemantics = deriveAlarmSessionSemantics(teachingSession.role, { syncAlarms: true, candidateCanEditAlarms: false, alarmsSilent: false })
-  const alarmSync = useTeachingAlarmSync(teachingSession.role, teachingSession.session?.id ?? null, (next) => { setAlarmSilencedUntil(next.silenceUntil) })
 
   const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRuntimeAdapter((snapshot) => {
     setPatientState(snapshot.patient)
@@ -282,6 +260,14 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     setSimulationSpeed(snapshot.simulationSpeed)
   }), [])
   const scenarioRuntime = useTeachingScenarioRuntime(edumonScenarioAdapter)
+  const edumonAlarmEvaluations = useMemo(() => evaluateEdumonAlarms(patientState, measurements.meanPressure), [patientState, measurements.meanPressure])
+  const alarmController = useSharedAlarmController({
+    role: teachingSession.role,
+    sessionId: teachingSession.session?.id ?? null,
+    policy: { syncAlarms: true, candidateCanEditAlarms: false, alarmsSilent: false },
+    evaluations: edumonAlarmEvaluations,
+    paused: simulationPaused,
+  })
 
   const loadSavedScenario = async (id: string) => {
     const row = savedScenarios.find((item) => item.id === id)
@@ -298,28 +284,18 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     void loadSavedScenario(requested)
   }, [instructorAuthenticated, teachingSession.role, savedScenarios])
 
-  useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('assignment')?.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) ?? ''
-    if (code.length !== 8 || launchedAssignmentRef.current === code) return
-    launchedAssignmentRef.current = code
-    void startSelfDirectedRun<EdumonStoredScenario>(code).then(async (run) => {
-      if (run.product !== scenarioProduct) {
-        window.location.assign(selfDirectedAssignmentUrl(code, run.product))
-        return
-      }
-      setSelfDirectedRunId(run.runId)
-      await scenarioRuntime.start(run.scenario.definition, elapsed)
-    }).catch((cause) => {
-      console.error('Unable to start self-directed EDUMON scenario', cause)
-      launchedAssignmentRef.current = null
-    })
-  }, [scenarioProduct])
+  const selfDirected = useSharedSelfDirectedScenario<EdumonStoredScenario>({
+    product: scenarioProduct,
+    stageIndex: scenarioRuntime.stageIndex,
+    status: scenarioRuntime.status,
+    complete: scenarioRuntime.status === 'complete',
+    onStart: async (run) => { await scenarioRuntime.start(run.scenario.definition, elapsed) },
+    onClear: () => scenarioRuntime.stop(),
+  })
 
   useEffect(() => {
     setScenarioQuestionState({ answered: false, correct: false })
-    if (selfDirectedRunId && scenarioRuntime.status === 'running') void updateSelfDirectedRun(selfDirectedRunId, scenarioRuntime.stageIndex)
-    if (selfDirectedRunId && scenarioRuntime.status === 'complete') void updateSelfDirectedRun(selfDirectedRunId, scenarioRuntime.stageIndex, true)
-  }, [scenarioRuntime.stageIndex, scenarioRuntime.status, selfDirectedRunId])
+  }, [scenarioRuntime.stageIndex])
 
   const selectedAuxiliary = module.auxiliaryMonitors.find((item) => item.id === auxiliaryMonitor) ?? null
 
@@ -377,22 +353,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const toggleFreeze = displayControls.toggleFreeze
   const toggleLaser = displayControls.toggleLaser
 
-  const silenceAlarm = (durationMs: number) => {
-    if (alarmSemantics.candidateLocked) return
-    if (teachingSession.role === 'instructor' && teachingSession.session?.id) alarmSync.silenceFor(durationMs)
-    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
-    const until = Date.now() + durationMs
-    setAlarmSilencedUntil(until)
-    alarmSilenceTimeoutRef.current = window.setTimeout(() => {
-      setAlarmSilencedUntil(null)
-      alarmSilenceTimeoutRef.current = null
-    }, durationMs)
-  }
-
-
-  const alarmMinutes = Math.floor(alarmSilenceRemaining / 60)
-  const alarmSeconds = alarmSilenceRemaining % 60
-  const alarmSilenceLabel = alarmSilenceRemaining > 0 ? `${alarmMinutes}:${String(alarmSeconds).padStart(2, '0')}` : undefined
+  const silenceAlarm = (durationMs: number) => alarmController.silenceFor(durationMs)
 
   const copyEdumonMonitorDiagnostics = async () => {
     await navigator.clipboard.writeText(JSON.stringify({ product: module.productName, simulationTime: elapsed, patient: patientState, measurements, simulationPaused, simulationSpeed }, null, 2))
@@ -442,12 +403,13 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             frozen={frozen}
             onFreezeToggle={toggleFreeze}
             freezeDisabled={displayControls.freezeDisabled}
-            alarmSilenced={alarmSilenceRemaining > 0}
-            alarmDisabled={alarmSemantics.candidateLocked}
-            alarmLabel={alarmSilenceLabel}
+            alarmSilenced={alarmController.silenced}
+            alarmDisabled={alarmController.candidateLocked}
+            alarmLabel={alarmController.silenceLabel}
             onAlarmSilence={silenceAlarm}
             alarmTimerClassName="edumon-alarm-silence-timer"
           />}
+          status={<div className="alarm-row"><div className="alarm-slot" aria-live="polite"><SharedAlarmBanner level={alarmController.level} labels={alarmController.labels} silenced={alarmController.silenced} /></div></div>}
           display={<div className="edumon-monitor-body">
             <div className="edumon-waveform-area waveforms">
               {TRACE_SPECS.map((spec) => <TraceCanvas key={spec.key} samples={samples} spec={spec} />)}
@@ -479,12 +441,14 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           stageName={scenarioRuntime.stage.name}
           stageNumber={scenarioRuntime.stageIndex + 1}
           stageCount={scenarioRuntime.scenario.stages.length}
-          notes={scenarioRuntime.stage.notes}
+          instructions={scenarioRuntime.stage.notes}
           content={scenarioRuntime.stage.content}
+          selfDirected={selfDirected.active}
+          complete={selfDirected.active && scenarioRuntime.status === 'complete'}
           manualAdvanceAvailable={scenarioRuntime.stage.triggers.some((trigger) => trigger.type === 'manual')}
           onAdvance={async () => { await scenarioRuntime.advance(elapsed) }}
           onQuestionResult={(answered, correct) => setScenarioQuestionState({ answered, correct })}
-          onClose={() => { scenarioRuntime.stop(); setSelfDirectedRunId(null) }}
+          onClose={() => { if (selfDirected.active) selfDirected.clear(); else scenarioRuntime.stop() }}
         />
       )}
 

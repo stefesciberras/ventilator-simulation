@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { SharedTeachingTab, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingAlarmSync, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
+import { SharedTeachingTab, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
+import { useSharedAlarmController, type SharedAlarmEvaluation } from './alarms/useSharedAlarmController'
+import { SharedAlarmBanner } from './alarms/SharedAlarmBanner'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -548,9 +550,6 @@ export default function App() {
   const [nebuliser, setNebuliser] = useState(false)
   const [scenarioActionEvent, setScenarioActionEvent] = useState<{ action: DynamicScenarioActionId; sequence: number } | null>(null)
   const scenarioActionSequenceRef = useRef(0)
-  const [alarmSilenced, setAlarmSilenced] = useState(false)
-  const [alarmClock, setAlarmClock] = useState(() => Date.now())
-  const [alarmLifecycle, setAlarmLifecycle] = useState<Record<string, { activeSince: number | null; resolvedAt: number | null; acknowledged: boolean }>>({})
   const [waveformFrozen, setWaveformFrozen] = useState(false)
   const [simulationPaused, setSimulationPaused] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState<SimulationSpeed>(1)
@@ -593,7 +592,6 @@ export default function App() {
     media.addEventListener('change', update)
     return () => media.removeEventListener('change', update)
   }, [])
-  const previousApneaAlarmActiveRef = useRef(false)
 
   const teachingSession = useTeachingSession({
     patient,
@@ -614,15 +612,6 @@ export default function App() {
   const sharedOxygenFlush = useTeachingSharedOxygenFlush(
     teachingSession.role,
     teachingSession.session?.id ?? null,
-  )
-
-  const teachingAlarmSync = useTeachingAlarmSync(
-    teachingSession.role,
-    teachingSession.session?.id ?? null,
-    (state) => {
-      if (teachingSession.role !== 'candidate') return
-      setAlarmSilenced(Boolean(state.instructorOverride || (state.silenceUntil ?? 0) > Date.now()))
-    },
   )
 
   const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
@@ -804,7 +793,6 @@ export default function App() {
   const patientTransitionRef = useRef<{ from: PatientSettings; to: PatientSettings; start: number; duration: number } | null>(null)
   const scenarioStageTransitionTimerRef = useRef<number | null>(null)
   const scenarioStageTransitionRunningRef = useRef(false)
-  const alarmSilenceTimeoutRef = useRef<number | null>(null)
   const alarmSilenceLongPressTimeoutRef = useRef<number | null>(null)
   const alarmSilenceLongPressTriggeredRef = useRef(false)
   const freezeLongPressTimeoutRef = useRef<number | null>(null)
@@ -812,7 +800,6 @@ export default function App() {
   const oxygenLongPressTimeoutRef = useRef<number | null>(null)
   const oxygenLongPressTriggeredRef = useRef(false)
   const oxygenBoostDeadlineRef = useRef<number | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
   const alarmHistoryRef = useRef<Record<string, { everTriggered: boolean; triggerCount: number; firstTriggeredAt: number | null; lastTriggeredAt: number | null }>>({})
   const [timeline, setTimeline] = useState<Sample[]>(() => {
     const initialSamples = advanceSimulation(
@@ -1073,62 +1060,20 @@ export default function App() {
     oxygenFailure: oxygenFailureActive,
   }
 
-  // Alarm annunciation is episode-scoped. When a breath resolves apnoea, do not
-  // resurrect alarm-lifecycle entries that were resolved/suppressed during the
-  // apnoeic episode. Clear those stale annunciations immediately, then let the
-  // ordinary alarm evaluator below add back only conditions that are genuinely
-  // active in the recovered ventilation state. O2 failure is deliberately kept.
-  const apneaJustResolved = previousApneaAlarmActiveRef.current && !apneaAlarmActive
-  useEffect(() => {
-    const wasActive = previousApneaAlarmActiveRef.current
-    previousApneaAlarmActiveRef.current = apneaAlarmActive
-    if (!wasActive || apneaAlarmActive) return
-
-    const staleApneaEpisodeKeys = new Set([
-      'apnea',
-      'pressure',
-      'co2Low',
-      'co2High',
-      'minuteVentilationLow',
-      'minuteVentilationHigh',
-      'tidalVolumeLow',
-      'tidalVolumeHigh',
-      'respiratoryRateLow',
-      'respiratoryRateHigh',
-    ])
-
-    setAlarmLifecycle((current) => {
-      let changed = false
-      const next = { ...current }
-      for (const key of staleApneaEpisodeKeys) {
-        if (key in next) {
-          delete next[key]
-          changed = true
-        }
-      }
-      return changed ? next : current
-    })
-
-    setAlarmOnsets((current) => {
-      let changed = false
-      const next = { ...current }
-      for (const key of staleApneaEpisodeKeys) {
-        if (next[key] != null) {
-          next[key] = null
-          changed = true
-        }
-      }
-      return changed ? next : current
-    })
-  }, [apneaAlarmActive])
+  const alarmEvaluations = useMemo<SharedAlarmEvaluation[]>(() => [
+    { key: 'apnea', label: 'APNOEA', active: apneaAlarmActive, priority: 'critical' },
+    { key: 'pressureLimit', label: 'PRESSURE LIMIT', active: pressureLimitAlarmActive, priority: 'critical', immediateCritical: true },
+    { key: 'pressure', label: 'HIGH PRESSURE', active: pressureAlarmActive, priority: 'critical', visible: !suppressSecondaryAlarmsForApnea },
+    { key: 'minuteVentilationLow', label: 'LOW MINUTE VENTILATION', active: minuteVentilationLowAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
+    { key: 'minuteVentilationHigh', label: 'HIGH MINUTE VENTILATION', active: minuteVentilationHighAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
+    { key: 'tidalVolumeLow', label: 'LOW TIDAL VOLUME', active: tidalVolumeLowAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
+    { key: 'tidalVolumeHigh', label: 'HIGH TIDAL VOLUME', active: tidalVolumeHighAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
+    { key: 'respiratoryRateLow', label: 'LOW RESPIRATORY RATE', active: respiratoryRateLowAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
+    { key: 'respiratoryRateHigh', label: 'HIGH RESPIRATORY RATE', active: respiratoryRateHighAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
+    { key: 'oxygenFailure', label: 'OXYGEN FAILURE', active: oxygenFailureActive, priority: 'critical' },
+  ], [apneaAlarmActive, pressureLimitAlarmActive, pressureAlarmActive, minuteVentilationLowAlarmActive, minuteVentilationHighAlarmActive, tidalVolumeLowAlarmActive, tidalVolumeHighAlarmActive, respiratoryRateLowAlarmActive, respiratoryRateHighAlarmActive, oxygenFailureActive, suppressSecondaryAlarmsForApnea])
 
   useEffect(() => {
-    const timer = window.setInterval(() => setAlarmClock(Date.now()), 500)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    const now = Date.now()
     setAlarmOnsets((current) => {
       let changed = false
       const next = { ...current }
@@ -1148,80 +1093,27 @@ export default function App() {
       }
       return changed ? next : current
     })
+  }, [apneaAlarmActive, pressureLimitAlarmActive, pressureAlarmActive, minuteVentilationLowAlarmActive, minuteVentilationHighAlarmActive, tidalVolumeLowAlarmActive, tidalVolumeHighAlarmActive, respiratoryRateLowAlarmActive, respiratoryRateHighAlarmActive, oxygenFailureActive, currentSimulationTime])
 
-    setAlarmLifecycle((current) => {
-      let changed = false
-      const next = { ...current }
-      for (const [key, active] of Object.entries(alarmConditions)) {
-        const entry = current[key] ?? { activeSince: null, resolvedAt: null, acknowledged: false }
-        if (active) {
-          if (entry.activeSince == null || entry.resolvedAt != null) {
-            next[key] = { activeSince: now, resolvedAt: null, acknowledged: false }
-            changed = true
-          }
-        } else if (entry.activeSince != null && entry.resolvedAt == null) {
-          next[key] = { ...entry, resolvedAt: now }
-          changed = true
-        }
-      }
-      return changed ? next : current
-    })
-  }, [
-    apneaAlarmActive,
-    pressureLimitAlarmActive,
-    pressureAlarmActive,
-    minuteVentilationLowAlarmActive,
-    minuteVentilationHighAlarmActive,
-    tidalVolumeLowAlarmActive,
-    tidalVolumeHighAlarmActive,
-    respiratoryRateLowAlarmActive,
-    respiratoryRateHighAlarmActive,
-    oxygenFailureActive,
-    currentSimulationTime,
-  ])
-
-  useEffect(() => {
-    setAlarmLifecycle((current) => {
-      let changed = false
-      const next = { ...current }
-      for (const [key, entry] of Object.entries(current)) {
-        if (entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 120000) {
-          delete next[key]
-          changed = true
-        }
-      }
-      return changed ? next : current
-    })
-  }, [alarmClock])
-
-  const criticalAlarmKeys = ['pressureLimit', 'pressure', 'apnea', 'oxygenFailure'] as const
-  const alarmVisibleDuringApnea = (key: string) => !apneaAlarmActive || key === 'apnea' || key === 'pressureLimit' || key === 'oxygenFailure'
-  const activeAlarmKeys = Object.entries(alarmConditions).filter(([, active]) => active).map(([key]) => key)
-  const resolvedYellowKeys = Object.entries(alarmLifecycle)
-    .filter(([key, entry]) => !apneaJustResolved && alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt < 10000)
-    .map(([key]) => key)
-  const greyAlarmKeys = Object.entries(alarmLifecycle)
-    .filter(([key, entry]) => !apneaJustResolved && alarmVisibleDuringApnea(key) && entry.resolvedAt != null && alarmClock - entry.resolvedAt >= 10000 && alarmClock - entry.resolvedAt < 120000 && !entry.acknowledged)
-    .map(([key]) => key)
-  const criticalEscalated = pressureLimitAlarmActive || criticalAlarmKeys.some((key) => {
-    const entry = alarmLifecycle[key]
-    return Boolean(alarmConditions[key] && entry?.activeSince != null && alarmClock - entry.activeSince >= 15000)
+  const alarmController = useSharedAlarmController({
+    role: teachingSession.role,
+    sessionId: teachingSession.session?.id ?? null,
+    policy: {
+      syncAlarms: Boolean(teachingSession.session?.sync_alarms),
+      candidateCanEditAlarms: Boolean(teachingSession.session?.candidate_can_edit_alarms),
+      alarmsSilent: Boolean(teachingSession.session?.alarms_silent),
+    },
+    evaluations: alarmEvaluations,
+    paused: simulationPaused,
+    onAudibleLevelChange: setCandidateAlarmLevelForSession,
   })
-  const audibleAlarmLevel: CandidateAlarmLevel = activeAlarmKeys.length || resolvedYellowKeys.length
-    ? (criticalEscalated ? 'red' : 'yellow')
-    : null
-  const alarmLevel: 'red' | 'yellow' | 'grey' | null = audibleAlarmLevel ?? (greyAlarmKeys.length ? 'grey' : null)
-
-  useEffect(() => {
-    setCandidateAlarmLevelForSession(audibleAlarmLevel)
-  }, [audibleAlarmLevel])
-  const visibleAlarmKeys = new Set([...activeAlarmKeys, ...resolvedYellowKeys, ...greyAlarmKeys])
-  const measurementAlarmNeedsAttention = (...keys: string[]) => keys.some((key) => {
-    const entry = alarmLifecycle[key]
-    if (entry?.acknowledged) return false
-    if (alarmConditions[key as keyof typeof alarmConditions]) return true
-    return entry?.resolvedAt != null && alarmClock - entry.resolvedAt < 120000
-  })
+  const alarmLifecycle = alarmController.lifecycle
+  const audibleAlarmLevel: CandidateAlarmLevel = alarmController.audibleLevel
+  const alarmLevel = alarmController.level
+  const alarmSilenced = alarmController.silenced
+  const visibleAlarmKeys = alarmController.visibleKeys
+  const measurementAlarmNeedsAttention = alarmController.needsAttention
+  const alarmLabels = alarmController.labels
   const ppeakMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('pressureLimit', 'pressure') ? 'yellow' : null
   const tidalVolumeMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('tidalVolumeLow', 'tidalVolumeHigh') ? 'yellow' : null
   const minuteVentilationMetricAlarm: MetricAlarmLevel = measurementAlarmNeedsAttention('minuteVentilationLow', 'minuteVentilationHigh') ? 'yellow' : null
@@ -1229,55 +1121,12 @@ export default function App() {
     ? 'red'
     : measurementAlarmNeedsAttention('respiratoryRateLow', 'respiratoryRateHigh') ? 'yellow' : null
   const spo2MetricAlarm: MetricAlarmLevel = latestSample?.spo2 != null && latestSample.spo2 < 85 ? 'red' : null
-  const alarmLabels = [
-    visibleAlarmKeys.has('pressureLimit') ? 'PRESSURE LIMIT' : null,
-    visibleAlarmKeys.has('pressure') ? 'HIGH PRESSURE' : null,
-    visibleAlarmKeys.has('apnea') ? 'APNOEA' : null,
-    visibleAlarmKeys.has('minuteVentilationLow') ? 'LOW MINUTE VENTILATION' : null,
-    visibleAlarmKeys.has('minuteVentilationHigh') ? 'HIGH MINUTE VENTILATION' : null,
-    visibleAlarmKeys.has('tidalVolumeLow') ? 'LOW TIDAL VOLUME' : null,
-    visibleAlarmKeys.has('tidalVolumeHigh') ? 'HIGH TIDAL VOLUME' : null,
-    visibleAlarmKeys.has('respiratoryRateLow') ? 'LOW RESPIRATORY RATE' : null,
-    visibleAlarmKeys.has('respiratoryRateHigh') ? 'HIGH RESPIRATORY RATE' : null,
-    visibleAlarmKeys.has('oxygenFailure') ? 'OXYGEN FAILURE' : null,
-  ].filter((value): value is string => value != null)
-
-  useEffect(() => {
-    if (!audibleAlarmLevel || alarmSilenced || simulationPaused || teachingSession.candidateAlarmsSilent) return
-    const beep = () => {
-      try {
-        const AudioContextConstructor = window.AudioContext
-        if (!AudioContextConstructor) return
-        const context = audioContextRef.current ?? new AudioContextConstructor()
-        audioContextRef.current = context
-        if (context.state === 'suspended') void context.resume()
-        const oscillator = context.createOscillator()
-        const gain = context.createGain()
-        oscillator.type = 'square'
-        oscillator.frequency.value = audibleAlarmLevel === 'red' ? 1040 : 820
-        gain.gain.setValueAtTime(0.0001, context.currentTime)
-        gain.gain.exponentialRampToValueAtTime(0.055, context.currentTime + 0.01)
-        gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12)
-        oscillator.connect(gain)
-        gain.connect(context.destination)
-        oscillator.start()
-        oscillator.stop(context.currentTime + 0.13)
-      } catch {
-        // Browser audio may remain blocked until the page has received a user gesture.
-      }
-    }
-    beep()
-    const interval = window.setInterval(beep, audibleAlarmLevel === 'red' ? 700 : 1300)
-    return () => window.clearInterval(interval)
-  }, [audibleAlarmLevel, alarmSilenced, simulationPaused, teachingSession.candidateAlarmsSilent])
 
   useEffect(() => () => {
-    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
     if (alarmSilenceLongPressTimeoutRef.current != null) window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
     if (freezeLongPressTimeoutRef.current != null) window.clearTimeout(freezeLongPressTimeoutRef.current)
     if (oxygenLongPressTimeoutRef.current != null) window.clearTimeout(oxygenLongPressTimeoutRef.current)
     if (scenarioStageTransitionTimerRef.current != null) window.clearInterval(scenarioStageTransitionTimerRef.current)
-    void audioContextRef.current?.close()
   }, [])
 
   useEffect(() => {
@@ -1371,24 +1220,7 @@ export default function App() {
     setWaveformFrozen(true)
   }
 
-  const silenceAlarm = (durationMs = 120000) => {
-    if (teachingSession.candidateAlarmsLocked) return
-    if (teachingSession.role === 'instructor' && teachingSession.session?.id) teachingAlarmSync.silenceFor(durationMs)
-    setAlarmLifecycle((current) => {
-      const next = { ...current }
-      for (const [key, entry] of Object.entries(current)) {
-        if (entry.resolvedAt != null) delete next[key]
-        else if (alarmConditions[key as keyof typeof alarmConditions]) next[key] = { ...entry, acknowledged: true }
-      }
-      return next
-    })
-    setAlarmSilenced(true)
-    if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
-    alarmSilenceTimeoutRef.current = window.setTimeout(() => {
-      setAlarmSilenced(false)
-      alarmSilenceTimeoutRef.current = null
-    }, durationMs)
-  }
+  const silenceAlarm = (durationMs = 120000) => alarmController.silenceFor(durationMs)
 
   const clearAlarmSilenceLongPress = () => {
     if (alarmSilenceLongPressTimeoutRef.current != null) {
@@ -1834,12 +1666,7 @@ export default function App() {
           </div>}
           status={<div className="alarm-row">
             <div className="alarm-slot" aria-live="polite">
-              {alarmLevel && (
-                <div className={`alarm-banner ${alarmLevel}`} role="alert">
-                  <strong>{alarmLabels.join(' • ')}</strong>
-                  {(alarmSilenced || teachingSession.candidateAlarmsSilent) && <span>ALARM SILENT</span>}
-                </div>
-              )}
+              <SharedAlarmBanner level={alarmLevel} labels={alarmLabels} silenced={alarmSilenced || teachingSession.candidateAlarmsSilent} />
             </div>
             <button className="mobile-alarm-limits-button" type="button" disabled={teachingSession.candidateAlarmsLocked} onClick={() => setAlarmDialogOpen(true)}>Alarm limits</button>
           </div>}

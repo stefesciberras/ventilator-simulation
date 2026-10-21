@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { createCaseMediaSignedUrl, listCaseMediaByIds } from '../../caseMedia'
 import type { TeachingScenarioStageContent } from './runtimeCore'
+import './SharedScenarioRuntimePanel.css'
 
 export interface SharedScenarioBranchAction {
   id: string
@@ -13,6 +15,8 @@ interface SharedScenarioRuntimePanelProps {
   stageName: string
   stageNumber: number
   stageCount: number
+  instructions?: string
+  /** Backwards-compatible alias for instructions. */
   notes?: string
   content?: TeachingScenarioStageContent
   manualAdvanceAvailable?: boolean
@@ -20,6 +24,10 @@ interface SharedScenarioRuntimePanelProps {
   previousAvailable?: boolean
   onPrevious?: () => void | Promise<void>
   branchActions?: SharedScenarioBranchAction[]
+  complete?: boolean
+  completionTitle?: string
+  completionMessage?: string
+  selfDirected?: boolean
   onQuestionResult?: (answered: boolean, correct: boolean) => void
   onClose?: () => void
 }
@@ -29,6 +37,7 @@ export function SharedScenarioRuntimePanel({
   stageName,
   stageNumber,
   stageCount,
+  instructions,
   notes,
   content,
   manualAdvanceAvailable,
@@ -36,11 +45,16 @@ export function SharedScenarioRuntimePanel({
   previousAvailable,
   onPrevious,
   branchActions = [],
+  complete = false,
+  completionTitle = 'Scenario complete',
+  completionMessage = 'You have reached the end of this scenario.',
+  selfDirected = false,
   onQuestionResult,
   onClose,
 }: SharedScenarioRuntimePanelProps) {
   const [answerId, setAnswerId] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [resolvedMediaUrl, setResolvedMediaUrl] = useState<string | null>(null)
 
   useEffect(() => {
     setAnswerId(null)
@@ -50,6 +64,24 @@ export function SharedScenarioRuntimePanel({
 
   const question = content?.kind === 'question' ? content.question : null
   const media = content?.kind === 'media' ? content.media : null
+  const instructionText = instructions ?? notes
+
+  useEffect(() => {
+    setResolvedMediaUrl(null)
+    if (!media) return
+    if (/^(https?:|data:|blob:)/i.test(media.storagePath)) {
+      setResolvedMediaUrl(media.storagePath)
+      return
+    }
+    if (!media.mediaId) return
+    let cancelled = false
+    void listCaseMediaByIds([media.mediaId])
+      .then((rows) => rows[0] ? createCaseMediaSignedUrl(rows[0].storage_path, 3600) : null)
+      .then((url) => { if (!cancelled) setResolvedMediaUrl(url) })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [media?.mediaId, media?.storagePath])
+
   const submit = () => {
     if (!question || !answerId) return
     const correct = question.kind === 'poll' || question.correctOptionId == null || question.correctOptionId === answerId
@@ -57,33 +89,41 @@ export function SharedScenarioRuntimePanel({
     onQuestionResult?.(true, correct)
   }
 
-  return <aside className="shared-scenario-runtime-panel" aria-label="Active scenario stage">
+  const safeStageCount = Math.max(1, stageCount)
+  const progress = Math.max(0, Math.min(100, (stageNumber / safeStageCount) * 100))
+
+  return <aside className={`shared-scenario-runtime-panel ${selfDirected ? 'self-directed' : ''} ${complete ? 'complete' : ''}`} aria-label="Active scenario stage">
     <header>
       <div><span>{scenarioName}</span><strong>{stageNumber}/{stageCount} · {stageName}</strong></div>
-      {onClose && <button type="button" onClick={onClose} aria-label="Close scenario">×</button>}
+      {onClose && <button type="button" onClick={onClose} aria-label={selfDirected ? 'Exit scenario' : 'Close scenario'}>×</button>}
     </header>
-    {notes && <p>{notes}</p>}
+    <div className="shared-scenario-runtime-progress" aria-label={`Scenario progress: stage ${stageNumber} of ${stageCount}`}>
+      <i style={{ width: `${progress}%` }} />
+    </div>
+    {instructionText && <p className="shared-scenario-runtime-instructions">{instructionText}</p>}
     {media && <div className="shared-scenario-runtime-media">
       <strong>{media.title || 'Scenario media'}</strong>
-      {/^(https?:|data:|blob:)/i.test(media.storagePath) ? (
+      {resolvedMediaUrl ? (
         media.mediaKind === 'video'
-          ? <video controls src={media.storagePath} />
-          : <img src={media.storagePath} alt={media.title || 'Scenario media'} />
-      ) : <small>Teaching media reference: {media.mediaId || media.storagePath || 'not selected'}</small>}
+          ? <video controls playsInline src={resolvedMediaUrl} />
+          : <img src={resolvedMediaUrl} alt={media.title || 'Scenario media'} />
+      ) : <small>{media.mediaId ? 'Loading scenario media…' : `Teaching media reference: ${media.storagePath || 'not selected'}`}</small>}
     </div>}
-    {question && <div className="shared-scenario-runtime-question">
+    {question && !complete && <div className="shared-scenario-runtime-question">
       {question.title && <strong>{question.title}</strong>}
       <p>{question.body}</p>
-      <div>{question.options.map((option) => <label key={option.id}><input type="radio" name="scenario-runtime-question" checked={answerId === option.id} disabled={submitted} onChange={() => setAnswerId(option.id)} /><span>{option.text}</span></label>)}</div>
+      <div>{question.options.map((option) => <label key={option.id}><input type="radio" name={`scenario-runtime-question-${stageNumber}`} checked={answerId === option.id} disabled={submitted} onChange={() => setAnswerId(option.id)} /><span>{option.text}</span></label>)}</div>
       {!submitted ? <button type="button" disabled={!answerId} onClick={submit}>Submit answer</button> : <div className="shared-scenario-runtime-answer">Answer submitted.{question.explanation ? ` ${question.explanation}` : ''}</div>}
     </div>}
-    {branchActions.length > 0 && <div className="instructor-scenario-branches">
-      <strong>Available paths</strong>
-      {branchActions.map((branch) => <button type="button" key={branch.id} className="manual" onClick={() => void branch.onSelect()}><span>{branch.label}</span>{branch.targetLabel && <em>→ {branch.targetLabel}</em>}</button>)}
-    </div>}
-    {(previousAvailable || manualAdvanceAvailable) && <div className="instructor-scenario-flow-actions">
-      {previousAvailable && <button type="button" onClick={() => void onPrevious?.()}>Previous</button>}
-      {manualAdvanceAvailable && <button type="button" className="scenario-builder-primary" onClick={() => void onAdvance?.()}>Next stage</button>}
-    </div>}
+    {complete ? <div className="shared-scenario-runtime-complete"><strong>{completionTitle}</strong><span>{completionMessage}</span></div> : <>
+      {branchActions.length > 0 && <div className="instructor-scenario-branches">
+        <strong>{selfDirected ? 'Choose a path' : 'Available paths'}</strong>
+        {branchActions.map((branch) => <button type="button" key={branch.id} className="manual" onClick={() => void branch.onSelect()}><span>{branch.label}</span>{branch.targetLabel && <em>→ {branch.targetLabel}</em>}</button>)}
+      </div>}
+      {(previousAvailable || manualAdvanceAvailable) && <div className="instructor-scenario-flow-actions">
+        {previousAvailable && <button type="button" onClick={() => void onPrevious?.()}>Previous</button>}
+        {manualAdvanceAvailable && <button type="button" className="scenario-builder-primary" onClick={() => void onAdvance?.()}>{selfDirected ? 'Continue' : 'Next stage'}</button>}
+      </div>}
+    </>}
   </aside>
 }
