@@ -3,6 +3,7 @@ import { TeachingInstructorWorkspace } from './TeachingWorkspace'
 import { TeachingMediaInstructorPanel } from './TeachingMediaPanel'
 import type { TeachingHostAdapter, TeachingRole } from './types'
 import { useTeachingPrompts, useTeachingQuestionLibrary } from './useTeachingInteractions'
+import './TeachingLayoutFixes.css'
 
 export type TeachingPromptsController = ReturnType<typeof useTeachingPrompts>
 export type TeachingQuestionLibraryController = ReturnType<typeof useTeachingQuestionLibrary>
