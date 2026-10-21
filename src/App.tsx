@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
 import { SharedTeachingTab, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingAlarmSync, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
@@ -9,6 +8,9 @@ import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurement
 import { SimulationTopBar } from './components/SimulationTopBar'
 import { SimulationAboutDialog } from './components/SimulationAboutDialog'
 import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from './components/SimulationDiagnosticsMenu'
+import { SimulationConsoleShell } from './components/SimulationConsoleShell'
+import { SimulationWorkspaceShell } from './components/SimulationWorkspaceShell'
+import { useSimulationDisplayControls } from './components/useSimulationDisplayControls'
 import { InteractiveVentilatorStrip, VentilatorModeControl } from './components/InteractiveVentilatorStrip'
 import { Waveform } from './components/Waveform'
 import type { Signal } from './components/Waveform'
@@ -24,7 +26,6 @@ import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
-import { useTeachingSharedWaveformFreeze } from './teaching/useTeachingSharedWaveformFreeze'
 import { useTeachingSharedOxygenFlush } from './teaching/useTeachingSharedOxygenFlush'
 import './session.css'
 import './physiology.css'
@@ -582,8 +583,6 @@ export default function App() {
   const [dynamicScenarioRuntimeHost, setDynamicScenarioRuntimeHost] = useState<HTMLDivElement | null>(null)
   const [dynamicScenarioDiagnostic, setDynamicScenarioDiagnostic] = useState<DynamicScenarioDiagnosticContext | null>(null)
   const [activeStaticScenarioName, setActiveStaticScenarioName] = useState<string | null>(null)
-  const [mobileWorkspacePage, setMobileWorkspacePage] = useState<'ventilator' | 'settings'>('ventilator')
-  const mobileSwipeStartRef = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
   const [wideInstructorLayout, setWideInstructorLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1181px)').matches)
   const scenarioClockOriginRef = useRef(WINDOW_SAMPLES * DT)
 
@@ -617,16 +616,6 @@ export default function App() {
     teachingSession.session?.id ?? null,
   )
 
-  const sharedWaveformFreeze = useTeachingSharedWaveformFreeze(
-    teachingSession.role,
-    teachingSession.session?.id ?? null,
-    (active) => {
-      if (teachingSession.role !== 'candidate') return
-      setWaveformFrozen(active)
-      if (!active) setFrozenSamples(null)
-    },
-  )
-
   const teachingAlarmSync = useTeachingAlarmSync(
     teachingSession.role,
     teachingSession.session?.id ?? null,
@@ -639,8 +628,7 @@ export default function App() {
   const candidateControlsVisible = teachingSession.role !== 'candidate' || teachingSession.session?.candidate_controls_visible !== false
 
   useEffect(() => {
-    if (!candidateControlsVisible && mobileWorkspacePage === 'settings') setMobileWorkspacePage('ventilator')
-  }, [candidateControlsVisible, mobileWorkspacePage])
+  }, [candidateControlsVisible])
 
   useEffect(() => {
     if (teachingSession.role !== 'standalone') return
@@ -648,14 +636,13 @@ export default function App() {
     const deepLinkKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
     if (deepLinkKey.length !== 6) return
     setControlTab('teaching')
-    setMobileWorkspacePage('settings')
   }, [teachingSession.role])
 
   useEffect(() => {
     if (teachingSession.role !== 'candidate') return
     const compactWorkspace = window.matchMedia('(max-width: 1180px)').matches
       || document.body.classList.contains('eduvent-tablet-landscape')
-    if (compactWorkspace) setMobileWorkspacePage('ventilator')
+    if (compactWorkspace) return
   }, [teachingSession.role])
 
   const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, eduventTeachingHost)
@@ -958,6 +945,21 @@ export default function App() {
   }, [effectiveVentilator, patient, simulationPaused, holdOptions, simulationSpeed])
 
   const movingSamples = useMemo(() => timeline.slice(-WINDOW_SAMPLES), [timeline])
+  const displayControls = useSimulationDisplayControls<Sample[]>({
+    role: teachingSession.role,
+    sessionId: teachingSession.session?.id ?? null,
+    frozen: waveformFrozen,
+    setFrozen: setWaveformFrozen,
+    frozenSnapshot: frozenSamples,
+    setFrozenSnapshot: setFrozenSamples,
+    captureSnapshot: () => movingSamples,
+    laserEnabled: teachingLaserEnabled,
+    setLaserEnabled: setTeachingLaserEnabled,
+    onFreezeActivated: () => {
+      recordScenarioAction('freeze-waveform')
+      setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
+    },
+  })
   const samples = waveformFrozen && frozenSamples ? frozenSamples : movingSamples
   const measurementSamples = useMemo(() => timeline.slice(-MINUTE_SAMPLES), [timeline])
   const measures = useMemo(() => calculateMeasurements(measurementSamples, effectiveVentilator), [measurementSamples, effectiveVentilator])
@@ -1307,17 +1309,7 @@ export default function App() {
     if (teachingSession.role === 'candidate' && teachingSession.session?.id) void recordSessionScenarioAction(teachingSession.session.id, action).catch(() => undefined)
   }
 
-  const toggleFreeze = () => {
-    if (!waveformFrozen) {
-      recordScenarioAction('freeze-waveform')
-      setFrozenSamples(movingSamples)
-      setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
-      setWaveformFrozen(true)
-    } else {
-      setWaveformFrozen(false)
-      setFrozenSamples(null)
-    }
-  }
+  const toggleFreeze = displayControls.toggleFreeze
 
   const startFreezeLongPress = () => {
     if (teachingSession.role !== 'instructor' || !teachingSession.session?.id) return
@@ -1326,15 +1318,7 @@ export default function App() {
     freezeLongPressTimeoutRef.current = window.setTimeout(() => {
       freezeLongPressTimeoutRef.current = null
       freezeLongPressTriggeredRef.current = true
-      const next = !sharedWaveformFreeze.active
-      if (next) recordScenarioAction('freeze-waveform')
-      if (next && !waveformFrozen) {
-        setFrozenSamples(movingSamples)
-        setTraceCursor(Math.min(Math.floor(movingSamples.length * 0.7), Math.max(0, movingSamples.length - 1)))
-      }
-      setWaveformFrozen(next)
-      if (!next) setFrozenSamples(null)
-      sharedWaveformFreeze.setActive(next)
+      displayControls.setSharedFrozen(!displayControls.sharedFrozen)
     }, 700)
   }
 
@@ -1348,13 +1332,6 @@ export default function App() {
   const handleFreezeClick = () => {
     if (freezeLongPressTriggeredRef.current) {
       freezeLongPressTriggeredRef.current = false
-      return
-    }
-    if (teachingSession.role === 'candidate' && sharedWaveformFreeze.active) return
-    if (teachingSession.role === 'instructor' && sharedWaveformFreeze.active) {
-      setWaveformFrozen(false)
-      setFrozenSamples(null)
-      sharedWaveformFreeze.setActive(false)
       return
     }
     toggleFreeze()
@@ -1681,28 +1658,6 @@ export default function App() {
   }))
   const isHoldKey = (key: string) => key === ' ' || key === 'Enter'
 
-  const handleMobileWorkspaceTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (!window.matchMedia('(max-width: 1180px)').matches || event.touches.length !== 1) {
-      mobileSwipeStartRef.current = null
-      return
-    }
-    const touch = event.touches[0]
-    const target = event.target as HTMLElement
-    const blocked = Boolean(target.closest('button, input, select, textarea, a, [role=\"slider\"], .waveform-card.cursor-enabled'))
-    mobileSwipeStartRef.current = { x: touch.clientX, y: touch.clientY, blocked }
-  }
-
-  const handleMobileWorkspaceTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
-    const start = mobileSwipeStartRef.current
-    mobileSwipeStartRef.current = null
-    if (!start || start.blocked || event.changedTouches.length !== 1) return
-    const touch = event.changedTouches[0]
-    const deltaX = touch.clientX - start.x
-    const deltaY = touch.clientY - start.y
-    if (Math.abs(deltaX) < 55 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return
-    setMobileWorkspacePage(deltaX > 0 ? 'ventilator' : 'settings')
-  }
-
   const eduventDiagnosticActions: SimulationDiagnosticAction[] = [
     { id: 'simulation', label: 'Simulation Logs', description: 'Settings, alarms and visible waveform', onSelect: copyDiagnostics },
     { id: 'snapshot', label: 'Scenario Debug Snapshot', description: 'Complete scenario, current stage/state and recent events', onSelect: copyScenarioSnapshotDiagnostics },
@@ -1758,7 +1713,7 @@ export default function App() {
               runtimeHost={dynamicScenarioRuntimeHost}
               onStartInstructorSession={startInstructorSession}
               onAccountConnectionChange={setInstructorAccountConnected}
-              onDynamicScenarioStarted={() => { setActiveStaticScenarioName(null); setControlTab('teaching'); setMobileWorkspacePage('settings') }}
+              onDynamicScenarioStarted={() => { setActiveStaticScenarioName(null); setControlTab('teaching') }}
               onStaticScenarioLoaded={(name) => { setActiveStaticScenarioName(name); setControlTab('teaching') }}
               onScenarioDiagnosticChange={setDynamicScenarioDiagnostic}
               scenarioActionEvent={scenarioActionEvent}
@@ -1776,18 +1731,19 @@ export default function App() {
         )}
       />
 
-      <nav className={`mobile-workspace-switcher ${candidateControlsVisible ? '' : 'candidate-controls-hidden'}`} aria-label="Mobile workspace pages">
-        <button type="button" className={mobileWorkspacePage === 'ventilator' ? 'active' : ''} aria-current={mobileWorkspacePage === 'ventilator' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('ventilator')}>Ventilator</button>
-        {candidateControlsVisible && <button type="button" className={mobileWorkspacePage === 'settings' ? 'active' : ''} aria-current={mobileWorkspacePage === 'settings' ? 'page' : undefined} onClick={() => setMobileWorkspacePage('settings')}>Controls</button>}
-      </nav>
-
-      <div
-        className={`workspace mobile-page-${mobileWorkspacePage} ${candidateControlsVisible ? '' : 'candidate-controls-hidden'}`}
-        onTouchStart={handleMobileWorkspaceTouchStart}
-        onTouchEnd={handleMobileWorkspaceTouchEnd}
-      >
-        <section className="ventilator-console">
-          <div className="console-mode-bar">
+      <SimulationWorkspaceShell
+        displayLabel="Ventilator"
+        controlsLabel="Controls"
+        ariaLabel="EDUVENT workspace pages"
+        displayPageClassName="mobile-page-ventilator"
+        controlsPageClassName="mobile-page-settings"
+        controlsVisible={candidateControlsVisible}
+        allowSwipeFromCanvas
+        display={(
+        <SimulationConsoleShell
+          ariaLabel="Mechanical ventilator"
+          className="eduvent-console"
+          header={<div className="console-mode-bar">
             <VentilatorModeControl
               settings={ventilator}
               onChange={setVentilator}
@@ -1798,7 +1754,7 @@ export default function App() {
               <button
                 type="button"
                 className={`hardware-button icon-button teaching-laser-console-button ${teachingLaserEnabled ? 'active' : ''}`}
-                onClick={() => setTeachingLaserEnabled((enabled) => !enabled)}
+                onClick={displayControls.toggleLaser}
                 title={teachingLaserEnabled ? 'Turn off laser pointer' : 'Laser pointer'}
                 aria-label={teachingLaserEnabled ? 'Turn off laser pointer' : 'Laser pointer'}
                 aria-pressed={teachingLaserEnabled}
@@ -1828,20 +1784,20 @@ export default function App() {
             <button className={`hardware-button icon-button ${nebuliser ? 'active blue' : ''}`} onClick={toggleNebuliser} title="Nebuliser" aria-label="Nebuliser"><NebuliserIcon /></button>
             <div className="freeze-control-group">
               <button
-                className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''} ${sharedWaveformFreeze.active ? 'shared-freeze' : ''}`}
+                className={`hardware-button icon-button freeze-button ${waveformFrozen ? 'active' : ''} ${displayControls.sharedFrozen ? 'shared-freeze' : ''}`}
                 onClick={handleFreezeClick}
                 onPointerDown={startFreezeLongPress}
                 onPointerUp={finishFreezePress}
                 onPointerCancel={finishFreezePress}
                 onPointerLeave={finishFreezePress}
                 onContextMenu={(event) => event.preventDefault()}
-                disabled={teachingSession.role === 'candidate' && sharedWaveformFreeze.active}
-                title={sharedWaveformFreeze.active
+                disabled={teachingSession.role === 'candidate' && displayControls.sharedFrozen}
+                title={displayControls.sharedFrozen
                   ? (teachingSession.role === 'instructor' ? 'All screens frozen — press to resume all' : 'All screens frozen by instructor')
                   : (teachingSession.role === 'instructor' ? 'Press to freeze locally; hold to freeze instructor and candidate waveforms' : (waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms'))}
-                aria-label={sharedWaveformFreeze.active ? 'All screens frozen' : (waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms')}
+                aria-label={displayControls.sharedFrozen ? 'All screens frozen' : (waveformFrozen ? 'Resume waveforms' : 'Freeze waveforms')}
               ><FreezeWaveformIcon /></button>
-              {sharedWaveformFreeze.active && <span className="shared-freeze-label">All screens frozen</span>}
+              {displayControls.sharedFrozen && <span className="shared-freeze-label">All screens frozen</span>}
             </div>
             <button
               className={`hardware-button hold-button ${inspiratoryHoldPressed ? 'active' : ''}`}
@@ -1875,9 +1831,8 @@ export default function App() {
               aria-label="Silence alarm sound: press for 2 minutes, hold for 10 minutes"
             ><AlarmSilenceIcon /></button>
             </div>
-          </div>
-
-          <div className="alarm-row">
+          </div>}
+          status={<div className="alarm-row">
             <div className="alarm-slot" aria-live="polite">
               {alarmLevel && (
                 <div className={`alarm-banner ${alarmLevel}`} role="alert">
@@ -1887,9 +1842,8 @@ export default function App() {
               )}
             </div>
             <button className="mobile-alarm-limits-button" type="button" disabled={teachingSession.candidateAlarmsLocked} onClick={() => setAlarmDialogOpen(true)}>Alarm limits</button>
-          </div>
-
-          <div className="screen-body teaching-laser-target">
+          </div>}
+          display={<div className="screen-body teaching-laser-target">
             <TeachingLaserPointerSurface
               role={teachingSession.role}
               sessionId={teachingSession.session?.id ?? null}
@@ -1999,17 +1953,17 @@ export default function App() {
               />
               {waveformFrozen && selectedSample && <div className="cursor-hint">← → or drag trace cursor</div>}
             </aside>
-          </div>
-
-          <InteractiveVentilatorStrip
+          </div>}
+          footer={<InteractiveVentilatorStrip
             settings={ventilator}
             onChange={setVentilator}
             disabled={teachingSession.candidateVentilatorLocked}
             fio2Override={effectiveVentilator.fio2}
             fio2BoostActive={oxygenBoostActive}
-          />
-        </section>
-
+          />}
+        />
+        )}
+        controls={(
         <aside className="control-panel tabbed-control-panel">
           <div className="control-navigation-stack">
             <div className="patient-profile-strip" role="group" aria-label="Patient profiles">
@@ -2122,7 +2076,8 @@ export default function App() {
           </div>
           <div className="disclaimer">Educational simulation only — not a medical device and not for clinical decision-making.</div>
         </aside>
-      </div>
+        )}
+      />
     </main>
   )
 }
