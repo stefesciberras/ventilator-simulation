@@ -1,16 +1,9 @@
+import type { ReactNode } from 'react'
 import type { EdumonModuleDefinition } from './modules'
 import { SimulationTopBar, type SharedSimulationSpeed } from '../components/SimulationTopBar'
 import './EdumonTopBar.css'
 
 export type EdumonSimulationSpeed = SharedSimulationSpeed
-
-function CloudIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M7.2 18.2h10.1a4 4 0 0 0 .7-7.9A6.2 6.2 0 0 0 6.2 8.6a4.9 4.9 0 0 0 1 9.6Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
 function ScenarioIcon() {
   return (
@@ -46,14 +39,14 @@ interface EdumonTopBarProps {
   onSpeedChange: (speed: EdumonSimulationSpeed) => void
   simulationControlsLocked?: boolean
   onScenario: () => void
-  onAccount: () => void
+  accountAction: ReactNode
   onAbout: () => void
 }
 
-export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, onAccount, onAbout }: EdumonTopBarProps) {
+export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, onAbout }: EdumonTopBarProps) {
   const actions = (
     <>
-      <button type="button" className="top-account-button" onClick={onAccount} title="Instructor account" aria-label="Open instructor account"><CloudIcon /></button>
+      {accountAction}
       <button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button>
       <a className="top-account-button edumon-module-menu-button" href="/edumon" title="EDUMON modules" aria-label="Choose EDUMON module"><MenuIcon /></a>
       <button type="button" className="top-diagnostic-button" onClick={onAbout} title="EDUMON information" aria-label="Open EDUMON information"><MonitorIcon /></button>

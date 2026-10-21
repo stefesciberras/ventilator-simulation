@@ -11,15 +11,10 @@ import {
   asDynamicScenario,
   asStaticScenario,
   createFullDynamicStageApplyMask,
-  createInstructorAccount,
   createInstructorPreset,
   deleteInstructorPreset,
   dynamicStageTriggers,
-  getInstructorAccount,
   listInstructorPresets,
-  signInInstructor,
-  signOutInstructor,
-  subscribeToInstructorAccount,
   updateInstructorPreset,
   type DynamicScenarioActionId,
   type DynamicScenarioApplyMask,
@@ -38,6 +33,7 @@ import {
 } from '../session/supabase'
 import { APP_VERSION } from '../appVersion'
 import { DynamicScenarioRuntimeLibrary } from './DynamicScenarioRuntimeLibrary'
+import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from './InstructorAccountAuth'
 import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'
 import { createCaseMediaSignedUrl, listCaseMediaByIds, releaseSessionCaseMedia } from '../caseMedia'
 import { eduventTeachingHost, useTeachingPrompts } from '../teaching'
@@ -241,17 +237,12 @@ function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
 }
 
 export function InstructorAccountControls({ role, sessionId, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange, scenarioActionEvent = null }: InstructorAccountControlsProps) {
-  const [account, setAccount] = useState<User | null>(null)
+  const accountChangeLocked = role !== 'standalone'
+  const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
+  const account = accountAuth.account
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
-  const [accountOpen, setAccountOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [scenarioOpen, setScenarioOpen] = useState(false)
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [presets, setPresets] = useState<InstructorPresetRow[]>([])
   const [presetName, setPresetName] = useState('')
   const [presetDescription, setPresetDescription] = useState('')
@@ -379,84 +370,9 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   }
 
   useEffect(() => {
-    let active = true
-    void getInstructorAccount()
-      .then((user) => {
-        if (!active) return
-        setAccount(user)
-        if (user) void refreshPresets(user)
-      })
-      .catch(() => undefined)
-
-    const unsubscribe = subscribeToInstructorAccount((user) => {
-      if (!active) return
-      setAccount(user)
-      setMessage(null)
-      setError(null)
-      if (user) void refreshPresets(user)
-      else setPresets([])
-    })
-
-    return () => {
-      active = false
-      unsubscribe()
-    }
-  }, [])
-
-  const accountChangeLocked = role !== 'standalone'
-
-  const submitAuth = async (event: React.FormEvent) => {
-    event.preventDefault()
-    if (accountChangeLocked) {
-      setError('End or leave the teaching session before changing instructor account.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    setMessage(null)
-    try {
-      if (authMode === 'signin') {
-        const user = await signInInstructor(email, password)
-        setAccount(user)
-        setMessage('Instructor account connected.')
-        setPassword('')
-        await refreshPresets(user)
-      } else {
-        const created = await createInstructorAccount(email, password)
-        setPassword('')
-        if (created.confirmationRequired) {
-          setMessage('Account created. Check your email to confirm the address, then return to EDUVENT and sign in.')
-        } else if (created.user) {
-          setAccount(created.user)
-          setMessage('Instructor account created and connected.')
-          await refreshPresets(created.user)
-        }
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to complete account request.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const logout = async () => {
-    if (accountChangeLocked) {
-      setError('End or leave the teaching session before signing out.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      await signOutInstructor()
-      setAccount(null)
-      setPresets([])
-      setMessage('Instructor cloud account disconnected.')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to sign out.')
-    } finally {
-      setBusy(false)
-    }
-  }
+    if (account) void refreshPresets(account)
+    else setPresets([])
+  }, [account])
 
   const openScenarios = () => {
     setScenarioOpen(true)
@@ -851,15 +767,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
 
   return (
     <>
-      <button
-        type="button"
-        className={`top-account-button ${account ? 'connected' : ''}`}
-        title={accountLabel(account)}
-        aria-label={account ? `Instructor cloud account connected as ${account.email}` : 'Instructor cloud account sign in'}
-        onClick={() => { setAccountOpen(true); setMessage(null); setError(null) }}
-      >
-        <CloudIcon connected={Boolean(account)} />
-      </button>
+      <InstructorAccountButton auth={accountAuth} />
       {role !== 'candidate' && (
         <button
           type="button"
@@ -926,41 +834,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
         <MenuIcon />
       </button>
 
-      {accountOpen && (
-        <div className="account-dialog-backdrop" onMouseDown={() => setAccountOpen(false)}>
-          <section className="account-dialog" role="dialog" aria-modal="true" aria-label="Instructor cloud account" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="account-dialog-heading">
-              <div><span>Cloud</span><h2>Instructor account</h2></div>
-              <button type="button" className="account-close-button" onClick={() => setAccountOpen(false)} aria-label="Close account dialog"><CloseIcon /></button>
-            </div>
-
-            {account ? (
-              <div className="account-connected-card">
-                <span>Connected instructor</span>
-                <strong>{account.email}</strong>
-                <small>Cloud scenarios are private to this account.</small>
-                <button type="button" className="account-secondary-button" disabled={busy || accountChangeLocked} onClick={() => void logout()}>Sign out</button>
-                {accountChangeLocked && <p>Finish the current teaching session before changing accounts.</p>}
-              </div>
-            ) : (
-              <>
-                <div className="account-auth-tabs" role="tablist" aria-label="Instructor account action">
-                  <button type="button" className={authMode === 'signin' ? 'selected' : ''} onClick={() => { setAuthMode('signin'); setError(null); setMessage(null) }}>Sign in</button>
-                  <button type="button" className={authMode === 'signup' ? 'selected' : ''} onClick={() => { setAuthMode('signup'); setError(null); setMessage(null) }}>Create account</button>
-                </div>
-                <form className="account-auth-form" onSubmit={submitAuth}>
-                  <label><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
-                  <label><span>Password</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'} minLength={8} required /></label>
-                  <button type="submit" className="account-primary-button" disabled={busy || accountChangeLocked}>{busy ? 'Please wait…' : authMode === 'signin' ? 'Sign in' : 'Create instructor account'}</button>
-                </form>
-                {accountChangeLocked && <p className="account-hint">Finish the current teaching session before changing accounts.</p>}
-              </>
-            )}
-            {message && <div className="account-message">{message}</div>}
-            {error && <div className="account-error" role="alert">{error}</div>}
-          </section>
-        </div>
-      )}
+      <InstructorAccountDialog auth={accountAuth} locked={accountChangeLocked} />
 
       {scenarioOpen && (
         <div className="account-dialog-backdrop" onMouseDown={() => setScenarioOpen(false)}>
@@ -1074,7 +948,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
               <div className="scenario-signin-card">
                 <strong>Cloud account required</strong>
                 <p>Static scenarios are saved privately to your instructor account so they are available on any device.</p>
-                <button type="button" className="account-primary-button" onClick={() => { setScenarioOpen(false); setAccountOpen(true) }}>Sign in to instructor account</button>
+                <button type="button" className="account-primary-button" onClick={() => { setScenarioOpen(false); accountAuth.setOpen(true) }}>Sign in to instructor account</button>
               </div>
             )}
             {presetMessage && <div className="account-message">{presetMessage}</div>}
