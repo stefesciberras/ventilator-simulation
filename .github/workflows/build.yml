@@ -3,16 +3,32 @@ name: Build
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, chatgpt/scenario-builder-v0.8.4-edumon-transitions]
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Apply EDUMON transition implementation
+        if: github.ref_name == 'chatgpt/scenario-builder-v0.8.4-edumon-transitions'
+        run: python3 scripts/apply-edumon-transitions-v084.py
       - run: npm ci
       - run: npm run build
+      - name: Commit implementation
+        if: github.ref_name == 'chatgpt/scenario-builder-v0.8.4-edumon-transitions'
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src
+          git commit -m "Scenario Builder v0.8.4 EDUMON transitions" || exit 0
+          git push
