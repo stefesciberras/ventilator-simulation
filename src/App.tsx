@@ -25,6 +25,7 @@ import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
 import { useTeachingSharedWaveformFreeze } from './teaching/useTeachingSharedWaveformFreeze'
+import { useTeachingSharedOxygenFlush } from './teaching/useTeachingSharedOxygenFlush'
 import './session.css'
 import './physiology.css'
 
@@ -611,6 +612,11 @@ export default function App() {
     setSimulationSpeed,
   })
 
+  const sharedOxygenFlush = useTeachingSharedOxygenFlush(
+    teachingSession.role,
+    teachingSession.session?.id ?? null,
+  )
+
   const sharedWaveformFreeze = useTeachingSharedWaveformFreeze(
     teachingSession.role,
     teachingSession.session?.id ?? null,
@@ -816,6 +822,8 @@ export default function App() {
   const alarmSilenceLongPressTriggeredRef = useRef(false)
   const freezeLongPressTimeoutRef = useRef<number | null>(null)
   const freezeLongPressTriggeredRef = useRef(false)
+  const oxygenLongPressTimeoutRef = useRef<number | null>(null)
+  const oxygenLongPressTriggeredRef = useRef(false)
   const oxygenBoostDeadlineRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const alarmHistoryRef = useRef<Record<string, { everTriggered: boolean; triggerCount: number; firstTriggeredAt: number | null; lastTriggeredAt: number | null }>>({})
@@ -902,7 +910,8 @@ export default function App() {
     return () => window.clearInterval(interval)
   }, [oxygenBoost])
 
-  const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoost ? 1 : ventilator.fio2 }), [ventilator, oxygenBoost])
+  const oxygenBoostActive = oxygenBoost || sharedOxygenFlush.active
+  const effectiveVentilator = useMemo(() => ({ ...ventilator, fio2: oxygenBoostActive ? 1 : ventilator.fio2 }), [ventilator, oxygenBoostActive])
   const holdOptions = useMemo(() => ({
     inspiratoryHoldRequestTime,
     inspiratoryHoldReleaseTime,
@@ -1264,6 +1273,7 @@ export default function App() {
     if (alarmSilenceTimeoutRef.current != null) window.clearTimeout(alarmSilenceTimeoutRef.current)
     if (alarmSilenceLongPressTimeoutRef.current != null) window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
     if (freezeLongPressTimeoutRef.current != null) window.clearTimeout(freezeLongPressTimeoutRef.current)
+    if (oxygenLongPressTimeoutRef.current != null) window.clearTimeout(oxygenLongPressTimeoutRef.current)
     if (scenarioStageTransitionTimerRef.current != null) window.clearInterval(scenarioStageTransitionTimerRef.current)
     void audioContextRef.current?.close()
   }, [])
@@ -1447,7 +1457,7 @@ export default function App() {
     ]
     const copied = await copyDiagnosticSnapshot({
       appVersion: APP_VERSION,
-      simulation: { time: currentSimulationTime, paused: simulationPaused, waveformFrozen, activeMode, oxygenBoost, nebuliser, alarmSilenced },
+      simulation: { time: currentSimulationTime, paused: simulationPaused, waveformFrozen, activeMode, oxygenBoost: oxygenBoostActive, nebuliser, alarmSilenced },
       settings: {
         ventilator,
         effectiveVentilator,
@@ -1550,18 +1560,56 @@ export default function App() {
     if (copied) window.setTimeout(() => setDiagnosticCopied(null), 1800)
   }
 
-  const toggleOxygenBoost = () => {
-    if (oxygenBoost) {
-      oxygenBoostDeadlineRef.current = null
-      setOxygenBoost(false)
-      setOxygenBoostSecondsRemaining(0)
-      return
-    }
+  const stopLocalOxygenBoost = () => {
+    oxygenBoostDeadlineRef.current = null
+    setOxygenBoost(false)
+    setOxygenBoostSecondsRemaining(0)
+  }
 
+  const startLocalOxygenBoost = () => {
     recordScenarioAction('oxygen-flush')
     oxygenBoostDeadlineRef.current = Date.now() + 60_000
     setOxygenBoostSecondsRemaining(60)
     setOxygenBoost(true)
+  }
+
+  const toggleOxygenBoost = () => {
+    if (oxygenBoost) stopLocalOxygenBoost()
+    else startLocalOxygenBoost()
+  }
+
+  const startOxygenLongPress = () => {
+    if (teachingSession.role !== 'instructor' || !teachingSession.session?.id) return
+    oxygenLongPressTriggeredRef.current = false
+    if (oxygenLongPressTimeoutRef.current != null) window.clearTimeout(oxygenLongPressTimeoutRef.current)
+    oxygenLongPressTimeoutRef.current = window.setTimeout(() => {
+      oxygenLongPressTimeoutRef.current = null
+      oxygenLongPressTriggeredRef.current = true
+      const next = !sharedOxygenFlush.active
+      if (next) startLocalOxygenBoost()
+      else stopLocalOxygenBoost()
+      sharedOxygenFlush.setActive(next)
+    }, 700)
+  }
+
+  const finishOxygenPress = () => {
+    if (oxygenLongPressTimeoutRef.current != null) {
+      window.clearTimeout(oxygenLongPressTimeoutRef.current)
+      oxygenLongPressTimeoutRef.current = null
+    }
+  }
+
+  const handleOxygenBoostClick = () => {
+    if (oxygenLongPressTriggeredRef.current) {
+      oxygenLongPressTriggeredRef.current = false
+      return
+    }
+    if (teachingSession.role === 'instructor' && sharedOxygenFlush.active) {
+      stopLocalOxygenBoost()
+      sharedOxygenFlush.setActive(false)
+      return
+    }
+    toggleOxygenBoost()
   }
 
   const toggleNebuliser = () => {
@@ -1570,6 +1618,11 @@ export default function App() {
       return !active
     })
   }
+
+  useEffect(() => {
+    if (teachingSession.role !== 'instructor' || !sharedOxygenFlush.active || oxygenBoost) return
+    sharedOxygenFlush.setActive(false)
+  }, [oxygenBoost, sharedOxygenFlush.active, sharedOxygenFlush.setActive, teachingSession.role])
 
   const oxygenBoostTimer = `0:${String(oxygenBoostSecondsRemaining).padStart(2, '0')}`
   const selectedProfileSettings = selectedPatientProfile === 'ARDS' && ardsSeverity !== 'off'
@@ -1751,12 +1804,24 @@ export default function App() {
                 aria-pressed={teachingLaserEnabled}
               ><LaserPointerIcon /></button>
             )}
-            <div className={`oxygen-enrichment-control ${oxygenBoost ? 'active' : ''}`}>
+            <div className={`oxygen-enrichment-control ${oxygenBoostActive ? 'active' : ''}`}>
               <button
-                className={`hardware-button oxygen-button ${oxygenBoost ? 'active amber' : ''}`}
-                onClick={toggleOxygenBoost}
-                title={oxygenBoost ? 'O₂ enrichment active at 100% — press to cancel' : 'O₂ enrichment: 100% oxygen for 1 minute'}
-                aria-label={oxygenBoost ? `O₂ enrichment active, ${oxygenBoostSecondsRemaining} seconds remaining. Press to cancel.` : 'Start O₂ enrichment at 100 percent for 1 minute'}
+                className={`hardware-button oxygen-button ${oxygenBoostActive ? 'active amber' : ''} ${sharedOxygenFlush.active ? 'shared-oxygen' : ''}`}
+                onClick={handleOxygenBoostClick}
+                onPointerDown={startOxygenLongPress}
+                onPointerUp={finishOxygenPress}
+                onPointerCancel={finishOxygenPress}
+                onPointerLeave={finishOxygenPress}
+                onContextMenu={(event) => event.preventDefault()}
+                title={sharedOxygenFlush.active
+                  ? (teachingSession.role === 'instructor' ? 'Shared O₂ enrichment active — press to stop for everyone' : 'Instructor shared O₂ enrichment active; your local O₂ control remains independent')
+                  : oxygenBoost ? 'O₂ enrichment active at 100% — press to cancel'
+                    : teachingSession.role === 'instructor' && teachingSession.session?.id ? 'O₂ enrichment: press for local, hold for all screens'
+                      : 'O₂ enrichment: 100% oxygen for 1 minute'}
+                aria-label={sharedOxygenFlush.active
+                  ? 'Shared O₂ enrichment active at 100 percent'
+                  : oxygenBoost ? `O₂ enrichment active, ${oxygenBoostSecondsRemaining} seconds remaining. Press to cancel.`
+                    : 'Start O₂ enrichment at 100 percent for 1 minute'}
               >O₂</button>
               {oxygenBoost && <span className="oxygen-enrichment-timer" aria-live="polite">{oxygenBoostTimer}</span>}
             </div>
@@ -1941,7 +2006,7 @@ export default function App() {
             onChange={setVentilator}
             disabled={teachingSession.candidateVentilatorLocked}
             fio2Override={effectiveVentilator.fio2}
-            fio2BoostActive={oxygenBoost}
+            fio2BoostActive={oxygenBoostActive}
           />
         </section>
 
@@ -2042,7 +2107,7 @@ export default function App() {
               <div className="control-tab-pane" role="tabpanel">
                 <fieldset className={`session-lock-fieldset ventilator-settings-fieldset ${teachingSession.candidateVentilatorLocked ? 'locked' : ''}`} disabled={teachingSession.candidateVentilatorLocked}>
                   {teachingSession.candidateVentilatorLocked && <div className="session-control-lock-label">Instructor controlled</div>}
-                  <VentilatorControls collapsible={false} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoost} />
+                  <VentilatorControls collapsible={false} settings={ventilator} onChange={setVentilator} onReset={resetVentilator} fio2Override={effectiveVentilator.fio2} fio2BoostActive={oxygenBoostActive} />
                 </fieldset>
               </div>
             )}
