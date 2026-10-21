@@ -1,0 +1,33 @@
+name: Refactor generic scenarios
+on:
+  push:
+    branches:
+      - edusim/generic-scenarios-self-directed-library
+jobs:
+  refactor:
+    if: ${{ !contains(github.event.head_commit.message, '[skip refactor]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: edusim/generic-scenarios-self-directed-library
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python scripts/refactor_generic_scenarios.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit generated refactor
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src
+          if git diff --cached --quiet; then
+            echo "No generated changes"
+          else
+            git commit -m "[skip refactor] Complete shared scenario framework integration"
+            git push origin HEAD:edusim/generic-scenarios-self-directed-library
+          fi
