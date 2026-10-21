@@ -23,14 +23,14 @@ export function evaluateEdumonAlarms(
   meanPressure: number | null,
   limits: EdumonAlarmLimits = DEFAULT_EDUMON_ALARM_LIMITS,
 ): SharedAlarmEvaluation[] {
-  const organisedRhythm = patient.rhythm !== 'vf' && patient.rhythm !== 'asystole'
+  const organisedRhythm = patient.rhythm !== 'ventricular-fibrillation' && patient.rhythm !== 'asystole'
   return [
     { key: 'heartRateLow', label: 'LOW HEART RATE', active: organisedRhythm && patient.heartRate < limits.heartRateLow, priority: 'warning' },
     { key: 'heartRateHigh', label: 'HIGH HEART RATE', active: organisedRhythm && patient.heartRate > limits.heartRateHigh, priority: 'warning' },
     { key: 'mapLow', label: 'LOW ARTERIAL PRESSURE', active: meanPressure != null && meanPressure < limits.mapLow, priority: 'critical' },
     { key: 'mapHigh', label: 'HIGH ARTERIAL PRESSURE', active: meanPressure != null && meanPressure > limits.mapHigh, priority: 'warning' },
     { key: 'spo2Low', label: 'LOW SpO₂', active: patient.spo2 < limits.spo2Low, priority: 'critical' },
-    { key: 'vf', label: 'VENTRICULAR FIBRILLATION', active: patient.rhythm === 'vf', priority: 'critical', immediateCritical: true },
+    { key: 'vf', label: 'VENTRICULAR FIBRILLATION', active: patient.rhythm === 'ventricular-fibrillation', priority: 'critical', immediateCritical: true },
     { key: 'asystole', label: 'ASYSTOLE', active: patient.rhythm === 'asystole', priority: 'critical', immediateCritical: true },
   ]
 }
