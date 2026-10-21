@@ -100,7 +100,9 @@ export function EdumonWorkspacePanel({
       {tab === 'patient' && (
         <section className="control-section edumon-patient-controls">
           <div className="control-section-title"><h2>Patient</h2><span className="edumon-profile-badge">{controlsLocked ? 'Instructor controlled' : profile}</span></div>
-          <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} />
+          <div className="patient-transition-control">
+            <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} />
+          </div>
           <label className="edumon-rhythm-control">
             <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
             <select disabled={controlsLocked} value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>
