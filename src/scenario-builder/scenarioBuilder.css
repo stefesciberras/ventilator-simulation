@@ -251,3 +251,30 @@
 .shared-scenario-authoring input.shared-scenario-control-slider[type="range"]:disabled{cursor:not-allowed!important}
 .shared-scenario-trash-button{display:inline-flex!important;align-items:center;justify-content:center;width:34px!important;min-width:34px!important;height:34px!important;padding:6px!important;color:#ffc4c9!important;border-color:#78434a!important;background:#26151a!important}
 .shared-scenario-trash-button svg{width:18px;height:18px;display:block}
+
+
+/* Scenario Builder v0.8.3 stage transitions */
+.shared-scenario-transition-card{margin:0 0 12px;padding:12px;border:1px solid rgba(97,190,221,.22);border-radius:10px;background:rgba(97,190,221,.055)}
+.shared-scenario-transition-card.initial{display:flex;align-items:center;min-height:58px}
+.shared-scenario-transition-card.initial>div{display:grid;gap:2px}
+.shared-scenario-transition-card span,.shared-scenario-transition-card small{font-size:11px;color:var(--muted,#9fb0b7)}
+.shared-scenario-transition-heading{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.shared-scenario-transition-heading>div:first-child{display:grid;gap:2px;flex:1 1 320px}
+.shared-scenario-transition-heading label{display:grid;gap:4px;min-width:140px}
+.shared-scenario-transition-heading label.compact{min-width:105px}
+.shared-scenario-duration-input{display:flex;align-items:center;gap:5px}
+.shared-scenario-duration-input input{width:78px!important}
+.shared-scenario-duration-input em{font-size:11px;font-style:normal;color:var(--muted,#9fb0b7)}
+.shared-scenario-transition-advanced{margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px}
+.shared-scenario-transition-advanced summary{cursor:pointer;font-size:12px;font-weight:600}
+.shared-scenario-transition-advanced summary small{font-weight:400;margin-left:6px}
+.shared-scenario-transition-overrides{display:grid;gap:6px;margin-top:8px}
+.shared-scenario-transition-override-row{display:grid;grid-template-columns:minmax(150px,1fr) 150px 100px;align-items:center;gap:8px;padding:6px 8px;border:1px solid rgba(255,255,255,.07);border-radius:7px;background:rgba(0,0,0,.10)}
+.shared-scenario-transition-effective{font-size:11px;color:var(--muted,#9fb0b7)}
+
+/* EDUMON-Ana / EDUMON-ICU current slider presentation */
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.monitor{--scenario-control-accent:rgb(97,190,221);border-color:rgba(97,190,221,.24);background:rgba(97,190,221,.055)}
+.shared-scenario-edumon-snapshot .shared-scenario-variable-heading{grid-template-columns:minmax(0,1fr) auto}
+.shared-scenario-edumon-snapshot .shared-scenario-control-slider{accent-color:var(--scenario-control-accent);appearance:auto;-webkit-appearance:auto;display:block;width:100%;height:5px;margin:2px 0;padding:0;border:0;background:transparent;cursor:pointer;box-sizing:border-box}
+.shared-scenario-edumon-snapshot .shared-scenario-variable-row>select{width:100%}
+@media(max-width:720px){.shared-scenario-transition-override-row{grid-template-columns:1fr}.shared-scenario-transition-heading{align-items:stretch}}
