@@ -1,10 +1,47 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 
+export interface TeachingScenarioMediaContent {
+  mediaId?: string
+  title: string
+  mediaKind: 'image' | 'video'
+  storagePath: string
+  mimeType: string
+}
+
+export interface TeachingScenarioQuestionOption { id: string; text: string }
+
+export interface TeachingScenarioQuestionContent {
+  libraryItemId?: string
+  kind: 'mcq' | 'poll'
+  title: string | null
+  body: string
+  options: TeachingScenarioQuestionOption[]
+  correctOptionId: string | null
+  explanation: string | null
+}
+
+export type TeachingScenarioStageContent =
+  | { kind: 'state' }
+  | { kind: 'media'; media: TeachingScenarioMediaContent }
+  | { kind: 'question'; question: TeachingScenarioQuestionContent }
+
 export interface TeachingScenarioStage<TSnapshot, TTrigger> {
   id: string
   name: string
   snapshot: TSnapshot
   triggers: TTrigger[]
+  notes?: string
+  content?: TeachingScenarioStageContent
+}
+
+export interface TeachingScenarioBranch<TTrigger> {
+  id?: string
+  fromStageId?: string
+  toStageId: string
+  trigger: TTrigger
+  priority?: number
+  label?: string
+  enabled?: boolean
 }
 
 export interface TeachingScenarioDefinition<TSnapshot, TTrigger> {
@@ -12,6 +49,7 @@ export interface TeachingScenarioDefinition<TSnapshot, TTrigger> {
   name: string
   description?: string
   stages: Array<TeachingScenarioStage<TSnapshot, TTrigger>>
+  branches?: Array<TeachingScenarioBranch<TTrigger>>
 }
 
 export type TeachingScenarioRuntimeStatus = 'idle' | 'running' | 'complete'
@@ -35,24 +73,12 @@ export interface TeachingScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext> {
   triggerMatches: (trigger: TTrigger, context: TContext, stage: TeachingScenarioStageContext<TSnapshot, TTrigger>) => boolean
 }
 
-export interface TeachingScenarioBranch<TTrigger> {
-  toStageId: string
-  trigger: TTrigger
-  priority?: number
-  enabled?: boolean
-}
-
 export type TeachingScenarioTransitionResolution =
   | { kind: 'branch'; toStageId: string }
   | { kind: 'advance' }
   | null
 
-/**
- * Shared transition resolver used by every EDUSIM product adapter. Branches
- * take priority over linear advancement. Manual triggers can be excluded by
- * the product's trigger matcher, leaving this resolver unaware of trigger
- * vocabulary or simulator-specific state.
- */
+/** Branches take priority over linear advancement; product adapters own trigger semantics. */
 export function resolveTeachingScenarioTransition<TTrigger>({
   stageTriggers,
   branches = [],
@@ -71,10 +97,9 @@ export function resolveTeachingScenarioTransition<TTrigger>({
 }
 
 /**
- * Product-neutral scenario sequencer. Simulation products provide only two
- * adapters: how a stage snapshot is applied, and how their trigger vocabulary
- * is evaluated. The runtime owns stage position, stage timing, manual advance,
- * completion, and durable reconstruction metadata.
+ * Product-neutral scenario sequencer. It owns stage order, branching, stage
+ * timing and durable reconstruction; products only apply snapshots and match
+ * their trigger vocabulary.
  */
 export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
   adapter: TeachingScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext>,
@@ -136,6 +161,18 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     }
   }, [applyStageAt, scenario, stageIndex, status])
 
+  const goToStage = useCallback(async (stageId: string, simulationTime: number) => {
+    if (!scenario || status !== 'running' || transitionBusyRef.current) return false
+    const index = scenario.stages.findIndex((candidate) => candidate.id === stageId)
+    if (index < 0) return false
+    transitionBusyRef.current = true
+    try {
+      return await applyStageAt(scenario, index, simulationTime)
+    } finally {
+      transitionBusyRef.current = false
+    }
+  }, [applyStageAt, scenario, status])
+
   const evaluate = useCallback(async (context: TContext, simulationTime: number) => {
     if (!scenario || !stage || status !== 'running' || transitionBusyRef.current) return false
     const stageContext: TeachingScenarioStageContext<TSnapshot, TTrigger> = {
@@ -144,9 +181,13 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
       stageIndex,
       stageStartedSimulationTime,
     }
-    if (!stage.triggers.some((trigger) => adapter.triggerMatches(trigger, context, stageContext))) return false
+    const triggerMatches = (trigger: TTrigger) => adapter.triggerMatches(trigger, context, stageContext)
+    const outgoingBranches = (scenario.branches ?? []).filter((branch) => !branch.fromStageId || branch.fromStageId === stage.id)
+    const resolution = resolveTeachingScenarioTransition({ stageTriggers: stage.triggers, branches: outgoingBranches, triggerMatches })
+    if (!resolution) return false
+    if (resolution.kind === 'branch') return goToStage(resolution.toStageId, simulationTime)
     return advance(simulationTime)
-  }, [adapter, advance, scenario, stage, stageIndex, stageStartedSimulationTime, status])
+  }, [adapter, advance, goToStage, scenario, stage, stageIndex, stageStartedSimulationTime, status])
 
   const restore = useCallback(async (
     definition: TeachingScenarioDefinition<TSnapshot, TTrigger>,
@@ -161,12 +202,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
 
   const runtimeSnapshot = useMemo<TeachingScenarioRuntimeSnapshot | null>(() => {
     if (!scenario || status === 'idle') return null
-    return {
-      scenarioId: scenario.id,
-      stageIndex,
-      stageStartedSimulationTime,
-      status,
-    }
+    return { scenarioId: scenario.id, stageIndex, stageStartedSimulationTime, status }
   }, [scenario, stageIndex, stageStartedSimulationTime, status])
 
   return {
@@ -179,6 +215,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     start,
     stop,
     advance,
+    goToStage,
     evaluate,
     restore,
   }
