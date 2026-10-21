@@ -5,15 +5,17 @@ export function SimulationTransitionTimeControl({
   onChange,
   disabled = false,
   label = 'Transition time',
+  showValue = true,
 }: {
   value: number
   onChange: (seconds: number) => void
   disabled?: boolean
   label?: string
+  showValue?: boolean
 }) {
   return (
     <label className="simulation-transition-time-control">
-      <span>{label} <b>{value === 0 ? 'Immediate' : `${value} s`}</b></span>
+      <span>{label}{showValue ? <> <b>{value === 0 ? 'Immediate' : `${value} s`}</b></> : null}</span>
       <select disabled={disabled} value={value} onChange={(event) => onChange(Number(event.target.value))}>
         {SIMULATION_TRANSITION_SECONDS.map((seconds) => (
           <option key={seconds} value={seconds}>{seconds === 0 ? 'Immediate' : `${seconds} seconds`}</option>
