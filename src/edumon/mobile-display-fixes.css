@@ -1,0 +1,37 @@
+.edumon-freeze-indicator {
+  display: none !important;
+}
+
+@media (max-width: 1180px) {
+  .edumon-app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .edumon-app-shell > .topbar,
+  .edumon-app-shell > .edumon-mobile-workspace-switcher {
+    flex: 0 0 auto;
+  }
+
+  .edumon-workspace {
+    flex: 1 1 auto;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor > .edumon-console {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .edumon-control-strip {
+    display: flex !important;
+    flex: 0 0 74px;
+    min-height: 74px;
+    visibility: visible !important;
+  }
+}
