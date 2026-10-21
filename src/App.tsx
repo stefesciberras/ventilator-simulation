@@ -408,10 +408,11 @@ export default function App() {
     // v0.34 shipped 30% rise / 35% release as the default. Migrate that exact
     // profile once to the corrected sinusoidal normal default so existing local
     // settings do not preserve the transient flat-topped model after upgrade.
-    if (stored.effortRisePercent === 30 && stored.effortRelaxationPercent === 35) {
-      return { ...stored, effortRisePercent: 50, effortRelaxationPercent: 50 }
+    const safeStored = { ...stored, maxSpO2: Number.isFinite(Number(stored.maxSpO2)) ? Number(stored.maxSpO2) : 100 }
+    if (safeStored.effortRisePercent === 30 && safeStored.effortRelaxationPercent === 35) {
+      return { ...safeStored, effortRisePercent: 50, effortRelaxationPercent: 50 }
     }
-    return stored
+    return safeStored
   })
   const [selectedPatientProfile, setSelectedPatientProfile] = useState<PatientProfileName | null>(() => {
     if (typeof window === 'undefined') return null

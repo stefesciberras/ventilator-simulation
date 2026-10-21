@@ -4,6 +4,7 @@ import { RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { SimulationControlPanel, SimulationProfileStrip, type SimulationControlTab } from '../components/SimulationControlPanel'
+import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
 import './edumon-rhythm-control.css'
 
 export type EdumonControlTab = 'actions' | 'patient' | 'physio' | 'teaching'
@@ -25,6 +26,8 @@ const CONTROL_TABS: Array<SimulationControlTab<EdumonControlTab>> = [
 interface EdumonWorkspacePanelProps {
   patientState: MonitorPatientState
   onPatientStateChange: (state: MonitorPatientState) => void
+  transitionSeconds: number
+  onTransitionSecondsChange: (seconds: number) => void
   teachingHost: TeachingHostAdapter
   teachingRole?: TeachingRole
   teachingSessionId?: string | null
@@ -37,6 +40,8 @@ interface EdumonWorkspacePanelProps {
 export function EdumonWorkspacePanel({
   patientState,
   onPatientStateChange,
+  transitionSeconds,
+  onTransitionSecondsChange,
   teachingHost,
   teachingRole = 'standalone',
   teachingSessionId = null,
@@ -95,6 +100,7 @@ export function EdumonWorkspacePanel({
       {tab === 'patient' && (
         <section className="control-section edumon-patient-controls">
           <div className="control-section-title"><h2>Patient</h2><span className="edumon-profile-badge">{controlsLocked ? 'Instructor controlled' : profile}</span></div>
+          <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} />
           <label className="edumon-rhythm-control">
             <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
             <select disabled={controlsLocked} value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>
