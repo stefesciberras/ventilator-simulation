@@ -12,13 +12,15 @@ import { SimulationHardwareControls } from '../components/SimulationHardwareCont
 import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
 import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from '../components/SimulationDiagnosticsMenu'
 import { SimulationWorkspaceShell } from '../components/SimulationWorkspaceShell'
+import { SimulationConsoleShell } from '../components/SimulationConsoleShell'
+import { useSimulationDisplayControls } from '../components/useSimulationDisplayControls'
 import { useScreenWakeLock } from '../useScreenWakeLock'
 import { SharedBasicSessionPanel, deriveAlarmSessionSemantics, useProductTeachingSession, useTeachingAlarmSync } from '../teaching/session'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from '../components/InstructorAccountAuth'
 import { useTeachingScenarioRuntime } from '../teaching/scenario/runtimeCore'
 import { createEdumonScenarioRuntimeAdapter } from './scenarioAdapter'
 import type { EdumonStoredScenario } from './scenarioTypes'
-import { TeachingLaserPointerSurface, useTeachingDisplaySync } from '../teaching'
+import { TeachingLaserPointerSurface } from '../teaching'
 import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
 import { SharedScenarioRuntimePanel } from '../teaching/scenario/SharedScenarioRuntimePanel'
 import { selfDirectedAssignmentUrl, startSelfDirectedRun, updateSelfDirectedRun } from '../selfDirectedAssignments'
@@ -260,10 +262,16 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const savedScenarioMessage = scenarioLibrary.message ?? (!savedScenariosBusy && instructorAuthenticated && !savedScenarios.length ? 'No saved scenarios for this simulator yet. Create one in Scenario Builder.' : null)
   useEffect(() => { setSelectedSavedScenarioId((current) => savedScenarios.some((row) => row.id === current) ? current : (savedScenarios[0]?.id ?? '')) }, [savedScenarios])
 
-  const displaySync = useTeachingDisplaySync(teachingSession.role, teachingSession.session?.id ?? null, {
-    localLaserEnabled: laserActive,
-    onCandidateFrozenChange: (active) => { setFrozen(active); setFrozenSamples(active ? liveSamples : null) },
-    onCandidateLaserChange: setLaserActive,
+  const displayControls = useSimulationDisplayControls<MonitorSample[]>({
+    role: teachingSession.role,
+    sessionId: teachingSession.session?.id ?? null,
+    frozen,
+    setFrozen,
+    frozenSnapshot: frozenSamples,
+    setFrozenSnapshot: setFrozenSamples,
+    captureSnapshot: () => liveSamples,
+    laserEnabled: laserActive,
+    setLaserEnabled: setLaserActive,
   })
   const alarmSemantics = deriveAlarmSessionSemantics(teachingSession.role, { syncAlarms: true, candidateCanEditAlarms: false, alarmsSilent: false })
   const alarmSync = useTeachingAlarmSync(teachingSession.role, teachingSession.session?.id ?? null, (next) => { setAlarmSilencedUntil(next.silenceUntil) })
@@ -366,26 +374,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     />
   )
 
-  const toggleFreeze = () => {
-    if (teachingSession.role === 'candidate' && displaySync.state.frozen) return
-    const next = !frozen
-    setFrozen(next)
-    setFrozenSamples(next ? liveSamples : null)
-    if (teachingSession.role === 'instructor' && teachingSession.session?.id) displaySync.setFrozen(next)
-  }
-
-  const toggleLaser = () => {
-    setLaserActive((active) => {
-      const next = !active
-      if (next && !frozen) {
-        setFrozenSamples(liveSamples)
-        setFrozen(true)
-        if (teachingSession.role === 'instructor' && teachingSession.session?.id) displaySync.setFrozen(true)
-      }
-      if (teachingSession.role === 'instructor' && teachingSession.session?.id) displaySync.setLaserEnabled(next)
-      return next
-    })
-  }
+  const toggleFreeze = displayControls.toggleFreeze
+  const toggleLaser = displayControls.toggleLaser
 
   const silenceAlarm = (durationMs: number) => {
     if (alarmSemantics.candidateLocked) return
@@ -441,23 +431,24 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         ariaLabel="EDUMON workspace pages"
         allowSwipeFromCanvas
         display={(
-        <section className="ventilator-console edumon-console" aria-label={`${module.productName} patient monitor`}>
-          <SimulationHardwareControls
+        <SimulationConsoleShell
+          ariaLabel={`${module.productName} patient monitor`}
+          className="edumon-console"
+          hardwareControls={<SimulationHardwareControls
             className="edumon-console-top-actions"
             laserActive={laserActive}
             onLaserToggle={toggleLaser}
-            laserDisabled={candidateLocked}
+            laserDisabled={displayControls.laserDisabled}
             frozen={frozen}
             onFreezeToggle={toggleFreeze}
-            freezeDisabled={teachingSession.role === 'candidate' && displaySync.state.frozen}
+            freezeDisabled={displayControls.freezeDisabled}
             alarmSilenced={alarmSilenceRemaining > 0}
             alarmDisabled={alarmSemantics.candidateLocked}
             alarmLabel={alarmSilenceLabel}
             onAlarmSilence={silenceAlarm}
             alarmTimerClassName="edumon-alarm-silence-timer"
-          />
-
-          <div className="edumon-monitor-body">
+          />}
+          display={<div className="edumon-monitor-body">
             <div className="edumon-waveform-area waveforms">
               {TRACE_SPECS.map((spec) => <TraceCanvas key={spec.key} samples={samples} spec={spec} />)}
               {frozen && <div className="edumon-freeze-indicator">FROZEN</div>}
@@ -469,15 +460,14 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
               <ValuePanel label="SpO₂" value={measurements.spo2 == null ? '—' : `${measurements.spo2}`} unit="%" className="spo2" />
             </aside>
             <TeachingLaserPointerSurface role={teachingSession.role} sessionId={teachingSession.session?.id ?? null} enabled={laserActive} onEnabledChange={setLaserActive} />
-          </div>
-
-          <div className="edumon-control-strip" aria-label="Monitor controls">
+          </div>}
+          footer={<div className="edumon-control-strip" aria-label="Monitor controls">
             <button type="button" className="edumon-control-tile disabled" disabled title="NIBP will be enabled in a later EDUMON milestone"><span>NIBP</span><strong>Inactive</strong><small>Manual / cycle</small></button>
             {module.auxiliaryMonitors.map((item) => (
               <button key={item.id} type="button" className="edumon-control-tile" onClick={() => setAuxiliaryMonitor(item.id)}><span>Extra monitor</span><strong>{item.shortLabel}</strong><small>{item.description}</small></button>
             ))}
-          </div>
-        </section>
+          </div>}
+        />
 
         )}
         controls={<EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} controlsLocked={candidateLocked} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
