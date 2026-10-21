@@ -19,6 +19,7 @@ const transition = read('src/components/SimulationTransitionTimeControl.tsx')
 
 assert(eduvent.includes('<SimulationControlFramework'), 'EDUVENT must use SimulationControlFramework')
 assert(edumonPanel.includes('<SimulationControlFramework'), 'EDUMON must use SimulationControlFramework')
+assert(!eduvent.includes('<aside className="control-panel tabbed-control-panel">'), 'EDUVENT must not restore product-owned control-panel chrome')
 assert(edumonPanel.includes('showValue={false}'), 'EDUMON transition control must not duplicate the selected duration beside its label')
 assert(transition.includes('showValue = true'), 'shared transition control must retain an explicit value-display option')
 
