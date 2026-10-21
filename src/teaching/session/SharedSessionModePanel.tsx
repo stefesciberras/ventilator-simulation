@@ -89,7 +89,7 @@ export function SharedSessionLauncher({
       <form className="candidate-join-form" onSubmit={(event) => {
         event.preventDefault()
         const key = sessionKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
-        if (key.length !== 6 || !displayName.trim()) return
+        if (key.length !== 6) return
         void onJoinCandidate(key, displayName.trim())
       }}>
         <label>
@@ -97,11 +97,11 @@ export function SharedSessionLauncher({
           <input value={sessionKey} onChange={(event) => setSessionKey(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))} placeholder="ABC123" autoCapitalize="characters" autoComplete="off" maxLength={6} required />
         </label>
         <label>
-          <span>Your name</span>
-          <input ref={candidateNameInputRef} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Candidate name" autoComplete="name" required />
+          <span>Name <small>(optional)</small></span>
+          <input ref={candidateNameInputRef} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Candidate" autoComplete="name" maxLength={60} />
         </label>
         <div className="session-launch-actions">
-          <button type="submit" className="session-primary-button" disabled={connection === 'connecting' || sessionKey.length < 6 || !displayName.trim()}>Join session</button>
+          <button type="submit" className="session-primary-button" disabled={connection === 'connecting' || sessionKey.length < 6}>Join session</button>
           <button type="button" className="session-secondary-button" onClick={() => setMode('choose')}>Cancel</button>
         </div>
         {error && <div className="session-error">{error}</div>}
