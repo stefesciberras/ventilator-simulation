@@ -41,3 +41,5 @@ p.write_text(s)
 # 5) Version bumps.
 Path('src/appVersion.ts').write_text("export const APP_VERSION = '0.83.0.5'\n")
 Path('src/edumon/appVersion.ts').write_text("export const EDUMON_APP_VERSION = '0.1.0.5'\n")
+
+# trigger workflow after the workflow file exists on this branch
