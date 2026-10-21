@@ -6,6 +6,7 @@ import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import type { PhysiologicalMeasurements } from '../physiologyMeasurements'
 import {
   applyDynamicStage,
+  dynamicBranchTriggers,
   dynamicStageTriggers,
   type DynamicScenarioActionId,
   type DynamicScenarioMetric,
@@ -93,6 +94,7 @@ function contentFor(stage: DynamicScenarioStage, mediaUrl?: string | null): Teac
 
 function definitionFor(preset: InstructorPresetRow): TeachingScenarioDefinition<DynamicScenarioStage, DynamicScenarioTrigger> {
   const stages = preset.scenario.stages ?? []
+  const pathDriven = (preset.scenario.schemaVersion ?? 0) >= 9
   return {
     id: preset.id,
     name: preset.name,
@@ -101,7 +103,7 @@ function definitionFor(preset: InstructorPresetRow): TeachingScenarioDefinition<
       id: stage.id ?? `${preset.id}:stage:${index}`,
       name: stage.name || `Stage ${index + 1}`,
       snapshot: stage,
-      triggers: dynamicStageTriggers(stage),
+      triggers: pathDriven ? [] : dynamicStageTriggers(stage),
       notes: stage.comment,
       content: contentFor(stage),
     })),
@@ -326,10 +328,12 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
   }, [options.role])
 
   useEffect(() => {
-    if (!selfDirectedRun || runtime.status === 'idle') return
-    const finalStageReached = Boolean(runtime.scenario && runtime.stageIndex >= runtime.scenario.stages.length - 1)
-    void updateSelfDirectedRun(selfDirectedRun.runId, runtime.stageIndex, runtime.status === 'complete' || finalStageReached).catch(() => undefined)
-  }, [selfDirectedRun?.runId, runtime.stageIndex, runtime.status, runtime.scenario])
+    if (!selfDirectedRun || runtime.status === 'idle' || !runtime.scenario || !runtime.stage) return
+    const pathDriven = (activePreset?.scenario.schemaVersion ?? 0) >= 9
+    const outgoing = (runtime.scenario.branches ?? []).filter((branch) => branch.enabled !== false && branch.fromStageId === runtime.stage?.id)
+    const completed = runtime.status === 'complete' || (pathDriven ? outgoing.length === 0 : runtime.stageIndex >= runtime.scenario.stages.length - 1)
+    void updateSelfDirectedRun(selfDirectedRun.runId, runtime.stageIndex, completed).catch(() => undefined)
+  }, [selfDirectedRun?.runId, runtime.stageIndex, runtime.status, runtime.scenario, runtime.stage?.id, activePreset?.scenario.schemaVersion])
 
   useEffect(() => {
     if (!options.onScenarioDiagnosticChange) return
@@ -369,7 +373,7 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
   const branchActions = useMemo<SharedScenarioBranchAction[]>(() => {
     if (!runtime.scenario || !currentStageId) return []
     return (runtime.scenario.branches ?? [])
-      .filter((branch) => branch.enabled !== false && branch.fromStageId === currentStageId && branch.trigger.type === 'manual')
+      .filter((branch) => branch.enabled !== false && branch.fromStageId === currentStageId && dynamicBranchTriggers(branch).some((trigger) => trigger.type === 'manual'))
       .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
       .map((branch, index) => ({
         id: branch.id ?? `${currentStageId}:branch:${index}`,
@@ -380,7 +384,9 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
   }, [runtime.scenario, currentStageId, options.scenarioElapsedSeconds])
 
   const previousStage = runtime.scenario && runtime.stageIndex > 0 ? runtime.scenario.stages[runtime.stageIndex - 1] : null
-  const finalStage = Boolean(runtime.scenario && runtime.stageIndex >= runtime.scenario.stages.length - 1)
+  const pathDriven = (activePreset?.scenario.schemaVersion ?? 0) >= 9
+  const outgoingPaths = runtime.scenario && currentStageId ? (runtime.scenario.branches ?? []).filter((branch) => branch.enabled !== false && branch.fromStageId === currentStageId) : []
+  const finalStage = Boolean(runtime.scenario && (pathDriven ? outgoingPaths.length === 0 : runtime.stageIndex >= runtime.scenario.stages.length - 1))
   const runtimePanel = activePreset && runtime.stage && runtime.status !== 'idle' ? <SharedScenarioRuntimePanel
     scenarioName={activePreset.name}
     stageName={runtime.stage.name}
@@ -388,11 +394,11 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
     stageCount={runtime.scenario?.stages.length ?? 0}
     notes={runtime.stage.notes}
     content={runtime.stage.content?.kind === 'media' && mediaUrl ? contentFor(runtime.stage.snapshot, mediaUrl) : runtime.stage.content}
-    manualAdvanceAvailable={!finalStage && runtime.stage.triggers.some((trigger) => trigger.type === 'manual')}
+    manualAdvanceAvailable={!pathDriven && !finalStage && runtime.stage.triggers.some((trigger) => trigger.type === 'manual')}
     onAdvance={async () => { await runtime.advance(options.scenarioElapsedSeconds) }}
     previousAvailable={Boolean(previousStage) && options.role === 'instructor'}
     onPrevious={previousStage ? async () => { await runtime.goToStage(previousStage.id, options.scenarioElapsedSeconds) } : undefined}
-    branchActions={options.role === 'instructor' ? branchActions : []}
+    branchActions={branchActions}
     onQuestionResult={(answered, correct) => setQuestionState({ answered, correct })}
     onClose={close}
   /> : null
