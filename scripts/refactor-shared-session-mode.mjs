@@ -21,6 +21,7 @@ fs.writeFileSync('src/edumon/appVersion.ts', "export const EDUMON_APP_VERSION = 
   let text = fs.readFileSync(path, 'utf8')
   const firstImport = "import { useEffect, useMemo, useRef, useState } from 'react'\n"
   if (text.includes(firstImport) && !text.includes("./appVersion'")) text = text.replace(firstImport, firstImport + "import { EDUMON_APP_VERSION } from './appVersion'\n")
+  text = replaceOnce(text, "import { generateMonitorSamples, measurementsFor } from './monitorEngine'\n", "import { generateMonitorSamples, measurementsFor, RHYTHM_LABELS } from './monitorEngine'\n", 'EDUMON rhythm labels import')
   text = text.replace(/version="0\.1\.0\.0"/g, 'version={EDUMON_APP_VERSION}')
   fs.writeFileSync(path, text)
 }
