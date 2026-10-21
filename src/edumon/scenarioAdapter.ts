@@ -1,30 +1,9 @@
-import type { MonitorMeasurements, MonitorPatientState } from './types'
-import type { EdumonSimulationSpeed } from './EdumonTopBar'
+import type { MonitorMeasurements } from './types'
+import type { EdumonScenarioMetric, EdumonScenarioSnapshot, EdumonScenarioTrigger } from './scenarioTypes'
 import type {
   TeachingScenarioRuntimeAdapter,
   TeachingScenarioStageContext,
 } from '../teaching/scenario/runtimeCore'
-
-export interface EdumonScenarioSnapshot {
-  patient: MonitorPatientState
-  simulationPaused: boolean
-  simulationSpeed: EdumonSimulationSpeed
-}
-
-export type EdumonScenarioMetric =
-  | 'heartRate'
-  | 'systolicPressure'
-  | 'diastolicPressure'
-  | 'meanPressure'
-  | 'pulsePressure'
-  | 'spo2'
-  | 'peripheralPerfusion'
-
-export type EdumonScenarioTrigger =
-  | { type: 'manual' }
-  | { type: 'time'; seconds: number }
-  | { type: 'condition'; metric: EdumonScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
-  | { type: 'patient-change'; parameter: keyof MonitorPatientState }
 
 export interface EdumonScenarioRuntimeContext {
   simulationTime: number
@@ -59,11 +38,7 @@ function changed(a: unknown, b: unknown) {
   return a !== b
 }
 
-/**
- * Product adapter for the shared EDUSIM scenario sequencer. EDUMON owns only
- * monitor-specific snapshots and trigger interpretation; stage sequencing stays
- * in the shared runtime core.
- */
+/** Product adapter for the shared EDUSIM scenario sequencer. */
 export function createEdumonScenarioRuntimeAdapter(
   applySnapshot: (
     snapshot: EdumonScenarioSnapshot,
