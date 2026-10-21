@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { TeachingScenarioStageContent } from './runtimeCore'
 
+export interface SharedScenarioBranchAction {
+  id: string
+  label: string
+  targetLabel?: string
+  onSelect: () => void | Promise<void>
+}
+
 interface SharedScenarioRuntimePanelProps {
   scenarioName: string
   stageName: string
@@ -10,6 +17,9 @@ interface SharedScenarioRuntimePanelProps {
   content?: TeachingScenarioStageContent
   manualAdvanceAvailable?: boolean
   onAdvance?: () => void | Promise<void>
+  previousAvailable?: boolean
+  onPrevious?: () => void | Promise<void>
+  branchActions?: SharedScenarioBranchAction[]
   onQuestionResult?: (answered: boolean, correct: boolean) => void
   onClose?: () => void
 }
@@ -23,6 +33,9 @@ export function SharedScenarioRuntimePanel({
   content,
   manualAdvanceAvailable,
   onAdvance,
+  previousAvailable,
+  onPrevious,
+  branchActions = [],
   onQuestionResult,
   onClose,
 }: SharedScenarioRuntimePanelProps) {
@@ -64,6 +77,13 @@ export function SharedScenarioRuntimePanel({
       <div>{question.options.map((option) => <label key={option.id}><input type="radio" name="scenario-runtime-question" checked={answerId === option.id} disabled={submitted} onChange={() => setAnswerId(option.id)} /><span>{option.text}</span></label>)}</div>
       {!submitted ? <button type="button" disabled={!answerId} onClick={submit}>Submit answer</button> : <div className="shared-scenario-runtime-answer">Answer submitted.{question.explanation ? ` ${question.explanation}` : ''}</div>}
     </div>}
-    {manualAdvanceAvailable && <button type="button" className="scenario-builder-primary" onClick={() => void onAdvance?.()}>Next stage</button>}
+    {branchActions.length > 0 && <div className="instructor-scenario-branches">
+      <strong>Available paths</strong>
+      {branchActions.map((branch) => <button type="button" key={branch.id} className="manual" onClick={() => void branch.onSelect()}><span>{branch.label}</span>{branch.targetLabel && <em>→ {branch.targetLabel}</em>}</button>)}
+    </div>}
+    {(previousAvailable || manualAdvanceAvailable) && <div className="instructor-scenario-flow-actions">
+      {previousAvailable && <button type="button" onClick={() => void onPrevious?.()}>Previous</button>}
+      {manualAdvanceAvailable && <button type="button" className="scenario-builder-primary" onClick={() => void onAdvance?.()}>Next stage</button>}
+    </div>}
   </aside>
 }
