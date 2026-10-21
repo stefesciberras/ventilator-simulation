@@ -6,7 +6,6 @@ import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import type { PhysiologicalMeasurements } from '../physiologyMeasurements'
 import {
   applyDynamicStage,
-  dynamicBranchTriggers,
   dynamicStageTriggers,
   type DynamicScenarioActionId,
   type DynamicScenarioMetric,
@@ -22,6 +21,7 @@ import { useTeachingMediaPresentation } from '../teaching/TeachingMediaPresentat
 import { SharedScenarioRuntimePanel, type SharedScenarioBranchAction } from '../teaching/scenario/SharedScenarioRuntimePanel'
 import {
   useTeachingScenarioRuntime,
+  type TeachingScenarioBranch,
   type TeachingScenarioDefinition,
   type TeachingScenarioRuntimeAdapter,
   type TeachingScenarioStageContent,
@@ -47,6 +47,10 @@ interface RuntimeContext {
   localAction: { action: DynamicScenarioActionId; sequence: number } | null
   questionAnswered: boolean
   questionCorrect: boolean
+}
+
+function branchTriggers(branch: TeachingScenarioBranch<DynamicScenarioTrigger>): DynamicScenarioTrigger[] {
+  return branch.triggers?.length ? branch.triggers : [branch.trigger]
 }
 
 function metricValue(measurements: PhysiologicalMeasurements, metric: DynamicScenarioMetric): number | null {
@@ -373,7 +377,7 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
   const branchActions = useMemo<SharedScenarioBranchAction[]>(() => {
     if (!runtime.scenario || !currentStageId) return []
     return (runtime.scenario.branches ?? [])
-      .filter((branch) => branch.enabled !== false && branch.fromStageId === currentStageId && dynamicBranchTriggers(branch).some((trigger) => trigger.type === 'manual'))
+      .filter((branch) => branch.enabled !== false && branch.fromStageId === currentStageId && branchTriggers(branch).some((trigger) => trigger.type === 'manual'))
       .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
       .map((branch, index) => ({
         id: branch.id ?? `${currentStageId}:branch:${index}`,
