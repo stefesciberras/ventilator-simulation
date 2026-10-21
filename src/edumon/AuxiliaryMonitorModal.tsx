@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { SimulationModal } from '../components/SimulationModal'
+import { SecondaryMonitorSurface } from '../components/SecondaryMonitorSurface'
 
 export function AuxiliaryMonitorModal({
   title,
@@ -13,7 +13,7 @@ export function AuxiliaryMonitorModal({
   onClose: () => void
 }) {
   return (
-    <SimulationModal
+    <SecondaryMonitorSurface
       title={title}
       eyebrow={eyebrow}
       onClose={onClose}
@@ -21,6 +21,6 @@ export function AuxiliaryMonitorModal({
       stageClassName="edumon-aux-stage"
     >
       {children}
-    </SimulationModal>
+    </SecondaryMonitorSurface>
   )
 }
