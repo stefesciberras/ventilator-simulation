@@ -41,6 +41,7 @@ import { DynamicScenarioRuntimeLibrary } from './DynamicScenarioRuntimeLibrary'
 import { startSelfDirectedRun, updateSelfDirectedRun, type SelfDirectedRunStart } from '../selfDirectedAssignments'
 import { createCaseMediaSignedUrl, listCaseMediaByIds, releaseSessionCaseMedia } from '../caseMedia'
 import { eduventTeachingHost, useTeachingPrompts } from '../teaching'
+import { resolveTeachingScenarioTransition } from '../teaching/scenario/runtimeCore'
 import { useTeachingMediaPresentation } from '../teaching/TeachingMediaPresentation'
 import '../account.css'
 
@@ -628,112 +629,78 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     if (role === 'candidate' || !activeRuntimePreset || automaticAdvanceLockRef.current || Date.now() < triggerArmedAfterRef.current) return
     const stages = activeRuntimePreset.scenario.stages ?? []
     if (activeDynamicStage < 0 || activeDynamicStage >= stages.length - 1) return
-    const automaticTriggers = dynamicStageTriggers(stages[activeDynamicStage]).filter((trigger) => trigger.type !== 'manual')
-    if (!automaticTriggers.length) return
-    let shouldAdvance = false
-    for (const trigger of automaticTriggers) {
-      if (trigger.type === 'time') shouldAdvance = scenarioElapsedSeconds - activeDynamicStageStartedAt >= Math.max(1, trigger.seconds)
-      else if (trigger.type === 'condition') {
-        const actual=conditionMetricValue(physiologyMeasurements,trigger.metric)
-        shouldAdvance=actual!=null && conditionMatches(actual,trigger.operator,trigger.value)
-      } else if (trigger.type === 'question-any') {
-        shouldAdvance = selfDirectedRun ? selfDirectedQuestionAnswer != null : scenarioPromptRuntime.responses.length > 0
-      } else if (trigger.type === 'question-correct') {
-        const question = stages[activeDynamicStage].question
-        const correct = question?.correctOptionId ?? null
-        shouldAdvance = Boolean(correct && (selfDirectedRun ? selfDirectedQuestionAnswer === correct : scenarioPromptRuntime.responses.some((response) => response.option_id === correct)))
-      } else if (trigger.type === 'patient-change') {
-        const transitionDuration = stageTransitionDuration(stages[activeDynamicStage], 'patient', String(trigger.parameter))
-        if (scenarioElapsedSeconds - activeDynamicStageStartedAt < transitionDuration) continue
-        if (selfDirectedRun) {
-          if (trigger.actor === 'candidate' || trigger.actor === 'either') {
-            const baseline=patientBaselineInstructorRef.current
-            if (baseline && settingChanged(currentScenario.patient[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
-          }
-        } else {
-          if (trigger.actor === 'instructor' || trigger.actor === 'either') {
-            const baseline=patientBaselineInstructorRef.current
-            if (baseline && settingChanged(currentScenario.patient[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
-          }
-          if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {
-            for (const member of sessionMembers) {
-              if (member.role !== 'candidate') continue
-              const baseline=patientBaselineCandidatesRef.current.get(member.id), settings=member.patient_settings as Partial<PatientSettings>
-              if (!baseline || !settings || !(trigger.parameter in settings)) continue
-              if (settingChanged(settings[trigger.parameter],baseline[trigger.parameter])) { shouldAdvance=true; break }
-            }
-          }
-        }
-      } else if (trigger.type === 'device-action') {
-        if (selfDirectedRun) {
-          shouldAdvance = (trigger.actor === 'candidate' || trigger.actor === 'either') && Boolean(scenarioActionEvent && scenarioActionEvent.sequence > localScenarioActionBaselineRef.current && scenarioActionEvent.action === trigger.action)
-        } else {
-          if ((trigger.actor === 'instructor' || trigger.actor === 'either') && scenarioActionEvent && scenarioActionEvent.sequence > localScenarioActionBaselineRef.current && scenarioActionEvent.action === trigger.action) shouldAdvance=true
-          if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {
-            for (const member of sessionMembers) {
-              if (member.role !== 'candidate') continue
-              const baseline=candidateScenarioActionBaselineRef.current.get(member.id) ?? 0
-              if ((member.scenario_action_revision ?? 0) > baseline && member.last_scenario_action === trigger.action) { shouldAdvance=true; break }
-            }
-          }
-        }
-      } else if (trigger.type === 'action') {
-        const transitionDuration = stageTransitionDuration(stages[activeDynamicStage], 'ventilator', String(trigger.parameter))
-        if (scenarioElapsedSeconds - activeDynamicStageStartedAt < transitionDuration) continue
-        if (selfDirectedRun) {
-          if (trigger.actor === 'candidate' || trigger.actor === 'either') {
-            const baseline=actionBaselineInstructorRef.current
-            if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
-          }
-        } else {
-          if (trigger.actor === 'instructor' || trigger.actor === 'either') {
-            const baseline=actionBaselineInstructorRef.current
-            if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter],baseline[trigger.parameter])) shouldAdvance=true
-          }
-          if (!shouldAdvance && (trigger.actor === 'candidate' || trigger.actor === 'either')) {
-            for (const member of sessionMembers) {
-              if (member.role !== 'candidate') continue
-              const baseline=actionBaselineCandidatesRef.current.get(member.id), settings=member.ventilator_settings as Partial<VentilatorSettings>
-              if (!baseline || !settings || !(trigger.parameter in settings)) continue
-              if (settingChanged(settings[trigger.parameter],baseline[trigger.parameter])) { shouldAdvance=true; break }
-            }
-          }
-        }
-      }
-      if (shouldAdvance) break
-    }
     const activeStage = stages[activeDynamicStage]
-    const outgoingBranches = (activeRuntimePreset.scenario.branches ?? []).filter((branch) => branch.enabled !== false && branch.fromStageId === activeStage?.id).sort((a,b) => a.priority - b.priority)
-    const branchMatches = (trigger: DynamicScenarioTrigger) => {
+
+    const triggerMatches = (trigger: DynamicScenarioTrigger) => {
       if (trigger.type === 'manual') return false
       if (trigger.type === 'time') return scenarioElapsedSeconds - activeDynamicStageStartedAt >= Math.max(1, trigger.seconds)
-      if (trigger.type === 'condition') { const actual=conditionMetricValue(physiologyMeasurements,trigger.metric); return actual!=null && conditionMatches(actual,trigger.operator,trigger.value) }
+      if (trigger.type === 'condition') {
+        const actual = conditionMetricValue(physiologyMeasurements, trigger.metric)
+        return actual != null && conditionMatches(actual, trigger.operator, trigger.value)
+      }
       if (trigger.type === 'question-any') return selfDirectedRun ? selfDirectedQuestionAnswer != null : scenarioPromptRuntime.responses.length > 0
-      if (trigger.type === 'question-correct') { const correct=activeStage?.question?.correctOptionId??null; return Boolean(correct && (selfDirectedRun ? selfDirectedQuestionAnswer===correct : scenarioPromptRuntime.responses.some((response)=>response.option_id===correct))) }
+      if (trigger.type === 'question-correct') {
+        const correct = activeStage?.question?.correctOptionId ?? null
+        return Boolean(correct && (selfDirectedRun ? selfDirectedQuestionAnswer === correct : scenarioPromptRuntime.responses.some((response) => response.option_id === correct)))
+      }
       if (trigger.type === 'device-action') {
-        if (selfDirectedRun) return (trigger.actor==='candidate'||trigger.actor==='either') && Boolean(scenarioActionEvent && scenarioActionEvent.sequence>localScenarioActionBaselineRef.current && scenarioActionEvent.action===trigger.action)
-        if ((trigger.actor==='instructor'||trigger.actor==='either') && scenarioActionEvent && scenarioActionEvent.sequence>localScenarioActionBaselineRef.current && scenarioActionEvent.action===trigger.action) return true
-        if (trigger.actor==='candidate'||trigger.actor==='either') return sessionMembers.some((member)=>member.role==='candidate' && (member.scenario_action_revision??0)>(candidateScenarioActionBaselineRef.current.get(member.id)??0) && member.last_scenario_action===trigger.action)
+        if (selfDirectedRun) return (trigger.actor === 'candidate' || trigger.actor === 'either') && Boolean(scenarioActionEvent && scenarioActionEvent.sequence > localScenarioActionBaselineRef.current && scenarioActionEvent.action === trigger.action)
+        if ((trigger.actor === 'instructor' || trigger.actor === 'either') && scenarioActionEvent && scenarioActionEvent.sequence > localScenarioActionBaselineRef.current && scenarioActionEvent.action === trigger.action) return true
+        if (trigger.actor === 'candidate' || trigger.actor === 'either') return sessionMembers.some((member) => member.role === 'candidate' && (member.scenario_action_revision ?? 0) > (candidateScenarioActionBaselineRef.current.get(member.id) ?? 0) && member.last_scenario_action === trigger.action)
         return false
       }
       if (trigger.type === 'patient-change') {
-        const duration=stageTransitionDuration(activeStage,'patient',String(trigger.parameter)); if(scenarioElapsedSeconds-activeDynamicStageStartedAt<duration)return false
-        if (selfDirectedRun) { const baseline=patientBaselineInstructorRef.current; return (trigger.actor==='candidate'||trigger.actor==='either') && Boolean(baseline && settingChanged(currentScenario.patient[trigger.parameter],baseline[trigger.parameter])) }
-        if (trigger.actor==='instructor'||trigger.actor==='either') { const baseline=patientBaselineInstructorRef.current; if(baseline && settingChanged(currentScenario.patient[trigger.parameter],baseline[trigger.parameter]))return true }
-        if (trigger.actor==='candidate'||trigger.actor==='either') return sessionMembers.some((member)=>{if(member.role!=='candidate')return false;const baseline=patientBaselineCandidatesRef.current.get(member.id),settings=member.patient_settings as Partial<PatientSettings>;return Boolean(baseline&&settings&&(trigger.parameter in settings)&&settingChanged(settings[trigger.parameter],baseline[trigger.parameter]))})
+        const duration = stageTransitionDuration(activeStage, 'patient', String(trigger.parameter))
+        if (scenarioElapsedSeconds - activeDynamicStageStartedAt < duration) return false
+        if (selfDirectedRun) {
+          const baseline = patientBaselineInstructorRef.current
+          return (trigger.actor === 'candidate' || trigger.actor === 'either') && Boolean(baseline && settingChanged(currentScenario.patient[trigger.parameter], baseline[trigger.parameter]))
+        }
+        if (trigger.actor === 'instructor' || trigger.actor === 'either') {
+          const baseline = patientBaselineInstructorRef.current
+          if (baseline && settingChanged(currentScenario.patient[trigger.parameter], baseline[trigger.parameter])) return true
+        }
+        if (trigger.actor === 'candidate' || trigger.actor === 'either') return sessionMembers.some((member) => {
+          if (member.role !== 'candidate') return false
+          const baseline = patientBaselineCandidatesRef.current.get(member.id)
+          const settings = member.patient_settings as Partial<PatientSettings>
+          return Boolean(baseline && settings && (trigger.parameter in settings) && settingChanged(settings[trigger.parameter], baseline[trigger.parameter]))
+        })
         return false
       }
-      const duration=stageTransitionDuration(activeStage,'ventilator',String(trigger.parameter)); if(scenarioElapsedSeconds-activeDynamicStageStartedAt<duration)return false
-      if (selfDirectedRun) { const baseline=actionBaselineInstructorRef.current; return (trigger.actor==='candidate'||trigger.actor==='either') && Boolean(baseline && settingChanged(currentScenario.ventilator[trigger.parameter],baseline[trigger.parameter])) }
-      if (trigger.actor==='instructor'||trigger.actor==='either') { const baseline=actionBaselineInstructorRef.current; if(baseline && settingChanged(currentScenario.ventilator[trigger.parameter],baseline[trigger.parameter]))return true }
-      if (trigger.actor==='candidate'||trigger.actor==='either') return sessionMembers.some((member)=>{if(member.role!=='candidate')return false;const baseline=actionBaselineCandidatesRef.current.get(member.id),settings=member.ventilator_settings as Partial<VentilatorSettings>;return Boolean(baseline&&settings&&(trigger.parameter in settings)&&settingChanged(settings[trigger.parameter],baseline[trigger.parameter]))})
+      const duration = stageTransitionDuration(activeStage, 'ventilator', String(trigger.parameter))
+      if (scenarioElapsedSeconds - activeDynamicStageStartedAt < duration) return false
+      if (selfDirectedRun) {
+        const baseline = actionBaselineInstructorRef.current
+        return (trigger.actor === 'candidate' || trigger.actor === 'either') && Boolean(baseline && settingChanged(currentScenario.ventilator[trigger.parameter], baseline[trigger.parameter]))
+      }
+      if (trigger.actor === 'instructor' || trigger.actor === 'either') {
+        const baseline = actionBaselineInstructorRef.current
+        if (baseline && settingChanged(currentScenario.ventilator[trigger.parameter], baseline[trigger.parameter])) return true
+      }
+      if (trigger.actor === 'candidate' || trigger.actor === 'either') return sessionMembers.some((member) => {
+        if (member.role !== 'candidate') return false
+        const baseline = actionBaselineCandidatesRef.current.get(member.id)
+        const settings = member.ventilator_settings as Partial<VentilatorSettings>
+        return Boolean(baseline && settings && (trigger.parameter in settings) && settingChanged(settings[trigger.parameter], baseline[trigger.parameter]))
+      })
       return false
     }
-    const matchedBranch = outgoingBranches.find((branch) => branchMatches(branch.trigger))
-    if (matchedBranch) { automaticAdvanceLockRef.current=true; loadDynamicBranch(activeRuntimePreset, matchedBranch, 'automatic'); return }
-    if (!shouldAdvance) return
-    automaticAdvanceLockRef.current=true
-    loadDynamicStage(activeRuntimePreset,activeDynamicStage+1,'automatic')
+
+    const resolution = resolveTeachingScenarioTransition({
+      stageTriggers: dynamicStageTriggers(activeStage).filter((trigger) => trigger.type !== 'manual'),
+      branches: (activeRuntimePreset.scenario.branches ?? []).filter((branch) => branch.fromStageId === activeStage?.id),
+      triggerMatches,
+    })
+    if (!resolution) return
+    automaticAdvanceLockRef.current = true
+    if (resolution.kind === 'branch') {
+      const target = stages.findIndex((stage) => stage.id === resolution.toStageId)
+      if (target >= 0) loadDynamicStage(activeRuntimePreset, target, 'automatic')
+      else automaticAdvanceLockRef.current = false
+      return
+    }
+    loadDynamicStage(activeRuntimePreset, activeDynamicStage + 1, 'automatic')
   }, [role, activeRuntimePreset, activeDynamicStage, activeDynamicStageStartedAt, scenarioElapsedSeconds, physiologyMeasurements, currentScenario.ventilator, currentScenario.patient, sessionMembers, selfDirectedRun, selfDirectedQuestionAnswer, scenarioPromptRuntime.responses, scenarioActionEvent])
 
   useEffect(() => {
