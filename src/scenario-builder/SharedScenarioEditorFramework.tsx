@@ -49,7 +49,9 @@ function triggerLabel(trigger: SharedScenarioAuthoringTrigger) {
   if (trigger.type === 'condition') return `${trigger.metric || 'Metric'} ${trigger.operator === 'lt' ? '<' : trigger.operator === 'gt' ? '>' : '='} ${trigger.value}`
   if (trigger.type === 'action') return `${trigger.actor}: ${trigger.parameter || 'action'}`
   if (trigger.type === 'question-any') return 'Any answer submitted'
-  return 'Correct answer submitted'
+  if (trigger.type === 'question-correct') return 'Correct answer submitted'
+  if (trigger.type === 'media-ended') return 'Video finished'
+  return 'Media acknowledged'
 }
 
 function pathTriggers(branch: SharedScenarioAuthoringBranch) {
@@ -83,6 +85,8 @@ function TriggerEditor({
       <option value="action">Candidate / instructor action</option>
       <option value="question-any">Any question answer</option>
       <option value="question-correct">Correct question answer</option>
+      <option value="media-ended">Video finished</option>
+      <option value="media-acknowledged">Media acknowledged</option>
     </select>
     {trigger.type === 'time' && <label><span>Seconds</span><input type="number" min={0} value={trigger.seconds} onChange={(event) => onChange({ ...trigger, seconds: Math.max(0, Number(event.target.value) || 0) })} /></label>}
     {trigger.type === 'condition' && <>

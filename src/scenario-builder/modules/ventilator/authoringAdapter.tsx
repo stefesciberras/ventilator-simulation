@@ -181,7 +181,7 @@ function SnapshotEditor({ snapshot, onChange, appliedVariableIds, onAppliedVaria
 }
 function triggerToShared(trigger: DynamicScenarioTrigger): SharedScenarioAuthoringTrigger {
   const id = crypto.randomUUID()
-  if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct') return { id, type: trigger.type }
+  if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct' || trigger.type === 'media-ended' || trigger.type === 'media-acknowledged') return { id, type: trigger.type }
   if (trigger.type === 'time') return { id, type: 'time', seconds: trigger.seconds }
   if (trigger.type === 'condition') return { id, type: 'condition', metric: trigger.metric, operator: trigger.operator, value: trigger.value }
   if (trigger.type === 'action') return { id, type: 'action', parameter: `ventilator.${String(trigger.parameter)}`, actor: trigger.actor }
@@ -190,7 +190,7 @@ function triggerToShared(trigger: DynamicScenarioTrigger): SharedScenarioAuthori
 }
 
 function sharedToTrigger(trigger: SharedScenarioAuthoringTrigger): DynamicScenarioTrigger {
-  if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct') return { type: trigger.type }
+  if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct' || trigger.type === 'media-ended' || trigger.type === 'media-acknowledged') return { type: trigger.type }
   if (trigger.type === 'time') return { type: 'time', seconds: trigger.seconds }
   if (trigger.type === 'condition') return { type: 'condition', metric: trigger.metric as DynamicScenarioMetric, operator: trigger.operator, value: trigger.value }
   if (trigger.parameter.startsWith('patient.')) return { type: 'patient-change', parameter: trigger.parameter.slice(8) as keyof InstructorScenarioSnapshot['patient'], actor: trigger.actor }

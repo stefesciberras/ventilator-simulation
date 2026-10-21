@@ -47,6 +47,8 @@ interface RuntimeContext {
   localAction: { action: DynamicScenarioActionId; sequence: number } | null
   questionAnswered: boolean
   questionCorrect: boolean
+  mediaEnded: boolean
+  mediaAcknowledged: boolean
 }
 
 function branchTriggers(branch: TeachingScenarioBranch<DynamicScenarioTrigger>): DynamicScenarioTrigger[] {
@@ -146,6 +148,7 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
   const [selfDirectedRun, setSelfDirectedRun] = useState<SelfDirectedRunStart | null>(null)
   const [selfDirectedError, setSelfDirectedError] = useState<string | null>(null)
   const [questionState, setQuestionState] = useState({ answered: false, correct: false })
+  const [mediaState, setMediaState] = useState({ ended: false, acknowledged: false })
   const prompts = useTeachingPrompts(options.role, options.sessionId, eduventTeachingHost)
   const mediaPresentation = useTeachingMediaPresentation(options.role, options.sessionId)
   selfDirectedRef.current = Boolean(selfDirectedRun)
@@ -181,6 +184,8 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
         return actual != null && conditionMatches(actual, trigger.operator, trigger.value)
       }
       if (trigger.type === 'question-any') return selfDirected ? ctx.questionAnswered : (ctx.questionAnswered || prompts.responses.length > 0)
+      if (trigger.type === 'media-ended') return ctx.mediaEnded
+      if (trigger.type === 'media-acknowledged') return ctx.mediaAcknowledged
       if (trigger.type === 'question-correct') {
         if (selfDirected) return ctx.questionCorrect
         return ctx.questionCorrect || Boolean(stage.question?.correctOptionId && prompts.responses.some((response) => response.option_id === stage.question?.correctOptionId))
@@ -259,12 +264,15 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
       localAction: options.scenarioActionEvent ?? null,
       questionAnswered: questionState.answered,
       questionCorrect: questionState.correct,
+      mediaEnded: mediaState.ended,
+      mediaAcknowledged: mediaState.acknowledged,
     }, options.scenarioElapsedSeconds)
-  }, [runtime.status, runtime.stageIndex, options.currentScenario, options.physiologyMeasurements, options.sessionMembers, options.scenarioElapsedSeconds, options.scenarioActionEvent, questionState])
+  }, [runtime.status, runtime.stageIndex, options.currentScenario, options.physiologyMeasurements, options.sessionMembers, options.scenarioElapsedSeconds, options.scenarioActionEvent, questionState, mediaState])
 
   useEffect(() => {
     const stage = runtime.stage?.snapshot
     setQuestionState({ answered: false, correct: false })
+    setMediaState({ ended: false, acknowledged: false })
     if (!stage) return
     const type = stage.stageType ?? 'controls'
     if (selfDirectedRun) return
@@ -394,7 +402,9 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
     previousAvailable={Boolean(previousStage) && options.role === 'instructor'}
     onPrevious={previousStage ? async () => { await runtime.goToStage(previousStage.id, options.scenarioElapsedSeconds) } : undefined}
     branchActions={branchActions}
-    onQuestionResult={(answered, correct) => setQuestionState({ answered, correct })}
+    onQuestionResult={(answered, correct) => setQuestionState({ answered, correct })
+    }
+    onMediaEvent={(event) => setMediaState((current) => event === 'ended' ? { ...current, ended: true } : { ...current, acknowledged: true })}
     onClose={close}
   /> : null
 

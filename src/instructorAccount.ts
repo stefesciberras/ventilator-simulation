@@ -32,6 +32,8 @@ export type DynamicScenarioTrigger =
   | { type: 'device-action'; action: DynamicScenarioActionId; actor: DynamicScenarioActor }
   | { type: 'question-any' }
   | { type: 'question-correct' }
+  | { type: 'media-ended' }
+  | { type: 'media-acknowledged' }
 
 export type DynamicScenarioStageType = 'controls' | 'media' | 'question'
 

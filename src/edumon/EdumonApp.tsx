@@ -225,10 +225,15 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   })
   const effectivePatientRef = useRef<MonitorPatientState>({ ...DEFAULT_MONITOR_STATE })
   const patientTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; duration: number } | null>(null)
+  const scenarioPatientBaselineRef = useRef<MonitorPatientState>({ ...DEFAULT_MONITOR_STATE })
+  const simulationPausedRef = useRef(false)
+  const simulationSpeedRef = useRef<EdumonSimulationSpeed>(1)
   const scenarioTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; defaultPolicy: TeachingScenarioTransition; overrides: Record<string, TeachingScenarioTransition> } | null>(null)
   const [elapsed, setElapsed] = useState(TRACE_WINDOW_SECONDS)
   const [simulationPaused, setSimulationPaused] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState<EdumonSimulationSpeed>(1)
+  simulationPausedRef.current = simulationPaused
+  simulationSpeedRef.current = simulationSpeed
   const [frozen, setFrozen] = useState(false)
   const [frozenSamples, setFrozenSamples] = useState<MonitorSample[] | null>(null)
   const [laserActive, setLaserActive] = useState(false)
@@ -237,6 +242,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [selectedSavedScenarioId, setSelectedSavedScenarioId] = useState('')
   const launchedScenarioRef = useRef<string | null>(null)
   const [scenarioQuestionState, setScenarioQuestionState] = useState({ answered: false, correct: false })
+  const [scenarioMediaState, setScenarioMediaState] = useState({ ended: false, acknowledged: false })
   const [alarmLimits, setAlarmLimits] = useState<EdumonAlarmLimits>(loadEdumonAlarmLimits)
   const [alarmLimitsOpen, setAlarmLimitsOpen] = useState(false)
   const screenWakeLock = useScreenWakeLock()
@@ -325,10 +331,20 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRuntimeAdapter((snapshot, stageContext) => {
     const stage = stageContext.stage
-    const targetPatient = { ...snapshot.patient }
+    const applied = stage.appliedVariableIds ? new Set(stage.appliedVariableIds) : null
+    const applies = (id: string) => !applied || applied.has(id)
+    const targetPatient: MonitorPatientState = { ...effectivePatientRef.current }
+    if (applies('rhythm')) targetPatient.rhythm = snapshot.patient.rhythm
+    if (applies('heartRate')) targetPatient.heartRate = snapshot.patient.heartRate
+    if (applies('systolicPressure')) targetPatient.systolicPressure = snapshot.patient.systolicPressure
+    if (applies('diastolicPressure')) targetPatient.diastolicPressure = snapshot.patient.diastolicPressure
+    if (applies('spo2')) targetPatient.spo2 = snapshot.patient.spo2
+    if (applies('peripheralPerfusion')) targetPatient.peripheralPerfusion = snapshot.patient.peripheralPerfusion
+    scenarioPatientBaselineRef.current = { ...targetPatient }
     const transition = stage.transition ?? { mode: 'immediate' as const }
     const overrides = stage.transitionOverrides ?? {}
     const hasLinear = ['heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion'].some((key) => {
+      if (!applies(key)) return false
       const policy = overrides[key] ?? transition
       return policy.mode === 'linear' && policy.durationSeconds > 0
     })
@@ -346,8 +362,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       effectivePatientRef.current = { ...targetPatient }
     }
     setPatientState(targetPatient)
-    setSimulationPaused(snapshot.simulationPaused)
-    setSimulationSpeed(snapshot.simulationSpeed)
+    setSimulationPaused(applies('simulationPaused') ? snapshot.simulationPaused : simulationPausedRef.current)
+    setSimulationSpeed(applies('simulationSpeed') ? snapshot.simulationSpeed : simulationSpeedRef.current)
   }), [])
   const scenarioRuntime = useTeachingScenarioRuntime(edumonScenarioAdapter)
   const edumonAlarmEvaluations = useMemo(() => evaluateEdumonAlarms(effectivePatientState, measurements.meanPressure, alarmLimits), [effectivePatientState, measurements.meanPressure, alarmLimits])
@@ -400,14 +416,15 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   useEffect(() => {
     setScenarioQuestionState({ answered: false, correct: false })
+    setScenarioMediaState({ ended: false, acknowledged: false })
   }, [scenarioRuntime.stageIndex])
 
   const selectedAuxiliary = module.auxiliaryMonitors.find((item) => item.id === auxiliaryMonitor) ?? null
 
   useEffect(() => {
     if (scenarioRuntime.status !== 'running') return
-    void scenarioRuntime.evaluate({ simulationTime: elapsed, state: sharedTeachingState, measurements, questionAnswered: scenarioQuestionState.answered, questionCorrect: scenarioQuestionState.correct }, elapsed)
-  }, [scenarioRuntime, elapsed, sharedTeachingState, measurements, scenarioQuestionState])
+    void scenarioRuntime.evaluate({ simulationTime: elapsed, state: sharedTeachingState, measurements, questionAnswered: scenarioQuestionState.answered, questionCorrect: scenarioQuestionState.correct, mediaEnded: scenarioMediaState.ended, mediaAcknowledged: scenarioMediaState.acknowledged, stageBaselinePatient: scenarioPatientBaselineRef.current }, elapsed)
+  }, [scenarioRuntime, elapsed, sharedTeachingState, measurements, scenarioQuestionState, scenarioMediaState])
 
   const sessionPanel = (
     <SharedBasicSessionPanel
@@ -566,6 +583,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           manualAdvanceAvailable={scenarioRuntime.stage.triggers.some((trigger) => trigger.type === 'manual')}
           onAdvance={async () => { await scenarioRuntime.advance(elapsed) }}
           onQuestionResult={(answered, correct) => setScenarioQuestionState({ answered, correct })}
+          onMediaEvent={(event) => setScenarioMediaState((current) => event === 'ended' ? { ...current, ended: true } : { ...current, acknowledged: true })}
           onClose={() => { if (selfDirected.active) selfDirected.clear(); else scenarioRuntime.stop() }}
         />
       )}
