@@ -15,6 +15,7 @@ export interface CaseMediaRow {
   media_kind: CaseMediaKind
   mime_type: string
   size_bytes: number
+  environments: string[]
   created_at: string
   updated_at: string
 }
@@ -59,13 +60,14 @@ async function requirePermanentInstructor() {
   return user
 }
 
-export async function listInstructorCaseMedia(): Promise<CaseMediaRow[]> {
+export async function listInstructorCaseMedia(environmentId?: string): Promise<CaseMediaRow[]> {
   const user = await requirePermanentInstructor()
-  const { data, error } = await supabase
+  let query = supabase
     .from('case_media')
     .select('*')
     .eq('instructor_id', user.id)
-    .order('created_at', { ascending: false })
+  if (environmentId) query = query.overlaps('environments', ['all', environmentId])
+  const { data, error } = await query.order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as CaseMediaRow[]
 }
@@ -83,7 +85,7 @@ export async function listCaseMediaByIds(ids: string[]): Promise<CaseMediaRow[]>
   return rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
 }
 
-export async function uploadCaseMedia(file: File, title?: string): Promise<CaseMediaRow> {
+export async function uploadCaseMedia(file: File, title?: string, environments: string[] = ['all']): Promise<CaseMediaRow> {
   const kind = mediaKindForMime(file.type)
   if (!kind || !ACCEPTED_MIME_TYPES.has(file.type)) {
     throw new Error('Use a JPEG, PNG, WebP, GIF, MP4, WebM or QuickTime file.')
@@ -113,6 +115,7 @@ export async function uploadCaseMedia(file: File, title?: string): Promise<CaseM
       media_kind: kind,
       mime_type: file.type,
       size_bytes: file.size,
+      environments: environments.length ? environments : ['all'],
     })
     .select('*')
     .single()
@@ -121,6 +124,19 @@ export async function uploadCaseMedia(file: File, title?: string): Promise<CaseM
     await supabase.storage.from(CASE_MEDIA_BUCKET).remove([storagePath]).catch(() => undefined)
     throw error
   }
+  return data as CaseMediaRow
+}
+
+export async function updateCaseMediaEnvironments(id: string, environments: string[]): Promise<CaseMediaRow> {
+  const user = await requirePermanentInstructor()
+  const { data, error } = await supabase
+    .from('case_media')
+    .update({ environments: environments.length ? environments : ['all'], updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('instructor_id', user.id)
+    .select('*')
+    .single()
+  if (error) throw error
   return data as CaseMediaRow
 }
 

@@ -6,10 +6,13 @@ import {
   listSessionCaseMedia,
   releaseSessionCaseMedia,
   uploadCaseMedia,
+  updateCaseMediaEnvironments,
   withdrawSessionCaseMedia,
   type CaseMediaRow,
 } from '../caseMedia'
 import type { TeachingRole } from './types'
+import { TeachingEnvironmentSelector } from './TeachingEnvironmentSelector'
+import { teachingEnvironmentLabel } from './environments'
 import { useTeachingMediaPresentation } from './TeachingMediaPresentation'
 import { TeachingMediaLaserInstructorModal } from './TeachingMediaLaser'
 import './TeachingMediaPanel.css'
@@ -17,6 +20,7 @@ import './TeachingMediaPanel.css'
 interface TeachingMediaInstructorPanelProps {
   role: TeachingRole
   instructorAuthenticated: boolean
+  environmentId: string
   sessionId: string | null
   scenarioMediaIds: string[]
   onScenarioMediaIdsChange: (ids: string[]) => void
@@ -35,13 +39,14 @@ function TrashIcon() {
   )
 }
 
-export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, sessionId, scenarioMediaIds, onScenarioMediaIdsChange }: TeachingMediaInstructorPanelProps) {
+export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, environmentId, sessionId, scenarioMediaIds, onScenarioMediaIdsChange }: TeachingMediaInstructorPanelProps) {
   const [collapsed, setCollapsed] = useState(true)
   const [library, setLibrary] = useState<CaseMediaRow[]>([])
   const [releasedIds, setReleasedIds] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [uploadTitle, setUploadTitle] = useState('')
+  const [uploadEnvironments, setUploadEnvironments] = useState<string[]>([environmentId])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -65,7 +70,7 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
       return
     }
     try {
-      const media = await listInstructorCaseMedia()
+      const media = await listInstructorCaseMedia(environmentId)
       setLibrary(media)
       if (!selectedId && media.length) setSelectedId(media[0].id)
       if (sessionId) {
@@ -78,7 +83,7 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to load media library.')
     }
-  }, [role, instructorAuthenticated, selectedId, sessionId])
+  }, [role, instructorAuthenticated, selectedId, sessionId, environmentId])
 
   useEffect(() => { void refresh() }, [refresh])
 
@@ -105,13 +110,25 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
     if (!file) return
     setBusy(true); setError(null); setMessage(null)
     try {
-      const media = await uploadCaseMedia(file, uploadTitle)
+      const media = await uploadCaseMedia(file, uploadTitle, uploadEnvironments)
       setUploadTitle('')
+      setUploadEnvironments([environmentId])
       setSelectedId(media.id)
       setMessage(`Uploaded “${media.title}”.`)
       await refresh()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to upload media.')
+    } finally { setBusy(false) }
+  }
+
+  const changeEnvironments = async (media: CaseMediaRow, environments: string[]) => {
+    setBusy(true); setError(null); setMessage(null)
+    try {
+      await updateCaseMediaEnvironments(media.id, environments)
+      setMessage(`Updated categories for “${media.title}”.`)
+      await refresh()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to update media categories.')
     } finally { setBusy(false) }
   }
 
@@ -193,6 +210,7 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
 
       {!collapsed && (
         <div className="teaching-media-body">
+          <TeachingEnvironmentSelector value={uploadEnvironments} onChange={setUploadEnvironments} disabled={working} label="New media categories" />
           <div className="teaching-media-upload-row">
             <input value={uploadTitle} maxLength={120} onChange={(event) => setUploadTitle(event.target.value)} placeholder="Optional media title" aria-label="Optional media title" />
             <label className={`teaching-media-upload ${working ? 'disabled' : ''}`}>
@@ -226,6 +244,7 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
                     <span className="teaching-media-list-copy">
                       <strong>{media.title}</strong>
                       <small>{media.media_kind === 'video' ? 'Video' : 'Image'} · {fileSizeLabel(media.size_bytes)}</small>
+                      <span className="teaching-media-environments">{media.environments.map((environment) => teachingEnvironmentLabel(environment)).join(' · ')}</span>
                       {(live || available || inScenario) && (
                         <span className="teaching-media-badges">
                           {live && <em className="live">LIVE</em>}
@@ -255,6 +274,12 @@ export function TeachingMediaInstructorPanel({ role, instructorAuthenticated, se
               ) : <span>Select a media item to preview it.</span>}
             </div>
           </div>
+
+          {selected && (
+            <div className="teaching-media-selected-categories">
+              <TeachingEnvironmentSelector value={selected.environments} onChange={(next) => void changeEnvironments(selected, next)} disabled={working} label="Media categories" />
+            </div>
+          )}
 
           {selected && (
             <div className="teaching-media-actions" aria-label={`Actions for ${selected.title}`}>

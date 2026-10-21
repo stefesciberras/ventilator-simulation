@@ -1,0 +1,13 @@
+.edumon-alarm-dialog{width:min(760px,calc(100vw - 28px));max-width:760px}
+.edumon-alarm-limits-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.edumon-alarm-limit-card{display:grid;gap:10px;min-width:0;padding:13px;border:1px solid #3d5059;border-radius:10px;background:#101b21}
+.edumon-alarm-limit-card>div:first-child{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-width:0}
+.edumon-alarm-limit-card span{color:#c8d4d9}
+.edumon-alarm-limit-card strong{white-space:nowrap;color:#fff}
+.edumon-alarm-limit-card strong small{color:#9fb0b8;font-size:.72em;font-weight:600}
+.edumon-alarm-limit-card input[type=range]{width:100%;min-width:0;accent-color:#ef8a27}
+.edumon-alarm-limit-scale{display:flex;justify-content:space-between;color:#7f939c;font-size:.72rem}
+.edumon-alarm-limits-locked{padding:9px 11px;border:1px solid #5a4a31;border-radius:8px;background:#2a2217;color:#e7c998;font-size:.82rem}
+.edumon-measurements .metrics-actions{grid-column:1/-1}
+.edumon-measurements .metrics-alarm-limits{width:100%}
+@media(max-width:640px){.edumon-alarm-limits-grid{grid-template-columns:1fr}.edumon-alarm-dialog{width:calc(100vw - 18px)}}

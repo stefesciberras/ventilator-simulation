@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { TeachingEnvironmentSelector } from './TeachingEnvironmentSelector'
+import { teachingEnvironmentLabel } from './environments'
 import type {
   TeachingHostAdapter,
   TeachingLibraryDraft,
@@ -25,6 +27,7 @@ function draftFromLibrary(item: TeachingLibraryItem) {
     options: item.options.map((option) => option.text),
     module: item.module,
     tags: item.tags.join(', '),
+    environments: item.environments,
     correctOptionId: item.correct_option_id,
     explanation: item.explanation ?? '',
   }
@@ -90,6 +93,7 @@ export function TeachingInstructorWorkspace({
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true)
   const [module, setModule] = useState(host.defaultModule)
   const [tags, setTags] = useState('')
+  const [environments, setEnvironments] = useState<string[]>([host.libraryEnvironmentId])
   const [editingLibraryId, setEditingLibraryId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [message, setMessage] = useState<string | null>(null)
@@ -123,6 +127,7 @@ export function TeachingInstructorWorkspace({
     setExplanation('')
     setModule(host.defaultModule)
     setTags('')
+    setEnvironments([host.libraryEnvironmentId])
     setEditingLibraryId(null)
     setMessage(null)
   }
@@ -137,6 +142,7 @@ export function TeachingInstructorWorkspace({
     setExplanation(draft.explanation)
     setModule(draft.module)
     setTags(draft.tags)
+    setEnvironments(draft.environments)
     setEditingLibraryId(item.id)
     setView('compose')
     setMessage(`Loaded “${item.title || 'Untitled'}” from the library.`)
@@ -172,6 +178,7 @@ export function TeachingInstructorWorkspace({
     const draft: TeachingLibraryDraft = {
       ...promptDraft(),
       module: module.trim() || host.defaultModule,
+      environments,
       tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
       correctOptionId: kind === 'mcq' ? correctOptionId : null,
       explanation: kind === 'mcq' ? explanation : null,
@@ -250,6 +257,7 @@ export function TeachingInstructorWorkspace({
               {editingLibraryId && <div className="teaching-composer-toolbar"><span>Editing saved question</span></div>}
               <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as TeachingPromptKind)}><option value="mcq">MCQ</option><option value="poll">Poll</option><option value="message">Information</option></select></label>
               <label>Tags <span>(optional)</span><input value={tags} maxLength={300} onChange={(event) => setTags(event.target.value)} placeholder="e.g. COPD, AutoPEEP, waveforms" /></label>
+              <TeachingEnvironmentSelector value={environments} onChange={setEnvironments} />
               <label>Title <span>(optional)</span><input value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
               <label>Prompt<textarea value={body} maxLength={4000} rows={4} onChange={(event) => setBody(event.target.value)} placeholder="Present the case, instruction or question…" /></label>
               {kind !== 'message' && (
@@ -292,6 +300,7 @@ export function TeachingInstructorWorkspace({
                         <article key={item.id} className="teaching-library-card">
                           <div className="teaching-library-card-heading"><div><strong>{item.title || 'Untitled'}</strong></div><em>{item.kind === 'message' ? 'Info' : item.kind.toUpperCase()}</em></div>
                           <p>{item.body}</p>
+                          <div className="teaching-library-environments">{item.environments.map((environment) => <span key={environment}>{teachingEnvironmentLabel(environment)}</span>)}</div>
                           {item.tags.length > 0 && <div className="teaching-library-tags">{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                           <div className="teaching-library-card-actions">
                             <button type="button" onClick={() => loadLibraryItem(item)}>Edit / use</button>
