@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { PatientSettings, VentilatorMode, VentilatorSettings } from '../simulation/types'
 import { calculatePredictedBodyWeight } from '../patientMetrics'
 import { loadPanelCollapsed, savePanelCollapsed } from '../panelCollapse'
+import { SimulationTransitionTimeControl } from './SimulationTransitionTimeControl'
 
 interface SliderProps {
   label: string
@@ -300,6 +301,7 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
   const patch = (value: Partial<PatientSettings>) => onChange({ ...settings, ...value })
   const previousSpontaneousRate = useRef(settings.spontaneousRate > 0 ? settings.spontaneousRate : 12)
   const predictedBodyWeight = calculatePredictedBodyWeight(settings.sex ?? 'male', settings.heightCm ?? 170)
+  const safeMaxSpO2 = Number.isFinite(Number(settings.maxSpO2)) ? Number(settings.maxSpO2) : 100
   const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed('patient-settings'))
   const toggleCollapsed = () => setCollapsed((current) => {
     const next = !current
@@ -335,16 +337,7 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
       )}
       <div className="patient-shared-profile-controls">
         <div className="patient-transition-control">
-          <label htmlFor={`patient-transition-select-${view}`}>
-            <span>Transition time</span>
-            <select id={`patient-transition-select-${view}`} value={transitionSeconds} onChange={(event) => onTransitionSecondsChange(Number(event.target.value))}>
-              <option value={0}>Now</option>
-              <option value={5}>5 s</option>
-              <option value={10}>10 s</option>
-              <option value={30}>30 s</option>
-              <option value={60}>60 s</option>
-            </select>
-          </label>
+          <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} />
         </div>
       </div>
       {view !== 'physiology' && <div className="patient-respiratory-controls">
@@ -401,7 +394,7 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
       <Slider label="Oxygen consumption (VO₂)" value={settings.oxygenConsumption ?? 250} unit=" mL/min" min={100} max={600} step={10} onChange={(v) => patch({ oxygenConsumption: v })} />
       <Slider label="FRC" value={settings.frc ?? 2500} unit=" mL" min={500} max={5000} step={10} onChange={(v) => patch({ frc: v })} />
       <Slider label="Shunt" value={Math.round((settings.shuntFraction ?? 0.03) * 100)} unit="%" min={0} max={50} step={1} onChange={(v) => patch({ shuntFraction: v / 100 })} />
-      {showSpO2Ceiling && <Slider label="Maximum SpO₂" value={Math.round(settings.maxSpO2 ?? 100)} unit="%" min={80} max={100} step={1} onChange={(v) => patch({ maxSpO2: v })} />}
+      {showSpO2Ceiling && <Slider label="Maximum SpO₂" value={Math.round(safeMaxSpO2)} unit="%" min={80} max={100} step={1} onChange={(v) => patch({ maxSpO2: v })} />}
       <Slider label="VCO₂ production" value={settings.co2Production ?? 250} unit=" mL/min" min={100} max={500} step={10} onChange={(v) => patch({ co2Production: v })} />
       <Slider label="Vd/Vt" value={Number((settings.vdVt ?? 0.4).toFixed(2))} unit="" min={0.1} max={0.9} step={0.05} displayValue={(settings.vdVt ?? 0.4).toFixed(2)} onChange={(v) => patch({ vdVt: v })} />
       </div>}

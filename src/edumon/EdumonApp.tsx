@@ -35,6 +35,7 @@ import './edumon-console-parity.css'
 const TRACE_WINDOW_SECONDS = 8
 const SAMPLE_RATE = 100
 const EDUMON_ALARM_STORAGE_KEY = 'edumon.alarm-limits'
+const EDUMON_PATIENT_TRANSITION_STORAGE_KEY = 'edumon.patient-transition-seconds'
 
 function loadEdumonAlarmLimits(): EdumonAlarmLimits {
   if (typeof window === 'undefined') return { ...DEFAULT_EDUMON_ALARM_LIMITS }
@@ -57,6 +58,7 @@ function loadEdumonAlarmLimits(): EdumonAlarmLimits {
 
 interface EdumonTeachingState {
   patient: MonitorPatientState
+  patientTransitionSeconds: number
   simulationPaused: boolean
   simulationSpeed: EdumonSimulationSpeed
   alarmLimits: EdumonAlarmLimits
@@ -197,6 +199,12 @@ function NeuroMonitorPreview({ map }: { map: number | null }) {
   )
 }
 
+function interpolateMonitorPatientState(from: MonitorPatientState, to: MonitorPatientState, fraction: number): MonitorPatientState {
+  const f = Math.max(0, Math.min(1, fraction))
+  const lerp = (a: number, b: number) => a + (b - a) * f
+  return { rhythm: f < 0.5 ? from.rhythm : to.rhythm, heartRate: lerp(from.heartRate, to.heartRate), systolicPressure: lerp(from.systolicPressure, to.systolicPressure), diastolicPressure: lerp(from.diastolicPressure, to.diastolicPressure), spo2: lerp(from.spo2, to.spo2), peripheralPerfusion: lerp(from.peripheralPerfusion, to.peripheralPerfusion) }
+}
+
 function TrendsPreview() {
   return (
     <div className="edumon-trends-preview">
@@ -210,6 +218,13 @@ function TrendsPreview() {
 
 function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [patientState, setPatientState] = useState<MonitorPatientState>(DEFAULT_MONITOR_STATE)
+  const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0
+    const stored = Number(window.localStorage.getItem(EDUMON_PATIENT_TRANSITION_STORAGE_KEY) ?? 0)
+    return [0, 5, 10, 30, 60].includes(stored) ? stored : 0
+  })
+  const effectivePatientRef = useRef<MonitorPatientState>({ ...DEFAULT_MONITOR_STATE })
+  const patientTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; duration: number } | null>(null)
   const [elapsed, setElapsed] = useState(TRACE_WINDOW_SECONDS)
   const [simulationPaused, setSimulationPaused] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState<EdumonSimulationSpeed>(1)
@@ -240,16 +255,26 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   }, [frozen, simulationPaused, simulationSpeed])
 
 
-  const liveSamples = useMemo(() => generateMonitorSamples(patientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE), [patientState, elapsed])
+  const effectivePatientState = (() => {
+    const transition = patientTransitionRef.current
+    if (!transition) { effectivePatientRef.current = { ...patientState }; return patientState }
+    const progress = (elapsed - transition.start) / Math.max(transition.duration, 0.001)
+    const next = interpolateMonitorPatientState(transition.from, transition.to, progress)
+    effectivePatientRef.current = next
+    if (progress >= 1) { effectivePatientRef.current = { ...transition.to }; patientTransitionRef.current = null; return transition.to }
+    return next
+  })()
+  const liveSamples = useMemo(() => generateMonitorSamples(effectivePatientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE), [effectivePatientState, elapsed])
   const samples = frozenSamples ?? liveSamples
-  const measurements = measurementsFor(patientState)
+  const measurements = measurementsFor(effectivePatientState)
   const teachingHost = module.id === 'ana' ? edumonAnaTeachingHost : edumonIcuTeachingHost
-  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, simulationPaused, simulationSpeed, alarmLimits }), [patientState, simulationPaused, simulationSpeed, alarmLimits])
+  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits }), [patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits])
   const teachingSession = useProductTeachingSession<EdumonTeachingState>({
     productId: teachingHost.appId,
     state: sharedTeachingState,
     setState: (next) => {
       setPatientState(next.patient)
+      setPatientTransitionSeconds(next.patientTransitionSeconds ?? 0)
       setSimulationPaused(next.simulationPaused)
       setSimulationSpeed(next.simulationSpeed)
       setAlarmLimits(next.alarmLimits ?? DEFAULT_EDUMON_ALARM_LIMITS)
@@ -287,7 +312,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     setSimulationSpeed(snapshot.simulationSpeed)
   }), [])
   const scenarioRuntime = useTeachingScenarioRuntime(edumonScenarioAdapter)
-  const edumonAlarmEvaluations = useMemo(() => evaluateEdumonAlarms(patientState, measurements.meanPressure, alarmLimits), [patientState, measurements.meanPressure, alarmLimits])
+  const edumonAlarmEvaluations = useMemo(() => evaluateEdumonAlarms(effectivePatientState, measurements.meanPressure, alarmLimits), [effectivePatientState, measurements.meanPressure, alarmLimits])
   const alarmController = useSharedAlarmController({
     role: teachingSession.role,
     sessionId: teachingSession.session?.id ?? null,
@@ -299,6 +324,12 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   useEffect(() => {
     window.localStorage.setItem(EDUMON_ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
   }, [alarmLimits])
+
+  useEffect(() => { window.localStorage.setItem(EDUMON_PATIENT_TRANSITION_STORAGE_KEY, String(patientTransitionSeconds)) }, [patientTransitionSeconds])
+  useEffect(() => {
+    if (patientTransitionSeconds <= 0) { effectivePatientRef.current = { ...patientState }; patientTransitionRef.current = null; return }
+    patientTransitionRef.current = { from: { ...effectivePatientRef.current }, to: { ...patientState }, start: elapsed, duration: patientTransitionSeconds }
+  }, [patientState, patientTransitionSeconds])
 
   useEffect(() => {
     if (alarmController.candidateLocked) setAlarmLimitsOpen(false)
@@ -469,6 +500,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
               <ValuePanel label="SpO₂" value={measurements.spo2 == null ? '—' : `${measurements.spo2}`} unit="%" className="spo2" />
             </aside>
             <TeachingLaserPointerSurface role={teachingSession.role} sessionId={teachingSession.session?.id ?? null} enabled={laserActive} onEnabledChange={setLaserActive} />
+            <EdumonAlarmLimitsDialog open={alarmLimitsOpen} limits={alarmLimits} disabled={alarmController.candidateLocked} contained onChange={setAlarmLimits} onClose={() => setAlarmLimitsOpen(false)} />
           </div>}
           footer={<div className="edumon-control-strip" aria-label="Monitor controls">
             <button type="button" className="edumon-control-tile disabled" disabled title="NIBP will be enabled in a later EDUMON milestone"><span>NIBP</span><strong>Inactive</strong><small>Manual / cycle</small></button>
@@ -479,7 +511,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         />
 
         )}
-        controls={<EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} controlsLocked={candidateLocked} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+        controls={<EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} controlsLocked={candidateLocked} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
 
       {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (
@@ -499,13 +531,6 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         />
       )}
 
-      <EdumonAlarmLimitsDialog
-        open={alarmLimitsOpen}
-        limits={alarmLimits}
-        disabled={alarmController.candidateLocked}
-        onChange={setAlarmLimits}
-        onClose={() => setAlarmLimitsOpen(false)}
-      />
 
       {selectedAuxiliary && auxiliaryMonitor && (
         <AuxiliaryMonitorModal title={selectedAuxiliary.label} onClose={() => setAuxiliaryMonitor(null)}>
