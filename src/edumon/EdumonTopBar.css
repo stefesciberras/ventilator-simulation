@@ -42,7 +42,6 @@
 
 .edumon-topbar-status {
   flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .edumon-topbar-status .top-account-button,
@@ -144,21 +143,12 @@
   }
 
   .edumon-topbar-brand,
-  .top-simulation-controls,
-  .edumon-topbar-status {
+  .top-simulation-controls {
     justify-self: stretch;
   }
 
   .top-simulation-controls {
     justify-content: center;
-  }
-
-  .edumon-topbar-status {
-    justify-content: center;
-  }
-
-  .edumon-simulation-status {
-    display: none;
   }
 }
 
