@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export interface SimulationDiagnosticAction {
   id: string
@@ -18,6 +18,25 @@ function DiagnosticIcon({ copied }: { copied: boolean }) {
 export function SimulationDiagnosticsMenu({ actions, title = 'Diagnostics' }: { actions: SimulationDiagnosticAction[]; title?: string }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (target && menuRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside, true)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside, true)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
 
   const run = async (action: SimulationDiagnosticAction) => {
     await action.onSelect()
@@ -27,7 +46,7 @@ export function SimulationDiagnosticsMenu({ actions, title = 'Diagnostics' }: { 
   }
 
   return (
-    <div className="top-diagnostic-menu">
+    <div ref={menuRef} className="top-diagnostic-menu">
       <button
         className={`top-diagnostic-button ${open ? 'active' : ''} ${copied ? 'copied' : ''}`}
         type="button"

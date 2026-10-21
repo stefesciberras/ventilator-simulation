@@ -417,6 +417,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         displayLabel="Display"
         controlsLabel="Controls"
         ariaLabel="EDUMON workspace pages"
+        allowSwipeFromCanvas
         display={(
         <section className="ventilator-console edumon-console" aria-label={`${module.productName} patient monitor`}>
           <SimulationHardwareControls

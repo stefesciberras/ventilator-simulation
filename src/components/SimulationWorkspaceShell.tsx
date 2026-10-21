@@ -11,6 +11,7 @@ interface SimulationWorkspaceShellProps {
   displayPageClassName?: string
   controlsPageClassName?: string
   controlsVisible?: boolean
+  allowSwipeFromCanvas?: boolean
 }
 
 export function SimulationWorkspaceShell({
@@ -24,6 +25,7 @@ export function SimulationWorkspaceShell({
   displayPageClassName = 'mobile-page-display',
   controlsPageClassName = 'mobile-page-controls',
   controlsVisible = true,
+  allowSwipeFromCanvas = false,
 }: SimulationWorkspaceShellProps) {
   const [page, setPage] = useState<'display' | 'controls'>('display')
   const swipeStart = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
@@ -35,7 +37,9 @@ export function SimulationWorkspaceShell({
     swipeStart.current = {
       x: touch.clientX,
       y: touch.clientY,
-      blocked: Boolean(target.closest('button, input, select, textarea, a, [role="slider"], canvas')),
+      blocked: Boolean(target.closest(allowSwipeFromCanvas
+        ? 'button, input, select, textarea, a, [role="slider"]'
+        : 'button, input, select, textarea, a, [role="slider"], canvas')),
     }
   }
 
