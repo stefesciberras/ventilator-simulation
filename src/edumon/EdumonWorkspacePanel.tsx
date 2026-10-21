@@ -101,7 +101,7 @@ export function EdumonWorkspacePanel({
         <section className="control-section edumon-patient-controls">
           <div className="control-section-title"><h2>Patient</h2><span className="edumon-profile-badge">{controlsLocked ? 'Instructor controlled' : profile}</span></div>
           <div className="patient-transition-control">
-            <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} />
+            <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} showValue={false} />
           </div>
           <label className="edumon-rhythm-control">
             <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
