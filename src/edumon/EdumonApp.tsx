@@ -10,7 +10,9 @@ import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type Edu
 import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
 import { SimulationHardwareControls } from '../components/SimulationHardwareControls'
 import { SharedBasicSessionPanel, useProductTeachingSession } from '../teaching/session'
-import { getInstructorAccount } from '../instructorAccount'
+import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from '../components/InstructorAccountAuth'
+import { useTeachingScenarioRuntime } from '../teaching/scenario/runtimeCore'
+import { createEdumonScenarioRuntimeAdapter } from './scenarioAdapter'
 import './edumon.css'
 import './edumon-console-parity.css'
 
@@ -179,10 +181,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [laserActive, setLaserActive] = useState(false)
   const [laserPoint, setLaserPoint] = useState({ x: 0.5, y: 0.25 })
   const [auxiliaryMonitor, setAuxiliaryMonitor] = useState<EdumonAuxiliaryMonitorId | null>(null)
-  const [topPanel, setTopPanel] = useState<'scenario' | 'account' | 'about' | null>(null)
+  const [topPanel, setTopPanel] = useState<'scenario' | 'about' | null>(null)
   const [alarmSilencedUntil, setAlarmSilencedUntil] = useState<number | null>(null)
   const [alarmSilenceRemaining, setAlarmSilenceRemaining] = useState(0)
-  const [instructorAuthenticated, setInstructorAuthenticated] = useState(false)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -234,15 +235,21 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   })
   const candidateCount = teachingSession.members.filter((member) => member.role === 'candidate').length
   const candidateLocked = teachingSession.role === 'candidate'
+  const accountChangeLocked = teachingSession.role !== 'standalone'
+  const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
+  const instructorAuthenticated = Boolean(accountAuth.account)
+  const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRuntimeAdapter((snapshot) => {
+    setPatientState(snapshot.patient)
+    setSimulationPaused(snapshot.simulationPaused)
+    setSimulationSpeed(snapshot.simulationSpeed)
+  }), [])
+  const scenarioRuntime = useTeachingScenarioRuntime(edumonScenarioAdapter)
   const selectedAuxiliary = module.auxiliaryMonitors.find((item) => item.id === auxiliaryMonitor) ?? null
 
   useEffect(() => {
-    let active = true
-    void getInstructorAccount()
-      .then((account) => { if (active) setInstructorAuthenticated(Boolean(account)) })
-      .catch(() => { if (active) setInstructorAuthenticated(false) })
-    return () => { active = false }
-  }, [topPanel])
+    if (scenarioRuntime.status !== 'running') return
+    void scenarioRuntime.evaluate({ simulationTime: elapsed, state: sharedTeachingState, measurements }, elapsed)
+  }, [scenarioRuntime, elapsed, sharedTeachingState, measurements])
 
   const sessionPanel = (
     <SharedBasicSessionPanel
@@ -318,7 +325,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         onSpeedChange={setSimulationSpeed}
         simulationControlsLocked={candidateLocked}
         onScenario={() => setTopPanel('scenario')}
-        onAccount={() => setTopPanel('account')}
+        accountAction={<InstructorAccountButton auth={accountAuth} />}
         onAbout={() => setTopPanel('about')}
       />
 
@@ -371,7 +378,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       )}
 
       {topPanel === 'scenario' && <AuxiliaryMonitorModal title="Scenarios and sessions" onClose={() => setTopPanel(null)}>{sessionPanel}</AuxiliaryMonitorModal>}
-      {topPanel === 'account' && <AuxiliaryMonitorModal title="Instructor account" onClose={() => setTopPanel(null)}><EdumonTeachingLibraries host={teachingHost} role={teachingSession.role} sessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} /></AuxiliaryMonitorModal>}
+      <InstructorAccountDialog auth={accountAuth} locked={accountChangeLocked} />
       {topPanel === 'about' && <AuxiliaryMonitorModal title={module.productName} onClose={() => setTopPanel(null)}><div className="edumon-top-panel-content"><span>EDUSIM MONITORING PLATFORM</span><strong>{module.subtitle}</strong><p>Version v0.1.0.0</p><p>Educational simulation only — not a medical device and not for clinical decision-making.</p></div></AuxiliaryMonitorModal>}
     </main>
   )
