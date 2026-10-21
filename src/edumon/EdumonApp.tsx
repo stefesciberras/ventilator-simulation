@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { EDUMON_APP_VERSION } from './appVersion'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
 import { generateMonitorSamples, measurementsFor, RHYTHM_LABELS } from './monitorEngine'
-import { AuxiliaryMonitorModal } from './AuxiliaryMonitorModal'
+import { SecondaryMonitorSurface } from '../components/SecondaryMonitorSurface'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonTopBar, type EdumonSimulationSpeed } from './EdumonTopBar'
 import { EdumonWorkspacePanel } from './EdumonWorkspacePanel'
@@ -29,6 +29,7 @@ import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenar
 import { SharedScenarioRuntimePanel } from '../teaching/scenario/SharedScenarioRuntimePanel'
 import { useSharedSelfDirectedScenario } from '../teaching/scenario/useSharedSelfDirectedScenario'
 import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
+import { createSimulationPersistence, type SimulationPersistence } from '../core/SimulationPersistence'
 import './edumon.css'
 import './edumon-console-parity.css'
 
@@ -37,12 +38,9 @@ const SAMPLE_RATE = 100
 const EDUMON_ALARM_STORAGE_KEY = 'edumon.alarm-limits'
 const EDUMON_PATIENT_TRANSITION_STORAGE_KEY = 'edumon.patient-transition-seconds'
 
-function loadEdumonAlarmLimits(): EdumonAlarmLimits {
-  if (typeof window === 'undefined') return { ...DEFAULT_EDUMON_ALARM_LIMITS }
+function loadEdumonAlarmLimits(persistence: SimulationPersistence): EdumonAlarmLimits {
   try {
-    const raw = window.localStorage.getItem(EDUMON_ALARM_STORAGE_KEY)
-    if (!raw) return { ...DEFAULT_EDUMON_ALARM_LIMITS }
-    const stored = JSON.parse(raw) as Partial<EdumonAlarmLimits>
+    const stored = persistence.readJson<Partial<EdumonAlarmLimits>>('alarm-limits', {}, [EDUMON_ALARM_STORAGE_KEY])
     return {
       heartRateLow: Number.isFinite(stored.heartRateLow) ? Number(stored.heartRateLow) : DEFAULT_EDUMON_ALARM_LIMITS.heartRateLow,
       heartRateHigh: Number.isFinite(stored.heartRateHigh) ? Number(stored.heartRateHigh) : DEFAULT_EDUMON_ALARM_LIMITS.heartRateHigh,
@@ -217,10 +215,12 @@ function TrendsPreview() {
 }
 
 function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
+  const productId = scenarioProductForEdumonModule(module.id)
+  const persistence = useMemo(() => createSimulationPersistence(productId), [productId])
   const [patientState, setPatientState] = useState<MonitorPatientState>(DEFAULT_MONITOR_STATE)
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
-    const stored = Number(window.localStorage.getItem(EDUMON_PATIENT_TRANSITION_STORAGE_KEY) ?? 0)
+    const stored = persistence.readNumber('patient-transition-seconds', 0, [EDUMON_PATIENT_TRANSITION_STORAGE_KEY])
     return [0, 5, 10, 30, 60].includes(stored) ? stored : 0
   })
   const effectivePatientRef = useRef<MonitorPatientState>({ ...DEFAULT_MONITOR_STATE })
@@ -237,7 +237,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [selectedSavedScenarioId, setSelectedSavedScenarioId] = useState('')
   const launchedScenarioRef = useRef<string | null>(null)
   const [scenarioQuestionState, setScenarioQuestionState] = useState({ answered: false, correct: false })
-  const [alarmLimits, setAlarmLimits] = useState<EdumonAlarmLimits>(loadEdumonAlarmLimits)
+  const [alarmLimits, setAlarmLimits] = useState<EdumonAlarmLimits>(() => loadEdumonAlarmLimits(persistence))
   const [alarmLimitsOpen, setAlarmLimitsOpen] = useState(false)
   const screenWakeLock = useScreenWakeLock()
 
@@ -360,10 +360,10 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   })
 
   useEffect(() => {
-    window.localStorage.setItem(EDUMON_ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
-  }, [alarmLimits])
+    persistence.writeJson('alarm-limits', alarmLimits)
+  }, [alarmLimits, persistence])
 
-  useEffect(() => { window.localStorage.setItem(EDUMON_PATIENT_TRANSITION_STORAGE_KEY, String(patientTransitionSeconds)) }, [patientTransitionSeconds])
+  useEffect(() => { persistence.writeNumber('patient-transition-seconds', patientTransitionSeconds) }, [patientTransitionSeconds, persistence])
   useEffect(() => {
     if (scenarioTransitionRef.current) return
     if (patientTransitionSeconds <= 0) { effectivePatientRef.current = { ...patientState }; patientTransitionRef.current = null; return }
@@ -572,15 +572,15 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
 
       {selectedAuxiliary && auxiliaryMonitor && (
-        <AuxiliaryMonitorModal title={selectedAuxiliary.label} onClose={() => setAuxiliaryMonitor(null)}>
+        <SecondaryMonitorSurface title={selectedAuxiliary.label} onClose={() => setAuxiliaryMonitor(null)}>
           {auxiliaryMonitor === 'ana-gases' && <GasMonitorPreview />}
           {auxiliaryMonitor === 'icu-neuro' && <NeuroMonitorPreview map={measurements.meanPressure} />}
           {auxiliaryMonitor === 'trends' && <TrendsPreview />}
           {auxiliaryMonitor === 'teaching' && <EdumonTeachingLibraries host={teachingHost} role={teachingSession.role} sessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} />}
-        </AuxiliaryMonitorModal>
+        </SecondaryMonitorSurface>
       )}
 
-      {topPanel === 'scenario' && <AuxiliaryMonitorModal title="Scenarios and sessions" onClose={() => setTopPanel(null)}>{sessionPanel}</AuxiliaryMonitorModal>}
+      {topPanel === 'scenario' && <SecondaryMonitorSurface title="Scenarios and sessions" onClose={() => setTopPanel(null)}>{sessionPanel}</SecondaryMonitorSurface>}
       <InstructorAccountDialog auth={accountAuth} locked={accountChangeLocked} />
       <SimulationAboutDialog open={topPanel === 'about'} productLabel={module.productName} title={module.subtitle} description="An interactive patient-monitor simulator for anaesthesia, acute care and intensive-care education." version={EDUMON_APP_VERSION} onClose={() => setTopPanel(null)} wakeLock={screenWakeLock} diagnostics={edumonDiagnosticActions} />
     </main>
