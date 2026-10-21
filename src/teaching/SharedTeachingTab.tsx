@@ -57,6 +57,7 @@ export function SharedTeachingTab({
           <TeachingMediaInstructorPanel
             role={role}
             instructorAuthenticated={instructorAuthenticated}
+            environmentId={host.libraryEnvironmentId}
             sessionId={sessionId}
             scenarioMediaIds={scenarioMediaIds}
             onScenarioMediaIdsChange={onScenarioMediaIdsChange}

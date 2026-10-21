@@ -4,10 +4,12 @@ export const edumonAnaTeachingHost: TeachingHostAdapter = {
   appId: 'edumon-ana',
   appName: 'EDUMON-Ana',
   defaultModule: 'Anaesthesia monitoring',
+  libraryEnvironmentId: 'anaesthesia',
 }
 
 export const edumonIcuTeachingHost: TeachingHostAdapter = {
   appId: 'edumon-icu',
   appName: 'EDUMON-ICU',
   defaultModule: 'Intensive care monitoring',
+  libraryEnvironmentId: 'itu',
 }

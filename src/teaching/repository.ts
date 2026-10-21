@@ -160,13 +160,14 @@ export function subscribeTeachingAuth(onChange: () => void) {
   return () => data.subscription.unsubscribe()
 }
 
-export async function listTeachingLibraryItems(): Promise<TeachingLibraryItem[]> {
+export async function listTeachingLibraryItems(environmentId?: string): Promise<TeachingLibraryItem[]> {
   const user = await requirePermanentTeachingAuthor()
-  const { data, error } = await supabase
+  let query = supabase
     .from('teaching_library_items')
     .select('*')
     .eq('owner_id', user.id)
-    .order('updated_at', { ascending: false })
+  if (environmentId) query = query.overlaps('environments', ['all', environmentId])
+  const { data, error } = await query.order('updated_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as TeachingLibraryItem[]
 }
@@ -181,6 +182,7 @@ export async function createTeachingLibraryItem(sourceApp: string, draft: Teachi
       owner_id: user.id,
       source_app: sourceApp,
       module: draft.module.trim() || 'General',
+      environments: draft.environments?.length ? draft.environments : ['all'],
       kind: draft.kind,
       title: draft.title?.trim() || null,
       body: draft.body.trim(),
@@ -204,6 +206,7 @@ export async function updateTeachingLibraryItem(id: string, sourceApp: string, d
     .update({
       source_app: sourceApp,
       module: draft.module.trim() || 'General',
+      environments: draft.environments?.length ? draft.environments : ['all'],
       kind: draft.kind,
       title: draft.title?.trim() || null,
       body: draft.body.trim(),

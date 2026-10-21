@@ -51,12 +51,14 @@ export interface TeachingLibraryItem {
   correct_option_id: string | null
   explanation: string | null
   tags: string[]
+  environments: string[]
   created_at: string
   updated_at: string
 }
 
 export interface TeachingLibraryDraft extends TeachingPromptDraft {
   module: string
+  environments?: string[]
   tags?: string[]
   correctOptionId?: string | null
   explanation?: string | null
@@ -66,6 +68,7 @@ export interface TeachingHostAdapter<TContext = Record<string, unknown>> {
   appId: string
   appName: string
   defaultModule: string
+  libraryEnvironmentId: string
   getContext?: () => TContext
   onPromptPresented?: (prompt: TeachingPromptDraft) => void
   onPromptClosed?: () => void

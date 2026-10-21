@@ -164,7 +164,7 @@ export function useTeachingQuestionLibrary(host: TeachingHostAdapter) {
         setError(null)
         return
       }
-      setItems(await listTeachingLibraryItems())
+      setItems(await listTeachingLibraryItems(host.libraryEnvironmentId))
       setError(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to load question library.')
@@ -174,7 +174,7 @@ export function useTeachingQuestionLibrary(host: TeachingHostAdapter) {
   useEffect(() => {
     void refresh()
     return subscribeTeachingAuth(() => void refresh())
-  }, [])
+  }, [host.libraryEnvironmentId])
 
   const save = async (draft: TeachingLibraryDraft, existingId?: string | null) => {
     setBusy(true)
