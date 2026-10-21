@@ -1,0 +1,30 @@
+name: Add teaching library environments
+on:
+  push:
+    branches: [fix/teaching-media-edumon-alarms]
+    paths:
+      - 'scripts/add-teaching-library-environments.mjs'
+      - '.github/workflows/add-teaching-library-environments.yml'
+permissions:
+  contents: write
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/add-teaching-library-environments.mjs
+      - run: npm ci
+      - run: npm run build
+      - name: Commit implementation and remove temporary tooling
+        run: |
+          rm scripts/add-teaching-library-environments.mjs .github/workflows/add-teaching-library-environments.yml
+          git config user.name stefesciberras
+          git config user.email '43134239+stefesciberras@users.noreply.github.com'
+          git add -A
+          git commit -m 'Categorize teaching media and question libraries by environment'
+          git push
