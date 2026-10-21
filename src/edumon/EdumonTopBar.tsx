@@ -76,7 +76,6 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
       className="edumon-topbar"
       brandClassName="edumon-topbar-brand"
       statusClassName="edumon-topbar-status"
-      statusTextClassName="edumon-simulation-status"
     />
   )
 }

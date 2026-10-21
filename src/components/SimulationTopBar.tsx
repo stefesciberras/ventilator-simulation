@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import './SimulationTopBar.css'
 
 export type SharedSimulationSpeed = 0.5 | 1 | 1.5 | 2 | 4
 
@@ -77,7 +78,7 @@ export function SimulationTopBar({
   const defaultPauseLabel = simulationPaused ? 'Resume whole simulation' : 'Pause whole simulation'
 
   return (
-    <header className={`topbar ${className}`.trim()}>
+    <header className={`topbar simulation-topbar ${className}`.trim()}>
       <div className={`brand-block ${brandClassName}`.trim()}>
         {brandLeading}
         <div><span className="brand-kicker">{brandKicker}</span><h1>{title}</h1></div>
@@ -112,7 +113,7 @@ export function SimulationTopBar({
         </label>
       </div>
 
-      <div className={`status-cluster ${statusClassName}`.trim()}>
+      <div className={`status-cluster simulation-topbar-status ${statusClassName}`.trim()}>
         <span className={`status-dot ${simulationPaused ? 'paused' : ''}`} />
         {statusText && <span className={statusTextClassName || 'simulation-status-text'}>{statusText}</span>}
         {rightActions}
