@@ -18,8 +18,10 @@ import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountA
 import { useTeachingScenarioRuntime } from '../teaching/scenario/runtimeCore'
 import { createEdumonScenarioRuntimeAdapter } from './scenarioAdapter'
 import type { EdumonStoredScenario } from './scenarioTypes'
-import { createProductScenario, deleteProductScenario, listProductScenarios, updateProductScenario, type ProductScenarioRow } from '../teaching/scenario/productLibrary'
-import { TeachingLaserPointerSurface, useScenarioLibraryManager, useTeachingDisplaySync } from '../teaching'
+import { TeachingLaserPointerSurface, useTeachingDisplaySync } from '../teaching'
+import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
+import { SharedScenarioRuntimePanel } from '../teaching/scenario/SharedScenarioRuntimePanel'
+import { selfDirectedAssignmentUrl, startSelfDirectedRun, updateSelfDirectedRun } from '../selfDirectedAssignments'
 import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import './edumon.css'
 import './edumon-console-parity.css'
@@ -193,6 +195,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [alarmSilenceRemaining, setAlarmSilenceRemaining] = useState(0)
   const [selectedSavedScenarioId, setSelectedSavedScenarioId] = useState('')
   const launchedScenarioRef = useRef<string | null>(null)
+  const launchedAssignmentRef = useRef<string | null>(null)
+  const [selfDirectedRunId, setSelfDirectedRunId] = useState<string | null>(null)
+  const [scenarioQuestionState, setScenarioQuestionState] = useState({ answered: false, correct: false })
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
   const screenWakeLock = useScreenWakeLock()
 
@@ -249,13 +254,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
   const instructorAuthenticated = Boolean(accountAuth.account)
   const scenarioProduct = scenarioProductForEdumonModule(module.id)
-  const scenarioLibraryRepository = useMemo(() => ({
-    list: () => listProductScenarios<EdumonStoredScenario>(scenarioProduct),
-    create: (name: string, scenario: EdumonStoredScenario) => createProductScenario(scenarioProduct, name, scenario),
-    update: (id: string, updates: { name?: string; scenario?: EdumonStoredScenario }) => updateProductScenario(scenarioProduct, id, updates),
-    remove: (id: string) => deleteProductScenario(scenarioProduct, id),
-  }), [scenarioProduct])
-  const scenarioLibrary = useScenarioLibraryManager<ProductScenarioRow<EdumonStoredScenario>, EdumonStoredScenario>({ enabled: instructorAuthenticated, repository: scenarioLibraryRepository })
+  const scenarioLibrary = useProductScenarioLibrary<EdumonStoredScenario>(scenarioProduct, instructorAuthenticated)
   const savedScenarios = scenarioLibrary.items
   const savedScenariosBusy = scenarioLibrary.busy
   const savedScenarioMessage = scenarioLibrary.message ?? (!savedScenariosBusy && instructorAuthenticated && !savedScenarios.length ? 'No saved scenarios for this simulator yet. Create one in Scenario Builder.' : null)
@@ -291,12 +290,35 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     void loadSavedScenario(requested)
   }, [instructorAuthenticated, teachingSession.role, savedScenarios])
 
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('assignment')?.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) ?? ''
+    if (code.length !== 8 || launchedAssignmentRef.current === code) return
+    launchedAssignmentRef.current = code
+    void startSelfDirectedRun<EdumonStoredScenario>(code).then(async (run) => {
+      if (run.product !== scenarioProduct) {
+        window.location.assign(selfDirectedAssignmentUrl(code, run.product))
+        return
+      }
+      setSelfDirectedRunId(run.runId)
+      await scenarioRuntime.start(run.scenario.definition, elapsed)
+    }).catch((cause) => {
+      console.error('Unable to start self-directed EDUMON scenario', cause)
+      launchedAssignmentRef.current = null
+    })
+  }, [scenarioProduct])
+
+  useEffect(() => {
+    setScenarioQuestionState({ answered: false, correct: false })
+    if (selfDirectedRunId && scenarioRuntime.status === 'running') void updateSelfDirectedRun(selfDirectedRunId, scenarioRuntime.stageIndex)
+    if (selfDirectedRunId && scenarioRuntime.status === 'complete') void updateSelfDirectedRun(selfDirectedRunId, scenarioRuntime.stageIndex, true)
+  }, [scenarioRuntime.stageIndex, scenarioRuntime.status, selfDirectedRunId])
+
   const selectedAuxiliary = module.auxiliaryMonitors.find((item) => item.id === auxiliaryMonitor) ?? null
 
   useEffect(() => {
     if (scenarioRuntime.status !== 'running') return
-    void scenarioRuntime.evaluate({ simulationTime: elapsed, state: sharedTeachingState, measurements }, elapsed)
-  }, [scenarioRuntime, elapsed, sharedTeachingState, measurements])
+    void scenarioRuntime.evaluate({ simulationTime: elapsed, state: sharedTeachingState, measurements, questionAnswered: scenarioQuestionState.answered, questionCorrect: scenarioQuestionState.correct }, elapsed)
+  }, [scenarioRuntime, elapsed, sharedTeachingState, measurements, scenarioQuestionState])
 
   const sessionPanel = (
     <SharedBasicSessionPanel
@@ -460,6 +482,21 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         )}
         controls={<EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} controlsLocked={candidateLocked} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
+
+      {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (
+        <SharedScenarioRuntimePanel
+          scenarioName={scenarioRuntime.scenario.name}
+          stageName={scenarioRuntime.stage.name}
+          stageNumber={scenarioRuntime.stageIndex + 1}
+          stageCount={scenarioRuntime.scenario.stages.length}
+          notes={scenarioRuntime.stage.notes}
+          content={scenarioRuntime.stage.content}
+          manualAdvanceAvailable={scenarioRuntime.stage.triggers.some((trigger) => trigger.type === 'manual')}
+          onAdvance={async () => { await scenarioRuntime.advance(elapsed) }}
+          onQuestionResult={(answered, correct) => setScenarioQuestionState({ answered, correct })}
+          onClose={() => { scenarioRuntime.stop(); setSelfDirectedRunId(null) }}
+        />
+      )}
 
       {selectedAuxiliary && auxiliaryMonitor && (
         <AuxiliaryMonitorModal title={selectedAuxiliary.label} onClose={() => setAuxiliaryMonitor(null)}>

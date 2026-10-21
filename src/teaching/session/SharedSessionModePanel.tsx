@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { routeToSelfDirectedAssignment } from '../../selfDirectedAssignments'
 import { SharedCandidateInvitation } from './SharedCandidateInvitation'
 import { SharedInstructorLiveRoom } from './SharedInstructorLiveRoom'
 import type {
@@ -75,16 +76,12 @@ export function SharedSessionLauncher({
     setDisplayName(recoverableCandidate.displayName)
   }, [recoverableCandidate])
 
-  const launchSelfDirected = (code: string) => {
+  const launchSelfDirected = async (code: string) => {
     if (onSelfDirected) {
       onSelfDirected(code)
       return
     }
-    const url = new URL(window.location.href)
-    url.search = ''
-    url.hash = ''
-    url.searchParams.set('assignment', code)
-    window.location.assign(url.toString())
+    await routeToSelfDirectedAssignment(code)
   }
 
   if (mode === 'candidate') {
@@ -118,7 +115,7 @@ export function SharedSessionLauncher({
         event.preventDefault()
         const code = assignmentCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
         if (code.length !== 8) return
-        launchSelfDirected(code)
+        void launchSelfDirected(code)
       }}>
         <label>
           <span>Self-directed session code</span>
