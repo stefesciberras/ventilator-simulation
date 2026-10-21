@@ -1,27 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { routeToSelfDirectedAssignment } from '../../selfDirectedAssignments'
+import { loadPanelCollapsed, savePanelCollapsed } from '../../panelCollapse'
 import { SharedCandidateInvitation } from './SharedCandidateInvitation'
 import { SharedInstructorLiveRoom } from './SharedInstructorLiveRoom'
-import type {
-  RecoverableTeachingCandidate,
-  RecoverableTeachingInstructor,
-  SharedTeachingConnection,
-  SharedTeachingMemberRow,
-  SharedTeachingRole,
-  SharedTeachingSessionRow,
-} from './types'
+import type { RecoverableTeachingCandidate, RecoverableTeachingInstructor, SharedTeachingConnection, SharedTeachingMemberRow, SharedTeachingRole, SharedTeachingSessionRow } from './types'
 
-function ConnectionBadge({ connection }: { connection: SharedTeachingConnection }) {
-  const label = connection === 'connected'
-    ? 'Connected'
-    : connection === 'connecting'
-      ? 'Connecting…'
-      : connection === 'reconnecting'
-        ? 'Reconnecting…'
-        : connection === 'error'
-          ? 'Connection error'
-          : 'Offline'
+export function SharedConnectionBadge({ connection }: { connection: SharedTeachingConnection }) {
+  const label = connection === 'connected' ? 'Connected' : connection === 'connecting' ? 'Connecting…' : connection === 'reconnecting' ? 'Reconnecting…' : connection === 'error' ? 'Connection error' : 'Offline'
   return <span className={`session-connection ${connection}`}><span className="session-connection-dot" />{label}</span>
 }
 
@@ -39,230 +25,38 @@ interface SharedSessionLauncherProps {
   instructorSignInNote?: string
 }
 
-export function SharedSessionLauncher({
-  instructorAuthenticated,
-  connection,
-  error,
-  recoverableInstructor,
-  recoverableCandidate,
-  onStartInstructor,
-  onResumeInstructor,
-  onJoinCandidate,
-  onResumeCandidate,
-  onSelfDirected,
-  instructorSignInNote = 'Sign in to an instructor account to start or resume an instructor teaching session. Joining as a candidate does not require an account.',
-}: SharedSessionLauncherProps) {
+export function SharedSessionLauncher({ instructorAuthenticated, connection, error, recoverableInstructor, recoverableCandidate, onStartInstructor, onResumeInstructor, onJoinCandidate, onResumeCandidate, onSelfDirected, instructorSignInNote = 'Sign in to an instructor account to start or resume an instructor teaching session. Joining as a candidate does not require an account.' }: SharedSessionLauncherProps) {
   const [mode, setMode] = useState<'choose' | 'candidate' | 'self-directed'>('choose')
   const [sessionKey, setSessionKey] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [assignmentCode, setAssignmentCode] = useState('')
-  const candidateNameInputRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    const rawKey = new URLSearchParams(window.location.search).get('session') ?? ''
-    const deepLinkKey = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
-    if (deepLinkKey.length !== 6) return
-    setSessionKey(deepLinkKey)
-    setMode('candidate')
-    window.setTimeout(() => {
-      candidateNameInputRef.current?.focus()
-      candidateNameInputRef.current?.select()
-    }, 80)
-  }, [])
-
-  useEffect(() => {
-    if (!recoverableCandidate) return
-    setSessionKey(recoverableCandidate.sessionKey)
-    setDisplayName(recoverableCandidate.displayName)
-  }, [recoverableCandidate])
-
-  const launchSelfDirected = async (code: string) => {
-    if (onSelfDirected) {
-      onSelfDirected(code)
-      return
-    }
-    await routeToSelfDirectedAssignment(code)
-  }
-
-  if (mode === 'candidate') {
-    return (
-      <form className="candidate-join-form" onSubmit={(event) => {
-        event.preventDefault()
-        const key = sessionKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
-        if (key.length !== 6) return
-        void onJoinCandidate(key, displayName.trim())
-      }}>
-        <label>
-          <span>Session key</span>
-          <input value={sessionKey} onChange={(event) => setSessionKey(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))} placeholder="ABC123" autoCapitalize="characters" autoComplete="off" maxLength={6} required />
-        </label>
-        <label>
-          <span>Name <small>(optional)</small></span>
-          <input ref={candidateNameInputRef} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Candidate" autoComplete="name" maxLength={60} />
-        </label>
-        <div className="session-launch-actions">
-          <button type="submit" className="session-primary-button" disabled={connection === 'connecting' || sessionKey.length < 6}>Join session</button>
-          <button type="button" className="session-secondary-button" onClick={() => setMode('choose')}>Cancel</button>
-        </div>
-        {error && <div className="session-error">{error}</div>}
-      </form>
-    )
-  }
-
-  if (mode === 'self-directed') {
-    return (
-      <form className="candidate-join-form" onSubmit={(event) => {
-        event.preventDefault()
-        const code = assignmentCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
-        if (code.length !== 8) return
-        void launchSelfDirected(code)
-      }}>
-        <label>
-          <span>Self-directed session code</span>
-          <input value={assignmentCode} onChange={(event) => setAssignmentCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} placeholder="A1B2C3D4" autoCapitalize="characters" autoComplete="off" maxLength={8} required />
-        </label>
-        <p className="session-start-note">This scenario runs independently on your device. No instructor needs to be online.</p>
-        <div className="session-launch-actions">
-          <button type="submit" className="session-primary-button" disabled={assignmentCode.length < 8}>Start scenario</button>
-          <button type="button" className="session-secondary-button" onClick={() => setMode('choose')}>Cancel</button>
-        </div>
-      </form>
-    )
-  }
-
-  return (
-    <>
-      <div className="session-launch-actions">
-        <button type="button" className="session-primary-button" disabled={!instructorAuthenticated || connection === 'connecting'} title={!instructorAuthenticated ? 'Sign in to an instructor account first' : undefined} onClick={() => void onStartInstructor()}>Start instructor session</button>
-        <button type="button" className="session-secondary-button" onClick={() => setMode('candidate')}>Join as candidate</button>
-        <button type="button" className="session-secondary-button" onClick={() => setMode('self-directed')}>Run self-directed scenario</button>
-        {recoverableCandidate && onResumeCandidate && (
-          <button type="button" className="session-secondary-button" disabled={connection === 'connecting'} onClick={() => void onResumeCandidate()}>Rejoin candidate {recoverableCandidate.sessionKey}</button>
-        )}
-        {recoverableInstructor && onResumeInstructor && (
-          <button type="button" className="session-secondary-button" disabled={!instructorAuthenticated || connection === 'connecting'} title={!instructorAuthenticated ? 'Sign in to an instructor account first' : undefined} onClick={() => void onResumeInstructor(recoverableInstructor.sessionId)}>Rejoin instructor {recoverableInstructor.sessionKey}</button>
-        )}
-      </div>
-      {!instructorAuthenticated && <div className="session-instructor-signin-note">{instructorSignInNote}</div>}
-      {error && <div className="session-error">{error}</div>}
-    </>
-  )
+  useEffect(() => { const raw = new URLSearchParams(window.location.search).get('session') ?? ''; const key = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); if (key.length === 6) { setSessionKey(key); setMode('candidate') } }, [])
+  useEffect(() => { if (recoverableCandidate) { setSessionKey(recoverableCandidate.sessionKey); setDisplayName(recoverableCandidate.displayName) } }, [recoverableCandidate])
+  const launchSelfDirected = async (code: string) => { if (onSelfDirected) onSelfDirected(code); else await routeToSelfDirectedAssignment(code) }
+  if (mode === 'candidate') return <form className="candidate-join-form" onSubmit={(e) => { e.preventDefault(); const key = sessionKey.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); if (key.length === 6) void onJoinCandidate(key, displayName.trim()) }}><label><span>Session key</span><input autoFocus value={sessionKey} onChange={(e) => setSessionKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))} placeholder="ABC123" maxLength={6} required /></label><label><span>Name <small>(optional)</small></span><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Candidate" maxLength={60} /></label><div className="session-launch-actions"><button type="submit" className="session-primary-button" disabled={connection === 'connecting' || sessionKey.length < 6}>Join session</button><button type="button" className="session-secondary-button" onClick={() => setMode('choose')}>Cancel</button></div>{error && <div className="session-error">{error}</div>}</form>
+  if (mode === 'self-directed') return <form className="candidate-join-form" onSubmit={(e) => { e.preventDefault(); const code = assignmentCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); if (code.length === 8) void launchSelfDirected(code) }}><label><span>Self-directed session code</span><input value={assignmentCode} onChange={(e) => setAssignmentCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} placeholder="A1B2C3D4" maxLength={8} required /></label><p className="session-start-note">This scenario runs independently on your device. No instructor needs to be online.</p><div className="session-launch-actions"><button type="submit" className="session-primary-button" disabled={assignmentCode.length < 8}>Start scenario</button><button type="button" className="session-secondary-button" onClick={() => setMode('choose')}>Cancel</button></div></form>
+  return <><div className="session-launch-actions"><button type="button" className="session-primary-button" disabled={!instructorAuthenticated || connection === 'connecting'} onClick={() => void onStartInstructor()}>Start instructor session</button><button type="button" className="session-secondary-button" onClick={() => setMode('candidate')}>Join as candidate</button><button type="button" className="session-secondary-button" onClick={() => setMode('self-directed')}>Run self-directed scenario</button>{recoverableCandidate && onResumeCandidate && <button type="button" className="session-secondary-button" onClick={() => void onResumeCandidate()}>Rejoin candidate {recoverableCandidate.sessionKey}</button>}{recoverableInstructor && onResumeInstructor && <button type="button" className="session-secondary-button" disabled={!instructorAuthenticated} onClick={() => void onResumeInstructor(recoverableInstructor.sessionId)}>Rejoin instructor {recoverableInstructor.sessionKey}</button>}</div>{!instructorAuthenticated && <div className="session-instructor-signin-note">{instructorSignInNote}</div>}{error && <div className="session-error">{error}</div>}</>
 }
 
-export interface SharedInstructorStartOption {
-  id: string
-  title: string
-  summary?: string
-  chips?: readonly string[]
-}
-
-export interface SharedInstructorStartConfig {
-  currentTitle: string
-  currentSummary: string
-  currentChips?: readonly string[]
-  savedOptions?: readonly SharedInstructorStartOption[]
-  selectedSavedId?: string
-  onSelectedSavedIdChange?: (id: string) => void
-  savedBusy?: boolean
-  savedMessage?: string | null
-  onStartCurrent: () => void | Promise<unknown>
-  onStartSaved?: (id: string) => void | Promise<unknown>
-  onLoadSaved?: (id: string) => void | Promise<unknown>
-}
+export interface SharedInstructorStartOption { id: string; title: string; summary?: string; chips?: readonly string[] }
+export interface SharedInstructorStartConfig { currentTitle: string; currentSummary: string; currentChips?: readonly string[]; savedOptions?: readonly SharedInstructorStartOption[]; selectedSavedId?: string; onSelectedSavedIdChange?: (id: string) => void; savedBusy?: boolean; savedMessage?: string | null; onStartCurrent: () => void | Promise<unknown>; onStartSaved?: (id: string) => void | Promise<unknown>; onLoadSaved?: (id: string) => void | Promise<unknown> }
 
 export function SharedInstructorStartWizard({ config, onClose }: { config: SharedInstructorStartConfig; onClose: () => void }) {
-  const [source, setSource] = useState<'current' | 'scenario'>('current')
-  const savedOptions = config.savedOptions ?? []
-  const selectedSavedId = config.selectedSavedId ?? savedOptions[0]?.id ?? ''
-  const selected = savedOptions.find((option) => option.id === selectedSavedId) ?? null
-  return (
-    <div className="session-start-wizard">
-      <div className="session-start-wizard-heading"><div><span>Instructor session</span><strong>Choose starting state</strong></div><button type="button" className="session-start-close" onClick={onClose} aria-label="Close session setup">×</button></div>
-      <div className="session-start-source-tabs" role="tablist" aria-label="Instructor session starting state">
-        <button type="button" className={source === 'current' ? 'selected' : ''} onClick={() => setSource('current')}>Current setup</button>
-        <button type="button" className={source === 'scenario' ? 'selected' : ''} disabled={config.savedBusy || !savedOptions.length} onClick={() => setSource('scenario')}>Saved scenario</button>
-      </div>
-      {source === 'current' ? <div className="session-start-current-card"><span>Current standalone setup</span><strong>{config.currentTitle}</strong>{config.currentChips?.length ? <div className="session-start-summary-chips">{config.currentChips.map((item) => <em key={item}>{item}</em>)}</div> : null}<small>{config.currentSummary}</small></div> : <div className="session-start-scenarios"><div className="session-start-scenario-list">{savedOptions.map((option) => <button type="button" key={option.id} className={`session-start-scenario-option ${selectedSavedId === option.id ? 'selected' : ''}`} onClick={() => config.onSelectedSavedIdChange?.(option.id)}><strong>{option.title}</strong>{option.summary && <small>{option.summary}</small>}{option.chips?.length ? <div className="session-start-summary-chips">{option.chips.map((item) => <em key={item}>{item}</em>)}</div> : null}</button>)}</div>{selected && config.onLoadSaved && <button type="button" className="session-secondary-button" onClick={() => void config.onLoadSaved?.(selected.id)}>Load into standalone first</button>}</div>}
-      {config.savedMessage && <p className="session-start-note">{config.savedMessage}</p>}
-      <button type="button" className="session-primary-button session-start-primary" disabled={source === 'scenario' && !selected} onClick={() => void (source === 'current' ? config.onStartCurrent() : selected && config.onStartSaved?.(selected.id))}>{source === 'current' ? 'Start with current setup' : 'Start with saved scenario'}</button>
-      <button type="button" className="session-secondary-button session-start-cancel" onClick={onClose}>Cancel</button>
-    </div>
-  )
+  const [source, setSource] = useState<'current' | 'scenario'>('current'); const options = config.savedOptions ?? []; const selectedId = config.selectedSavedId ?? options[0]?.id ?? ''; const selected = options.find((x) => x.id === selectedId) ?? null
+  return <div className="session-start-wizard"><div className="session-start-wizard-heading"><div><span>Instructor session</span><strong>Choose starting state</strong></div><button type="button" className="session-start-close" onClick={onClose}>×</button></div><div className="session-start-source-tabs"><button type="button" className={source === 'current' ? 'selected' : ''} onClick={() => setSource('current')}>Current setup</button><button type="button" className={source === 'scenario' ? 'selected' : ''} disabled={config.savedBusy || !options.length} onClick={() => setSource('scenario')}>Saved scenario</button></div>{source === 'current' ? <div className="session-start-current-card"><span>Current standalone setup</span><strong>{config.currentTitle}</strong>{config.currentChips?.length ? <div className="session-start-summary-chips">{config.currentChips.map((x) => <em key={x}>{x}</em>)}</div> : null}<small>{config.currentSummary}</small></div> : <div className="session-start-scenarios"><div className="session-start-scenario-list">{options.map((o) => <button type="button" key={o.id} className={`session-start-scenario-option ${selectedId === o.id ? 'selected' : ''}`} onClick={() => config.onSelectedSavedIdChange?.(o.id)}><strong>{o.title}</strong>{o.summary && <small>{o.summary}</small>}{o.chips?.length ? <div className="session-start-summary-chips">{o.chips.map((x) => <em key={x}>{x}</em>)}</div> : null}</button>)}</div>{selected && config.onLoadSaved && <button type="button" className="session-secondary-button" onClick={() => void config.onLoadSaved?.(selected.id)}>Load into standalone first</button>}</div>}{config.savedMessage && <p className="session-start-note">{config.savedMessage}</p>}<button type="button" className="session-primary-button session-start-primary" disabled={source === 'scenario' && !selected} onClick={() => void (source === 'current' ? config.onStartCurrent() : selected && config.onStartSaved?.(selected.id))}>{source === 'current' ? 'Start with current setup' : 'Start with saved scenario'}</button><button type="button" className="session-secondary-button session-start-cancel" onClick={onClose}>Cancel</button></div>
 }
 
-interface SharedBasicSessionPanelProps extends SharedSessionLauncherProps {
-  role: SharedTeachingRole
-  session: SharedTeachingSessionRow | null
-  members?: SharedTeachingMemberRow[]
-  onLeaveSession: () => void | Promise<unknown>
-  onEndInstructorSession: () => void | Promise<unknown>
-  title?: string
-  instructorStart?: SharedInstructorStartConfig
-  footer?: ReactNode
-  productId?: string
-  productLabel?: string
-  productDescription?: string
-  renderCandidateTelemetry?: (member: SharedTeachingMemberRow) => ReactNode
-}
+export interface SharedSessionSwitchRow { id: string; label: string; checked: boolean; disabled?: boolean; emphasis?: boolean; onChange: (checked: boolean) => void | Promise<unknown> }
+export interface SharedSessionDomain { id: string; title: string; status: string; active?: boolean; rows: SharedSessionSwitchRow[] }
+export interface SharedInstructorDashboardConfig { runtimeBadge?: ReactNode; domains?: SharedSessionDomain[]; simulationPaused?: boolean; onSimulationPausedChange?: (paused: boolean) => void; pausedMessage?: string; onBroadcastNow?: () => void | Promise<unknown>; broadcastLabel?: string; candidateStatus?: ReactNode; instructorNotice?: ReactNode; collapseStorageKey?: string }
 
-/** Compact product-neutral session surface used by simulators that do not need
- * EDUVENT's advanced instructor policy dashboard. */
-export function SharedBasicSessionPanel({
-  role,
-  session,
-  members = [],
-  connection,
-  onLeaveSession,
-  onEndInstructorSession,
-  title = 'Session mode',
-  instructorStart,
-  footer,
-  productId = 'edusim',
-  productLabel = 'EDUSIM',
-  productDescription = 'interactive clinical simulation',
-  renderCandidateTelemetry,
-  ...launcherProps
-}: SharedBasicSessionPanelProps) {
-  const [startWizardOpen, setStartWizardOpen] = useState(false)
-  const candidateCount = members.filter((member) => member.role === 'candidate').length
-  const candidateJoinUrl = useMemo(() => {
-    if (!session?.session_key || typeof window === 'undefined') return ''
-    const url = new URL(window.location.href)
-    url.search = ''
-    url.hash = ''
-    url.searchParams.set('session', session.session_key)
-    return url.toString()
-  }, [session?.session_key])
+interface SharedBasicSessionPanelProps extends SharedSessionLauncherProps { role: SharedTeachingRole; session: SharedTeachingSessionRow | null; members?: SharedTeachingMemberRow[]; onLeaveSession: () => void | Promise<unknown>; onEndInstructorSession: () => void | Promise<unknown>; title?: string; instructorStart?: SharedInstructorStartConfig; instructorDashboard?: SharedInstructorDashboardConfig; footer?: ReactNode; productId?: string; productLabel?: string; productDescription?: string; renderCandidateTelemetry?: (member: SharedTeachingMemberRow) => ReactNode }
 
-  return (
-    <section className="session-panel standalone-session-panel">
-      <div className="session-panel-heading">
-        <div><span className="session-kicker">Teaching</span><h2>{title}</h2></div>
-        <span className="session-role-pill">{role === 'standalone' ? 'Standalone' : role === 'instructor' ? 'Instructor' : 'Candidate'}</span>
-      </div>
-
-      {role === 'standalone' ? (
-        startWizardOpen && instructorStart ? <SharedInstructorStartWizard config={instructorStart} onClose={() => setStartWizardOpen(false)} /> : <SharedSessionLauncher connection={connection} {...launcherProps} onStartInstructor={instructorStart ? () => setStartWizardOpen(true) : launcherProps.onStartInstructor} />
-      ) : (
-        <div className="session-active-summary">
-          <div className="session-status-row">
-            <ConnectionBadge connection={connection} />
-            {session?.session_key && <span className="session-key-display"><small>SESSION</small><strong>{session.session_key}</strong></span>}
-          </div>
-          {role === 'instructor' && <>
-            <p>{candidateCount} candidate{candidateCount === 1 ? '' : 's'} joined.</p>
-            {session?.id && session.session_key && candidateJoinUrl && <SharedCandidateInvitation sessionId={session.id} sessionKey={session.session_key} joinUrl={candidateJoinUrl} productId={productId} productLabel={productLabel} productDescription={productDescription} />}
-            <SharedInstructorLiveRoom role={role} members={members} renderTelemetry={renderCandidateTelemetry} storageKey={`${productId}-instructor-live-room`} />
-          </>}
-          {role === 'candidate' && <p>Connected to the instructor's teaching session.</p>}
-          <div className="session-launch-actions">
-            {role === 'instructor'
-              ? <button type="button" className="session-secondary-button" onClick={() => void onEndInstructorSession()}>End session</button>
-              : <button type="button" className="session-secondary-button" onClick={() => void onLeaveSession()}>Leave session</button>}
-          </div>
-        </div>
-      )}
-      {footer}
-    </section>
-  )
+export function SharedBasicSessionPanel({ role, session, members = [], connection, error, onLeaveSession, onEndInstructorSession, title = 'Session mode', instructorStart, instructorDashboard, footer, productId = 'edusim', productLabel = 'EDUSIM', productDescription = 'interactive clinical simulation', renderCandidateTelemetry, ...launcherProps }: SharedBasicSessionPanelProps) {
+  const [wizard, setWizard] = useState(false); const [controlsExpanded, setControlsExpanded] = useState(false); const collapseKey = instructorDashboard?.collapseStorageKey ?? `${productId}-instructor-dashboard`; const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed(collapseKey)); const candidates = members.filter((m) => m.role === 'candidate'); const online = candidates.filter((m) => Date.now() - new Date(m.last_seen).getTime() <= 30000).length
+  const joinUrl = useMemo(() => { if (!session?.session_key || typeof window === 'undefined') return ''; const url = new URL(window.location.href); url.search = ''; url.hash = ''; url.searchParams.set('session', session.session_key); return url.toString() }, [session?.session_key])
+  const toggleCollapsed = () => setCollapsed((v) => { const n = !v; savePanelCollapsed(collapseKey, n); return n })
+  if (role === 'standalone') return <section className="session-panel standalone-session-panel"><div className="session-panel-heading"><div><span className="session-kicker">Teaching</span><h2>{title}</h2></div><span className="session-role-pill">Standalone</span></div>{wizard && instructorStart ? <SharedInstructorStartWizard config={instructorStart} onClose={() => setWizard(false)} /> : <SharedSessionLauncher connection={connection} error={error} {...launcherProps} onStartInstructor={instructorStart ? () => setWizard(true) : launcherProps.onStartInstructor} />}{footer}</section>
+  if (role === 'instructor') return <section className={`session-panel instructor-session-panel ${collapsed ? 'panel-collapsed' : ''}`}><div className="session-panel-heading"><div><span className="session-kicker">Teaching</span><h2>Instructor dashboard</h2></div><div className="collapsible-heading-actions"><SharedConnectionBadge connection={connection} />{instructorDashboard?.runtimeBadge}<button className={`teaching-workspace-collapse ${collapsed ? 'collapsed' : 'expanded'}`} type="button" onClick={toggleCollapsed}><span className="teaching-collapse-caret" /></button></div></div>{!collapsed && <><div className="instructor-dashboard-summary"><div className="session-key-card session-share-card"><div className="session-key-details"><span>Candidate session key</span><strong>{session?.session_key ?? '———'}</strong><small>Scan the QR code or enter this key manually.</small>{session?.id && session.session_key && joinUrl && <SharedCandidateInvitation sessionId={session.id} sessionKey={session.session_key} joinUrl={joinUrl} productId={productId} productLabel={productLabel} productDescription={productDescription} />}</div></div><div className="candidate-count-card"><span>Candidates</span><strong>{online}<small> online</small></strong><em>{candidates.length} joined</em></div></div>{instructorDashboard?.simulationPaused && <div className="instructor-pause-banner">{instructorDashboard.pausedMessage ?? 'All candidate simulations are paused by the instructor.'}</div>}{instructorDashboard?.instructorNotice}{instructorDashboard?.domains?.length ? <div className="instructor-session-controls"><button type="button" className="instructor-session-controls-toggle" onClick={() => setControlsExpanded((v) => !v)}><span><strong>Sharing & control policy</strong><small>{instructorDashboard.domains.map((d) => d.title).join(' • ')}</small></span><b>{controlsExpanded ? 'Collapse' : 'Configure'}</b></button>{controlsExpanded && <div className="session-domain-grid instructor-domain-grid">{instructorDashboard.domains.map((d) => <div key={d.id} className={`session-domain-card ${d.active ? 'shared' : ''}`}><div className="session-domain-title"><strong>{d.title}</strong><span>{d.status}</span></div>{d.rows.map((r) => <label key={r.id} className={`session-switch-row ${r.emphasis ? 'session-switch-row-emphasis' : ''}`}><span>{r.label}</span><input type="checkbox" checked={r.checked} disabled={r.disabled} onChange={(e) => void r.onChange(e.target.checked)} /></label>)}</div>)}</div>}</div> : null}<div className="session-action-row">{instructorDashboard?.onSimulationPausedChange && <button type="button" className={instructorDashboard.simulationPaused ? 'session-primary-button' : 'session-secondary-button'} onClick={() => instructorDashboard.onSimulationPausedChange?.(!instructorDashboard.simulationPaused)}>{instructorDashboard.simulationPaused ? 'Resume all simulations' : 'Pause all simulations'}</button>}{instructorDashboard?.onBroadcastNow && <button type="button" className="session-secondary-button" onClick={() => void instructorDashboard.onBroadcastNow?.()}>{instructorDashboard.broadcastLabel ?? 'Push current settings'}</button>}<button type="button" className="session-danger-button" onClick={() => void onEndInstructorSession()}>End session</button></div>{error && <div className="session-error">{error}</div>}<SharedInstructorLiveRoom role={role} members={members} renderTelemetry={renderCandidateTelemetry} storageKey={`${productId}-instructor-live-room`} /></>}{footer}</section>
+  return <section className="session-panel candidate-session-panel"><div className="session-panel-heading"><div><span className="session-kicker">Teaching</span><h2>Candidate session</h2></div><SharedConnectionBadge connection={connection} /></div><div className="candidate-session-body"><div className="candidate-session-summary"><span>Session <strong>{session?.session_key ?? '———'}</strong></span>{instructorDashboard?.candidateStatus}</div>{instructorDashboard?.simulationPaused && <div className="session-warning">Simulation paused by instructor. The instructor controls when it resumes.</div>}{connection === 'reconnecting' && <div className="session-warning">Connection lost. Simulation continues with the last received settings while EDUSIM reconnects.</div>}{error && <div className="session-error">{error}</div>}<button type="button" className="session-secondary-button" onClick={() => void onLeaveSession()}>Leave session</button></div>{footer}</section>
 }
