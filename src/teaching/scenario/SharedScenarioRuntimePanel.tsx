@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createCaseMediaSignedUrl, listCaseMediaByIds } from '../../caseMedia'
 import type { TeachingScenarioStageContent } from './runtimeCore'
+import './SharedScenarioRuntimePanel.css'
 
 export interface SharedScenarioBranchAction {
   id: string
