@@ -1,6 +1,5 @@
-import { useState } from 'react'
-import { TeachingInstructorWorkspace } from '../teaching/TeachingWorkspace'
-import { TeachingMediaInstructorPanel } from '../teaching/TeachingMediaPanel'
+import { useState, type ReactNode } from 'react'
+import { SharedTeachingTab } from '../teaching/SharedTeachingTab'
 import { useTeachingPrompts, useTeachingQuestionLibrary } from '../teaching/useTeachingInteractions'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 
@@ -9,13 +8,22 @@ interface EdumonTeachingLibrariesProps {
   role?: TeachingRole
   sessionId?: string | null
   candidateCount?: number
+  sessionPanel?: ReactNode
+  activeScenario?: ReactNode
+  runtimeHost?: ReactNode
+  liveRoom?: ReactNode
 }
 
+/** EDUMON adapter around the shared EDUSIM Teaching tab. */
 export function EdumonTeachingLibraries({
   host,
   role = 'standalone',
   sessionId = null,
   candidateCount = 0,
+  sessionPanel = null,
+  activeScenario,
+  runtimeHost,
+  liveRoom,
 }: EdumonTeachingLibrariesProps) {
   const [scenarioMediaIds, setScenarioMediaIds] = useState<string[]>([])
   const prompts = useTeachingPrompts(role, sessionId, host)
@@ -23,38 +31,20 @@ export function EdumonTeachingLibraries({
   const instructorAuthenticated = Boolean(library.author)
 
   return (
-    <div className="edumon-teaching-library-stage">
-      <div className="edumon-teaching-library-intro">
-        <strong>Shared teaching library</strong>
-        <span>EDUMON uses the same media and Questions & Polls infrastructure as EDUVENT, including live instructor/candidate sessions.</span>
-      </div>
-
-      <TeachingMediaInstructorPanel
-        role={role}
-        instructorAuthenticated={instructorAuthenticated}
-        sessionId={sessionId}
-        scenarioMediaIds={scenarioMediaIds}
-        onScenarioMediaIdsChange={setScenarioMediaIds}
-      />
-
-      <TeachingInstructorWorkspace
-        role={role}
-        instructorAuthenticated={instructorAuthenticated}
-        host={host}
-        activePrompt={prompts.activePrompt}
-        responses={prompts.responses}
-        candidateCount={candidateCount}
-        promptBusy={prompts.busy}
-        promptError={prompts.error}
-        libraryItems={library.items}
-        libraryAvailable={instructorAuthenticated}
-        libraryBusy={library.busy}
-        libraryError={library.error}
-        onPresent={prompts.presentPrompt}
-        onClose={prompts.closePrompt}
-        onReleaseAnswer={prompts.releaseAnswer}
-        onSaveLibrary={library.save}
-      />
-    </div>
+    <SharedTeachingTab
+      role={role}
+      instructorAuthenticated={instructorAuthenticated}
+      host={host}
+      sessionId={sessionId}
+      candidateCount={candidateCount}
+      sessionPanel={sessionPanel}
+      scenarioMediaIds={scenarioMediaIds}
+      onScenarioMediaIdsChange={setScenarioMediaIds}
+      prompts={prompts}
+      library={library}
+      activeScenario={activeScenario}
+      runtimeHost={runtimeHost}
+      liveRoom={liveRoom}
+    />
   )
 }
