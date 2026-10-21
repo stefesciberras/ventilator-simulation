@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { ScenarioProductId } from './products'
 
 export type SharedScenarioStageKind = 'state' | 'media' | 'question'
@@ -76,7 +77,7 @@ export interface SharedScenarioEditorAdapter<TScenario, TSnapshot> {
   emptySnapshot: () => TSnapshot
   toDocument: (name: string, scenario: TScenario) => SharedScenarioAuthoringDocument<TSnapshot>
   fromDocument: (document: SharedScenarioAuthoringDocument<TSnapshot>) => TScenario
-  renderSnapshotEditor: (snapshot: TSnapshot, onChange: (snapshot: TSnapshot) => void) => React.ReactNode
+  renderSnapshotEditor: (snapshot: TSnapshot, onChange: (snapshot: TSnapshot) => void) => ReactNode
   conditionMetrics: readonly SharedScenarioTriggerChoice[]
   actionParameters: readonly SharedScenarioTriggerChoice[]
 }
