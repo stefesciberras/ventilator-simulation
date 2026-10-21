@@ -4,7 +4,6 @@ import { EdusimLanding } from './EdusimLanding'
 import { EduventApp } from './eduvent/EduventApp'
 import { ScenarioBuilderApp } from './scenario-builder/ScenarioBuilderApp'
 import { EdumonApp } from './edumon/EdumonApp'
-import { installEdumonMobileWorkspace } from './edumon/edumonMobileWorkspace'
 import { installTabletResponsiveMode } from './tabletResponsiveRuntime'
 import { installSelfDirectedScenarioPanelDrag } from './selfDirectedScenarioPanel'
 import './styles.css'
@@ -24,8 +23,7 @@ const isScenarioBuilderRoute = pathname === '/scenarios' || pathname.startsWith(
 
 if (isEduventRoute || isEdumonRoute) {
   installTabletResponsiveMode()
-  if (isEdumonRoute) installEdumonMobileWorkspace()
-  else installSelfDirectedScenarioPanelDrag()
+  if (isEduventRoute) installSelfDirectedScenarioPanelDrag()
 }
 
 function RoutedApp() {
