@@ -31,6 +31,7 @@ import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
 import { useTeachingSharedOxygenFlush } from './teaching/useTeachingSharedOxygenFlush'
+import { createSimulationPersistence } from './core/SimulationPersistence'
 import './session.css'
 import './physiology.css'
 
@@ -97,18 +98,13 @@ const MINUTE_SAMPLES = 6000
 const HISTORY_SAMPLES = 7200
 const DT = 0.01
 const TICK_STEPS = 10
+const eduventPersistence = createSimulationPersistence('eduvent')
 
 function loadStoredSettings<T extends object>(key: string, defaults: T): T {
-  if (typeof window === 'undefined') return { ...defaults }
-  try {
-    const stored = window.localStorage.getItem(key)
-    if (!stored) return { ...defaults }
-    const parsed = JSON.parse(stored)
-    if (!parsed || typeof parsed !== 'object') return { ...defaults }
-    return { ...defaults, ...(parsed as Partial<T>) }
-  } catch {
-    return { ...defaults }
-  }
+  const name = key.startsWith('eduvent.') ? key.slice('eduvent.'.length) : key
+  const parsed = eduventPersistence.readJson<Partial<T> | null>(name, null, [key])
+  if (!parsed || typeof parsed !== 'object') return { ...defaults }
+  return { ...defaults, ...parsed }
 }
 
 
@@ -417,18 +413,18 @@ export default function App() {
   })
   const [selectedPatientProfile, setSelectedPatientProfile] = useState<PatientProfileName | null>(() => {
     if (typeof window === 'undefined') return null
-    const stored = window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY)
+    const stored = eduventPersistence.readString('patient-preset', '', [PATIENT_PROFILE_STORAGE_KEY])
     return PATIENT_PROFILE_NAMES.includes(stored as PatientProfileName) ? stored as PatientProfileName : null
   })
   const [ardsSeverity, setArdsSeverity] = useState<ArdsSeverity | 'off'>(() => {
     if (typeof window === 'undefined') return 'off'
-    const stored = window.localStorage.getItem(ARDS_SEVERITY_STORAGE_KEY)
+    const stored = eduventPersistence.readString('ards-severity', '', [ARDS_SEVERITY_STORAGE_KEY])
     if (stored && ARDS_SEVERITIES.includes(stored as ArdsSeverity)) return stored as ArdsSeverity
-    return window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY) === 'ARDS' ? 'moderate' : 'off'
+    return eduventPersistence.readString('patient-preset', '', [PATIENT_PROFILE_STORAGE_KEY]) === 'ARDS' ? 'moderate' : 'off'
   })
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
-    const stored = Number(window.localStorage.getItem(PATIENT_TRANSITION_STORAGE_KEY) ?? 0)
+    const stored = eduventPersistence.readNumber('patient-transition-seconds', 0, [PATIENT_TRANSITION_STORAGE_KEY])
     return [0, 5, 10, 30, 60].includes(stored) ? stored : 0
   })
   const [alarmLimits, setAlarmLimits] = useState<AlarmLimits>(() => {
@@ -469,7 +465,7 @@ export default function App() {
   const [scenarioMediaIds, setScenarioMediaIds] = useState<string[]>(() => {
     if (typeof window === 'undefined') return []
     try {
-      const parsed = JSON.parse(window.localStorage.getItem(SCENARIO_MEDIA_STORAGE_KEY) ?? '[]')
+      const parsed = eduventPersistence.readJson<unknown>('scenario-media-ids', [], [SCENARIO_MEDIA_STORAGE_KEY])
       return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string' && id.length > 0) : []
     } catch {
       return []
@@ -477,7 +473,7 @@ export default function App() {
   })
   const [alarmDialogOpen, setAlarmDialogOpen] = useState(false)
   const [measurementsOpen, setMeasurementsOpen] = useState(false)
-  const [showPatientEffort, setShowPatientEffort] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem(SHOW_PATIENT_EFFORT_STORAGE_KEY) === 'true')
+  const [showPatientEffort, setShowPatientEffort] = useState(() => eduventPersistence.readString('show-patient-effort', 'false', [SHOW_PATIENT_EFFORT_STORAGE_KEY]) === 'true')
   const [oxygenBoost, setOxygenBoost] = useState(false)
   const [oxygenBoostSecondsRemaining, setOxygenBoostSecondsRemaining] = useState(0)
   const [nebuliser, setNebuliser] = useState(false)
@@ -748,15 +744,15 @@ export default function App() {
   })
 
   useEffect(() => {
-    window.localStorage.setItem(VENTILATOR_STORAGE_KEY, JSON.stringify(ventilator))
+    eduventPersistence.writeJson('ventilator-settings', ventilator)
   }, [ventilator])
 
   useEffect(() => {
-    window.localStorage.setItem(PATIENT_STORAGE_KEY, JSON.stringify(patient))
+    eduventPersistence.writeJson('patient-settings', patient)
   }, [patient])
 
   useEffect(() => {
-    window.localStorage.setItem(PATIENT_TRANSITION_STORAGE_KEY, String(patientTransitionSeconds))
+    eduventPersistence.writeNumber('patient-transition-seconds', patientTransitionSeconds)
   }, [patientTransitionSeconds])
 
   useEffect(() => {
@@ -779,7 +775,7 @@ export default function App() {
   }, [patient, patientTransitionSeconds])
 
   useEffect(() => {
-    window.localStorage.setItem(ALARM_STORAGE_KEY, JSON.stringify(alarmLimits))
+    eduventPersistence.writeJson('alarm-limits', alarmLimits)
   }, [alarmLimits])
 
   useEffect(() => {
@@ -787,15 +783,15 @@ export default function App() {
   }, [teachingSession.candidateAlarmsLocked])
 
   useEffect(() => {
-    window.localStorage.setItem(WAVEFORM_STORAGE_KEY, JSON.stringify(waveformDisplay))
+    eduventPersistence.writeJson('waveform-display', waveformDisplay)
   }, [waveformDisplay])
 
   useEffect(() => {
-    window.localStorage.setItem(SCENARIO_MEDIA_STORAGE_KEY, JSON.stringify(scenarioMediaIds))
+    eduventPersistence.writeJson('scenario-media-ids', scenarioMediaIds)
   }, [scenarioMediaIds])
 
   useEffect(() => {
-    window.localStorage.setItem(SHOW_PATIENT_EFFORT_STORAGE_KEY, String(showPatientEffort))
+    eduventPersistence.writeString('show-patient-effort', String(showPatientEffort))
   }, [showPatientEffort])
 
   useEffect(() => {
@@ -1375,11 +1371,11 @@ export default function App() {
     : false
   const persistPatientProfile = (profile: PatientProfileName) => {
     setSelectedPatientProfile(profile)
-    try { window.localStorage.setItem(PATIENT_PROFILE_STORAGE_KEY, profile) } catch { /* optional UI preference */ }
+    try { eduventPersistence.writeString('patient-preset', profile) } catch { /* optional UI preference */ }
   }
   const setArdsSeverityAndPersist = (severity: ArdsSeverity | 'off') => {
     setArdsSeverity(severity)
-    try { window.localStorage.setItem(ARDS_SEVERITY_STORAGE_KEY, severity) } catch { /* optional UI preference */ }
+    try { eduventPersistence.writeString('ards-severity', severity) } catch { /* optional UI preference */ }
   }
   const applyPatientProfile = (profile: PatientProfileName) => {
     if (profile === 'ARDS') {
