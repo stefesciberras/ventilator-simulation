@@ -24,6 +24,10 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
+function TrashIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
+
 function questionDefault(): SharedScenarioQuestionContent {
   return {
     kind: 'mcq',
@@ -89,21 +93,26 @@ function TriggerEditor({
       <select value={trigger.parameter} onChange={(event) => onChange({ ...trigger, parameter: event.target.value })}>{adapter.actionParameters.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
       <select value={trigger.actor} onChange={(event) => onChange({ ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="candidate">Candidate</option><option value="instructor">Instructor</option><option value="either">Either</option></select>
     </>}
-    {onDelete && <button type="button" className="scenario-builder-danger" onClick={onDelete}>Remove</button>}
+    {onDelete && <button type="button" className="scenario-builder-danger shared-scenario-trash-button" onClick={onDelete} aria-label="Remove condition" title="Remove condition"><TrashIcon /></button>}
   </div>
 }
 
 export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, enabled = true, onStartScenario }: SharedScenarioEditorFrameworkProps<TScenario, TSnapshot>) {
   const library = useProductScenarioLibrary<TScenario>(adapter.product, enabled)
   const [selectedId, setSelectedId] = useState('')
-  const [document, setDocument] = useState<SharedScenarioAuthoringDocument<TSnapshot>>(() => ({
-    schemaVersion: 1,
-    product: adapter.product,
-    name: 'New scenario',
-    description: '',
-    stages: [createAuthoringStage('Stage 1', adapter.emptySnapshot())],
-    branches: [],
-  }))
+  const [document, setDocument] = useState<SharedScenarioAuthoringDocument<TSnapshot>>(() => {
+    const snapshot = adapter.emptySnapshot()
+    const stage = createAuthoringStage('Stage 1', snapshot)
+    stage.appliedVariableIds = adapter.defaultAppliedVariableIds?.(snapshot)
+    return {
+      schemaVersion: 1,
+      product: adapter.product,
+      name: 'New scenario',
+      description: '',
+      stages: [stage],
+      branches: [],
+    }
+  })
   const [selectedStageId, setSelectedStageId] = useState(document.stages[0].id)
   const [message, setMessage] = useState<string | null>(null)
   const [expiryDays, setExpiryDays] = useState(30)
@@ -118,7 +127,9 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
   }, [library.items, selectedId])
 
   const newScenario = () => {
-    const stage = createAuthoringStage('Stage 1', adapter.emptySnapshot())
+    const snapshot = adapter.emptySnapshot()
+    const stage = createAuthoringStage('Stage 1', snapshot)
+    stage.appliedVariableIds = adapter.defaultAppliedVariableIds?.(snapshot)
     setSelectedId('')
     setDocument({ schemaVersion: 1, product: adapter.product, name: 'New scenario', description: '', stages: [stage], branches: [] })
     setSelectedStageId(stage.id)
@@ -168,6 +179,8 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
   const addStage = () => {
     const source = selectedStage?.snapshot ?? adapter.emptySnapshot()
     const stage = createAuthoringStage(`Stage ${document.stages.length + 1}`, clone(source))
+    // New state stages inherit the visible values for authoring convenience but change nothing until explicitly enabled.
+    stage.appliedVariableIds = []
     const trigger = defaultAuthoringTrigger()
     const path: SharedScenarioAuthoringBranch = { id: authoringId('path'), fromStageId: selectedStage.id, toStageId: stage.id, trigger, triggers: [trigger], triggerMode: 'any', priority: document.branches.filter((branch) => branch.fromStageId === selectedStage.id).length, label: 'Continue', enabled: true }
     setDocument((current) => ({ ...current, stages: [...current.stages, stage], branches: [...current.branches, path] }))
@@ -308,7 +321,14 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
           </div>
           <label className="shared-scenario-notes"><span>Instructor notes</span><textarea rows={2} value={selectedStage.notes} onChange={(event) => updateStage({ notes: event.target.value })} /></label>
 
-          {selectedStage.kind === 'state' && <div className="shared-scenario-snapshot-editor">{adapter.renderSnapshotEditor(selectedStage.snapshot, (snapshot) => updateStage({ snapshot }))}</div>}
+          {selectedStage.kind === 'state' && <div className="shared-scenario-snapshot-editor">{adapter.renderSnapshotEditor(
+            selectedStage.snapshot,
+            (snapshot) => updateStage({ snapshot }),
+            {
+              appliedVariableIds: selectedStage.appliedVariableIds,
+              onAppliedVariableIdsChange: (appliedVariableIds) => updateStage({ appliedVariableIds }),
+            },
+          )}</div>}
 
           {selectedStage.kind === 'media' && selectedStage.media && <div className="shared-scenario-content-card">
             <h3>Media stage</h3>
@@ -345,7 +365,7 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
                   <label className="compact"><span>Priority</span><input type="number" min={0} value={branch.priority} onChange={(event) => updateBranch(branch.id, { priority: Number(event.target.value) || 0 })} /></label>
                   <label className="compact"><span>Match</span><select value={branch.triggerMode === 'all' ? 'all' : 'any'} onChange={(event) => updateBranch(branch.id, { triggerMode: event.target.value as 'any' | 'all' })}><option value="any">ANY</option><option value="all">ALL</option></select></label>
                   <label className="shared-scenario-check"><input type="checkbox" checked={branch.enabled !== false} onChange={(event) => updateBranch(branch.id, { enabled: event.target.checked })} /> Enabled</label>
-                  <button type="button" className="scenario-builder-danger" onClick={() => deleteBranch(branch.id)}>Remove path</button>
+                  <button type="button" className="scenario-builder-danger shared-scenario-trash-button" onClick={() => deleteBranch(branch.id)} aria-label="Remove path" title="Remove path"><TrashIcon /></button>
                 </div>
                 <div className="shared-scenario-path-conditions">
                   {conditions.map((trigger, conditionIndex) => <div className="shared-scenario-path-condition" key={trigger.id}>

@@ -216,3 +216,38 @@
 .shared-scenario-paths{padding:12px;border:1px solid #2c414a;background:#0b161c}.shared-scenario-section-heading>div{display:grid;gap:2px}.shared-scenario-section-heading small{color:#718892;font-size:9px}
 .shared-scenario-path-card{margin-top:10px;padding:10px;border:1px solid #36515c;background:#091419}.shared-scenario-path-header{display:grid;grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) 76px 82px auto auto;gap:8px;align-items:end}.shared-scenario-path-header label{display:grid;gap:4px}.shared-scenario-path-header label>span{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#8298a1}.shared-scenario-path-header .shared-scenario-check{display:flex!important;align-items:center;align-self:center;margin-top:18px}.shared-scenario-path-conditions{margin-top:9px;padding-top:8px;border-top:1px solid #263b44}.shared-scenario-path-condition{position:relative}.shared-scenario-path-condition .shared-scenario-trigger-editor{margin-top:6px}.shared-scenario-path-join{display:inline-block;margin:8px 0 0;padding:2px 6px;border:1px solid #49616b;background:#10212a;color:#9fd9e8;font-size:8px;font-weight:800;letter-spacing:.08em}.shared-scenario-add-condition{margin-top:8px!important;border-color:#4d7859!important;color:#a5e6b5!important;background:#102219!important}.shared-scenario-end-stage{display:grid;gap:3px;margin-top:10px;padding:12px;border:1px dashed #40515a;color:#91a4ac}.shared-scenario-end-stage strong{color:#d4e0e4}.shared-scenario-end-stage span{font-size:10px}.shared-scenario-triggers,.shared-scenario-branches{display:none!important}
 @media(max-width:1300px){.shared-scenario-slider-grid{grid-template-columns:1fr}.shared-scenario-path-header{grid-template-columns:1fr 1fr 70px 78px}.shared-scenario-path-header>.shared-scenario-check,.shared-scenario-path-header>button{grid-row:2}}
+
+
+/* Scenario Builder v0.8.2 control consistency */
+.shared-scenario-variable-row{display:block;min-width:0;padding:8px 10px;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.10)}
+.shared-scenario-variable-row.not-applied{opacity:.56}
+.shared-scenario-variable-heading{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin-bottom:5px}
+.shared-scenario-variable-heading>strong{font-size:12px;font-weight:600;white-space:nowrap}
+.shared-scenario-variable-label{font-size:11px;min-width:0}
+.shared-scenario-apply-toggle{display:inline-flex!important;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.shared-scenario-apply-toggle input{width:auto!important;margin:0;accent-color:currentColor}
+.shared-scenario-apply-toggle span{font-size:9px!important;letter-spacing:.06em;text-transform:uppercase;color:inherit!important}
+.shared-scenario-control-group.vent{--scenario-control-accent:rgb(97,190,221)}
+.shared-scenario-control-group.patient{--scenario-control-accent:rgb(112,197,132)}
+.shared-scenario-control-group.physio{--scenario-control-accent:rgb(166,109,221)}
+.shared-scenario-control-group{border-left:3px solid var(--scenario-control-accent);padding-left:12px}
+.shared-scenario-control-group h3,.shared-scenario-control-group .shared-scenario-apply-toggle,.shared-scenario-control-group .shared-scenario-variable-heading>strong{color:var(--scenario-control-accent)}
+.shared-scenario-authoring input.shared-scenario-control-slider[type="range"]{
+  appearance:auto!important;
+  -webkit-appearance:auto!important;
+  display:block!important;
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:5px!important;
+  min-height:5px!important;
+  margin:2px!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  cursor:pointer!important;
+  accent-color:var(--scenario-control-accent)!important;
+}
+.shared-scenario-authoring input.shared-scenario-control-slider[type="range"]:disabled{cursor:not-allowed!important}
+.shared-scenario-trash-button{display:inline-flex!important;align-items:center;justify-content:center;width:34px!important;min-width:34px!important;height:34px!important;padding:6px!important;color:#ffc4c9!important;border-color:#78434a!important;background:#26151a!important}
+.shared-scenario-trash-button svg{width:18px;height:18px;display:block}
