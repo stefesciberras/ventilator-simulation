@@ -17,6 +17,9 @@ import { SharedBasicSessionPanel, useProductTeachingSession } from '../teaching/
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from '../components/InstructorAccountAuth'
 import { useTeachingScenarioRuntime } from '../teaching/scenario/runtimeCore'
 import { createEdumonScenarioRuntimeAdapter } from './scenarioAdapter'
+import type { EdumonStoredScenario } from './scenarioTypes'
+import { listProductScenarios, type ProductScenarioRow } from '../teaching/scenario/productLibrary'
+import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import './edumon.css'
 import './edumon-console-parity.css'
 
@@ -133,7 +136,7 @@ function EdumonLanding() {
           ))}
         </div>
       </section>
-      <div className="edumon-version">EDUMON v0.1.0.0</div>
+      <div className="edumon-version">EDUMON v{EDUMON_APP_VERSION}</div>
     </main>
   )
 }
@@ -188,6 +191,11 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [topPanel, setTopPanel] = useState<'scenario' | 'about' | null>(null)
   const [alarmSilencedUntil, setAlarmSilencedUntil] = useState<number | null>(null)
   const [alarmSilenceRemaining, setAlarmSilenceRemaining] = useState(0)
+  const [savedScenarios, setSavedScenarios] = useState<Array<ProductScenarioRow<EdumonStoredScenario>>>([])
+  const [selectedSavedScenarioId, setSelectedSavedScenarioId] = useState('')
+  const [savedScenariosBusy, setSavedScenariosBusy] = useState(false)
+  const [savedScenarioMessage, setSavedScenarioMessage] = useState<string | null>(null)
+  const launchedScenarioRef = useRef<string | null>(null)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
   const screenWakeLock = useScreenWakeLock()
 
@@ -243,12 +251,45 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const accountChangeLocked = teachingSession.role !== 'standalone'
   const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
   const instructorAuthenticated = Boolean(accountAuth.account)
+  const scenarioProduct = scenarioProductForEdumonModule(module.id)
   const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRuntimeAdapter((snapshot) => {
     setPatientState(snapshot.patient)
     setSimulationPaused(snapshot.simulationPaused)
     setSimulationSpeed(snapshot.simulationSpeed)
   }), [])
   const scenarioRuntime = useTeachingScenarioRuntime(edumonScenarioAdapter)
+
+  const refreshSavedScenarios = async () => {
+    if (!instructorAuthenticated) { setSavedScenarios([]); setSelectedSavedScenarioId(''); return }
+    setSavedScenariosBusy(true)
+    setSavedScenarioMessage(null)
+    try {
+      const next = await listProductScenarios<EdumonStoredScenario>(scenarioProduct)
+      setSavedScenarios(next)
+      setSelectedSavedScenarioId((current) => next.some((row) => row.id === current) ? current : (next[0]?.id ?? ''))
+      if (!next.length) setSavedScenarioMessage('No saved scenarios for this simulator yet. Create one in Scenario Builder.')
+    } catch (cause) {
+      setSavedScenarioMessage(cause instanceof Error ? cause.message : 'Unable to load saved scenarios.')
+    } finally { setSavedScenariosBusy(false) }
+  }
+
+  useEffect(() => { void refreshSavedScenarios() }, [instructorAuthenticated, scenarioProduct])
+
+  const loadSavedScenario = async (id: string) => {
+    const row = savedScenarios.find((item) => item.id === id)
+    if (!row) return false
+    await scenarioRuntime.start(row.scenario.definition, elapsed)
+    return true
+  }
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('scenario')
+    if (!requested || !instructorAuthenticated || teachingSession.role !== 'standalone' || launchedScenarioRef.current === requested) return
+    if (!savedScenarios.some((row) => row.id === requested)) return
+    launchedScenarioRef.current = requested
+    void loadSavedScenario(requested)
+  }, [instructorAuthenticated, teachingSession.role, savedScenarios])
+
   const selectedAuxiliary = module.auxiliaryMonitors.find((item) => item.id === auxiliaryMonitor) ?? null
 
   useEffect(() => {
@@ -272,7 +313,19 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       onResumeCandidate={teachingSession.resumeCandidate}
       onLeaveSession={teachingSession.leaveSession}
       onEndInstructorSession={teachingSession.endInstructorSession}
-      instructorStart={{ currentTitle: `${RHYTHM_LABELS[patientState.rhythm]} · HR ${patientState.heartRate} · ${patientState.systolicPressure}/${patientState.diastolicPressure} · SpO₂ ${patientState.spo2}%`, currentSummary: 'Configure the patient monitor in standalone mode before opening the room.', currentChips: [RHYTHM_LABELS[patientState.rhythm], `HR ${patientState.heartRate}`, `MAP ${measurements.meanPressure ?? "—"}`, `SpO₂ ${patientState.spo2}%`], savedMessage: 'Saved EDUMON scenarios will appear here once product-aware scenario persistence is enabled.', onStartCurrent: teachingSession.startInstructor }}
+      instructorStart={{
+        currentTitle: `${RHYTHM_LABELS[patientState.rhythm]} · HR ${patientState.heartRate} · ${patientState.systolicPressure}/${patientState.diastolicPressure} · SpO₂ ${patientState.spo2}%`,
+        currentSummary: 'Configure the patient monitor in standalone mode before opening the room.',
+        currentChips: [RHYTHM_LABELS[patientState.rhythm], `HR ${patientState.heartRate}`, `MAP ${measurements.meanPressure ?? "—"}`, `SpO₂ ${patientState.spo2}%`],
+        savedOptions: savedScenarios.map((row) => { const snapshot = row.scenario.definition.stages[0]?.snapshot; return { id: row.id, title: row.name, summary: row.scenario.description || 'Saved monitor scenario', chips: snapshot ? [RHYTHM_LABELS[snapshot.patient.rhythm], `HR ${snapshot.patient.heartRate}`, `SpO₂ ${snapshot.patient.spo2}%`] : [] } }),
+        selectedSavedId: selectedSavedScenarioId,
+        onSelectedSavedIdChange: setSelectedSavedScenarioId,
+        savedBusy: savedScenariosBusy,
+        savedMessage: savedScenarioMessage,
+        onStartCurrent: teachingSession.startInstructor,
+        onLoadSaved: loadSavedScenario,
+        onStartSaved: async (id) => { if (await loadSavedScenario(id)) { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); await teachingSession.startInstructor() } },
+      }}
     />
   )
 

@@ -8,9 +8,12 @@ import {
   subscribeToInstructorAccount,
   type InstructorPresetRow,
 } from '../instructorAccount'
-import { APP_VERSION } from '../appVersion'
 import { createDefaultVentilatorScenario } from './modules/ventilator/defaultScenario'
 import { VentilatorScenarioEditor } from './modules/ventilator/VentilatorScenarioEditor'
+import { EdumonScenarioEditor } from './modules/edumon/EdumonScenarioEditor'
+import type { EdumonStoredScenario } from '../edumon/scenarioTypes'
+import type { ProductScenarioRow } from '../teaching/scenario/productLibrary'
+import { SCENARIO_PRODUCTS, type ScenarioProductId } from '../teaching/scenario/products'
 import { DEFAULT_SCENARIO_MODULE_ID, SCENARIO_MODULES } from './modules/registry'
 import { SCENARIO_BUILDER_VERSION } from './version'
 import './scenarioBuilder.css'
@@ -90,12 +93,15 @@ export function ScenarioBuilderApp() {
     }
   }
 
-  const startScenario = (preset: InstructorPresetRow) => {
+  const startProductScenario = (product: ScenarioProductId, id: string) => {
     launchingScenarioRef.current = true
-    const url = new URL('/', window.location.origin)
-    url.searchParams.set('scenario', preset.id)
+    const url = new URL(SCENARIO_PRODUCTS[product].route, window.location.origin)
+    url.searchParams.set('scenario', id)
     window.location.assign(url.toString())
   }
+
+  const startScenario = (preset: InstructorPresetRow) => startProductScenario(preset.product ?? 'eduvent', preset.id)
+  const startEdumonScenario = (row: ProductScenarioRow<EdumonStoredScenario>) => startProductScenario(row.product, row.id)
 
   const closeBuilder = () => {
     if (launchingScenarioRef.current) return
@@ -108,12 +114,12 @@ export function ScenarioBuilderApp() {
         <div>
           <span className="scenario-builder-eyebrow">Simulation authoring workspace</span>
           <h1>Scenario Builder</h1>
-          <small>Builder v{SCENARIO_BUILDER_VERSION} · EDUVENT simulator v{APP_VERSION}</small>
+          <small>Builder v{SCENARIO_BUILDER_VERSION} · EDUSIM shared scenario framework</small>
         </div>
         <div className="scenario-builder-appbar-actions">
           {account && <span className="scenario-builder-account">{account.email}</span>}
           {account && <button type="button" onClick={() => void signOut()} disabled={busy}>Sign out</button>}
-          <button type="button" className="scenario-builder-primary" onClick={closeBuilder}>Return to simulator</button>
+          <button type="button" className="scenario-builder-primary" onClick={closeBuilder}>Return to EDUSIM</button>
         </div>
       </header>
 
@@ -156,6 +162,10 @@ export function ScenarioBuilderApp() {
             onStartScenario={startScenario}
             onClose={closeBuilder}
           />
+        </section>
+      ) : moduleId === 'edumon-ana' || moduleId === 'edumon-icu' ? (
+        <section className="scenario-builder-workspace">
+          <EdumonScenarioEditor product={moduleId} onStartScenario={startEdumonScenario} />
         </section>
       ) : (
         <section className="scenario-builder-state">This simulation module is not yet available.</section>

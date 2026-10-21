@@ -2,8 +2,36 @@ import type { InstructorPresetRow } from '../../instructorAccount'
 import type { ScenarioModuleDefinition } from '../model'
 import { VENTILATOR_SCENARIO_MODULE } from './ventilator/definition'
 
+const EDUMON_ANA_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
+  id: 'edumon-ana',
+  schemaVersion: 1,
+  label: 'EDUMON-Ana',
+  shortLabel: 'Anaesthesia monitor',
+  description: 'Anaesthesia patient-monitor scenarios using the shared EDUSIM scenario library.',
+  available: true,
+  variables: [],
+  templates: [],
+  triggerSources: [],
+  supportsPreset: (preset) => preset.product === 'edumon-ana',
+}
+
+const EDUMON_ICU_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
+  id: 'edumon-icu',
+  schemaVersion: 1,
+  label: 'EDUMON-ICU',
+  shortLabel: 'ICU monitor',
+  description: 'Intensive-care patient-monitor scenarios using the shared EDUSIM scenario library.',
+  available: true,
+  variables: [],
+  templates: [],
+  triggerSources: [],
+  supportsPreset: (preset) => preset.product === 'edumon-icu',
+}
+
 export const SCENARIO_MODULES: Array<ScenarioModuleDefinition<InstructorPresetRow>> = [
   VENTILATOR_SCENARIO_MODULE,
+  EDUMON_ANA_MODULE,
+  EDUMON_ICU_MODULE,
 ]
 
 export const DEFAULT_SCENARIO_MODULE_ID = 'ventilator'
