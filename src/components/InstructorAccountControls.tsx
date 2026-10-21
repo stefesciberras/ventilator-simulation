@@ -93,9 +93,12 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
 
   const startItem = async (preset: InstructorPresetRow) => {
     if (preset.scenario.kind === 'dynamic') return scenarioRuntime.start(preset)
-    if (role === 'standalone') await onStartInstructorSession(preset.scenario)
-    else loadStatic(preset)
-    onStaticScenarioLoaded?.(preset.name)
+    if (role === 'standalone') {
+      await onStartInstructorSession(preset.scenario)
+      onStaticScenarioLoaded?.(preset.name)
+    } else {
+      loadStatic(preset)
+    }
   }
 
   const saveCurrent = async (name: string, description: string) => {
