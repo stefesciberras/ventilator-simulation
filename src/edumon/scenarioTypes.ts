@@ -1,13 +1,27 @@
 import type { EdumonSimulationSpeed } from './EdumonTopBar'
 import type { MonitorPatientState } from './types'
 import type { TeachingScenarioDefinition } from '../teaching/scenario/runtimeCore'
-import type { EdumonScenarioTrigger } from './scenarioAdapter'
 
 export interface EdumonScenarioSnapshot {
   patient: MonitorPatientState
   simulationPaused: boolean
   simulationSpeed: EdumonSimulationSpeed
 }
+
+export type EdumonScenarioMetric =
+  | 'heartRate'
+  | 'systolicPressure'
+  | 'diastolicPressure'
+  | 'meanPressure'
+  | 'pulsePressure'
+  | 'spo2'
+  | 'peripheralPerfusion'
+
+export type EdumonScenarioTrigger =
+  | { type: 'manual' }
+  | { type: 'time'; seconds: number }
+  | { type: 'condition'; metric: EdumonScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
+  | { type: 'patient-change'; parameter: keyof MonitorPatientState }
 
 export interface EdumonStoredScenario {
   schemaVersion: 1
