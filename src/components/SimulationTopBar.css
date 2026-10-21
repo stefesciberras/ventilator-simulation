@@ -1,0 +1,17 @@
+/* Shared EDUSIM top-bar responsive behaviour. Product-specific simulators should not override this layout. */
+.simulation-topbar-status .simulation-status-text {
+  white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+  .simulation-topbar .simulation-topbar-status {
+    width: 100%;
+    justify-self: stretch;
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+
+  .simulation-topbar .simulation-status-text {
+    display: inline;
+  }
+}
