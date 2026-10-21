@@ -1,0 +1,83 @@
+import type { MonitorMeasurements, MonitorPatientState } from './types'
+import type { EdumonSimulationSpeed } from './EdumonTopBar'
+import type {
+  TeachingScenarioRuntimeAdapter,
+  TeachingScenarioStageContext,
+} from '../teaching/scenario/runtimeCore'
+
+export interface EdumonScenarioSnapshot {
+  patient: MonitorPatientState
+  simulationPaused: boolean
+  simulationSpeed: EdumonSimulationSpeed
+}
+
+export type EdumonScenarioMetric =
+  | 'heartRate'
+  | 'systolicPressure'
+  | 'diastolicPressure'
+  | 'meanPressure'
+  | 'pulsePressure'
+  | 'spo2'
+  | 'peripheralPerfusion'
+
+export type EdumonScenarioTrigger =
+  | { type: 'manual' }
+  | { type: 'time'; seconds: number }
+  | { type: 'condition'; metric: EdumonScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
+  | { type: 'patient-change'; parameter: keyof MonitorPatientState }
+
+export interface EdumonScenarioRuntimeContext {
+  simulationTime: number
+  state: EdumonScenarioSnapshot
+  measurements: MonitorMeasurements
+}
+
+function numericMetric(context: EdumonScenarioRuntimeContext, metric: EdumonScenarioMetric): number | null {
+  const { state, measurements } = context
+  if (metric === 'heartRate') return measurements.heartRate
+  if (metric === 'systolicPressure') return measurements.systolicPressure
+  if (metric === 'diastolicPressure') return measurements.diastolicPressure
+  if (metric === 'meanPressure') return measurements.meanPressure
+  if (metric === 'pulsePressure') {
+    if (measurements.systolicPressure == null || measurements.diastolicPressure == null) return null
+    return measurements.systolicPressure - measurements.diastolicPressure
+  }
+  if (metric === 'spo2') return measurements.spo2
+  if (metric === 'peripheralPerfusion') return state.patient.peripheralPerfusion
+  return null
+}
+
+function conditionMatches(actual: number, operator: 'lt' | 'eq' | 'gt', target: number) {
+  if (operator === 'lt') return actual < target
+  if (operator === 'gt') return actual > target
+  const tolerance = Math.max(0.1, Math.abs(target) * 0.005)
+  return Math.abs(actual - target) <= tolerance
+}
+
+function changed(a: unknown, b: unknown) {
+  if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) > 1e-6
+  return a !== b
+}
+
+/** Product adapter for the shared EDUSIM scenario sequencer. */
+export function createEdumonScenarioRuntimeAdapter(
+  applySnapshot: (
+    snapshot: EdumonScenarioSnapshot,
+    stage: TeachingScenarioStageContext<EdumonScenarioSnapshot, EdumonScenarioTrigger>,
+  ) => void | Promise<void>,
+): TeachingScenarioRuntimeAdapter<EdumonScenarioSnapshot, EdumonScenarioTrigger, EdumonScenarioRuntimeContext> {
+  return {
+    applyStage: applySnapshot,
+    triggerMatches: (trigger, context, stage) => {
+      if (trigger.type === 'manual') return false
+      if (trigger.type === 'time') {
+        return context.simulationTime - stage.stageStartedSimulationTime >= Math.max(0, trigger.seconds)
+      }
+      if (trigger.type === 'condition') {
+        const actual = numericMetric(context, trigger.metric)
+        return actual != null && Number.isFinite(actual) && conditionMatches(actual, trigger.operator, trigger.value)
+      }
+      return changed(context.state.patient[trigger.parameter], stage.stage.snapshot.patient[trigger.parameter])
+    },
+  }
+}
