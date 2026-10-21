@@ -9,11 +9,19 @@ import { EdumonWorkspacePanel } from './EdumonWorkspacePanel'
 import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type EdumonModuleDefinition } from './modules'
 import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
 import { SimulationHardwareControls } from '../components/SimulationHardwareControls'
+import { SharedBasicSessionPanel, useProductTeachingSession } from '../teaching/session'
+import { getInstructorAccount } from '../instructorAccount'
 import './edumon.css'
 import './edumon-console-parity.css'
 
 const TRACE_WINDOW_SECONDS = 8
 const SAMPLE_RATE = 100
+
+interface EdumonTeachingState {
+  patient: MonitorPatientState
+  simulationPaused: boolean
+  simulationSpeed: EdumonSimulationSpeed
+}
 
 type TraceKey = 'ecg' | 'arterialPressure' | 'pleth'
 
@@ -174,6 +182,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [topPanel, setTopPanel] = useState<'scenario' | 'account' | 'about' | null>(null)
   const [alarmSilencedUntil, setAlarmSilencedUntil] = useState<number | null>(null)
   const [alarmSilenceRemaining, setAlarmSilenceRemaining] = useState(0)
+  const [instructorAuthenticated, setInstructorAuthenticated] = useState(false)
   const alarmSilenceTimeoutRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -213,7 +222,46 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const samples = frozenSamples ?? liveSamples
   const measurements = measurementsFor(patientState)
   const teachingHost = module.id === 'ana' ? edumonAnaTeachingHost : edumonIcuTeachingHost
+  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, simulationPaused, simulationSpeed }), [patientState, simulationPaused, simulationSpeed])
+  const teachingSession = useProductTeachingSession<EdumonTeachingState>({
+    productId: teachingHost.appId,
+    state: sharedTeachingState,
+    setState: (next) => {
+      setPatientState(next.patient)
+      setSimulationPaused(next.simulationPaused)
+      setSimulationSpeed(next.simulationSpeed)
+    },
+  })
+  const candidateCount = teachingSession.members.filter((member) => member.role === 'candidate').length
+  const candidateLocked = teachingSession.role === 'candidate'
   const selectedAuxiliary = module.auxiliaryMonitors.find((item) => item.id === auxiliaryMonitor) ?? null
+
+  useEffect(() => {
+    let active = true
+    void getInstructorAccount()
+      .then((account) => { if (active) setInstructorAuthenticated(Boolean(account)) })
+      .catch(() => { if (active) setInstructorAuthenticated(false) })
+    return () => { active = false }
+  }, [topPanel])
+
+  const sessionPanel = (
+    <SharedBasicSessionPanel
+      role={teachingSession.role}
+      session={teachingSession.session}
+      members={teachingSession.members}
+      connection={teachingSession.connection}
+      error={teachingSession.error}
+      instructorAuthenticated={instructorAuthenticated}
+      recoverableInstructor={teachingSession.recoverableInstructor}
+      recoverableCandidate={teachingSession.recoverableCandidate}
+      onStartInstructor={teachingSession.startInstructor}
+      onResumeInstructor={teachingSession.resumeInstructor}
+      onJoinCandidate={teachingSession.joinCandidate}
+      onResumeCandidate={teachingSession.resumeCandidate}
+      onLeaveSession={teachingSession.leaveSession}
+      onEndInstructorSession={teachingSession.endInstructorSession}
+    />
+  )
 
   const toggleFreeze = () => {
     if (frozen) {
@@ -268,6 +316,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         elapsedSeconds={elapsed}
         onPausedChange={setSimulationPaused}
         onSpeedChange={setSimulationSpeed}
+        simulationControlsLocked={candidateLocked}
         onScenario={() => setTopPanel('scenario')}
         onAccount={() => setTopPanel('account')}
         onAbout={() => setTopPanel('about')}
@@ -309,7 +358,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           </div>
         </section>
 
-        <EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} teachingHost={teachingHost} meanPressure={measurements.meanPressure} />
+        <EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} controlsLocked={candidateLocked} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />
       </div>
 
       {selectedAuxiliary && auxiliaryMonitor && (
@@ -317,12 +366,12 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           {auxiliaryMonitor === 'ana-gases' && <GasMonitorPreview />}
           {auxiliaryMonitor === 'icu-neuro' && <NeuroMonitorPreview map={measurements.meanPressure} />}
           {auxiliaryMonitor === 'trends' && <TrendsPreview />}
-          {auxiliaryMonitor === 'teaching' && <EdumonTeachingLibraries host={teachingHost} />}
+          {auxiliaryMonitor === 'teaching' && <EdumonTeachingLibraries host={teachingHost} role={teachingSession.role} sessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} />}
         </AuxiliaryMonitorModal>
       )}
 
-      {topPanel === 'scenario' && <AuxiliaryMonitorModal title="Scenario" onClose={() => setTopPanel(null)}><div className="edumon-top-panel-content"><span>ACTIVE SCENARIO</span><strong>None</strong><p>EDUMON will use the shared EDUSIM Scenario Runtime and the same scenario workflow as EDUVENT.</p></div></AuxiliaryMonitorModal>}
-      {topPanel === 'account' && <AuxiliaryMonitorModal title="Instructor account" onClose={() => setTopPanel(null)}><EdumonTeachingLibraries host={teachingHost} /></AuxiliaryMonitorModal>}
+      {topPanel === 'scenario' && <AuxiliaryMonitorModal title="Scenarios and sessions" onClose={() => setTopPanel(null)}>{sessionPanel}</AuxiliaryMonitorModal>}
+      {topPanel === 'account' && <AuxiliaryMonitorModal title="Instructor account" onClose={() => setTopPanel(null)}><EdumonTeachingLibraries host={teachingHost} role={teachingSession.role} sessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} /></AuxiliaryMonitorModal>}
       {topPanel === 'about' && <AuxiliaryMonitorModal title={module.productName} onClose={() => setTopPanel(null)}><div className="edumon-top-panel-content"><span>EDUSIM MONITORING PLATFORM</span><strong>{module.subtitle}</strong><p>Version v0.1.0.0</p><p>Educational simulation only — not a medical device and not for clinical decision-making.</p></div></AuxiliaryMonitorModal>}
     </main>
   )

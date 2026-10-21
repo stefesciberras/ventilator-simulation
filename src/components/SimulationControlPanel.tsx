@@ -45,14 +45,15 @@ interface SimulationProfileStripProps<T extends string> {
   profiles: readonly T[]
   activeProfile: T
   onProfileChange: (profile: T) => void
+  disabled?: boolean
   className?: string
 }
 
-export function SimulationProfileStrip<T extends string>({ profiles, activeProfile, onProfileChange, className = '' }: SimulationProfileStripProps<T>) {
+export function SimulationProfileStrip<T extends string>({ profiles, activeProfile, onProfileChange, disabled = false, className = '' }: SimulationProfileStripProps<T>) {
   return (
     <div className={`patient-profile-strip edusim-profile-strip ${className}`.trim()} aria-label="Patient profiles">
       {profiles.map((profile) => (
-        <button key={profile} type="button" className={activeProfile === profile ? 'active' : ''} onClick={() => onProfileChange(profile)}>{profile}</button>
+        <button key={profile} type="button" disabled={disabled} className={activeProfile === profile ? 'active' : ''} onClick={() => onProfileChange(profile)}>{profile}</button>
       ))}
     </div>
   )
