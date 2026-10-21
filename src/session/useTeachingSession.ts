@@ -6,7 +6,7 @@ import {
   type TeachingSessionRow,
   updateTeachingSession,
 } from './supabase'
-import { useSharedTeachingSession, type SharedTeachingRole, type RecoverableTeachingCandidate, type SharedTeachingRuntimeTransport } from '../teaching/session'
+import { deriveAlarmSessionSemantics, useSharedTeachingSession, type SharedTeachingRole, type RecoverableTeachingCandidate, type SharedTeachingRuntimeTransport } from '../teaching/session'
 import { eduventTeachingSessionRepository, type EduventTeachingSessionCreateInput } from './eduventTeachingSessionAdapter'
 import {
   LocalRuntimeTransport,
@@ -681,8 +681,9 @@ export function useTeachingSession({
 
   const candidateVentilatorLocked = role === 'candidate' && Boolean(session?.sync_ventilator) && !Boolean(session?.candidate_can_edit_ventilator)
   const candidatePatientLocked = role === 'candidate' && Boolean(session?.sync_patient) && !Boolean(session?.candidate_can_edit_patient)
-  const candidateAlarmsLocked = role === 'candidate' && Boolean(session?.sync_alarms) && !Boolean(session?.candidate_can_edit_alarms)
-  const candidateAlarmsSilent = role === 'candidate' && Boolean(session?.sync_alarms) && Boolean(session?.alarms_silent)
+  const alarmSemantics = deriveAlarmSessionSemantics(role, { syncAlarms: Boolean(session?.sync_alarms), candidateCanEditAlarms: Boolean(session?.candidate_can_edit_alarms), alarmsSilent: Boolean(session?.alarms_silent) })
+  const candidateAlarmsLocked = alarmSemantics.candidateLocked
+  const candidateAlarmsSilent = alarmSemantics.forcedSilent
   const candidateWaveformsLocked = role === 'candidate' && !Boolean(session?.candidate_can_edit_waveforms)
   const candidatePauseLocked = role === 'candidate' && Boolean(session?.simulation_paused)
   const candidateOesophagealPressureAllowed = role !== 'candidate' || session == null || Boolean(session.allow_oesophageal_pressure)

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
 import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { SharedTeachingTab, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
+import { SharedTeachingTab, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingAlarmSync, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
 import { InstructorAccountControls, type DynamicScenarioDiagnosticContext } from './components/InstructorAccountControls'
 import { CaseMediaPanel } from './components/CaseMediaPanel'
 import { PhysiologyMeasurementsDialog } from './components/PhysiologyMeasurementsDialog'
@@ -618,6 +618,15 @@ export default function App() {
       if (teachingSession.role !== 'candidate') return
       setWaveformFrozen(active)
       if (!active) setFrozenSamples(null)
+    },
+  )
+
+  const teachingAlarmSync = useTeachingAlarmSync(
+    teachingSession.role,
+    teachingSession.session?.id ?? null,
+    (state) => {
+      if (teachingSession.role !== 'candidate') return
+      setAlarmSilenced(Boolean(state.instructorOverride || (state.silenceUntil ?? 0) > Date.now()))
     },
   )
 
@@ -1376,6 +1385,8 @@ export default function App() {
   }
 
   const silenceAlarm = (durationMs = 120000) => {
+    if (teachingSession.candidateAlarmsLocked) return
+    if (teachingSession.role === 'instructor' && teachingSession.session?.id) teachingAlarmSync.silenceFor(durationMs)
     setAlarmLifecycle((current) => {
       const next = { ...current }
       for (const [key, entry] of Object.entries(current)) {
