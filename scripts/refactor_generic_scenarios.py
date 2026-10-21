@@ -113,3 +113,5 @@ p.write_text(s)
 Path('src/appVersion.ts').write_text("export const APP_VERSION = '0.83.0.6'\n")
 Path('src/edumon/appVersion.ts').write_text("export const EDUMON_APP_VERSION = '0.1.0.6'\n")
 Path('src/scenario-builder/version.ts').write_text("export const SCENARIO_BUILDER_VERSION = '0.7.0'\n")
+
+# trigger
