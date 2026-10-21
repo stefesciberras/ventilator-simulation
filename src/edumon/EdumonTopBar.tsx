@@ -44,20 +44,23 @@ interface EdumonTopBarProps {
   elapsedSeconds: number
   onPausedChange: (paused: boolean) => void
   onSpeedChange: (speed: EdumonSimulationSpeed) => void
+  simulationControlsLocked?: boolean
   onScenario: () => void
   onAccount: () => void
   onAbout: () => void
 }
 
-export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, onScenario, onAccount, onAbout }: EdumonTopBarProps) {
+export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, onAccount, onAbout }: EdumonTopBarProps) {
   const actions = (
     <>
       <button type="button" className="top-account-button" onClick={onAccount} title="Instructor account" aria-label="Open instructor account"><CloudIcon /></button>
-      <button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios" aria-label="Open scenarios"><ScenarioIcon /></button>
+      <button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button>
       <a className="top-account-button edumon-module-menu-button" href="/edumon" title="EDUMON modules" aria-label="Choose EDUMON module"><MenuIcon /></a>
       <button type="button" className="top-diagnostic-button" onClick={onAbout} title="EDUMON information" aria-label="Open EDUMON information"><MonitorIcon /></button>
     </>
   )
+
+  const controlledTitle = simulationControlsLocked ? 'Simulation timing is controlled by the instructor' : undefined
 
   return (
     <SimulationTopBar
@@ -69,6 +72,10 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
       elapsedSeconds={elapsedSeconds}
       onPausedChange={onPausedChange}
       onSpeedChange={onSpeedChange}
+      pauseDisabled={simulationControlsLocked}
+      speedDisabled={simulationControlsLocked}
+      pauseTitle={controlledTitle}
+      speedTitle={controlledTitle}
       rightActions={actions}
       statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
       version="0.1.0.0"
