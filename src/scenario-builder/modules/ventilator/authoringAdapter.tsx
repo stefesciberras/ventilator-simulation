@@ -34,11 +34,24 @@ function setPath(snapshot: InstructorScenarioSnapshot, id: string, value: unknow
   return next
 }
 
-function VariableInput({ variable, value, onChange }: { variable: ScenarioVariableDefinition; value: unknown; onChange: (value: unknown) => void }) {
-  if (variable.type === 'boolean') return <select value={value ? 'true' : 'false'} onChange={(event) => onChange(event.target.value === 'true')}><option value="true">On</option><option value="false">Off</option></select>
-  if (variable.type === 'select') return <select value={String(value ?? '')} onChange={(event) => onChange(event.target.value)}>{variable.options?.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select>
-  if (variable.type === 'number') return <input className="shared-scenario-control-slider" type="range" min={variable.min} max={variable.max} step={variable.step ?? 1} value={typeof value === 'number' ? value : 0} onChange={(event) => onChange(Number(event.target.value))} />
-  return <input value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} />
+function VariableInput({ variable, value, onChange, disabled = false }: { variable: ScenarioVariableDefinition; value: unknown; onChange: (value: unknown) => void; disabled?: boolean }) {
+  if (variable.type === 'boolean') return <select disabled={disabled} value={value ? 'true' : 'false'} onChange={(event) => onChange(event.target.value === 'true')}><option value="true">On</option><option value="false">Off</option></select>
+  if (variable.type === 'select') return <select disabled={disabled} value={String(value ?? '')} onChange={(event) => onChange(event.target.value)}>{variable.options?.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select>
+  if (variable.type === 'number') {
+    const isFio2 = variable.id === 'ventilator.fio2'
+    const numericValue = typeof value === 'number' ? value : 0
+    return <input
+      className="shared-scenario-control-slider"
+      type="range"
+      min={isFio2 ? 21 : variable.min}
+      max={isFio2 ? 100 : variable.max}
+      step={isFio2 ? 1 : (variable.step ?? 1)}
+      value={isFio2 ? Math.round(numericValue * 100) : numericValue}
+      disabled={disabled}
+      onChange={(event) => onChange(isFio2 ? Number(event.target.value) / 100 : Number(event.target.value))}
+    />
+  }
+  return <input disabled={disabled} value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} />
 }
 
 function variablePalette(variable: ScenarioVariableDefinition) {
@@ -50,27 +63,104 @@ function variablePalette(variable: ScenarioVariableDefinition) {
 function displayVariableValue(variable: ScenarioVariableDefinition, value: unknown) {
   if (variable.type === 'boolean') return value ? 'On' : 'Off'
   if (variable.type === 'select') return variable.options?.find((option) => String(option.value) === String(value))?.label ?? String(value ?? '')
+  if (variable.id === 'ventilator.fio2' && typeof value === 'number') return `${Math.round(value * 100)}%`
   return `${typeof value === 'number' ? Number(value.toFixed(3)) : value ?? ''}${variable.unit ? ` ${variable.unit}` : ''}`
 }
 
-function SnapshotEditor({ snapshot, onChange }: { snapshot: InstructorScenarioSnapshot; onChange: (snapshot: InstructorScenarioSnapshot) => void }) {
+function allWritableVariableIds() {
+  return VENTILATOR_SCENARIO_MODULE.variables
+    .filter((variable) => variable.role === 'setting' && variable.writable)
+    .map((variable) => variable.id)
+}
+
+function isVentilatorVariableRelevant(variable: ScenarioVariableDefinition, snapshot: InstructorScenarioSnapshot) {
+  if (!variable.id.startsWith('ventilator.')) return true
+  const key = variable.id.slice('ventilator.'.length)
+  const mode = snapshot.ventilator.mode
+  const isSimv = mode === 'SIMV-VC' || mode === 'SIMV-PC'
+  const isVolumeMandatory = mode === 'VC-AC' || mode === 'SIMV-VC'
+  const isPressureMandatory = mode === 'PC-AC' || mode === 'SIMV-PC'
+
+  if (key === 'mode' || key === 'fio2') return true
+  if (mode === 'APRV') return ['pHigh', 'pLow', 'tHigh', 'tLow'].includes(key)
+  if (mode === 'BIPAP') return ['pressureControl', 'peep', 'rate', 'inspiratoryTime', 'triggerType', snapshot.ventilator.triggerType === 'flow' ? 'flowTriggerSensitivity' : 'triggerSensitivity'].includes(key)
+
+  if (['pHigh', 'pLow', 'tHigh', 'tLow'].includes(key)) return false
+  if (key === 'peep') return true
+  if (key === 'rate') return mode !== 'PSV'
+  if (key === 'tidalVolume') return isVolumeMandatory || mode === 'VG-PC'
+  if (key === 'inspiratoryTime') return mode !== 'PSV'
+  if (key === 'inspiratoryFlow' || key === 'plateauPercent') return isVolumeMandatory
+  if (key === 'pressureControl') return isPressureMandatory
+  if (key === 'volumeGuaranteePressureLimit') return mode === 'VG-PC'
+  if (key === 'pressureSupport' || key === 'terminationSensitivity') return mode === 'PSV' || isSimv
+  if (key === 'simvSyncWindowPercent' || key === 'showSimvSyncWindow') return isSimv
+  if (key === 'triggerType') return true
+  if (key === 'triggerSensitivity') return snapshot.ventilator.triggerType !== 'flow'
+  if (key === 'flowTriggerSensitivity') return snapshot.ventilator.triggerType === 'flow'
+  return true
+}
+
+function variableIdsFromApplyMask(stage: { apply?: { ventilator: Array<string | number | symbol>; patient: Array<string | number | symbol> } }) {
+  if (!stage.apply) return allWritableVariableIds()
+  return [
+    ...stage.apply.ventilator.map((key) => `ventilator.${String(key)}`),
+    ...stage.apply.patient.map((key) => `patient.${String(key)}`),
+  ]
+}
+
+function applyMaskFromVariableIds(snapshot: InstructorScenarioSnapshot, ids: readonly string[]) {
+  const full = createFullDynamicStageApplyMask(snapshot)
+  const selected = new Set(ids)
+  return {
+    ...full,
+    ventilator: full.ventilator.filter((key) => selected.has(`ventilator.${String(key)}`)),
+    patient: full.patient.filter((key) => selected.has(`patient.${String(key)}`)),
+    alarmLimits: [],
+    patientTransitionSeconds: false,
+    waveformDisplay: false,
+    mediaIds: false,
+  }
+}
+
+function SnapshotEditor({ snapshot, onChange, appliedVariableIds, onAppliedVariableIdsChange }: {
+  snapshot: InstructorScenarioSnapshot
+  onChange: (snapshot: InstructorScenarioSnapshot) => void
+  appliedVariableIds?: string[]
+  onAppliedVariableIdsChange?: (ids: string[]) => void
+}) {
   const writable = VENTILATOR_SCENARIO_MODULE.variables.filter((variable) => variable.role === 'setting' && variable.writable)
   const groups = [...new Set(writable.map((variable) => variable.group))]
+  const selected = new Set(appliedVariableIds ?? allWritableVariableIds())
+  const setApplied = (id: string, enabled: boolean) => {
+    const next = new Set(selected)
+    if (enabled) next.add(id)
+    else next.delete(id)
+    onAppliedVariableIdsChange?.([...next])
+  }
   return <div className="shared-scenario-eduvent-snapshot">
     {groups.map((group) => {
-      const variables = writable.filter((variable) => variable.group === group)
+      const variables = writable.filter((variable) => variable.group === group && isVentilatorVariableRelevant(variable, snapshot))
+      if (!variables.length) return null
       const palette = variablePalette(variables[0])
       return <section key={group} className={`shared-scenario-control-group ${palette}`}><h3>{group}</h3><div className="shared-scenario-slider-grid">{variables.map((variable) => {
         const value = getPath(snapshot, variable.id)
-        return <label className={`shared-scenario-variable-row ${variable.type === 'number' ? 'slider' : ''}`} key={variable.id}>
-          <div className="shared-scenario-variable-heading"><span>{variable.label}</span><strong>{displayVariableValue(variable, value)}</strong></div>
-          <VariableInput variable={variable} value={value} onChange={(next) => onChange(setPath(snapshot, variable.id, next))} />
-        </label>
+        const applied = selected.has(variable.id)
+        return <div className={`shared-scenario-variable-row ${variable.type === 'number' ? 'slider' : ''} ${applied ? 'applied' : 'not-applied'}`} key={variable.id}>
+          <div className="shared-scenario-variable-heading">
+            <label className="shared-scenario-apply-toggle" title={applied ? 'This value will be applied on stage entry' : 'This value will be left unchanged on stage entry'}>
+              <input type="checkbox" checked={applied} onChange={(event) => setApplied(variable.id, event.target.checked)} />
+              <span>Apply</span>
+            </label>
+            <span className="shared-scenario-variable-label">{variable.label}</span>
+            <strong>{displayVariableValue(variable, value)}</strong>
+          </div>
+          <VariableInput variable={variable} value={value} disabled={!applied} onChange={(next) => onChange(setPath(snapshot, variable.id, next))} />
+        </div>
       })}</div></section>
     })}
   </div>
 }
-
 function triggerToShared(trigger: DynamicScenarioTrigger): SharedScenarioAuthoringTrigger {
   const id = crypto.randomUUID()
   if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct') return { id, type: trigger.type }
@@ -111,7 +201,8 @@ export function createVentilatorAuthoringAdapter(seed: InstructorScenarioSnapsho
       { id: 'device.oxygen-flush', label: 'Oxygen flush' },
       { id: 'device.nebulisation', label: 'Nebulisation' },
     ],
-    renderSnapshotEditor: (snapshot, onChange): ReactNode => <SnapshotEditor snapshot={snapshot} onChange={onChange} />,
+    defaultAppliedVariableIds: () => allWritableVariableIds(),
+    renderSnapshotEditor: (snapshot, onChange, options): ReactNode => <SnapshotEditor snapshot={snapshot} onChange={onChange} appliedVariableIds={options?.appliedVariableIds} onAppliedVariableIdsChange={options?.onAppliedVariableIdsChange} />,
     toDocument: (name, scenario) => {
       const dynamic = (scenario.kind ?? 'static') === 'dynamic' && scenario.stages?.length
       const sourceStages = dynamic ? scenario.stages! : [{ id: crypto.randomUUID(), name: 'Initial state', comment: '', stageType: 'controls' as const, snapshot: scenario, advanceTriggers: [] as DynamicScenarioTrigger[] }]
@@ -121,6 +212,7 @@ export function createVentilatorAuthoringAdapter(seed: InstructorScenarioSnapsho
         notes: stage.comment ?? '',
         kind: (stage.stageType ?? 'controls') === 'controls' ? 'state' as const : stage.stageType as 'media' | 'question',
         snapshot: stage.snapshot,
+        appliedVariableIds: variableIdsFromApplyMask(stage),
         triggers: [] as SharedScenarioAuthoringTrigger[],
         media: stage.media ? { ...stage.media, mediaId: stage.media.mediaId ?? stage.media.storagePath } : undefined,
         question: stage.question,
@@ -160,7 +252,7 @@ export function createVentilatorAuthoringAdapter(seed: InstructorScenarioSnapsho
           transition: { mode: 'immediate' },
           transitionOverrides: {},
           snapshot: clone(stage.snapshot),
-          apply: createFullDynamicStageApplyMask(stage.snapshot),
+          apply: applyMaskFromVariableIds(stage.snapshot, stage.appliedVariableIds ?? allWritableVariableIds()),
           advanceTrigger: { type: 'manual' },
           advanceTriggers: [{ type: 'manual' }],
         })),

@@ -42,6 +42,8 @@ export interface SharedScenarioAuthoringStage<TSnapshot> {
   notes: string
   kind: SharedScenarioStageKind
   snapshot: TSnapshot
+  /** Product variable IDs explicitly applied when this state stage is entered. */
+  appliedVariableIds?: string[]
   triggers: SharedScenarioAuthoringTrigger[]
   media?: SharedScenarioMediaContent
   question?: SharedScenarioQuestionContent
@@ -82,7 +84,12 @@ export interface SharedScenarioEditorAdapter<TScenario, TSnapshot> {
   emptySnapshot: () => TSnapshot
   toDocument: (name: string, scenario: TScenario) => SharedScenarioAuthoringDocument<TSnapshot>
   fromDocument: (document: SharedScenarioAuthoringDocument<TSnapshot>) => TScenario
-  renderSnapshotEditor: (snapshot: TSnapshot, onChange: (snapshot: TSnapshot) => void) => ReactNode
+  renderSnapshotEditor: (
+    snapshot: TSnapshot,
+    onChange: (snapshot: TSnapshot) => void,
+    options?: { appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void },
+  ) => ReactNode
+  defaultAppliedVariableIds?: (snapshot: TSnapshot) => string[]
   conditionMetrics: readonly SharedScenarioTriggerChoice[]
   actionParameters: readonly SharedScenarioTriggerChoice[]
 }
