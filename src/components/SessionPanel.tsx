@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CandidateInvitation } from './CandidateInvitation'
-import { SharedInstructorStartWizard, SharedSessionLauncher } from '../teaching/session'
+import { SharedInstructorLiveRoom, SharedInstructorStartWizard, SharedSessionLauncher } from '../teaching/session'
 import type { RuntimeTransportKind, SessionConnection, SessionRole } from '../session/useTeachingSession'
 import type { LocalRuntimeConnection } from '../session/localRuntimeTransport'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
@@ -122,45 +122,25 @@ function CandidateCard({ member, now }: { member: SessionMemberRow; now: number 
 
 
 export function InstructorLiveRoom({ role, members }: { role: SessionRole; members: SessionMemberRow[] }) {
-  const [now, setNow] = useState(() => Date.now())
-  const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed('instructor-live-room'))
-  const toggleCollapsed = () => setCollapsed((current) => {
-    const next = !current
-    savePanelCollapsed('instructor-live-room', next)
-    return next
-  })
-  useEffect(() => {
-    if (role !== 'instructor') return
-    const timer = window.setInterval(() => setNow(Date.now()), 5000)
-    return () => window.clearInterval(timer)
-  }, [role])
-
-  const candidates = useMemo(() => members.filter((member) => member.role === 'candidate'), [members])
-  const onlineCandidates = candidates.filter((member) => {
-    const lastSeen = new Date(member.last_seen).getTime()
-    return Number.isFinite(lastSeen) && now - lastSeen <= 30000
-  }).length
-
-  if (role !== 'instructor') return null
-
-  return (
-    <section className={`candidate-roster instructor-live-room ${collapsed ? 'panel-collapsed' : ''}`} aria-label="Candidates">
-      <div className="candidate-roster-heading">
-        <div><span className="session-kicker">Live room</span><h3>Candidates</h3></div>
-        <div className="collapsible-heading-actions">
-          <span>{onlineCandidates}/{candidates.length} online</span>
-          <button className="panel-collapse-button" type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand candidates' : 'Collapse candidates'} title={collapsed ? 'Expand candidates' : 'Collapse candidates'}>{collapsed ? '▾' : '▴'}</button>
-        </div>
+  return <SharedInstructorLiveRoom
+    role={role}
+    members={members}
+    storageKey="instructor-live-room"
+    renderTelemetry={(member) => {
+      const vent = hasVentilatorSettings(member.ventilator_settings) ? member.ventilator_settings : null
+      const patient = hasPatientSettings(member.patient_settings) ? member.patient_settings : null
+      return <div className="candidate-state-grid">
+        <div><span>Mode</span><strong>{vent?.mode ?? '—'}</strong></div>
+        <div><span>FiO₂</span><strong>{vent ? `${Math.round(vent.fio2 * 100)}%` : '—'}</strong></div>
+        <div><span>PEEP</span><strong>{vent?.peep ?? '—'}</strong></div>
+        <div><span>RR set</span><strong>{vent?.rate ?? '—'}</strong></div>
+        <div><span>Compliance</span><strong>{patient ? patient.compliance.toFixed(0) : '—'}</strong></div>
+        <div><span>Rinsp</span><strong>{patient ? patient.resistance.toFixed(0) : '—'}</strong></div>
+        <div><span>Spont RR</span><strong>{patient ? patient.spontaneousRate.toFixed(0) : '—'}</strong></div>
+        <div><span>Effort</span><strong>{patient ? patient.effort.toFixed(0) : '—'}</strong></div>
       </div>
-      {candidates.length ? (
-        <div className="candidate-card-list">
-          {candidates.map((member) => <CandidateCard key={member.id} member={member} now={now} />)}
-        </div>
-      ) : (
-        <div className="candidate-empty-state">No candidates have joined yet. Keep this dashboard open while candidates enter the session key.</div>
-      )}
-    </section>
-  )
+    }}
+  />
 }
 
 export function SessionPanel({

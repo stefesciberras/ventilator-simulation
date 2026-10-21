@@ -12,6 +12,7 @@ import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/
 import { SimulationHardwareControls } from '../components/SimulationHardwareControls'
 import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
 import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from '../components/SimulationDiagnosticsMenu'
+import { SimulationWorkspaceShell } from '../components/SimulationWorkspaceShell'
 import { useScreenWakeLock } from '../useScreenWakeLock'
 import { SharedBasicSessionPanel, useProductTeachingSession } from '../teaching/session'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from '../components/InstructorAccountAuth'
@@ -313,6 +314,20 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       onResumeCandidate={teachingSession.resumeCandidate}
       onLeaveSession={teachingSession.leaveSession}
       onEndInstructorSession={teachingSession.endInstructorSession}
+      productId={teachingHost.appId}
+      productLabel={module.productName}
+      productDescription={module.subtitle}
+      renderCandidateTelemetry={(member) => {
+        const state = (member as typeof teachingSession.members[number]).product_state as EdumonTeachingState | undefined
+        if (!state?.patient) return null
+        const p = state.patient
+        return <div className="candidate-state-grid">
+          <div><span>Rhythm</span><strong>{RHYTHM_LABELS[p.rhythm]}</strong></div>
+          <div><span>HR</span><strong>{Math.round(p.heartRate)}</strong></div>
+          <div><span>ART</span><strong>{Math.round(p.systolicPressure)}/{Math.round(p.diastolicPressure)}</strong></div>
+          <div><span>SpO₂</span><strong>{Math.round(p.spo2)}%</strong></div>
+        </div>
+      }}
       instructorStart={{
         currentTitle: `${RHYTHM_LABELS[patientState.rhythm]} · HR ${patientState.heartRate} · ${patientState.systolicPressure}/${patientState.diastolicPressure} · SpO₂ ${patientState.spo2}%`,
         currentSummary: 'Configure the patient monitor in standalone mode before opening the room.',
@@ -400,7 +415,15 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         onAbout={() => setTopPanel('about')}
       />
 
-      <div className="workspace edumon-workspace">
+      <SimulationWorkspaceShell
+        workspaceClassName="edumon-workspace"
+        switcherClassName="edumon-mobile-workspace-switcher"
+        displayPageClassName="mobile-page-monitor"
+        controlsPageClassName="mobile-page-controls"
+        displayLabel="Display"
+        controlsLabel="Controls"
+        ariaLabel="EDUMON workspace pages"
+        display={(
         <section className="ventilator-console edumon-console" aria-label={`${module.productName} patient monitor`}>
           <SimulationHardwareControls
             className="edumon-console-top-actions"
@@ -436,8 +459,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           </div>
         </section>
 
-        <EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} controlsLocked={candidateLocked} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />
-      </div>
+        )}
+        controls={<EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} controlsLocked={candidateLocked} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+      />
 
       {selectedAuxiliary && auxiliaryMonitor && (
         <AuxiliaryMonitorModal title={selectedAuxiliary.label} onClose={() => setAuxiliaryMonitor(null)}>
