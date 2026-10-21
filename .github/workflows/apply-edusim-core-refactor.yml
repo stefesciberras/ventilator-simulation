@@ -24,6 +24,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.tsx
-          git commit -m "Migrate EDUVENT controls to shared framework"
+          git add src/App.tsx src/edumon/EdumonApp.tsx
+          git commit -m "Adopt shared persistence and secondary surfaces"
           git push origin HEAD:fix/remove-transition-value-label
