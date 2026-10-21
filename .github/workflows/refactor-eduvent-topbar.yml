@@ -1,0 +1,36 @@
+name: One-off EDUVENT top bar refactor
+
+on:
+  push:
+    branches:
+      - edusim/shared-topbar-eduvent
+    paths:
+      - 'scripts/refactor-eduvent-topbar.mjs'
+      - '.github/workflows/refactor-eduvent-topbar.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: edusim/shared-topbar-eduvent
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Refactor EDUVENT top bar
+        run: node scripts/refactor-eduvent-topbar.mjs
+      - name: Remove one-off migration files
+        run: rm scripts/refactor-eduvent-topbar.mjs .github/workflows/refactor-eduvent-topbar.yml
+      - name: Commit generated refactor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx scripts/refactor-eduvent-topbar.mjs .github/workflows/refactor-eduvent-topbar.yml
+          git commit -m "Migrate EDUVENT to shared SimulationTopBar"
+          git push origin HEAD:edusim/shared-topbar-eduvent
