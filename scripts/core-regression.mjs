@@ -32,7 +32,6 @@ const displayControls = read('src/components/useSimulationDisplayControls.ts')
 const mobileWorkspace = read('src/components/mobileWorkspaceRuntime.ts')
 const workspaceShell = read('src/components/SimulationWorkspaceShell.tsx')
 const laserInteractionCss = read('src/teaching/laser-interaction.css')
-const mediaLaser = read('src/teaching/TeachingMediaLaser.tsx')
 
 // Existing shared shell / UI ownership regression checks.
 assert(eduvent.includes('<SimulationControlFramework'), 'EDUVENT must use SimulationControlFramework')
@@ -78,19 +77,20 @@ assert(displayControls.includes("const sharedTeachingLaser = role === 'instructo
 assert(displayControls.includes('if (next && sharedTeachingLaser && !frozen)'), 'standalone laser must not force a local waveform freeze')
 assert(displayControls.includes('data-edusim-simulator-laser-active'), 'laser toggle must expose a synchronous global interaction lock')
 assert(displayControls.includes('setSimulatorLaserInteractionLock(next)'), 'laser toggle must claim the global interaction lock before React rerenders')
-assert(mobileWorkspace.includes('isSwipeBlockedTouch'), 'mobile workspace swipes must detect protected interaction surfaces from touch coordinates')
-assert(mobileWorkspace.includes('isGlobalLaserInteractionActive'), 'mobile workspace must consult the global laser interaction lock')
-assert(mobileWorkspace.includes('event.preventDefault()'), 'mobile workspace must cancel touch-pan while laser interaction owns the gesture')
-assert(mobileWorkspace.includes('passive: false'), 'laser-owned touchmove must be non-passive so browser pan can be cancelled')
-assert(mobileWorkspace.includes('.teaching-laser-layer-active'), 'mobile workspace swipes must ignore active simulator laser interactions')
-assert(mobileWorkspace.includes('.teaching-media-laser-stage'), 'mobile workspace swipes must ignore teaching media laser interactions')
+
+// Workspace navigation is deliberately two-finger so one-finger sliders, scrolling and laser input
+// do not need special swipe-blocking hooks.
+assert(mobileWorkspace.includes('event.touches.length !== 2'), 'legacy mobile workspace navigation must require exactly two active touches')
+assert(mobileWorkspace.includes('centroidFromTouches(event.touches)'), 'legacy mobile workspace must track the two-finger gesture centroid')
+assert(mobileWorkspace.includes('event.touches.length !== 2) resetSwipe()'), 'legacy mobile workspace must cancel navigation when the active touch count changes')
+assert(!mobileWorkspace.includes('isSwipeBlockedTouch'), 'mobile workspace must not restore laser-specific swipe blocking')
+assert(!mobileWorkspace.includes('isGlobalLaserInteractionActive'), 'mobile workspace must not couple page navigation to the laser lock')
+assert(!mobileWorkspace.includes('event.preventDefault()'), 'mobile workspace must not suppress laser or slider touch movement')
 assert(workspaceShell.includes('event.touches.length !== 2'), 'React workspace navigation must require exactly two active touches')
 assert(workspaceShell.includes('centroidFromTouches(event.touches)'), 'React workspace must track the two-finger gesture centroid')
 assert(workspaceShell.includes('event.touches.length !== 2) resetSwipe()'), 'React workspace must cancel navigation if the active touch count changes')
 assert(workspaceShell.includes('twoTouchCentroidAtEnd(event)'), 'React workspace must reconstruct the two-finger centroid when one contact lifts')
 assert(workspaceShell.includes('onTouchCancel={resetSwipe}'), 'React workspace must reset tracked swipe state when a touch is cancelled')
-assert(mediaLaser.includes('data-edusim-block-workspace-swipe="true"'), 'teaching media laser stage must explicitly block workspace swipe recognition')
-assert(mediaLaser.includes('data-edusim-media-laser-active'), 'teaching media laser must claim a global interaction lock while open')
 assert(laserInteractionCss.includes('.teaching-laser-exit'), 'legacy laser exit affordance must remain hidden')
 
 // Shared persistence and diagnostics infrastructure with product-owned payloads.
