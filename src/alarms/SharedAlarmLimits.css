@@ -1,1 +1,105 @@
-.shared-alarm-limits-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:stretch}.shared-alarm-limits-dialog{width:min(760px,calc(100vw - 24px));max-height:min(720px,calc(100dvh - 24px));overflow:auto}.shared-alarm-limit-card.disabled{opacity:.58}.shared-alarm-limit-card.disabled .vertical-dual-range{cursor:not-allowed}.shared-alarm-limits-locked{margin:0 0 12px;padding:9px 12px;border:1px solid rgba(255,180,80,.38);border-radius:8px;color:#ffd59c;background:rgba(115,67,10,.22)}.shared-alarm-current-limit{display:block;text-align:center;font-variant-numeric:tabular-nums}.shared-alarm-current-limit small{font-size:.55em;font-weight:600;color:#8fa1aa}.shared-alarm-current-limit-high{margin:8px 0 4px}.shared-alarm-current-limit-low{margin:6px 0 0}.shared-alarm-limits-backdrop.contained{position:absolute;inset:0;width:auto;height:auto;z-index:40}.shared-alarm-limits-backdrop.contained .shared-alarm-limits-dialog{max-width:calc(100% - 24px);max-height:calc(100% - 24px)}@media(max-width:640px){.shared-alarm-limits-grid{grid-template-columns:repeat(3,minmax(110px,1fr))}.shared-alarm-limits-dialog{width:calc(100vw - 12px)}}
+.shared-alarm-limits-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: stretch;
+}
+
+.shared-alarm-limits-dialog {
+  width: min(760px, calc(100vw - 24px));
+  max-height: min(720px, calc(100dvh - 24px));
+  overflow: auto;
+}
+
+.shared-alarm-limit-card.disabled {
+  opacity: .58;
+}
+
+.shared-alarm-limit-card.disabled .vertical-dual-range {
+  cursor: not-allowed;
+}
+
+.shared-alarm-limits-locked {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 180, 80, .38);
+  border-radius: 8px;
+  color: #ffd59c;
+  background: rgba(115, 67, 10, .22);
+}
+
+.shared-alarm-current-limit {
+  display: block;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.shared-alarm-current-limit small {
+  font-size: .55em;
+  font-weight: 600;
+  color: #8fa1aa;
+}
+
+.shared-alarm-current-limit-high {
+  margin: 8px 0 4px;
+}
+
+.shared-alarm-current-limit-low {
+  margin: 6px 0 0;
+}
+
+.shared-alarm-limits-backdrop.contained {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: 40;
+}
+
+.shared-alarm-limits-backdrop.contained .shared-alarm-limits-dialog {
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+}
+
+@media (max-width: 640px) {
+  .shared-alarm-limits-grid {
+    grid-template-columns: repeat(3, minmax(110px, 1fr));
+  }
+
+  .shared-alarm-limits-dialog {
+    width: calc(100vw - 12px);
+  }
+
+  /* A contained monitor dialog becomes a true viewport modal on mobile.
+     This matches EDUVENT and avoids forcing the monitor page itself to scroll. */
+  .shared-alarm-limits-backdrop.contained {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    padding: 0;
+    z-index: 120;
+  }
+
+  .shared-alarm-limits-backdrop.contained .shared-alarm-limits-dialog {
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: max(14px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    border: 0;
+    border-radius: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .shared-alarm-limits-backdrop.contained .shared-alarm-limits-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .shared-alarm-limits-backdrop.contained .alarm-dialog-done {
+    flex: 0 0 auto;
+  }
+}
