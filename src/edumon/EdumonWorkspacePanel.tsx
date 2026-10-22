@@ -93,29 +93,29 @@ export function EdumonWorkspacePanel({
           <div className="patient-transition-control">
             <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} showValue={false} />
           </div>
-          <label className="edumon-select-control">
+          <label className="edumon-select-control edumon-signal-control edumon-signal-ecg">
             <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
             <select disabled={controlsLocked} value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>
               {RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}
             </select>
           </label>
-          <label className="edumon-select-control">
+          <label className="edumon-select-control edumon-signal-control edumon-signal-ecg">
             <span>Morphology <b>{ECG_MORPHOLOGY_LABELS[morphology]}</b></span>
             <select disabled={controlsLocked} value={morphology} onChange={(event) => updatePatient({ ecgMorphology: event.target.value as MonitorPatientState['ecgMorphology'] })}>
               {ECG_MORPHOLOGIES.map((candidate) => <option key={candidate} value={candidate}>{ECG_MORPHOLOGY_LABELS[candidate]}</option>)}
             </select>
           </label>
           {morphology !== 'nil' && (
-            <label className="edumon-morphology-severity">
+            <label className="edumon-morphology-severity edumon-signal-control edumon-signal-ecg">
               <span>Severity <b>{Math.round(morphologySeverity)}%</b></span>
               <input disabled={controlsLocked} type="range" min="0" max="100" step="1" value={morphologySeverity} onChange={(event) => updatePatient({ morphologySeverity: Number(event.target.value) })} />
             </label>
           )}
-          <label><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input disabled={controlsLocked} type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => updatePatient({ heartRate: Number(event.target.value) })} /></label>
-          <label><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => updatePatient({ systolicPressure: Number(event.target.value) })} /></label>
-          <label><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => updatePatient({ diastolicPressure: Number(event.target.value) })} /></label>
-          <label><span>SpO₂ <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
-          <label><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input disabled={controlsLocked} type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => updatePatient({ peripheralPerfusion: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-ecg"><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input disabled={controlsLocked} type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => updatePatient({ heartRate: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-art"><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => updatePatient({ systolicPressure: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-art"><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => updatePatient({ diastolicPressure: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-spo2"><span>SpO₂ <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-spo2"><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input disabled={controlsLocked} type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => updatePatient({ peripheralPerfusion: Number(event.target.value) })} /></label>
         </section>
       ),
     },
