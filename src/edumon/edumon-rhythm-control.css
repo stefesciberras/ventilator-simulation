@@ -108,6 +108,27 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--edumon-signal-accent) 18%, transparent);
 }
 
+.edumon-pressure-coupling {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.edumon-pressure-coupling input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--edumon-signal-accent);
+}
+
+.edumon-pressure-coupling > span {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .edumon-signal-control:has(:disabled) {
   opacity: .62;
 }
