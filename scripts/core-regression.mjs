@@ -16,6 +16,8 @@ const physiology = read('src/components/PhysiologyMeasurementsDialog.tsx')
 const scenarioProducts = read('src/teaching/scenario/products.ts')
 const scenarioDomain = read('src/teaching/scenario/domain.ts')
 const scenarioRuntime = read('src/teaching/scenario/runtimeCore.ts')
+const eduventScenarioRuntime = read('src/eduvent/useEduventInstructorScenarioRuntime.tsx')
+const edumonScenarioAdapter = read('src/edumon/scenarioAdapter.ts')
 const registry = read('src/core/products.ts')
 const adapter = read('src/core/SimulationProductAdapter.ts')
 const eduventContract = read('src/eduvent/productContract.ts')
@@ -69,9 +71,15 @@ for (const capability of ['supportsBranches', 'supportsTransitions', 'supportsMe
 for (const feature of ['branches', 'transition', 'media', 'question']) {
   assert(scenarioDomain.toLowerCase().includes(feature), `shared scenario domain must retain ${feature} semantics`)
 }
-assert(scenarioRuntime.includes('condition'), 'shared scenario runtime must retain condition triggers')
-assert(scenarioRuntime.includes('action'), 'shared scenario runtime must retain action triggers')
-assert(scenarioRuntime.includes('elapsed'), 'shared scenario runtime must retain elapsed-time triggers')
+assert(scenarioRuntime.includes("branch.triggerMode === 'all'"), 'shared scenario runtime must preserve ALL branch-trigger semantics')
+assert(scenarioRuntime.includes('triggers.some(triggerMatches)'), 'shared scenario runtime must preserve ANY branch-trigger semantics')
+assert(scenarioRuntime.includes('stageStartedSimulationTime'), 'shared scenario runtime must retain an independent simulation-time stage clock')
+for (const productRuntime of [eduventScenarioRuntime, edumonScenarioAdapter]) {
+  assert(productRuntime.includes("trigger.type === 'time'"), 'each product scenario adapter must preserve elapsed-time triggers')
+  assert(productRuntime.includes("trigger.type === 'condition'"), 'each product scenario adapter must preserve condition triggers')
+}
+assert(eduventScenarioRuntime.includes("trigger.type === 'device-action'"), 'EDUVENT scenario adapter must preserve explicit device-action triggers')
+assert(edumonScenarioAdapter.includes('stageBaselinePatient'), 'EDUMON scenario adapter must preserve candidate patient-change detection')
 
 // Shared persistence and diagnostics envelope with product-owned serialization.
 assert(persistence.includes('edusim.${productId}.'), 'shared persistence must namespace values by product')
@@ -80,7 +88,7 @@ assert(edumon.includes('createSimulationPersistence(productId)'), 'EDUMON must u
 assert(diagnostics.includes("'edusim-diagnostic-v1'"), 'shared diagnostics must provide the EDUSIM diagnostic envelope')
 assert(diagnostics.includes('productId') && diagnostics.includes('appVersion'), 'shared diagnostics must include product/version metadata')
 assert(eduventDiagnostics.includes('copySimulationDiagnostic'), 'EDUVENT diagnostics must use the shared diagnostic serializer')
-assert(edumon.includes("copySimulationDiagnostic"), 'EDUMON diagnostics must use the shared diagnostic serializer')
+assert(edumon.includes('copySimulationDiagnostic'), 'EDUMON diagnostics must use the shared diagnostic serializer')
 
 // Candidate teaching presentation listeners must remain persistent in both products.
 for (const listener of ['useTeachingPrompts', 'TeachingCandidateOverlay', 'useTeachingMediaPresentation', 'TeachingMediaCandidateOverlay']) {
