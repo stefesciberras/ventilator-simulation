@@ -14,6 +14,39 @@
   min-width: 0;
 }
 
+.simulation-console-status {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.simulation-console-status-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.simulation-console-status-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+
+.shared-alarm-limits-button {
+  min-width: 112px;
+  min-height: 34px;
+  border-radius: 0;
+  border-top: 0;
+  border-bottom: 0;
+  border-right: 0;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #e6edf0;
+  background: #182229;
+  border-color: #40525d;
+}
+
 .simulation-console-display {
   position: relative;
   flex: 1 1 auto;
@@ -46,5 +79,19 @@
     display: block;
     visibility: visible;
     flex-shrink: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .shared-alarm-limits-button {
+    min-width: 86px;
+    padding: 5px 6px;
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 400px) {
+  .shared-alarm-limits-button {
+    min-width: 80px;
   }
 }
