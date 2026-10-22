@@ -1,6 +1,14 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { TeachingRole } from '../teaching'
 import { useTeachingDisplaySync } from '../teaching'
+
+const SIMULATOR_LASER_LOCK_ATTRIBUTE = 'data-edusim-simulator-laser-active'
+
+function setSimulatorLaserInteractionLock(active: boolean) {
+  if (typeof document === 'undefined') return
+  if (active) document.documentElement.setAttribute(SIMULATOR_LASER_LOCK_ATTRIBUTE, 'true')
+  else document.documentElement.removeAttribute(SIMULATOR_LASER_LOCK_ATTRIBUTE)
+}
 
 interface UseSimulationDisplayControlsOptions<TSnapshot> {
   role: TeachingRole
@@ -51,6 +59,14 @@ export function useSimulationDisplayControls<TSnapshot>({
     onCandidateLaserChange: setLaserEnabled,
   })
 
+  useEffect(() => {
+    setSimulatorLaserInteractionLock(role !== 'candidate' && laserEnabled)
+  }, [laserEnabled, role])
+
+  useEffect(() => () => {
+    setSimulatorLaserInteractionLock(false)
+  }, [])
+
   const setSharedFrozen = useCallback((active: boolean) => {
     if (role !== 'instructor' || !sessionId) return
     freezeLocal(active)
@@ -68,6 +84,12 @@ export function useSimulationDisplayControls<TSnapshot>({
     if (role === 'candidate') return
     const next = !laserEnabled
     const sharedTeachingLaser = role === 'instructor' && Boolean(sessionId)
+
+    // Claim or release the interaction lock synchronously with the button action.
+    // Do not wait for React to render the active laser layer before mobile swipe
+    // recognition knows that the display belongs to the laser.
+    setSimulatorLaserInteractionLock(next)
+
     if (next && sharedTeachingLaser && !frozen) {
       freezeLocal(true)
       displaySync.setFrozen(true)
