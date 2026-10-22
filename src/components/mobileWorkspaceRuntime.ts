@@ -29,7 +29,16 @@ export function installMobileWorkspaceRuntime({
   let swipeSuppressed = false
 
   const shouldUseMobileWorkspace = () => window.matchMedia(mobileQuery).matches || document.body.classList.contains(tabletBodyClass)
-  const isLaserInteractionTarget = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('.teaching-laser-layer-active'))
+
+  const isSwipeBlockedElement = (element: Element | null) => Boolean(element?.closest(
+    '.teaching-laser-layer-active, .teaching-media-laser-stage, [data-edusim-block-workspace-swipe="true"]',
+  ))
+
+  const isSwipeBlockedTouch = (target: EventTarget | null, clientX: number, clientY: number) => {
+    const targetElement = target instanceof Element ? target : null
+    if (isSwipeBlockedElement(targetElement)) return true
+    return isSwipeBlockedElement(document.elementFromPoint(clientX, clientY))
+  }
 
   const applyPage = (page: string) => {
     activePage = page
@@ -76,12 +85,20 @@ export function installMobileWorkspaceRuntime({
       workspace.addEventListener('touchstart', (event) => {
         swipeSuppressed = false
         if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
-        if (isLaserInteractionTarget(event.target)) {
+        const touch = event.touches[0]
+        if (isSwipeBlockedTouch(event.target, touch.clientX, touch.clientY)) {
           swipeSuppressed = true
           return
         }
-        touchStartX = event.touches[0].clientX
-        touchStartY = event.touches[0].clientY
+        touchStartX = touch.clientX
+        touchStartY = touch.clientY
+      }, { passive: true })
+
+      workspace.addEventListener('touchmove', (event) => {
+        if (swipeSuppressed) return
+        if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
+        const touch = event.touches[0]
+        if (isSwipeBlockedTouch(event.target, touch.clientX, touch.clientY)) swipeSuppressed = true
       }, { passive: true })
 
       workspace.addEventListener('touchend', (event) => {

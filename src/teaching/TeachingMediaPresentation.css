@@ -62,6 +62,16 @@
 .teaching-media-loading { color: #9dafb7; padding: 32px; }
 .teaching-media-reopen { top: 132px; }
 
+/* Laser interaction surfaces own the gesture while pointing. This prevents
+   iOS/Android pan and the shared Display/Controls swipe navigator from
+   interpreting a fast pointer drag as page navigation. */
+.teaching-media-laser-stage {
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .case-media-item-tags em.presenting {
   background: #7a4017;
   color: #ffd3a4;
