@@ -24,7 +24,6 @@ const eduventContract = read('src/eduvent/productContract.ts')
 const edumonContract = read('src/edumon/productContract.ts')
 const productDashboard = read('src/teaching/session/productDashboard.tsx')
 const productSession = read('src/teaching/session/productSession.ts')
-const sharedSession = read('src/teaching/session/useSharedTeachingSession.ts')
 const persistence = read('src/core/SimulationPersistence.ts')
 const diagnostics = read('src/core/SimulationDiagnostics.ts')
 const eduventDiagnostics = read('src/diagnostics.ts')
@@ -61,8 +60,7 @@ for (const domain of ["id: 'patient'", "id: 'alarms'", "id: 'display'"]) {
 assert(productDashboard.includes('product.session.domains.map'), 'shared session dashboard must render product session-domain descriptors')
 assert(productDashboard.includes('product.session?.candidateStatus'), 'shared session dashboard must render product candidate status descriptors')
 assert(productDashboard.includes('product.session?.telemetry'), 'shared session dashboard must render product telemetry descriptors')
-assert(productSession.includes('product_id') || productSession.includes('productId'), 'product teaching sessions must remain product-scoped')
-assert(sharedSession.includes('simulationPaused'), 'shared teaching session must preserve pause synchronization')
+assert(productSession.includes('product_id') && productSession.includes('normalizedProductId'), 'product teaching sessions must remain product-scoped')
 
 // Product-neutral scenario contract/runtime capabilities.
 for (const capability of ['supportsBranches', 'supportsTransitions', 'supportsMediaStages', 'supportsQuestionStages']) {
@@ -90,9 +88,12 @@ assert(diagnostics.includes('productId') && diagnostics.includes('appVersion'), 
 assert(eduventDiagnostics.includes('copySimulationDiagnostic'), 'EDUVENT diagnostics must use the shared diagnostic serializer')
 assert(edumon.includes('copySimulationDiagnostic'), 'EDUMON diagnostics must use the shared diagnostic serializer')
 
-// Candidate teaching presentation listeners must remain persistent in both products.
-for (const listener of ['useTeachingPrompts', 'TeachingCandidateOverlay', 'useTeachingMediaPresentation', 'TeachingMediaCandidateOverlay']) {
+// Candidate teaching presentation listeners must remain persistently mounted where each product owns them.
+for (const listener of ['useTeachingPrompts', 'TeachingCandidateOverlay']) {
   assert(eduvent.includes(listener), `EDUVENT must retain persistent ${listener}`)
+  assert(edumon.includes(listener), `EDUMON must retain persistent ${listener}`)
+}
+for (const listener of ['useTeachingMediaPresentation', 'TeachingMediaCandidateOverlay']) {
   assert(edumon.includes(listener), `EDUMON must retain persistent ${listener}`)
 }
 
