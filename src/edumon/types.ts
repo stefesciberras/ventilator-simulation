@@ -2,6 +2,7 @@ export type CardiacRhythm =
   | 'sinus'
   | 'sinus-bradycardia'
   | 'sinus-tachycardia'
+  | 'atrial-flutter'
   | 'atrial-fibrillation'
   | 'svt'
   | 'ventricular-tachycardia'

@@ -35,32 +35,86 @@ function effectiveRate(state: MonitorPatientState): number {
   }
 }
 
+/** Monomorphic broad-complex VT with no intervening normal P-QRS-T morphology. */
+function ventricularTachycardiaAtPhase(phase: number): number {
+  const fundamental = Math.sin(TWO_PI * (phase + 0.015))
+  const secondHarmonic = 0.30 * Math.sin(TWO_PI * 2 * (phase - 0.08))
+  const thirdHarmonic = 0.09 * Math.sin(TWO_PI * 3 * (phase + 0.04))
+  return 1.02 * fundamental + secondHarmonic + thirdHarmonic - 0.03
+}
+
+/** Deterministic chaotic VF with slow coarse/fine amplitude and frequency variation. */
+function ventricularFibrillationAtTime(time: number): number {
+  const envelope = clamp(
+    0.68
+      + 0.24 * Math.sin(time * 0.73 + 0.4)
+      + 0.15 * Math.sin(time * 1.31 + 2.1)
+      + 0.08 * Math.sin(time * 2.17 + 0.9),
+    0.26,
+    1.12,
+  )
+  const oscillatorA = 0.58 * Math.sin(time * 18.4 + 0.72 * Math.sin(time * 0.41))
+  const oscillatorB = 0.34 * Math.sin(time * 29.6 + 0.55 * Math.sin(time * 0.67 + 1.2))
+  const oscillatorC = 0.21 * Math.sin(time * 43.1 + 0.44 * Math.sin(time * 0.29 + 2.4))
+  const oscillatorD = 0.10 * Math.sin(time * 57.7 + 0.31 * Math.sin(time * 0.93))
+  return envelope * (oscillatorA + oscillatorB + oscillatorC + oscillatorD)
+}
+
+/** Typical flutter waves near 300/min, independent of the conducted ventricular rate. */
+function atrialFlutterBaseline(time: number): number {
+  const atrialPhase = fract(time * 5)
+  const descendingSaw = 1 - 2 * atrialPhase
+  const rounding = 0.025 * Math.sin(TWO_PI * atrialPhase)
+  return 0.105 * descendingSaw + rounding
+}
+
+function atrialFibrillationBaseline(time: number): number {
+  const envelope = 0.78 + 0.22 * Math.sin(time * 0.84 + 0.7)
+  return envelope * (
+    0.040 * Math.sin(time * 39.5 + 0.35 * Math.sin(time * 0.77))
+    + 0.026 * Math.sin(time * 57.8 + 0.22 * Math.sin(time * 1.13 + 1.4))
+    + 0.014 * Math.sin(time * 73.1 + 2.1)
+  )
+}
+
+function sinusFamilyMorphology(phase: number, state: MonitorPatientState): number {
+  const rate = Math.max(30, effectiveRate(state))
+  const qrsSigma = clamp(0.018 * rate / 60, 0.011, 0.050)
+  const qSigma = clamp(0.010 * rate / 60, 0.007, 0.030)
+  const sSigma = clamp(0.012 * rate / 60, 0.008, 0.035)
+  const pSigma = clamp(0.020 * rate / 60, 0.012, 0.050)
+  const tSigma = clamp(0.050 * rate / 60, 0.035, 0.110)
+  const pAmplitude = state.rhythm === 'sinus-bradycardia' ? 0.16 : state.rhythm === 'sinus-tachycardia' ? 0.11 : 0.14
+  const tAmplitude = state.rhythm === 'sinus-bradycardia' ? 0.34 : state.rhythm === 'sinus-tachycardia' ? 0.26 : 0.31
+
+  return gaussian(phase, 0.12, pSigma, pAmplitude)
+    - gaussian(phase, 0.205, qSigma, 0.16)
+    + gaussian(phase, 0.23, qrsSigma, 1.15)
+    - gaussian(phase, 0.265, sSigma, 0.28)
+    + gaussian(phase, 0.55, tSigma, tAmplitude)
+}
+
+function narrowComplexWithoutP(phase: number, state: MonitorPatientState, tAmplitude = 0.24): number {
+  const rate = Math.max(30, effectiveRate(state))
+  const qrsSigma = clamp(0.014 * rate / 60, 0.010, 0.045)
+  const qSigma = clamp(0.008 * rate / 60, 0.006, 0.026)
+  const sSigma = clamp(0.010 * rate / 60, 0.007, 0.030)
+  const tSigma = clamp(0.042 * rate / 60, 0.030, 0.095)
+  return -gaussian(phase, 0.205, qSigma, 0.14)
+    + gaussian(phase, 0.23, qrsSigma, 1.12)
+    - gaussian(phase, 0.265, sSigma, 0.25)
+    + gaussian(phase, 0.55, tSigma, tAmplitude)
+}
+
 function ecgAtPhase(time: number, state: MonitorPatientState, phase: number): number {
   const rhythm = state.rhythm
   if (rhythm === 'asystole') return 0.012 * Math.sin(time * 10.7)
-  if (rhythm === 'ventricular-fibrillation') {
-    return 0.65 * Math.sin(time * 18.1) + 0.33 * Math.sin(time * 31.7) + 0.17 * Math.sin(time * 47.3)
-  }
-
-  if (rhythm === 'ventricular-tachycardia') {
-    return gaussian(phase, 0.16, 0.055, 1.55)
-      - gaussian(phase, 0.08, 0.035, 0.45)
-      - gaussian(phase, 0.28, 0.07, 0.7)
-      + gaussian(phase, 0.58, 0.12, 0.22)
-  }
-
-  const qrsWidth = rhythm === 'svt' ? 0.018 : 0.022
-  const fibrillatoryBaseline = rhythm === 'atrial-fibrillation'
-    ? 0.055 * Math.sin(time * 42) + 0.028 * Math.sin(time * 67)
-    : 0
-  const pWave = rhythm === 'atrial-fibrillation' || rhythm === 'svt' ? 0 : gaussian(phase, 0.12, 0.025, 0.14)
-
-  return fibrillatoryBaseline
-    + pWave
-    - gaussian(phase, 0.205, 0.012, 0.16)
-    + gaussian(phase, 0.23, qrsWidth, 1.15)
-    - gaussian(phase, 0.265, 0.015, 0.28)
-    + gaussian(phase, 0.55, 0.065, 0.31)
+  if (rhythm === 'ventricular-fibrillation') return ventricularFibrillationAtTime(time)
+  if (rhythm === 'ventricular-tachycardia') return ventricularTachycardiaAtPhase(phase)
+  if (rhythm === 'atrial-flutter') return atrialFlutterBaseline(time) + narrowComplexWithoutP(phase, state, 0.18)
+  if (rhythm === 'atrial-fibrillation') return atrialFibrillationBaseline(time) + narrowComplexWithoutP(phase, state, 0.22)
+  if (rhythm === 'svt') return narrowComplexWithoutP(phase, state, 0.18)
+  return sinusFamilyMorphology(phase, state)
 }
 
 function arterialPulse(phase: number): number {
@@ -129,7 +183,14 @@ function trimPhaseHistory(runtime: MonitorWaveformRuntime, endTime: number): voi
 
 function phaseRateMultiplier(time: number, rhythm: CardiacRhythm): number {
   if (rhythm !== 'atrial-fibrillation') return 1
-  return clamp(1 + 0.18 * Math.sin(time * 2.7) + 0.09 * Math.sin(time * 7.9), 0.62, 1.38)
+  return clamp(
+    1
+      + 0.22 * Math.sin(time * 2.31 + 0.4)
+      + 0.14 * Math.sin(time * 5.73 + 1.7)
+      + 0.07 * Math.sin(time * 11.17 + 2.2),
+    0.48,
+    1.55,
+  )
 }
 
 function generateNextSample(
@@ -160,14 +221,6 @@ function generateNextSample(
   return sample
 }
 
-/**
- * Return the rolling monitor display history up to endTime.
- *
- * Unlike the original implementation, existing samples are never recalculated
- * from the latest patient state. Heart-rate, rhythm, pressure and perfusion
- * changes therefore affect only samples generated after the change while the
- * already-visible waveform scrolls out naturally.
- */
 export function generateMonitorSamples(state: MonitorPatientState, endTime: number, seconds = 8, sampleRate = 100): MonitorSample[] {
   const safeSampleRate = Math.max(1, sampleRate)
   const safeWindowSeconds = Math.max(0.1, seconds)
@@ -192,7 +245,6 @@ export function generateMonitorSamples(state: MonitorPatientState, endTime: numb
   return runtime.history.snapshot()
 }
 
-/** Reset EDUMON's streaming waveform timeline, primarily for future explicit reset/restart flows. */
 export function resetMonitorWaveformHistory(): void {
   waveformRuntime = null
 }
@@ -213,6 +265,7 @@ export const RHYTHM_LABELS: Record<CardiacRhythm, string> = {
   sinus: 'Sinus rhythm',
   'sinus-bradycardia': 'Sinus bradycardia',
   'sinus-tachycardia': 'Sinus tachycardia',
+  'atrial-flutter': 'Atrial flutter',
   'atrial-fibrillation': 'Atrial fibrillation',
   svt: 'SVT',
   'ventricular-tachycardia': 'Ventricular tachycardia',
