@@ -15,7 +15,7 @@ import { SimulationWorkspaceShell } from '../components/SimulationWorkspaceShell
 import { SimulationConsoleShell } from '../components/SimulationConsoleShell'
 import { useSimulationDisplayControls } from '../components/useSimulationDisplayControls'
 import { useScreenWakeLock } from '../useScreenWakeLock'
-import { SharedBasicSessionPanel, useProductTeachingSession } from '../teaching/session'
+import { SharedBasicSessionPanel, ProductCandidateTelemetry, buildProductInstructorDashboard, useProductTeachingSession } from '../teaching/session'
 import { useSharedAlarmController } from '../alarms/useSharedAlarmController'
 import { SharedAlarmBanner } from '../alarms/SharedAlarmBanner'
 import { DEFAULT_EDUMON_ALARM_LIMITS, evaluateEdumonAlarms, type EdumonAlarmLimits } from './alarmDefinitions'
@@ -30,6 +30,8 @@ import { SharedScenarioRuntimePanel } from '../teaching/scenario/SharedScenarioR
 import { useSharedSelfDirectedScenario } from '../teaching/scenario/useSharedSelfDirectedScenario'
 import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import { createSimulationPersistence, type SimulationPersistence } from '../core/SimulationPersistence'
+import { getSimulationProduct } from '../core/products'
+import type { EdumonTeachingState } from './teachingState'
 import './edumon.css'
 import './edumon-console-parity.css'
 
@@ -52,14 +54,6 @@ function loadEdumonAlarmLimits(persistence: SimulationPersistence): EdumonAlarmL
   } catch {
     return { ...DEFAULT_EDUMON_ALARM_LIMITS }
   }
-}
-
-interface EdumonTeachingState {
-  patient: MonitorPatientState
-  patientTransitionSeconds: number
-  simulationPaused: boolean
-  simulationSpeed: EdumonSimulationSpeed
-  alarmLimits: EdumonAlarmLimits
 }
 
 type TraceKey = 'ecg' | 'arterialPressure' | 'pleth'
@@ -311,6 +305,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
   const instructorAuthenticated = Boolean(accountAuth.account)
   const scenarioProduct = scenarioProductForEdumonModule(module.id)
+  const product = getSimulationProduct(scenarioProduct)
   const scenarioLibrary = useProductScenarioLibrary<EdumonStoredScenario>(scenarioProduct, instructorAuthenticated)
   const savedScenarios = scenarioLibrary.items
   const savedScenariosBusy = scenarioLibrary.busy
@@ -445,17 +440,12 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       productId={teachingHost.appId}
       productLabel={module.productName}
       productDescription={module.subtitle}
-      renderCandidateTelemetry={(member) => {
-        const state = (member as typeof teachingSession.members[number]).product_state as EdumonTeachingState | undefined
-        if (!state?.patient) return null
-        const p = state.patient
-        return <div className="candidate-state-grid">
-          <div><span>Rhythm</span><strong>{RHYTHM_LABELS[p.rhythm]}</strong></div>
-          <div><span>HR</span><strong>{Math.round(p.heartRate)}</strong></div>
-          <div><span>ART</span><strong>{Math.round(p.systolicPressure)}/{Math.round(p.diastolicPressure)}</strong></div>
-          <div><span>SpO₂</span><strong>{Math.round(p.spo2)}%</strong></div>
-        </div>
-      }}
+      instructorDashboard={buildProductInstructorDashboard(product, teachingSession.session, {
+        simulationPaused,
+        onSimulationPausedChange: setSimulationPaused,
+        collapseStorageKey: `${product.id}-instructor-dashboard`,
+      })}
+      renderCandidateTelemetry={(member) => <ProductCandidateTelemetry product={product} member={member} />}
       instructorStart={{
         currentTitle: `${RHYTHM_LABELS[patientState.rhythm]} · HR ${patientState.heartRate} · ${patientState.systolicPressure}/${patientState.diastolicPressure} · SpO₂ ${patientState.spo2}%`,
         currentSummary: 'Configure the patient monitor in standalone mode before opening the room.',
