@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { MonitorPatientState } from './types'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
@@ -50,6 +50,13 @@ export function EdumonWorkspacePanel({
   const [tab, setTab] = useState<EdumonControlTab>('patient')
   const [profile, setProfile] = useState<EdumonPatientProfile>('Awake')
   const [pressuresCoupled, setPressuresCoupled] = useState(false)
+  const [showInvasiveBloodPressure, setShowInvasiveBloodPressure] = useState(true)
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.setAttribute('data-edumon-invasive-bp-visible', showInvasiveBloodPressure ? 'true' : 'false')
+    return () => root.removeAttribute('data-edumon-invasive-bp-visible')
+  }, [showInvasiveBloodPressure])
 
   const applyProfile = (nextProfile: EdumonPatientProfile) => {
     if (controlsLocked) return
@@ -146,10 +153,16 @@ export function EdumonWorkspacePanel({
             </label>
           )}
           <label className="edumon-signal-control edumon-signal-ecg"><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input disabled={controlsLocked} type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => updatePatient({ heartRate: Number(event.target.value) })} /></label>
-          <label className="edumon-pressure-coupling edumon-signal-control edumon-signal-art">
-            <input disabled={controlsLocked} type="checkbox" checked={pressuresCoupled} onChange={(event) => setPressuresCoupled(event.target.checked)} />
-            <span>Couple pressures <b>30% linked</b></span>
-          </label>
+          <div className="edumon-art-options" aria-label="Arterial pressure options">
+            <label className="edumon-inline-checkbox edumon-signal-control edumon-signal-art">
+              <input disabled={controlsLocked} type="checkbox" checked={pressuresCoupled} onChange={(event) => setPressuresCoupled(event.target.checked)} />
+              <span>Couple pressures</span>
+            </label>
+            <label className="edumon-inline-checkbox edumon-signal-control edumon-signal-art">
+              <input disabled={controlsLocked} type="checkbox" checked={showInvasiveBloodPressure} onChange={(event) => setShowInvasiveBloodPressure(event.target.checked)} />
+              <span>Show invasive blood pressure</span>
+            </label>
+          </div>
           <label className="edumon-signal-control edumon-signal-art"><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => updateSystolicPressure(Number(event.target.value))} /></label>
           <label className="edumon-signal-control edumon-signal-art"><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => updateDiastolicPressure(Number(event.target.value))} /></label>
           <label className="edumon-signal-control edumon-signal-spo2"><span>SpO₂ <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
