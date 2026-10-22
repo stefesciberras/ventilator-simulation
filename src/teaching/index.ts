@@ -1,3 +1,5 @@
+import './laser-interaction.css'
+
 export * from './types'
 export * from './useTeachingInteractions'
 export * from './TeachingWorkspace'
