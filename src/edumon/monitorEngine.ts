@@ -25,7 +25,7 @@ interface BeatMeasurement {
   systolic: number
   diastolic: number
   mean: number
-  spo2: number
+  spo2: number | null
 }
 
 interface MonitorWaveformRuntime {
@@ -103,6 +103,23 @@ function effectiveBloodPressure(state: MonitorPatientState, rhythm: CardiacRhyth
   const diastolic = state.diastolicPressure
   const mean = diastolic + (systolic - diastolic) / 3
   return { systolic, diastolic, mean }
+}
+
+function beatSystolicPressure(state: MonitorPatientState, rhythm: CardiacRhythm, pulseAmplitude: number): number {
+  const pressure = effectiveBloodPressure(state, rhythm)
+  return pressure.diastolic + (pressure.systolic - pressure.diastolic) * pulseAmplitude
+}
+
+function spo2ForSystolic(targetSpo2: number, systolic: number): number | null {
+  if (systolic < 70) return null
+  const hypotensionPenalty = systolic < 80 ? (80 - systolic) * 0.8 : 0
+  return clamp(targetSpo2 - hypotensionPenalty, 0, 100)
+}
+
+function plethPerfusionFactor(systolic: number): number {
+  if (systolic < 70) return 0
+  if (systolic >= 80) return 1
+  return clamp((systolic - 70) / 10, 0, 1)
 }
 
 function ventricularTachycardiaAtPhase(phase: number): number {
@@ -215,7 +232,8 @@ function plethPulse(phase: number): number {
 
 function plethAtPhase(state: MonitorPatientState, phase: number, rhythm: CardiacRhythm, pulseAmplitude = 1): number {
   if (rhythm === 'asystole' || rhythm === 'ventricular-fibrillation') return 0
-  return plethPulse(phase) * clamp(state.peripheralPerfusion, 0, 1) * pulseAmplitude
+  const systolic = beatSystolicPressure(state, rhythm, pulseAmplitude)
+  return plethPulse(phase) * clamp(state.peripheralPerfusion, 0, 1) * pulseAmplitude * plethPerfusionFactor(systolic)
 }
 
 function createWaveformRuntime(windowSeconds: number, sampleRate: number): MonitorWaveformRuntime {
@@ -252,10 +270,11 @@ function recordBeat(runtime: MonitorWaveformRuntime, state: MonitorPatientState,
   runtime.lastBeatTime = time
   const pressure = effectiveBloodPressure(state, rhythm)
   const diastolic = pressure.diastolic
-  const systolic = diastolic + (pressure.systolic - diastolic) * pulseAmplitude
+  const systolic = beatSystolicPressure(state, rhythm, pulseAmplitude)
   const mean = diastolic + (systolic - diastolic) / 3
   const perfusionNoise = (beatRandom(runtime.beatIndex + 101, rhythm) - 0.5) * (0.35 + (1 - clamp(state.peripheralPerfusion, 0, 1)) * 0.9)
-  runtime.beatHistory.push({ time, rrSeconds, instantaneousRate: 60 / rrSeconds, pulseAmplitude, systolic, diastolic, mean, spo2: clamp(state.spo2 + perfusionNoise, 0, 100) })
+  const perfusionSpo2 = spo2ForSystolic(state.spo2, systolic)
+  runtime.beatHistory.push({ time, rrSeconds, instantaneousRate: 60 / rrSeconds, pulseAmplitude, systolic, diastolic, mean, spo2: perfusionSpo2 == null ? null : clamp(perfusionSpo2 + perfusionNoise, 0, 100) })
 }
 
 function generateNextSample(runtime: MonitorWaveformRuntime, state: MonitorPatientState, time: number, deltaTime: number): MonitorSample {
@@ -323,14 +342,16 @@ export function measurementsFor(state: MonitorPatientState): MonitorMeasurements
   const beats = runtime?.beatHistory ?? []
   const latestBeat = beats.length ? beats[beats.length - 1] : null
   const hrBeats = beats.filter((beat) => beat.time >= now - 60)
-  const spo2Beats = beats.filter((beat) => beat.time >= now - 30)
+  const spo2Beats = beats.filter((beat) => beat.time >= now - 30 && beat.spo2 != null)
   const pressure = effectiveBloodPressure(state)
+  const currentSystolic = latestBeat?.systolic ?? pressure.systolic
+  const fallbackSpo2 = spo2ForSystolic(state.spo2, currentSystolic)
   return {
     heartRate: Math.round(average(hrBeats.map((beat) => beat.instantaneousRate)) ?? effectiveRate(state)),
-    systolicPressure: Math.round(latestBeat?.systolic ?? pressure.systolic),
+    systolicPressure: Math.round(currentSystolic),
     diastolicPressure: Math.round(latestBeat?.diastolic ?? pressure.diastolic),
     meanPressure: Math.round(latestBeat?.mean ?? pressure.mean),
-    spo2: Math.round(average(spo2Beats.map((beat) => beat.spo2)) ?? clamp(state.spo2, 0, 100)),
+    spo2: currentSystolic < 70 ? null : Math.round(average(spo2Beats.map((beat) => beat.spo2 as number)) ?? fallbackSpo2 ?? clamp(state.spo2, 0, 100)),
   }
 }
 
