@@ -31,6 +31,50 @@ export interface SimulationProductAlarmDefinition {
   priority?: 'warning' | 'critical'
 }
 
+export interface SimulationProductSessionSwitchDefinition {
+  id: string
+  label: string
+  checked: (session: unknown) => boolean
+  disabled?: (session: unknown) => boolean
+  emphasis?: boolean
+  /** Missing patch means this row is informative/read-only for this transport. */
+  patch?: (checked: boolean) => unknown
+}
+
+export interface SimulationProductSessionDomainDefinition {
+  id: string
+  title: string
+  status: (session: unknown) => string
+  active?: (session: unknown) => boolean
+  rows: readonly SimulationProductSessionSwitchDefinition[]
+}
+
+export interface SimulationProductCandidateStatusDefinition {
+  id: string
+  text: (session: unknown) => string
+  state?: (session: unknown) => 'locked' | 'available'
+}
+
+export interface SimulationProductTelemetryDefinition {
+  id: string
+  label: string
+  value: (member: unknown) => string
+}
+
+export interface SimulationProductSessionContract {
+  domains: readonly SimulationProductSessionDomainDefinition[]
+  candidateStatus?: readonly SimulationProductCandidateStatusDefinition[]
+  telemetry?: readonly SimulationProductTelemetryDefinition[]
+}
+
+export interface SimulationProductScenarioContract {
+  productId: SimulationProductId
+  supportsBranches: boolean
+  supportsTransitions: boolean
+  supportsMediaStages: boolean
+  supportsQuestionStages: boolean
+}
+
 export interface SimulationProductAdapter<TPatient = unknown, TDevice = unknown, TAlarmLimits = unknown> {
   id: SimulationProductId
   family: 'EDUVENT' | 'EDUMON'
@@ -41,6 +85,10 @@ export interface SimulationProductAdapter<TPatient = unknown, TDevice = unknown,
   controlTabs: readonly SimulationProductControlTabDefinition[]
   secondaryDisplays: readonly SimulationProductSecondaryDisplayDefinition[]
   alarmDefinitions: readonly SimulationProductAlarmDefinition[]
+  /** Functional live-session contract consumed by shared EDUSIM session UI. */
+  session?: SimulationProductSessionContract
+  /** Product scenario capabilities consumed by builder/runtime surfaces. */
+  scenario?: SimulationProductScenarioContract
   defaultPatientState?: TPatient
   defaultDeviceState?: TDevice
   defaultAlarmLimits?: TAlarmLimits
