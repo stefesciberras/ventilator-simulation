@@ -30,6 +30,7 @@ import { SharedScenarioRuntimePanel } from '../teaching/scenario/SharedScenarioR
 import { useSharedSelfDirectedScenario } from '../teaching/scenario/useSharedSelfDirectedScenario'
 import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import { createSimulationPersistence, type SimulationPersistence } from '../core/SimulationPersistence'
+import { copySimulationDiagnostic } from '../core/SimulationDiagnostics'
 import { getSimulationProduct } from '../core/products'
 import type { EdumonTeachingState } from './teachingState'
 import './edumon.css'
@@ -468,10 +469,31 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const silenceAlarm = (durationMs: number) => alarmController.silenceFor(durationMs)
 
   const copyEdumonMonitorDiagnostics = async () => {
-    await navigator.clipboard.writeText(JSON.stringify({ product: module.productName, simulationTime: elapsed, patient: patientState, measurements, simulationPaused, simulationSpeed }, null, 2))
+    await copySimulationDiagnostic<MonitorSample>({
+      productId,
+      productLabel: module.productName,
+      appVersion: EDUMON_APP_VERSION,
+      kind: 'monitor-state',
+      payload: { simulationTime: elapsed, patient: patientState, measurements, simulationPaused, simulationSpeed },
+      waveform: {
+        source: frozenSamples ? 'frozen' : 'live',
+        sampleIntervalSeconds: 1 / SAMPLE_RATE,
+        samples,
+        columns: ['time', 'ecg', 'arterialPressure', 'pleth'],
+        units: { time: 's', ecg: 'mV', arterialPressure: 'mmHg', pleth: 'relative' },
+        sampleTimeSeconds: (sample) => sample.time,
+        serializeSample: (sample) => [sample.time, sample.ecg, sample.arterialPressure, sample.pleth],
+      },
+    })
   }
   const copyEdumonSessionDiagnostics = async () => {
-    await navigator.clipboard.writeText(JSON.stringify({ product: module.productName, role: teachingSession.role, session: teachingSession.session, members: teachingSession.members, scenarioRuntime: scenarioRuntime.runtimeSnapshot }, null, 2))
+    await copySimulationDiagnostic({
+      productId,
+      productLabel: module.productName,
+      appVersion: EDUMON_APP_VERSION,
+      kind: 'session-scenario-state',
+      payload: { role: teachingSession.role, session: teachingSession.session, members: teachingSession.members, scenarioRuntime: scenarioRuntime.runtimeSnapshot },
+    })
   }
   const edumonDiagnosticActions: SimulationDiagnosticAction[] = [
     { id: 'monitor', label: 'Monitor State', description: 'Patient settings, measurements and timing', onSelect: copyEdumonMonitorDiagnostics },
