@@ -1,0 +1,22 @@
+name: Audit diagnostics cleanup
+
+on:
+  push:
+    branches: [refactor/diagnostics-legacy-cleanup-final2]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit legacy references
+        run: |
+          for term in CandidateInvitation SessionPanel InstructorLiveRoom DynamicScenarioBuilder DynamicScenarioRuntimeLibrary; do
+            echo "===== $term ====="
+            rg -n "$term" src || true
+          done
+          echo "===== diagnostics ====="
+          rg -n "copyEdumonMonitorDiagnostics|copyEdumonSessionDiagnostics|SimulationDiagnostics" src || true
