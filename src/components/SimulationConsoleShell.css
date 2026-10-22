@@ -64,6 +64,22 @@
   flex-direction: column;
 }
 
+/* Alarm dialogs currently render inside each product display tree. Promote the
+   shared display stacking context while one is open so device-header controls
+   such as EDUVENT's mode selector can never render above the modal. */
+.simulation-console-shell:has(.alarm-dialog-backdrop) .simulation-console-display {
+  overflow: visible;
+  z-index: 1000;
+}
+
+.simulation-console-shell:has(.alarm-dialog-backdrop) .simulation-console-header,
+.simulation-console-shell:has(.alarm-dialog-backdrop) .simulation-console-hardware,
+.simulation-console-shell:has(.alarm-dialog-backdrop) .simulation-console-status,
+.simulation-console-shell:has(.alarm-dialog-backdrop) .simulation-console-footer {
+  position: relative;
+  z-index: 0;
+}
+
 .simulation-console-display > .screen-body,
 .simulation-console-display > .edumon-monitor-body {
   flex: 1 1 auto;

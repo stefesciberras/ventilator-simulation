@@ -3,8 +3,18 @@
   align-items: stretch;
 }
 
+/* Shared EDUSIM alarm-modal frame. Products supply the clinical cards and
+   definitions; core owns viewport placement, dimensions and responsive shape. */
+.shared-alarm-limits-backdrop {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: 10000;
+}
+
 .shared-alarm-limits-dialog {
-  width: min(760px, calc(100vw - 24px));
+  width: min(900px, calc(100vw - 24px));
   max-height: min(720px, calc(100dvh - 24px));
   overflow: auto;
 }
@@ -46,60 +56,32 @@
   margin: 6px 0 0;
 }
 
+/* `contained` is retained as a compatibility flag for product callers, but the
+   visible modal frame now follows the same viewport-level shell as EDUVENT. */
 .shared-alarm-limits-backdrop.contained {
-  position: absolute;
+  position: fixed;
   inset: 0;
   width: auto;
   height: auto;
-  z-index: 40;
+  z-index: 10000;
 }
 
 .shared-alarm-limits-backdrop.contained .shared-alarm-limits-dialog {
-  max-width: calc(100% - 24px);
-  max-height: calc(100% - 24px);
+  max-width: calc(100vw - 24px);
+  max-height: min(720px, calc(100dvh - 24px));
+}
+
+@media (max-width: 760px) {
+  .shared-alarm-limits-dialog,
+  .shared-alarm-limits-backdrop.contained .shared-alarm-limits-dialog {
+    width: min(96vw, 760px);
+    max-width: min(96vw, 760px);
+    max-height: min(82dvh, 720px);
+  }
 }
 
 @media (max-width: 640px) {
   .shared-alarm-limits-grid {
     grid-template-columns: repeat(3, minmax(110px, 1fr));
-  }
-
-  .shared-alarm-limits-dialog {
-    width: calc(100vw - 12px);
-  }
-
-  /* A contained monitor dialog becomes a true viewport modal on mobile.
-     This matches EDUVENT and avoids forcing the monitor page itself to scroll. */
-  .shared-alarm-limits-backdrop.contained {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100dvh;
-    padding: 0;
-    z-index: 120;
-  }
-
-  .shared-alarm-limits-backdrop.contained .shared-alarm-limits-dialog {
-    width: 100vw;
-    height: 100dvh;
-    max-width: none;
-    max-height: none;
-    margin: 0;
-    padding: max(14px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-    border: 0;
-    border-radius: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .shared-alarm-limits-backdrop.contained .shared-alarm-limits-grid {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .shared-alarm-limits-backdrop.contained .alarm-dialog-done {
-    flex: 0 0 auto;
   }
 }
