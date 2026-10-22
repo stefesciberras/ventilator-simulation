@@ -1,3 +1,7 @@
+.edumon-control-strip {
+  position: relative;
+}
+
 .edumon-control-strip > button[title*='NIBP'] {
   display: none;
 }
