@@ -16,10 +16,6 @@ function ScenarioIcon() {
   )
 }
 
-function MenuIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></svg>
-}
-
 interface EdumonTopBarProps {
   module: EdumonModuleDefinition
   simulationPaused: boolean
@@ -30,23 +26,23 @@ interface EdumonTopBarProps {
   simulationControlsLocked?: boolean
   onScenario: () => void
   accountAction: ReactNode
+  settingsAction: ReactNode
   diagnosticsAction: ReactNode
   onAbout: () => void
 }
 
-export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, diagnosticsAction, onAbout }: EdumonTopBarProps) {
+export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, settingsAction, diagnosticsAction, onAbout }: EdumonTopBarProps) {
   return (
     <SimulationTopBar
       brandKicker={module.productName}
       title={module.subtitle}
-      brandLeading={<a href="/edumon" className="edumon-topbar-back" aria-label="Choose EDUMON module">‹</a>}
       simulationPaused={simulationPaused}
       simulationSpeed={simulationSpeed}
       elapsedSeconds={elapsedSeconds}
       onPausedChange={onPausedChange}
       onSpeedChange={onSpeedChange}
       controlsControlledByInstructor={simulationControlsLocked}
-      rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button><a className="top-account-button edumon-module-menu-button" href="/edumon" title="EDUMON modules" aria-label="Choose EDUMON module"><MenuIcon /></a>{diagnosticsAction}</>}
+      rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button>{settingsAction}{diagnosticsAction}</>}
       statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
       version={EDUMON_APP_VERSION}
       onAbout={onAbout}
