@@ -3,6 +3,7 @@ import type { MonitorPatientState } from './types'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
+import { EdumonNibpControl } from './EdumonNibpControl'
 import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
 import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
 import './edumon-rhythm-control.css'
@@ -203,7 +204,7 @@ export function EdumonWorkspacePanel({
     },
   ]
 
-  return (
+  return <>
     <SimulationControlFramework
       activeTab={tab}
       tabs={tabs}
@@ -215,5 +216,6 @@ export function EdumonWorkspacePanel({
       bodyClassName="edumon-side-panel-body"
       profileClassName="edumon-profile-strip"
     />
-  )
+    <EdumonNibpControl patientState={patientState} />
+  </>
 }
