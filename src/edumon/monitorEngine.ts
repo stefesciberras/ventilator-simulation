@@ -14,6 +14,7 @@ interface CardiacPhaseHistorySample {
   time: number
   phase: number
   rhythm: CardiacRhythm
+  pulseAmplitude: number
 }
 
 interface MonitorWaveformRuntime {
@@ -23,6 +24,10 @@ interface MonitorWaveformRuntime {
   lastGeneratedTime: number | null
   windowSeconds: number
   sampleRate: number
+  beatIndex: number
+  rateScale: number
+  pulseAmplitude: number
+  lastRhythm: CardiacRhythm | null
 }
 
 interface EffectiveBloodPressure {
@@ -43,6 +48,31 @@ function effectiveRate(state: MonitorPatientState): number {
     case 'asystole': return 0
     default: return clamp(state.heartRate, 30, 220)
   }
+}
+
+function isIrregularAtrialRhythm(rhythm: CardiacRhythm): boolean {
+  return rhythm === 'atrial-fibrillation' || rhythm === 'atrial-flutter'
+}
+
+/** Deterministic beat-to-beat pseudo-random value in the range 0..1. */
+function beatRandom(index: number, rhythm: CardiacRhythm): number {
+  const salt = rhythm === 'atrial-flutter' ? 17.41 : 29.73
+  return fract(Math.sin((index + 1) * 12.9898 + salt) * 43758.5453)
+}
+
+/** AF/flutter ventricular rate varies independently by ±10% around the set HR. */
+function irregularRateScale(index: number, rhythm: CardiacRhythm): number {
+  return 0.9 + 0.2 * beatRandom(index, rhythm)
+}
+
+/**
+ * Pulse amplitude follows the filling interval that preceded the beat. A short
+ * RR interval produces less ventricular filling and therefore a smaller ART
+ * pulse and pleth pulse; a longer interval produces the converse.
+ */
+function pulseAmplitudeFromRateScale(rateScale: number): number {
+  const rrRatio = 1 / Math.max(0.1, rateScale)
+  return clamp(1 + (rrRatio - 1) * 1.8, 0.80, 1.18)
 }
 
 /**
@@ -142,18 +172,11 @@ function narrowComplexWithoutP(phase: number, state: MonitorPatientState, tAmpli
 }
 
 function stJunctionWindow(phase: number): number {
-  // Begin at the terminal S/J point rather than after the QRS has returned to
-  // baseline. This keeps ST shifts anatomically continuous with the QRS.
   const rise = smoothstep(0.265, 0.300, phase)
   const fall = 1 - smoothstep(0.455, 0.525, phase)
   return rise * fall
 }
 
-/**
- * Apply an ECG morphology overlay to organized rhythms. Severity is 0..100.
- * Existing samples are already committed to rolling history, so morphology
- * changes affect only samples generated after the control change.
- */
 function applyEcgMorphology(base: number, phase: number, state: MonitorPatientState): number {
   const morphology = state.ecgMorphology ?? 'nil'
   if (morphology === 'nil') return base
@@ -163,8 +186,6 @@ function applyEcgMorphology(base: number, phase: number, state: MonitorPatientSt
   if (severity <= 0) return base
 
   if (morphology === 'ischaemia') {
-    // Subendocardial ischaemia: J-point/ST depression with a mildly downsloping
-    // segment, progressing from T-wave flattening to symmetric T inversion.
     const stSlope = 0.88 + 0.12 * smoothstep(0.31, 0.46, phase)
     const depression = 0.32 * severity * stJunctionWindow(phase) * stSlope
     const tInversion = gaussian(phase, 0.55, 0.075, 0.56 * severity)
@@ -172,9 +193,6 @@ function applyEcgMorphology(base: number, phase: number, state: MonitorPatientSt
   }
 
   if (morphology === 'infarction') {
-    // Acute transmural injury: lift the terminal S/J point itself so the trace
-    // does not return to baseline before ST elevation. The elevated segment
-    // then blends into a broad hyperacute T wave.
     const jPointLift = gaussian(phase, 0.292, 0.036, 0.24 * severity)
     const stElevation = 0.40 * severity * stJunctionWindow(phase)
     const convexShoulder = gaussian(phase, 0.405, 0.095, 0.12 * severity)
@@ -217,11 +235,11 @@ function arterialPulse(phase: number): number {
   return 0.48 * Math.exp(-(phase - 0.42) * 4.1)
 }
 
-function arterialAtPhase(state: MonitorPatientState, phase: number, rhythm: CardiacRhythm): number {
+function arterialAtPhase(state: MonitorPatientState, phase: number, rhythm: CardiacRhythm, pulseAmplitude = 1): number {
   const pressure = effectiveBloodPressure(state, rhythm)
   if (rhythm === 'asystole' || rhythm === 'ventricular-fibrillation') return Math.max(0, pressure.mean * 0.34)
   const pulse = arterialPulse(phase)
-  return pressure.diastolic + (pressure.systolic - pressure.diastolic) * pulse
+  return pressure.diastolic + (pressure.systolic - pressure.diastolic) * pulse * pulseAmplitude
 }
 
 function plethPulse(phase: number): number {
@@ -231,10 +249,10 @@ function plethPulse(phase: number): number {
   return Math.max(0, primary + notch + rebound)
 }
 
-function plethAtPhase(state: MonitorPatientState, phase: number, rhythm: CardiacRhythm): number {
+function plethAtPhase(state: MonitorPatientState, phase: number, rhythm: CardiacRhythm, pulseAmplitude = 1): number {
   if (rhythm === 'asystole' || rhythm === 'ventricular-fibrillation') return 0
   const perfusion = clamp(state.peripheralPerfusion, 0, 1)
-  return plethPulse(phase) * perfusion
+  return plethPulse(phase) * perfusion * pulseAmplitude
 }
 
 function createWaveformRuntime(windowSeconds: number, sampleRate: number): MonitorWaveformRuntime {
@@ -245,6 +263,10 @@ function createWaveformRuntime(windowSeconds: number, sampleRate: number): Monit
     lastGeneratedTime: null,
     windowSeconds,
     sampleRate,
+    beatIndex: 0,
+    rateScale: 1,
+    pulseAmplitude: 1,
+    lastRhythm: null,
   }
 }
 
@@ -272,42 +294,68 @@ function trimPhaseHistory(runtime: MonitorWaveformRuntime, endTime: number): voi
   if (first > 0) runtime.phaseHistory.splice(0, first)
 }
 
-function phaseRateMultiplier(time: number, rhythm: CardiacRhythm): number {
-  if (rhythm !== 'atrial-fibrillation') return 1
-  return clamp(
-    1
-      + 0.22 * Math.sin(time * 2.31 + 0.4)
-      + 0.14 * Math.sin(time * 5.73 + 1.7)
-      + 0.07 * Math.sin(time * 11.17 + 2.2),
-    0.48,
-    1.55,
-  )
-}
-
 function generateNextSample(
   runtime: MonitorWaveformRuntime,
   state: MonitorPatientState,
   time: number,
   deltaTime: number,
 ): MonitorSample {
-  const currentPhase = runtime.phase
   const currentRhythm = state.rhythm
-  runtime.phaseHistory.push({ time, phase: currentPhase, rhythm: currentRhythm })
+  const irregular = isIrregularAtrialRhythm(currentRhythm)
 
-  const arterialPhase = delayedPhase(runtime, time - 0.16) ?? { time, phase: currentPhase, rhythm: currentRhythm }
-  const plethPhase = delayedPhase(runtime, time - 0.29) ?? { time, phase: currentPhase, rhythm: currentRhythm }
+  if (runtime.lastRhythm !== currentRhythm) {
+    runtime.lastRhythm = currentRhythm
+    runtime.pulseAmplitude = 1
+    runtime.rateScale = irregular ? irregularRateScale(runtime.beatIndex, currentRhythm) : 1
+  }
+
+  const currentPhase = runtime.phase
+  runtime.phaseHistory.push({
+    time,
+    phase: currentPhase,
+    rhythm: currentRhythm,
+    pulseAmplitude: runtime.pulseAmplitude,
+  })
+
+  const arterialPhase = delayedPhase(runtime, time - 0.16) ?? {
+    time,
+    phase: currentPhase,
+    rhythm: currentRhythm,
+    pulseAmplitude: runtime.pulseAmplitude,
+  }
+  const plethPhase = delayedPhase(runtime, time - 0.29) ?? {
+    time,
+    phase: currentPhase,
+    rhythm: currentRhythm,
+    pulseAmplitude: runtime.pulseAmplitude,
+  }
 
   const sample: MonitorSample = {
     time,
     ecg: ecgAtPhase(time, state, currentPhase),
-    arterialPressure: arterialAtPhase(state, arterialPhase.phase, arterialPhase.rhythm),
-    pleth: plethAtPhase(state, plethPhase.phase, plethPhase.rhythm),
+    arterialPressure: arterialAtPhase(state, arterialPhase.phase, arterialPhase.rhythm, arterialPhase.pulseAmplitude),
+    pleth: plethAtPhase(state, plethPhase.phase, plethPhase.rhythm, plethPhase.pulseAmplitude),
   }
 
   const rate = effectiveRate(state)
   if (rate > 0) {
-    runtime.phase = fract(runtime.phase + (rate / 60) * deltaTime * phaseRateMultiplier(time, currentRhythm))
+    const rateScale = irregular ? runtime.rateScale : 1
+    const nextPhase = runtime.phase + (rate / 60) * deltaTime * rateScale
+    if (nextPhase >= 1) {
+      runtime.phase = fract(nextPhase)
+      if (irregular) {
+        runtime.pulseAmplitude = pulseAmplitudeFromRateScale(runtime.rateScale)
+        runtime.beatIndex += 1
+        runtime.rateScale = irregularRateScale(runtime.beatIndex, currentRhythm)
+      } else {
+        runtime.pulseAmplitude = 1
+        runtime.rateScale = 1
+      }
+    } else {
+      runtime.phase = nextPhase
+    }
   }
+
   trimPhaseHistory(runtime, time)
   return sample
 }
