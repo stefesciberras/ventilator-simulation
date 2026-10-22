@@ -29,6 +29,7 @@ const transition = read('src/components/SimulationTransitionTimeControl.tsx')
 const displayControls = read('src/components/useSimulationDisplayControls.ts')
 const mobileWorkspace = read('src/components/mobileWorkspaceRuntime.ts')
 const laserInteractionCss = read('src/teaching/laser-interaction.css')
+const mediaLaser = read('src/teaching/TeachingMediaLaser.tsx')
 
 // Existing shared shell / UI ownership regression checks.
 assert(eduvent.includes('<SimulationControlFramework'), 'EDUVENT must use SimulationControlFramework')
@@ -73,8 +74,10 @@ for (const productRuntime of [eduventScenarioRuntime, edumonScenarioAdapter]) {
 assert(displayControls.includes("const sharedTeachingLaser = role === 'instructor' && Boolean(sessionId)"), 'laser freeze must be scoped to an active instructor session')
 assert(displayControls.includes('if (next && sharedTeachingLaser && !frozen)'), 'standalone laser must not force a local waveform freeze')
 assert(mobileWorkspace.includes('isSwipeBlockedTouch'), 'mobile workspace swipes must detect protected interaction surfaces from touch coordinates')
+assert(mobileWorkspace.includes('isWorkspaceLaserActive'), 'mobile workspace swipes must be fully disabled while the display laser is active')
 assert(mobileWorkspace.includes('.teaching-laser-layer-active'), 'mobile workspace swipes must ignore active simulator laser interactions')
 assert(mobileWorkspace.includes('.teaching-media-laser-stage'), 'mobile workspace swipes must ignore teaching media laser interactions')
+assert(mediaLaser.includes('data-edusim-block-workspace-swipe="true"'), 'teaching media laser stage must explicitly block workspace swipe recognition')
 assert(laserInteractionCss.includes('.teaching-laser-exit'), 'legacy laser exit affordance must remain hidden')
 
 // Shared persistence and diagnostics infrastructure with product-owned payloads.
