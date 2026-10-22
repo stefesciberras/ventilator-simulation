@@ -204,18 +204,20 @@ export function EdumonWorkspacePanel({
     },
   ]
 
-  return <>
-    <SimulationControlFramework
-      activeTab={tab}
-      tabs={tabs}
-      onTabChange={setTab}
-      profiles={profiles}
-      ariaLabel="EDUMON controls"
-      className="edumon-side-panel"
-      tabsClassName="edumon-control-tabs"
-      bodyClassName="edumon-side-panel-body"
-      profileClassName="edumon-profile-strip"
-    />
-    <EdumonNibpControl patientState={patientState} />
-  </>
+  return (
+    <>
+      <EdumonNibpControl patientState={patientState} />
+      <SimulationControlFramework
+        activeTab={tab}
+        tabs={tabs}
+        onTabChange={setTab}
+        profiles={profiles}
+        ariaLabel="EDUMON controls"
+        className="edumon-side-panel"
+        tabsClassName="edumon-control-tabs"
+        bodyClassName="edumon-side-panel-body"
+        profileClassName="edumon-profile-strip"
+      />
+    </>
+  )
 }
