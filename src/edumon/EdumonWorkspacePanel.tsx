@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { MonitorPatientState } from './types'
-import { RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
+import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
@@ -11,9 +11,9 @@ export type EdumonControlTab = 'actions' | 'patient' | 'physio' | 'teaching'
 export type EdumonPatientProfile = 'Awake' | 'Asleep' | 'Paediatric'
 
 export const EDUMON_PATIENT_PROFILES: Record<EdumonPatientProfile, MonitorPatientState> = {
-  Awake: { heartRate: 78, rhythm: 'sinus', systolicPressure: 122, diastolicPressure: 68, spo2: 98, peripheralPerfusion: 1 },
-  Asleep: { heartRate: 62, rhythm: 'sinus', systolicPressure: 105, diastolicPressure: 60, spo2: 99, peripheralPerfusion: 0.9 },
-  Paediatric: { heartRate: 110, rhythm: 'sinus', systolicPressure: 95, diastolicPressure: 55, spo2: 99, peripheralPerfusion: 1 },
+  Awake: { heartRate: 78, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 122, diastolicPressure: 68, spo2: 98, peripheralPerfusion: 1 },
+  Asleep: { heartRate: 62, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 105, diastolicPressure: 60, spo2: 99, peripheralPerfusion: 0.9 },
+  Paediatric: { heartRate: 110, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 95, diastolicPressure: 55, spo2: 99, peripheralPerfusion: 1 },
 }
 
 interface EdumonWorkspacePanelProps {
@@ -68,6 +68,9 @@ export function EdumonWorkspacePanel({
     onPatientStateChange({ ...patientState, ...patch })
   }
 
+  const morphology = patientState.ecgMorphology ?? 'nil'
+  const morphologySeverity = patientState.morphologySeverity ?? 50
+
   const profiles: Array<SimulationControlProfileDefinition<EdumonPatientProfile>> = (Object.keys(EDUMON_PATIENT_PROFILES) as EdumonPatientProfile[]).map((candidate) => ({
     id: candidate,
     label: candidate,
@@ -90,12 +93,24 @@ export function EdumonWorkspacePanel({
           <div className="patient-transition-control">
             <SimulationTransitionTimeControl value={transitionSeconds} onChange={onTransitionSecondsChange} disabled={controlsLocked} showValue={false} />
           </div>
-          <label className="edumon-rhythm-control">
+          <label className="edumon-select-control">
             <span>Rhythm <b>{RHYTHM_LABELS[patientState.rhythm]}</b></span>
             <select disabled={controlsLocked} value={patientState.rhythm} onChange={(event) => updateRhythm(event.target.value as MonitorPatientState['rhythm'])}>
               {RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}
             </select>
           </label>
+          <label className="edumon-select-control">
+            <span>Morphology <b>{ECG_MORPHOLOGY_LABELS[morphology]}</b></span>
+            <select disabled={controlsLocked} value={morphology} onChange={(event) => updatePatient({ ecgMorphology: event.target.value as MonitorPatientState['ecgMorphology'] })}>
+              {ECG_MORPHOLOGIES.map((candidate) => <option key={candidate} value={candidate}>{ECG_MORPHOLOGY_LABELS[candidate]}</option>)}
+            </select>
+          </label>
+          {morphology !== 'nil' && (
+            <label className="edumon-morphology-severity">
+              <span>Severity <b>{Math.round(morphologySeverity)}%</b></span>
+              <input disabled={controlsLocked} type="range" min="0" max="100" step="1" value={morphologySeverity} onChange={(event) => updatePatient({ morphologySeverity: Number(event.target.value) })} />
+            </label>
+          )}
           <label><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input disabled={controlsLocked} type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => updatePatient({ heartRate: Number(event.target.value) })} /></label>
           <label><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => updatePatient({ systolicPressure: Number(event.target.value) })} /></label>
           <label><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => updatePatient({ diastolicPressure: Number(event.target.value) })} /></label>

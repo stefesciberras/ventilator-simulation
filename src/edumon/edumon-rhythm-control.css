@@ -1,4 +1,4 @@
-.edumon-rhythm-control select {
+.edumon-select-control select {
   width: 100%;
   min-height: 38px;
   padding: 7px 10px;
@@ -10,9 +10,18 @@
   outline: none;
 }
 
-.edumon-rhythm-control select:focus {
+.edumon-select-control select:focus {
   border-color: #5cc6e9;
   box-shadow: 0 0 0 2px rgba(92, 198, 233, .12);
+}
+
+.edumon-morphology-severity {
+  animation: edumon-morphology-severity-in 120ms ease-out;
+}
+
+@keyframes edumon-morphology-severity-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Rhythm selection now lives in Patient controls. Hide the legacy v0.1

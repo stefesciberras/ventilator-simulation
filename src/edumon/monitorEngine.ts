@@ -1,10 +1,14 @@
 import { RollingSignalHistory } from '../core/RollingSignalHistory'
-import type { CardiacRhythm, MonitorMeasurements, MonitorPatientState, MonitorSample } from './types'
+import type { CardiacRhythm, EcgMorphology, MonitorMeasurements, MonitorPatientState, MonitorSample } from './types'
 
 const TWO_PI = Math.PI * 2
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const gaussian = (x: number, centre: number, width: number, amplitude: number) => amplitude * Math.exp(-0.5 * ((x - centre) / width) ** 2)
 const fract = (value: number) => value - Math.floor(value)
+const smoothstep = (edge0: number, edge1: number, value: number) => {
+  const x = clamp((value - edge0) / Math.max(1e-6, edge1 - edge0), 0, 1)
+  return x * x * (3 - 2 * x)
+}
 
 interface CardiacPhaseHistorySample {
   time: number
@@ -106,15 +110,61 @@ function narrowComplexWithoutP(phase: number, state: MonitorPatientState, tAmpli
     + gaussian(phase, 0.55, tSigma, tAmplitude)
 }
 
+function stSegmentWindow(phase: number): number {
+  const rise = smoothstep(0.285, 0.325, phase)
+  const fall = 1 - smoothstep(0.455, 0.515, phase)
+  return rise * fall
+}
+
+/**
+ * Apply an ECG morphology overlay to organized rhythms. Severity is 0..100.
+ * Existing samples are already committed to rolling history, so morphology
+ * changes affect only samples generated after the control change.
+ */
+function applyEcgMorphology(base: number, phase: number, state: MonitorPatientState): number {
+  const morphology = state.ecgMorphology ?? 'nil'
+  if (morphology === 'nil') return base
+  if (state.rhythm === 'asystole' || state.rhythm === 'ventricular-fibrillation' || state.rhythm === 'ventricular-tachycardia') return base
+
+  const severity = clamp((state.morphologySeverity ?? 50) / 100, 0, 1)
+  if (severity <= 0) return base
+
+  if (morphology === 'ischaemia') {
+    const depression = 0.34 * severity * stSegmentWindow(phase)
+    const tFlattening = gaussian(phase, 0.55, 0.085, 0.10 * severity)
+    return base - depression - tFlattening
+  }
+
+  if (morphology === 'infarction') {
+    const elevation = 0.42 * severity * stSegmentWindow(phase)
+    const convexShoulder = gaussian(phase, 0.405, 0.085, 0.10 * severity)
+    return base + elevation + convexShoulder
+  }
+
+  if (morphology === 'hyperkalaemia') {
+    const pSuppression = gaussian(phase, 0.12, 0.035, 0.13 * severity)
+    const qrsBroadening = gaussian(phase, 0.23, 0.052, 0.20 * severity)
+      - gaussian(phase, 0.295, 0.045, 0.07 * severity)
+    const peakedT = gaussian(phase, 0.55, Math.max(0.020, 0.050 - 0.022 * severity), 0.78 * severity)
+    return base - pSuppression + qrsBroadening + peakedT
+  }
+
+  return base
+}
+
 function ecgAtPhase(time: number, state: MonitorPatientState, phase: number): number {
   const rhythm = state.rhythm
   if (rhythm === 'asystole') return 0.012 * Math.sin(time * 10.7)
   if (rhythm === 'ventricular-fibrillation') return ventricularFibrillationAtTime(time)
   if (rhythm === 'ventricular-tachycardia') return ventricularTachycardiaAtPhase(phase)
-  if (rhythm === 'atrial-flutter') return atrialFlutterBaseline(time) + narrowComplexWithoutP(phase, state, 0.18)
-  if (rhythm === 'atrial-fibrillation') return atrialFibrillationBaseline(time) + narrowComplexWithoutP(phase, state, 0.22)
-  if (rhythm === 'svt') return narrowComplexWithoutP(phase, state, 0.18)
-  return sinusFamilyMorphology(phase, state)
+
+  let base: number
+  if (rhythm === 'atrial-flutter') base = atrialFlutterBaseline(time) + narrowComplexWithoutP(phase, state, 0.18)
+  else if (rhythm === 'atrial-fibrillation') base = atrialFibrillationBaseline(time) + narrowComplexWithoutP(phase, state, 0.22)
+  else if (rhythm === 'svt') base = narrowComplexWithoutP(phase, state, 0.18)
+  else base = sinusFamilyMorphology(phase, state)
+
+  return applyEcgMorphology(base, phase, state)
 }
 
 function arterialPulse(phase: number): number {
@@ -274,3 +324,12 @@ export const RHYTHM_LABELS: Record<CardiacRhythm, string> = {
 }
 
 export const RHYTHMS = Object.keys(RHYTHM_LABELS) as CardiacRhythm[]
+
+export const ECG_MORPHOLOGY_LABELS: Record<EcgMorphology, string> = {
+  nil: 'Nil',
+  ischaemia: 'Ischaemia (ST depression)',
+  infarction: 'Infarction (ST elevation)',
+  hyperkalaemia: 'Hyperkalaemia',
+}
+
+export const ECG_MORPHOLOGIES = Object.keys(ECG_MORPHOLOGY_LABELS) as EcgMorphology[]
