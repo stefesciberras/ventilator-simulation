@@ -225,15 +225,21 @@ function arterialAtPhase(state: MonitorPatientState, phase: number, rhythm: Card
   return pressure.diastolic + (pressure.systolic - pressure.diastolic) * arterialPulse(phase) * pulseAmplitude
 }
 
-function plethPulse(phase: number): number {
-  const primary = Math.pow(Math.max(0, Math.sin(Math.PI * clamp(phase / 0.72, 0, 1))), 1.9)
-  return Math.max(0, primary + gaussian(phase, 0.54, 0.035, -0.12) + gaussian(phase, 0.63, 0.055, 0.13))
+function plethPulse(phase: number, perfusion: number): number {
+  const normalizedPerfusion = clamp(perfusion, 0, 1)
+  const primary = ((1 - Math.exp(-phase / 0.035)) * Math.exp(-phase / 0.38)) / 0.73
+  const featureScale = 0.22 + 0.78 * normalizedPerfusion
+  const earlyShoulder = gaussian(phase, 0.18, 0.070, 0.045 * featureScale)
+  const notch = gaussian(phase, 0.34, 0.028, -0.17 * featureScale)
+  const rebound = gaussian(phase, 0.415, 0.050, 0.13 * featureScale)
+  return Math.max(0, primary + earlyShoulder + notch + rebound)
 }
 
 function plethAtPhase(state: MonitorPatientState, phase: number, rhythm: CardiacRhythm, pulseAmplitude = 1): number {
   if (rhythm === 'asystole' || rhythm === 'ventricular-fibrillation') return 0
   const systolic = beatSystolicPressure(state, rhythm, pulseAmplitude)
-  return plethPulse(phase) * clamp(state.peripheralPerfusion, 0, 1) * pulseAmplitude * plethPerfusionFactor(systolic)
+  const perfusion = clamp(state.peripheralPerfusion, 0, 1) * plethPerfusionFactor(systolic)
+  return plethPulse(phase, perfusion) * perfusion * pulseAmplitude
 }
 
 function createWaveformRuntime(windowSeconds: number, sampleRate: number): MonitorWaveformRuntime {
