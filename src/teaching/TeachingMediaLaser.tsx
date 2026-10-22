@@ -89,6 +89,11 @@ export function TeachingMediaLaserInstructorModal({
 
   useEffect(() => { pointerRef.current = pointer }, [pointer])
 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-edusim-media-laser-active', 'true')
+    return () => document.documentElement.removeAttribute('data-edusim-media-laser-active')
+  }, [])
+
   const send = useCallback((next: MediaLaserState, force = false) => {
     const now = Date.now()
     if (!force && now - lastSentAt.current < 30) return
