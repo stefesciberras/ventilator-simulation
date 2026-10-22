@@ -1,26 +1,17 @@
 import { useMemo } from 'react'
-import {
-  createInstructorPreset,
-  deleteInstructorPreset,
-  listInstructorPresets,
-  updateInstructorPreset,
-  type InstructorPresetRow,
-  type InstructorScenarioSnapshot,
-} from '../../instructorAccount'
-import { useScenarioLibraryManager, type ScenarioLibraryRepository } from './useScenarioLibraryManager'
+import type { InstructorScenarioSnapshot } from '../../instructorAccount'
+import { normaliseEduventScenario } from '../../eduvent/scenarioCodec'
+import { createScenarioRepository, type ScenarioRepositoryRow } from './ScenarioRepository'
+import { useScenarioLibraryManager } from './useScenarioLibraryManager'
 
-/**
- * Compatibility adapter for legacy EDUVENT presets. Keeping normalisation here
- * lets shared library management own CRUD without leaking the old preset
- * persistence API back into InstructorAccountControls.
- */
+export type EduventScenarioRow = ScenarioRepositoryRow<InstructorScenarioSnapshot>
+
+/** EDUVENT adapter over the shared EDUSIM scenario repository. */
 export function useEduventScenarioLibrary(enabled: boolean) {
-  const repository = useMemo<ScenarioLibraryRepository<InstructorPresetRow, InstructorScenarioSnapshot>>(() => ({
-    list: () => listInstructorPresets('eduvent'),
-    create: (name, scenario) => createInstructorPreset(name, scenario, 'eduvent'),
-    update: (id, updates) => updateInstructorPreset(id, updates, 'eduvent'),
-    remove: (id) => deleteInstructorPreset(id, 'eduvent'),
+  const repository = useMemo(() => createScenarioRepository<InstructorScenarioSnapshot>('eduvent', {
+    encode: normaliseEduventScenario,
+    decode: (scenario) => normaliseEduventScenario(scenario as InstructorScenarioSnapshot),
   }), [])
 
-  return useScenarioLibraryManager<InstructorPresetRow, InstructorScenarioSnapshot>({ enabled, repository })
+  return useScenarioLibraryManager<EduventScenarioRow, InstructorScenarioSnapshot>({ enabled, repository })
 }
