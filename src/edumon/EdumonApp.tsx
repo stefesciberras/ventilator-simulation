@@ -71,13 +71,15 @@ interface TraceSpec {
 
 const TRACE_SPECS: TraceSpec[] = [
   { key: 'ecg', label: 'ECG II', unit: 'mV', className: 'ecg', scaleDecimals: 1, autoscale: { fallbackMin: -0.8, fallbackMax: 1.6, paddingFraction: 0.08, minimumSpan: 1.2, roundTo: 0.1 } },
-  { key: 'arterialPressure', label: 'ART', unit: 'mmHg', className: 'art', scaleDecimals: 0, autoscale: { fallbackMin: 0, fallbackMax: 180, paddingFraction: 0.06, minimumSpan: 40, roundTo: 10, hardMin: 0 } },
-  { key: 'pleth', label: 'SpO₂', unit: '', className: 'spo2', scaleDecimals: 1, autoscale: { fallbackMin: 0, fallbackMax: 1.2, paddingFraction: 0.08, minimumSpan: 0.3, roundTo: 0.1, includeZero: true, hardMin: 0 } },
+  { key: 'arterialPressure', label: 'ART', unit: 'mmHg', className: 'art', scaleDecimals: 0, autoscale: { fallbackMin: 30, fallbackMax: 130, paddingFraction: 0.06, minimumSpan: 100, roundTo: 10, hardMin: 30 } },
+  { key: 'pleth', label: 'SpO₂', unit: '', className: 'spo2', scaleDecimals: 1, autoscale: { fallbackMin: 0, fallbackMax: 1.2, paddingFraction: 0, minimumSpan: 1.2, roundTo: 0, hardMin: 0, hardMax: 1.2 } },
 ]
 
 function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceSpec }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const scale = useMemo(() => autoscaleWaveformSamples(samples, (sample) => sample[spec.key], spec.autoscale), [samples, spec])
+  const scale = useMemo(() => spec.key === 'pleth'
+    ? { min: spec.autoscale.fallbackMin, max: spec.autoscale.fallbackMax }
+    : autoscaleWaveformSamples(samples, (sample) => sample[spec.key], spec.autoscale), [samples, spec])
 
   useEffect(() => {
     const canvas = canvasRef.current
