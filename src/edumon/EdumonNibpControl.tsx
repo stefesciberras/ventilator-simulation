@@ -114,11 +114,22 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
   intervalRef.current = interval
 
   useEffect(() => {
-    const findHost = () => setHost(document.querySelector<HTMLElement>('.edumon-control-strip'))
+    const findHost = () => {
+      const candidates = Array.from(document.querySelectorAll<HTMLElement>('.simulation-console-footer .edumon-control-strip'))
+      const visibleHost = candidates.find((candidate) => candidate.isConnected && candidate.getClientRects().length > 0)
+        ?? candidates.find((candidate) => candidate.isConnected)
+        ?? null
+      setHost((current) => current === visibleHost ? current : visibleHost)
+    }
+
     findHost()
     const observer = new MutationObserver(findHost)
-    observer.observe(document.body, { childList: true, subtree: true })
-    return () => observer.disconnect()
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
+    window.addEventListener('resize', findHost)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', findHost)
+    }
   }, [])
 
   const clearTimers = useCallback(() => {
