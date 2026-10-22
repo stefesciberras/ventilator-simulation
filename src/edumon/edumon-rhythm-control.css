@@ -48,8 +48,55 @@
   color: var(--edumon-signal-accent);
 }
 
+/* Explicit track/thumb styling is used rather than relying only on
+   accent-color, so the waveform-family colour is visible on Safari/iOS,
+   Chromium and Firefox. */
 .edumon-signal-control input[type='range'] {
   accent-color: var(--edumon-signal-accent);
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+}
+
+.edumon-signal-control input[type='range']::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--edumon-signal-accent) 78%, #27343b);
+}
+
+.edumon-signal-control input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5.5px;
+  border: 2px solid #111a20;
+  border-radius: 50%;
+  background: var(--edumon-signal-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--edumon-signal-accent) 72%, transparent);
+}
+
+.edumon-signal-control input[type='range']::-moz-range-track {
+  height: 5px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--edumon-signal-accent) 78%, #27343b);
+}
+
+.edumon-signal-control input[type='range']::-moz-range-progress {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--edumon-signal-accent);
+}
+
+.edumon-signal-control input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #111a20;
+  border-radius: 50%;
+  background: var(--edumon-signal-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--edumon-signal-accent) 72%, transparent);
 }
 
 .edumon-signal-control.edumon-select-control select {
