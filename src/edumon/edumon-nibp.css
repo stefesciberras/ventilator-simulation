@@ -1,5 +1,6 @@
 .edumon-control-strip {
   position: relative;
+  min-height: 172px;
 }
 
 .edumon-control-strip > button[title*='NIBP'] {
