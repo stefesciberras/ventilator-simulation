@@ -85,6 +85,30 @@
   }
 }
 
+/* In landscape the monitor should keep clinically useful trace height and scroll
+   vertically, rather than compressing all three waveforms into the remaining
+   viewport after the top bar, page switcher, alarm banner and hardware strip. */
+@media (max-width: 1180px) and (orientation: landscape) {
+  .edumon-workspace.mobile-page-monitor {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor > .edumon-console {
+    height: auto !important;
+    min-height: 560px !important;
+    overflow: visible !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor .edumon-monitor-body {
+    flex: 0 0 auto !important;
+    min-height: 360px !important;
+  }
+}
+
 /* EDUVENT tablet mode deliberately compacts the hardware strip further. */
 @media (min-width: 681px) and (max-width: 1180px) {
   .edumon-console-top-actions {
@@ -128,10 +152,25 @@ body.eduvent-tablet-landscape .edumon-workspace {
   touch-action: pan-y !important;
 }
 
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y !important;
+}
+
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor > .edumon-console {
   display: flex !important;
   width: 100% !important;
-  height: 100% !important;
+  height: auto !important;
+  min-height: 560px !important;
+  overflow: visible !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-monitor-body {
+  flex: 0 0 auto !important;
+  min-height: 360px !important;
 }
 
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor > .edumon-side-panel {
