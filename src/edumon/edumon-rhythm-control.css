@@ -108,25 +108,38 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--edumon-signal-accent) 18%, transparent);
 }
 
-.edumon-pressure-coupling {
+.edumon-art-options {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
+  flex-wrap: wrap;
   min-height: 28px;
 }
 
-.edumon-pressure-coupling input[type='checkbox'] {
+.edumon-inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  width: auto;
+}
+
+.edumon-inline-checkbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
   margin: 0;
+  flex: 0 0 auto;
   accent-color: var(--edumon-signal-accent);
 }
 
-.edumon-pressure-coupling > span {
-  display: flex;
-  flex: 1;
-  justify-content: space-between;
-  gap: 10px;
+.edumon-inline-checkbox > span {
+  display: inline;
+  white-space: nowrap;
+}
+
+html[data-edumon-invasive-bp-visible='false'] .edumon-trace-art,
+html[data-edumon-invasive-bp-visible='false'] .edumon-value-art {
+  display: none;
 }
 
 .edumon-signal-control:has(:disabled) {
