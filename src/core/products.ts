@@ -1,3 +1,5 @@
+import { EDUVENT_SESSION_CONTRACT } from '../eduvent/productContract'
+import { EDUMON_SESSION_CONTRACT } from '../edumon/productContract'
 import { defineSimulationProduct, type SimulationProductAdapter, type SimulationProductId } from './SimulationProductAdapter'
 
 const sharedCapabilities = {
@@ -8,6 +10,14 @@ const sharedCapabilities = {
   secondaryDisplays: true,
   waveforms: true,
 } as const
+
+const scenarioCapabilities = (productId: SimulationProductId) => ({
+  productId,
+  supportsBranches: true,
+  supportsTransitions: true,
+  supportsMediaStages: true,
+  supportsQuestionStages: true,
+})
 
 export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapter> = {
   eduvent: defineSimulationProduct({
@@ -34,6 +44,8 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
       { key: 'respiratoryRate', label: 'Respiratory rate', unit: '/min' },
       { key: 'apneaTime', label: 'Apnoea time', unit: 's', priority: 'critical' },
     ],
+    session: EDUVENT_SESSION_CONTRACT,
+    scenario: scenarioCapabilities('eduvent'),
   }),
   'edumon-ana': defineSimulationProduct({
     id: 'edumon-ana',
@@ -59,6 +71,8 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
       { key: 'map', label: 'MAP', unit: 'mmHg' },
       { key: 'spo2', label: 'SpO₂', unit: '%' },
     ],
+    session: EDUMON_SESSION_CONTRACT,
+    scenario: scenarioCapabilities('edumon-ana'),
   }),
   'edumon-icu': defineSimulationProduct({
     id: 'edumon-icu',
@@ -84,6 +98,8 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
       { key: 'map', label: 'MAP', unit: 'mmHg' },
       { key: 'spo2', label: 'SpO₂', unit: '%' },
     ],
+    session: EDUMON_SESSION_CONTRACT,
+    scenario: scenarioCapabilities('edumon-icu'),
   }),
 }
 
