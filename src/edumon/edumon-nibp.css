@@ -1,14 +1,28 @@
 .edumon-control-strip {
   position: relative;
-  flex: 0 0 172px !important;
-  min-height: 172px !important;
-  height: 172px;
+  flex: 0 0 128px !important;
+  min-height: 128px !important;
+  height: 128px;
   box-sizing: border-box;
+  overflow: visible !important;
 }
 
 .simulation-console-footer:has(> .edumon-control-strip) {
-  flex: 0 0 172px;
-  min-height: 172px;
+  flex: 0 0 128px;
+  min-height: 128px;
+  overflow: visible;
+}
+
+/* Keep four equal monitor rows available. The fourth row is intentionally
+   vacant for the next waveform (capnography first; CVP/BIS remain possible). */
+.edumon-waveform-area,
+.edumon-measurements {
+  grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.edumon-trace,
+.edumon-value-panel {
+  min-height: 0 !important;
 }
 
 .edumon-control-strip > button.edumon-control-tile.disabled[title^='NIBP will be enabled'] {
@@ -21,6 +35,7 @@
   flex: 0 0 170px;
   min-width: 170px;
   display: grid !important;
+  pointer-events: auto;
 }
 
 .edumon-nibp-tile.measuring strong {
@@ -29,7 +44,7 @@
 
 .edumon-nibp-popover {
   position: absolute;
-  z-index: 40;
+  z-index: 80;
   left: 10px;
   bottom: calc(100% + 10px);
   width: min(320px, calc(100vw - 28px));
@@ -38,6 +53,7 @@
   border-radius: 10px;
   background: #10181e;
   box-shadow: 0 14px 34px rgba(0, 0, 0, .38);
+  pointer-events: auto;
 }
 
 .edumon-nibp-popover-heading {
@@ -86,9 +102,9 @@
 @media (max-width: 680px) {
   .edumon-control-strip,
   .simulation-console-footer:has(> .edumon-control-strip) {
-    flex-basis: 150px !important;
-    min-height: 150px !important;
-    height: 150px;
+    flex-basis: 112px !important;
+    min-height: 112px !important;
+    height: 112px;
   }
 
   .edumon-nibp-tile {
