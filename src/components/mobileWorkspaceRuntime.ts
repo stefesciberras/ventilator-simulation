@@ -10,6 +10,19 @@ export interface MobileWorkspaceRuntimeOptions {
   swipeThreshold?: number
 }
 
+type TouchPoint = { clientX: number; clientY: number }
+
+const centroidFromTouches = (touches: ArrayLike<TouchPoint>) => {
+  if (touches.length < 1) return null
+  let x = 0
+  let y = 0
+  for (let index = 0; index < touches.length; index += 1) {
+    x += touches[index].clientX
+    y += touches[index].clientY
+  }
+  return { x: x / touches.length, y: y / touches.length }
+}
+
 export function installMobileWorkspaceRuntime({
   appSelector,
   workspaceSelector,
@@ -24,31 +37,12 @@ export function installMobileWorkspaceRuntime({
   let workspace: HTMLElement | null = null
   let switcher: HTMLElement | null = null
   let activePage = firstPage.id
-  let touchStartX = 0
-  let touchStartY = 0
-  let swipeSuppressed = false
+  let swipeStart: { x: number; y: number } | null = null
 
   const shouldUseMobileWorkspace = () => window.matchMedia(mobileQuery).matches || document.body.classList.contains(tabletBodyClass)
 
-  const isGlobalLaserInteractionActive = () => (
-    document.documentElement.getAttribute('data-edusim-simulator-laser-active') === 'true'
-    || document.documentElement.getAttribute('data-edusim-media-laser-active') === 'true'
-  )
-
-  const isWorkspaceLaserActive = () => activePage === firstPage.id && (
-    isGlobalLaserInteractionActive()
-    || Boolean(workspace?.querySelector('.teaching-laser-layer-active'))
-  )
-
-  const isSwipeBlockedElement = (element: Element | null) => Boolean(element?.closest(
-    '.teaching-laser-layer-active, .teaching-media-laser-stage, [data-edusim-block-workspace-swipe="true"]',
-  ))
-
-  const isSwipeBlockedTouch = (target: EventTarget | null, clientX: number, clientY: number) => {
-    if (isWorkspaceLaserActive() || isGlobalLaserInteractionActive()) return true
-    const targetElement = target instanceof Element ? target : null
-    if (isSwipeBlockedElement(targetElement)) return true
-    return isSwipeBlockedElement(document.elementFromPoint(clientX, clientY))
+  const resetSwipe = () => {
+    swipeStart = null
   }
 
   const applyPage = (page: string) => {
@@ -94,46 +88,37 @@ export function installMobileWorkspaceRuntime({
     if (workspace !== nextWorkspace) {
       workspace = nextWorkspace
       workspace.addEventListener('touchstart', (event) => {
-        swipeSuppressed = false
-        if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
-        if (isWorkspaceLaserActive() || isGlobalLaserInteractionActive()) {
-          swipeSuppressed = true
-          return
-        }
-        const touch = event.touches[0]
-        if (isSwipeBlockedTouch(event.target, touch.clientX, touch.clientY)) {
-          swipeSuppressed = true
-          return
-        }
-        touchStartX = touch.clientX
-        touchStartY = touch.clientY
+        resetSwipe()
+        if (!shouldUseMobileWorkspace() || event.touches.length !== 2) return
+        swipeStart = centroidFromTouches(event.touches)
       }, { passive: true })
 
       workspace.addEventListener('touchmove', (event) => {
-        if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
-        const touch = event.touches[0]
-        if (swipeSuppressed || isWorkspaceLaserActive() || isGlobalLaserInteractionActive() || isSwipeBlockedTouch(event.target, touch.clientX, touch.clientY)) {
-          swipeSuppressed = true
-          event.preventDefault()
-        }
-      }, { passive: false })
+        if (swipeStart && event.touches.length !== 2) resetSwipe()
+      }, { passive: true })
 
       workspace.addEventListener('touchend', (event) => {
-        if (swipeSuppressed || isWorkspaceLaserActive() || isGlobalLaserInteractionActive()) {
-          swipeSuppressed = false
+        const start = swipeStart
+        if (!start || !shouldUseMobileWorkspace()) {
+          if (event.touches.length < 2) resetSwipe()
           return
         }
-        if (!shouldUseMobileWorkspace() || event.changedTouches.length !== 1) return
-        const dx = event.changedTouches[0].clientX - touchStartX
-        const dy = event.changedTouches[0].clientY - touchStartY
+
+        const contacts: TouchPoint[] = []
+        for (let index = 0; index < event.touches.length; index += 1) contacts.push(event.touches[index])
+        for (let index = 0; index < event.changedTouches.length; index += 1) contacts.push(event.changedTouches[index])
+        const end = contacts.length >= 2 ? centroidFromTouches(contacts.slice(0, 2)) : null
+        resetSwipe()
+        if (!end) return
+
+        const dx = end.x - start.x
+        const dy = end.y - start.y
         if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.2) return
         if (dx < 0 && activePage === firstPage.id) applyPage(secondPage.id)
         else if (dx > 0 && activePage === secondPage.id) applyPage(firstPage.id)
       }, { passive: true })
 
-      workspace.addEventListener('touchcancel', () => {
-        swipeSuppressed = false
-      }, { passive: true })
+      workspace.addEventListener('touchcancel', resetSwipe, { passive: true })
     }
 
     switcher = buildSwitcher(app)
