@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PatientControls, VentilatorControls } from './components/Controls'
-import { InstructorLiveRoom, SessionPanel } from './components/SessionPanel'
-import { SharedTeachingTab, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
+import { EduventSessionPanel } from './eduvent/EduventSessionPanel'
+import { SharedTeachingTab, SharedInstructorLiveRoom, ProductCandidateTelemetry, TeachingCandidateOverlay, TeachingLaserPointerSurface, eduventTeachingHost, useTeachingPrompts, useTeachingQuestionLibrary, type TeachingMetricSnapshot } from './teaching'
 import { useSharedAlarmController, type SharedAlarmEvaluation } from './alarms/useSharedAlarmController'
 import { SharedAlarmBanner } from './alarms/SharedAlarmBanner'
 import { VerticalDualAlarmSlider } from './alarms/SharedAlarmLimits'
@@ -32,6 +32,7 @@ import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
 import { useTeachingSharedOxygenFlush } from './teaching/useTeachingSharedOxygenFlush'
 import { createSimulationPersistence } from './core/SimulationPersistence'
+import { getSimulationProduct } from './core/products'
 import './session.css'
 import './physiology.css'
 
@@ -1774,7 +1775,7 @@ export default function App() {
                   sessionId={teachingSession.session?.id ?? null}
                   candidateCount={teachingSession.members.filter((member) => member.role === 'candidate').length}
                   sessionPanel={(
-                    <SessionPanel
+                    <EduventSessionPanel
                       role={teachingSession.role}
                       instructorAuthenticated={instructorAccountConnected}
                       simulatorExpanded={teachingSession.role === 'instructor'}
@@ -1819,7 +1820,12 @@ export default function App() {
                     </section>
                   ) : null}
                   runtimeHost={<div ref={setDynamicScenarioRuntimeHost} className="teaching-scenario-runtime-host" />}
-                  liveRoom={<InstructorLiveRoom role={teachingSession.role} members={teachingSession.members} />}
+                  liveRoom={<SharedInstructorLiveRoom
+                    role={teachingSession.role}
+                    members={teachingSession.members}
+                    storageKey="eduvent-instructor-live-room"
+                    renderTelemetry={(member) => <ProductCandidateTelemetry product={getSimulationProduct('eduvent')} member={member} />}
+                  />}
                 />
               ),
             },
