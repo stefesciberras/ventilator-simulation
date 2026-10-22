@@ -1,70 +1,25 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import type {
+  ScenarioBranch,
+  ScenarioDefinition,
+  ScenarioMediaContent,
+  ScenarioQuestionContent,
+  ScenarioRuntimeAdapter,
+  ScenarioStage,
+  ScenarioStageContent,
+  ScenarioStageContext,
+  ScenarioTransition,
+} from './domain'
 
-export interface TeachingScenarioMediaContent {
-  mediaId?: string
-  title: string
-  mediaKind: 'image' | 'video'
-  storagePath: string
-  mimeType: string
-}
-
-export interface TeachingScenarioQuestionOption { id: string; text: string }
-
-export interface TeachingScenarioQuestionContent {
-  libraryItemId?: string
-  kind: 'mcq' | 'poll'
-  title: string | null
-  body: string
-  options: TeachingScenarioQuestionOption[]
-  correctOptionId: string | null
-  explanation: string | null
-}
-
-export type TeachingScenarioStageContent =
-  | { kind: 'state' }
-  | { kind: 'media'; media: TeachingScenarioMediaContent }
-  | { kind: 'question'; question: TeachingScenarioQuestionContent }
-
-export type TeachingScenarioTransition =
-  | { mode: 'immediate' }
-  | { mode: 'linear'; durationSeconds: number }
-
-export interface TeachingScenarioStage<TSnapshot, TTrigger> {
-  id: string
-  name: string
-  snapshot: TSnapshot
-  /** Product variable IDs explicitly applied on entry. Missing means legacy/full snapshot. */
-  appliedVariableIds?: string[]
-  /** Default transition for numeric values when this stage is entered. */
-  transition?: TeachingScenarioTransition
-  /** Optional per-variable transition overrides keyed by product variable ID. */
-  transitionOverrides?: Record<string, TeachingScenarioTransition>
-  triggers: TTrigger[]
-  notes?: string
-  content?: TeachingScenarioStageContent
-}
-
-export interface TeachingScenarioBranch<TTrigger> {
-  id?: string
-  fromStageId?: string
-  toStageId: string
-  /** Legacy single trigger. */
-  trigger: TTrigger
-  /** Multiple path conditions. Defaults to ANY semantics. */
-  triggers?: TTrigger[]
-  triggerMode?: 'any' | 'all'
-  priority?: number
-  label?: string
-  enabled?: boolean
-}
-
-export interface TeachingScenarioDefinition<TSnapshot, TTrigger> {
-  id: string
-  name: string
-  description?: string
-  stages: Array<TeachingScenarioStage<TSnapshot, TTrigger>>
-  branches?: Array<TeachingScenarioBranch<TTrigger>>
-}
+export type TeachingScenarioMediaContent = ScenarioMediaContent
+export type TeachingScenarioQuestionContent = ScenarioQuestionContent
+export type TeachingScenarioStageContent = ScenarioStageContent
+export type TeachingScenarioTransition = ScenarioTransition
+export type TeachingScenarioStage<TSnapshot, TTrigger> = ScenarioStage<TSnapshot, TTrigger>
+export type TeachingScenarioBranch<TTrigger> = ScenarioBranch<TTrigger>
+export type TeachingScenarioDefinition<TSnapshot, TTrigger> = ScenarioDefinition<TSnapshot, TTrigger>
+export type TeachingScenarioStageContext<TSnapshot, TTrigger> = ScenarioStageContext<TSnapshot, TTrigger>
+export type TeachingScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext> = ScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext>
 
 export type TeachingScenarioRuntimeStatus = 'idle' | 'running' | 'complete'
 
@@ -73,18 +28,6 @@ export interface TeachingScenarioRuntimeSnapshot {
   stageIndex: number
   stageStartedSimulationTime: number
   status: Exclude<TeachingScenarioRuntimeStatus, 'idle'>
-}
-
-export interface TeachingScenarioStageContext<TSnapshot, TTrigger> {
-  scenario: TeachingScenarioDefinition<TSnapshot, TTrigger>
-  stage: TeachingScenarioStage<TSnapshot, TTrigger>
-  stageIndex: number
-  stageStartedSimulationTime: number
-}
-
-export interface TeachingScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext> {
-  applyStage: (snapshot: TSnapshot, context: TeachingScenarioStageContext<TSnapshot, TTrigger>) => void | Promise<void>
-  triggerMatches: (trigger: TTrigger, context: TContext, stage: TeachingScenarioStageContext<TSnapshot, TTrigger>) => boolean
 }
 
 export type TeachingScenarioTransitionResolution =
