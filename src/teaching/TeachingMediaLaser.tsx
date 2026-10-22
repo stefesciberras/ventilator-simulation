@@ -143,6 +143,7 @@ export function TeachingMediaLaserInstructorModal({
         </header>
         <div
           className="teaching-media-laser-stage"
+          data-edusim-block-workspace-swipe="true"
           onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); updatePointer(event) }}
           onPointerMove={updatePointer}
           onPointerUp={hidePointer}
