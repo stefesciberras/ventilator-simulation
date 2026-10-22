@@ -25,6 +25,12 @@ interface MonitorWaveformRuntime {
   sampleRate: number
 }
 
+interface EffectiveBloodPressure {
+  systolic: number
+  diastolic: number
+  mean: number
+}
+
 let waveformRuntime: MonitorWaveformRuntime | null = null
 
 function effectiveRate(state: MonitorPatientState): number {
@@ -37,6 +43,31 @@ function effectiveRate(state: MonitorPatientState): number {
     case 'asystole': return 0
     default: return clamp(state.heartRate, 30, 220)
   }
+}
+
+/**
+ * Perfusing VT remains pulsatile but is intrinsically haemodynamically
+ * compromised. The pressure ceiling falls from ~80 mmHg systolic at the slow
+ * end of VT to ~60 mmHg at 240 bpm. Instructor-set pressures below that ceiling
+ * remain respected rather than being raised by the rhythm model.
+ */
+function ventricularTachycardiaBloodPressure(state: MonitorPatientState): EffectiveBloodPressure {
+  const rate = clamp(state.heartRate, 110, 240)
+  const rateFraction = (rate - 110) / (240 - 110)
+  const systolicCeiling = 80 - 20 * rateFraction
+  const systolic = Math.min(state.systolicPressure, systolicCeiling)
+  const diastolicCeiling = clamp(systolic * 0.55, 30, 48)
+  const diastolic = Math.min(state.diastolicPressure, diastolicCeiling, Math.max(20, systolic - 10))
+  const mean = diastolic + (systolic - diastolic) / 3
+  return { systolic, diastolic, mean }
+}
+
+function effectiveBloodPressure(state: MonitorPatientState, rhythm: CardiacRhythm = state.rhythm): EffectiveBloodPressure {
+  if (rhythm === 'ventricular-tachycardia') return ventricularTachycardiaBloodPressure(state)
+  const systolic = state.systolicPressure
+  const diastolic = state.diastolicPressure
+  const mean = diastolic + (systolic - diastolic) / 3
+  return { systolic, diastolic, mean }
 }
 
 /** Monomorphic broad-complex VT with no intervening normal P-QRS-T morphology. */
@@ -177,10 +208,10 @@ function arterialPulse(phase: number): number {
 }
 
 function arterialAtPhase(state: MonitorPatientState, phase: number, rhythm: CardiacRhythm): number {
-  const map = state.diastolicPressure + (state.systolicPressure - state.diastolicPressure) / 3
-  if (rhythm === 'asystole' || rhythm === 'ventricular-fibrillation') return Math.max(0, map * 0.34)
+  const pressure = effectiveBloodPressure(state, rhythm)
+  if (rhythm === 'asystole' || rhythm === 'ventricular-fibrillation') return Math.max(0, pressure.mean * 0.34)
   const pulse = arterialPulse(phase)
-  return state.diastolicPressure + (state.systolicPressure - state.diastolicPressure) * pulse
+  return pressure.diastolic + (pressure.systolic - pressure.diastolic) * pulse
 }
 
 function plethPulse(phase: number): number {
@@ -301,12 +332,12 @@ export function resetMonitorWaveformHistory(): void {
 
 export function measurementsFor(state: MonitorPatientState): MonitorMeasurements {
   const arrestRhythm = state.rhythm === 'asystole' || state.rhythm === 'ventricular-fibrillation'
-  const meanPressure = Math.round(state.diastolicPressure + (state.systolicPressure - state.diastolicPressure) / 3)
+  const pressure = effectiveBloodPressure(state)
   return {
     heartRate: arrestRhythm ? null : Math.round(effectiveRate(state)),
-    systolicPressure: arrestRhythm ? null : Math.round(state.systolicPressure),
-    diastolicPressure: arrestRhythm ? null : Math.round(state.diastolicPressure),
-    meanPressure: arrestRhythm ? null : meanPressure,
+    systolicPressure: arrestRhythm ? null : Math.round(pressure.systolic),
+    diastolicPressure: arrestRhythm ? null : Math.round(pressure.diastolic),
+    meanPressure: arrestRhythm ? null : Math.round(pressure.mean),
     spo2: arrestRhythm ? null : Math.round(clamp(state.spo2, 0, 100)),
   }
 }
