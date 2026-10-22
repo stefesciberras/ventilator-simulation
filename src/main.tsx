@@ -6,6 +6,8 @@ import { ScenarioBuilderApp } from './scenario-builder/ScenarioBuilderApp'
 import { EdumonApp } from './edumon/EdumonApp'
 import { installTabletResponsiveMode } from './tabletResponsiveRuntime'
 import { installSelfDirectedScenarioPanelDrag } from './selfDirectedScenarioPanel'
+import { SharedAlarmMetricHighlight } from './components/SharedAlarmMetricHighlight'
+import { EDUMON_ALARM_METRIC_HIGHLIGHTS } from './edumon/alarmMetricHighlights'
 import './styles.css'
 import './alarm.css'
 import './mobile-metrics.css'
@@ -15,6 +17,7 @@ import './tablet-responsive.css'
 import './tablet-runtime.css'
 import './selfDirectedScenarioPanel.css'
 import './edumon/mobile-display-fixes.css'
+import './components/SharedAlarmMetricHighlight.css'
 import './scenario-builder/scenarioNavigation.css'
 
 const pathname = window.location.pathname
@@ -38,6 +41,7 @@ function RoutedApp() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    <SharedAlarmMetricHighlight rules={isEdumonRoute ? EDUMON_ALARM_METRIC_HIGHLIGHTS : []} />
     <RoutedApp />
   </StrictMode>,
 )

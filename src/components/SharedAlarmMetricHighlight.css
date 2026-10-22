@@ -1,0 +1,29 @@
+.edusim-alarm-value-active.edusim-alarm-value-yellow {
+  background: rgba(232, 185, 78, .24) !important;
+  box-shadow: inset 0 0 0 2px rgba(232, 185, 78, .8), inset 0 0 22px rgba(232, 185, 78, .12) !important;
+}
+
+.edusim-alarm-value-active.edusim-alarm-value-yellow > span,
+.edusim-alarm-value-active.edusim-alarm-value-yellow > strong,
+.edusim-alarm-value-active.edusim-alarm-value-yellow > small,
+.edusim-alarm-value-active.edusim-alarm-value-yellow .edumon-value-label,
+.edusim-alarm-value-active.edusim-alarm-value-yellow .edumon-value-main,
+.edusim-alarm-value-active.edusim-alarm-value-yellow .edumon-value-unit,
+.edusim-alarm-value-active.edusim-alarm-value-yellow .edumon-value-detail {
+  color: #ffe18a !important;
+}
+
+.edusim-alarm-value-active.edusim-alarm-value-red {
+  background: rgba(206, 65, 65, .3) !important;
+  box-shadow: inset 0 0 0 2px rgba(239, 91, 91, .92), inset 0 0 24px rgba(239, 91, 91, .16) !important;
+}
+
+.edusim-alarm-value-active.edusim-alarm-value-red > span,
+.edusim-alarm-value-active.edusim-alarm-value-red > strong,
+.edusim-alarm-value-active.edusim-alarm-value-red > small,
+.edusim-alarm-value-active.edusim-alarm-value-red .edumon-value-label,
+.edusim-alarm-value-active.edusim-alarm-value-red .edumon-value-main,
+.edusim-alarm-value-active.edusim-alarm-value-red .edumon-value-unit,
+.edusim-alarm-value-active.edusim-alarm-value-red .edumon-value-detail {
+  color: #ff9a9a !important;
+}
