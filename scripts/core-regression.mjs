@@ -73,11 +73,16 @@ for (const productRuntime of [eduventScenarioRuntime, edumonScenarioAdapter]) {
 // Shared display interactions: standalone laser stays live; teaching laser may freeze/share.
 assert(displayControls.includes("const sharedTeachingLaser = role === 'instructor' && Boolean(sessionId)"), 'laser freeze must be scoped to an active instructor session')
 assert(displayControls.includes('if (next && sharedTeachingLaser && !frozen)'), 'standalone laser must not force a local waveform freeze')
+assert(displayControls.includes('data-edusim-simulator-laser-active'), 'laser toggle must expose a synchronous global interaction lock')
+assert(displayControls.includes('setSimulatorLaserInteractionLock(next)'), 'laser toggle must claim the global interaction lock before React rerenders')
 assert(mobileWorkspace.includes('isSwipeBlockedTouch'), 'mobile workspace swipes must detect protected interaction surfaces from touch coordinates')
-assert(mobileWorkspace.includes('isWorkspaceLaserActive'), 'mobile workspace swipes must be fully disabled while the display laser is active')
+assert(mobileWorkspace.includes('isGlobalLaserInteractionActive'), 'mobile workspace must consult the global laser interaction lock')
+assert(mobileWorkspace.includes('event.preventDefault()'), 'mobile workspace must cancel touch-pan while laser interaction owns the gesture')
+assert(mobileWorkspace.includes('passive: false'), 'laser-owned touchmove must be non-passive so browser pan can be cancelled')
 assert(mobileWorkspace.includes('.teaching-laser-layer-active'), 'mobile workspace swipes must ignore active simulator laser interactions')
 assert(mobileWorkspace.includes('.teaching-media-laser-stage'), 'mobile workspace swipes must ignore teaching media laser interactions')
 assert(mediaLaser.includes('data-edusim-block-workspace-swipe="true"'), 'teaching media laser stage must explicitly block workspace swipe recognition')
+assert(mediaLaser.includes('data-edusim-media-laser-active'), 'teaching media laser must claim a global interaction lock while open')
 assert(laserInteractionCss.includes('.teaching-laser-exit'), 'legacy laser exit affordance must remain hidden')
 
 // Shared persistence and diagnostics infrastructure with product-owned payloads.
