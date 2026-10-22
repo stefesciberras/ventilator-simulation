@@ -112,6 +112,8 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
   const longPressTriggeredRef = useRef(false)
   const measuringRef = useRef(false)
   const audioContextRef = useRef<AudioContext | null>(null)
+  const tileRef = useRef<HTMLDivElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
 
   patientRef.current = patientState
   intervalRef.current = interval
@@ -134,6 +136,18 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
       window.removeEventListener('resize', findHost)
     }
   }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const dismissOutside = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (tileRef.current?.contains(target) || popoverRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener('pointerdown', dismissOutside)
+    return () => document.removeEventListener('pointerdown', dismissOutside)
+  }, [open])
 
   const clearTimers = useCallback(() => {
     if (timerRef.current != null) window.clearInterval(timerRef.current)
@@ -248,7 +262,7 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
   const phaseDetail = phase === 'idle' ? cycleDetail : `Cuff mmHg · ${phase === 'inflating' ? 'inflating' : 'measuring'}`
 
   return createPortal(<>
-    <div className={`edumon-control-tile edumon-nibp-tile ${phase !== 'idle' ? 'measuring' : ''}`}>
+    <div ref={tileRef} className={`edumon-control-tile edumon-nibp-tile ${phase !== 'idle' ? 'measuring' : ''}`}>
       <button
         type="button"
         className="edumon-nibp-display-button"
@@ -277,12 +291,14 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
           }
         }}
         title="Press to open NIBP controls. Long press for one immediate reading."
+        aria-label="Start NIBP"
       >
-        START
+        <span className="edumon-nibp-start-label">START</span>
+        <span className="edumon-nibp-start-icon" aria-hidden="true">▶</span>
       </button>
     </div>
     {open && (
-      <div className="edumon-nibp-popover" role="dialog" aria-label="NIBP measurement settings">
+      <div ref={popoverRef} className="edumon-nibp-popover" role="dialog" aria-label="NIBP measurement settings">
         <div className="edumon-nibp-popover-heading"><strong>NIBP</strong><span>Measurement interval</span></div>
         <div className="edumon-nibp-intervals">
           <button type="button" onClick={runStat}>STAT</button>
