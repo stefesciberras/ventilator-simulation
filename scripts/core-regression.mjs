@@ -12,6 +12,8 @@ const assert = (condition, message) => {
 const eduvent = read('src/App.tsx')
 const edumonPanel = read('src/edumon/EdumonWorkspacePanel.tsx')
 const edumon = read('src/edumon/EdumonApp.tsx')
+const edumonMonitorEngine = read('src/edumon/monitorEngine.ts')
+const rollingSignalHistory = read('src/core/RollingSignalHistory.ts')
 const physiology = read('src/components/PhysiologyMeasurementsDialog.tsx')
 const scenarioProducts = read('src/teaching/scenario/products.ts')
 const scenarioRuntime = read('src/teaching/scenario/runtimeCore.ts')
@@ -98,6 +100,15 @@ assert(edumon.includes('createSimulationPersistence(productId)'), 'EDUMON must u
 assert(diagnostics.includes('edusim-diagnostic-v1'), 'shared diagnostics must retain the EDUSIM diagnostic envelope')
 assert(eduventDiagnostics.includes('copySimulationDiagnostic'), 'EDUVENT diagnostics must use shared diagnostic infrastructure')
 assert(edumon.includes('copySimulationDiagnostic'), 'EDUMON diagnostics must use shared diagnostic infrastructure')
+
+// Continuous signal history belongs to EDUSIM core; waveform semantics remain product-owned.
+assert(rollingSignalHistory.includes('class RollingSignalHistory'), 'EDUSIM core must expose a reusable rolling signal history')
+assert(rollingSignalHistory.includes('append(sample: TSample)'), 'rolling signal history must append future samples rather than regenerate history')
+assert(rollingSignalHistory.includes('trim(endTime: number)'), 'rolling signal history must trim samples by simulation time')
+assert(edumonMonitorEngine.includes("import { RollingSignalHistory } from '../core/RollingSignalHistory'"), 'EDUMON monitor engine must use the shared rolling signal history')
+assert(edumonMonitorEngine.includes('runtime.history.append(generateNextSample'), 'EDUMON must generate and append only future monitor samples')
+assert(edumonMonitorEngine.includes('runtime.phase = fract(runtime.phase +'), 'EDUMON must preserve cardiac phase continuously across rate changes')
+assert(!edumonMonitorEngine.includes('cardiacPhase(time, rate'), 'EDUMON must not derive the whole visible waveform phase from the current heart rate')
 
 // Completed compatibility cleanup must not regress.
 assert(!fs.existsSync('src/teaching/scenario/useEduventScenarioLibrary.ts'), 'obsolete EDUVENT-only scenario library hook must not be reintroduced')
