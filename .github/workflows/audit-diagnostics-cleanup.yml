@@ -16,7 +16,7 @@ jobs:
         run: |
           for term in CandidateInvitation SessionPanel InstructorLiveRoom DynamicScenarioBuilder DynamicScenarioRuntimeLibrary; do
             echo "===== $term ====="
-            rg -n "$term" src || true
+            grep -RIn --exclude-dir=node_modules --exclude='*.map' "$term" src || true
           done
           echo "===== diagnostics ====="
-          rg -n "copyEdumonMonitorDiagnostics|copyEdumonSessionDiagnostics|SimulationDiagnostics" src || true
+          grep -RIn --exclude-dir=node_modules --exclude='*.map' -E "copyEdumonMonitorDiagnostics|copyEdumonSessionDiagnostics|SimulationDiagnostics" src || true
