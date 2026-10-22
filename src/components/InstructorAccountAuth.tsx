@@ -6,7 +6,7 @@ import {
   signInInstructor,
   signOutInstructor,
   subscribeToInstructorAccount,
-} from '../instructorAccount'
+} from '../teaching/account/InstructorAccountService'
 import '../account.css'
 
 export interface InstructorAccountAuthState {

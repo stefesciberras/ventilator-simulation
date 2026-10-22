@@ -1,10 +1,9 @@
-import type { User } from '@supabase/supabase-js'
 import type { AlarmLimits } from './alarmTypes'
 import type { PatientSettings, VentilatorSettings } from './simulation/types'
 import { calculatePredictedBodyWeight } from './patientMetrics'
-import { supabase } from './session/supabase'
 import { createBranchId, createStageId } from './scenario-builder/ids'
 import type { ScenarioProductId } from './teaching/scenario/products'
+import { createScenarioRepository } from './teaching/scenario/ScenarioRepository'
 
 export type ScenarioWaveform = 'volume' | 'co2' | 'oesophagealPressure'
 export type InstructorScenarioKind = 'static' | 'dynamic'
@@ -287,142 +286,46 @@ function normalisePreset(row: InstructorPresetRow): InstructorPresetRow {
   return { ...row, product: row.product ?? 'eduvent', scenario: normaliseScenario(row.scenario) }
 }
 
-export function isPermanentInstructor(user: User | null | undefined): user is User {
-  if (!user) return false
-  const anonymous = Boolean((user as User & { is_anonymous?: boolean }).is_anonymous)
-  return !anonymous && Boolean(user.email)
+/**
+ * Compatibility exports. Instructor identity is owned by EDUSIM teaching core.
+ */
+export {
+  isPermanentInstructor,
+  getInstructorAccount,
+  subscribeToInstructorAccount,
+  signInInstructor,
+  createInstructorAccount,
+  signOutInstructor,
+} from './teaching/account/InstructorAccountService'
+
+function legacyScenarioRepository(product: ScenarioProductId) {
+  return createScenarioRepository<InstructorScenarioSnapshot>(product, product === 'eduvent' ? {
+    encode: normaliseScenario,
+    decode: (scenario) => normaliseScenario(scenario as InstructorScenarioSnapshot),
+  } : {})
 }
 
-export async function getInstructorAccount(): Promise<User | null> {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-  if (sessionError) throw sessionError
-  if (!sessionData.session) return null
-  const { data, error } = await supabase.auth.getUser()
-  if (error) throw error
-  return isPermanentInstructor(data.user) ? data.user : null
-}
-
-export function subscribeToInstructorAccount(onChange: (user: User | null) => void) {
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    onChange(isPermanentInstructor(session?.user) ? session!.user : null)
-  })
-  return () => data.subscription.unsubscribe()
-}
-
-export async function signInInstructor(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
-    password,
-  })
-  if (error) throw error
-  if (!isPermanentInstructor(data.user)) throw new Error('A permanent instructor account was not returned.')
-  return data.user
-}
-
-export async function createInstructorAccount(email: string, password: string) {
-  const { data: current } = await supabase.auth.getUser()
-  if (current.user && !isPermanentInstructor(current.user)) {
-    // EDUVENT creates anonymous identities for teaching rooms. Account creation
-    // is a deliberate switch to a permanent instructor identity.
-    await supabase.auth.signOut()
-  }
-
-  const { data, error } = await supabase.auth.signUp({
-    email: email.trim(),
-    password,
-    options: {
-      emailRedirectTo: window.location.origin,
-    },
-  })
-  if (error) throw error
-  return {
-    user: isPermanentInstructor(data.user) ? data.user : null,
-    confirmationRequired: data.session == null,
-  }
-}
-
-export async function signOutInstructor() {
-  const { error } = await supabase.auth.signOut()
-  if (error) throw error
-}
-
-async function requirePermanentInstructor() {
-  const user = await getInstructorAccount()
-  if (!user) throw new Error('Sign in to an instructor account first.')
-  return user
-}
-
+/** @deprecated Use createScenarioRepository/useProductScenarioLibrary. */
 export async function listInstructorPresets(product: ScenarioProductId = 'eduvent'): Promise<InstructorPresetRow[]> {
-  const user = await requirePermanentInstructor()
-  const { data, error } = await supabase
-    .from('instructor_presets')
-    .select('*')
-    .eq('instructor_id', user.id)
-    .eq('product', product)
-    .order('updated_at', { ascending: false })
-  if (error) throw error
-  return ((data ?? []) as InstructorPresetRow[]).map(normalisePreset)
+  const rows = await legacyScenarioRepository(product).list()
+  return rows as InstructorPresetRow[]
 }
 
+/** @deprecated Use createScenarioRepository/useProductScenarioLibrary. */
 export async function createInstructorPreset(name: string, scenario: InstructorScenarioSnapshot, product: ScenarioProductId = 'eduvent') {
-  const user = await requirePermanentInstructor()
-  const cleanName = name.trim()
-  if (!cleanName) throw new Error('Enter a scenario name.')
-  const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('instructor_presets')
-    .insert({
-      instructor_id: user.id,
-      product,
-      name: cleanName,
-      scenario: normaliseScenario(scenario),
-      updated_at: now,
-    })
-    .select('*')
-    .single()
-  if (error) {
-    if (error.code === '23505') throw new Error('You already have a scenario with that name.')
-    throw error
-  }
-  return normalisePreset(data as InstructorPresetRow)
+  return legacyScenarioRepository(product).create(name, scenario) as Promise<InstructorPresetRow>
 }
 
+/** @deprecated Use createScenarioRepository/useProductScenarioLibrary. */
 export async function updateInstructorPreset(
   id: string,
   updates: { name?: string; scenario?: InstructorScenarioSnapshot },
   product: ScenarioProductId = 'eduvent',
 ) {
-  const user = await requirePermanentInstructor()
-  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (updates.name !== undefined) {
-    const cleanName = updates.name.trim()
-    if (!cleanName) throw new Error('Enter a scenario name.')
-    payload.name = cleanName
-  }
-  if (updates.scenario !== undefined) payload.scenario = normaliseScenario(updates.scenario)
-
-  const { data, error } = await supabase
-    .from('instructor_presets')
-    .update(payload)
-    .eq('id', id)
-    .eq('instructor_id', user.id)
-    .eq('product', product)
-    .select('*')
-    .single()
-  if (error) {
-    if (error.code === '23505') throw new Error('You already have a scenario with that name.')
-    throw error
-  }
-  return normalisePreset(data as InstructorPresetRow)
+  return legacyScenarioRepository(product).update(id, updates) as Promise<InstructorPresetRow>
 }
 
+/** @deprecated Use createScenarioRepository/useProductScenarioLibrary. */
 export async function deleteInstructorPreset(id: string, product: ScenarioProductId = 'eduvent') {
-  const user = await requirePermanentInstructor()
-  const { error } = await supabase
-    .from('instructor_presets')
-    .delete()
-    .eq('id', id)
-    .eq('instructor_id', user.id)
-    .eq('product', product)
-  if (error) throw error
+  return legacyScenarioRepository(product).remove(id)
 }

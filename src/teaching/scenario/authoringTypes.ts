@@ -1,13 +1,23 @@
 import type { ReactNode } from 'react'
 import type { ScenarioProductId } from './products'
+import type {
+  ScenarioActor,
+  ScenarioMediaContent,
+  ScenarioOperator,
+  ScenarioQuestionContent,
+  ScenarioQuestionOption,
+  ScenarioStageKind,
+  ScenarioTransition,
+  ScenarioTriggerMode,
+} from './domain'
 
-export type SharedScenarioStageKind = 'state' | 'media' | 'question'
-export type SharedScenarioActor = 'candidate' | 'instructor' | 'either'
-export type SharedScenarioOperator = 'lt' | 'eq' | 'gt'
-
-export type SharedScenarioTransition =
-  | { mode: 'immediate' }
-  | { mode: 'linear'; durationSeconds: number }
+export type SharedScenarioStageKind = ScenarioStageKind
+export type SharedScenarioActor = ScenarioActor
+export type SharedScenarioOperator = ScenarioOperator
+export type SharedScenarioTransition = ScenarioTransition
+export type SharedScenarioMediaContent = ScenarioMediaContent
+export type SharedScenarioQuestionContent = ScenarioQuestionContent
+export type SharedScenarioQuestionOption = ScenarioQuestionOption
 
 export type SharedScenarioAuthoringTrigger =
   | { id: string; type: 'manual' }
@@ -18,29 +28,6 @@ export type SharedScenarioAuthoringTrigger =
   | { id: string; type: 'question-correct' }
   | { id: string; type: 'media-ended' }
   | { id: string; type: 'media-acknowledged' }
-
-export interface SharedScenarioMediaContent {
-  mediaId?: string
-  title: string
-  mediaKind: 'image' | 'video'
-  storagePath: string
-  mimeType: string
-}
-
-export interface SharedScenarioQuestionOption {
-  id: string
-  text: string
-}
-
-export interface SharedScenarioQuestionContent {
-  libraryItemId?: string
-  kind: 'mcq' | 'poll'
-  title: string | null
-  body: string
-  options: SharedScenarioQuestionOption[]
-  correctOptionId: string | null
-  explanation: string | null
-}
 
 export interface SharedScenarioAuthoringStage<TSnapshot> {
   id: string
@@ -68,7 +55,7 @@ export interface SharedScenarioAuthoringBranch {
   /** Path conditions. */
   triggers?: SharedScenarioAuthoringTrigger[]
   /** ANY is the default; ALL requires every condition to match. */
-  triggerMode?: 'any' | 'all'
+  triggerMode?: ScenarioTriggerMode
   priority: number
   label?: string
   enabled?: boolean
