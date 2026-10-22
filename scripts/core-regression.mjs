@@ -72,7 +72,9 @@ for (const productRuntime of [eduventScenarioRuntime, edumonScenarioAdapter]) {
 // Shared display interactions: standalone laser stays live; teaching laser may freeze/share.
 assert(displayControls.includes("const sharedTeachingLaser = role === 'instructor' && Boolean(sessionId)"), 'laser freeze must be scoped to an active instructor session')
 assert(displayControls.includes('if (next && sharedTeachingLaser && !frozen)'), 'standalone laser must not force a local waveform freeze')
-assert(mobileWorkspace.includes("closest('.teaching-laser-layer-active')"), 'mobile workspace swipes must ignore active laser interactions')
+assert(mobileWorkspace.includes('isSwipeBlockedTouch'), 'mobile workspace swipes must detect protected interaction surfaces from touch coordinates')
+assert(mobileWorkspace.includes('.teaching-laser-layer-active'), 'mobile workspace swipes must ignore active simulator laser interactions')
+assert(mobileWorkspace.includes('.teaching-media-laser-stage'), 'mobile workspace swipes must ignore teaching media laser interactions')
 assert(laserInteractionCss.includes('.teaching-laser-exit'), 'legacy laser exit affordance must remain hidden')
 
 // Shared persistence and diagnostics infrastructure with product-owned payloads.
