@@ -19,8 +19,8 @@ interface UseSimulationDisplayControlsOptions<TSnapshot> {
  * Product-neutral freeze/laser authority for simulator displays.
  *
  * Products own the shape/rendering of a frozen snapshot. Core owns local vs
- * instructor-shared authority, candidate locking, laser-forces-freeze behaviour,
- * and synchronization over the EDUSIM teaching display bus.
+ * instructor-shared authority, candidate locking, teaching-session laser freeze
+ * behaviour, and synchronization over the EDUSIM teaching display bus.
  */
 export function useSimulationDisplayControls<TSnapshot>({
   role,
@@ -67,12 +67,13 @@ export function useSimulationDisplayControls<TSnapshot>({
   const toggleLaser = useCallback(() => {
     if (role === 'candidate') return
     const next = !laserEnabled
-    if (next && !frozen) {
+    const sharedTeachingLaser = role === 'instructor' && Boolean(sessionId)
+    if (next && sharedTeachingLaser && !frozen) {
       freezeLocal(true)
-      if (role === 'instructor' && sessionId) displaySync.setFrozen(true)
+      displaySync.setFrozen(true)
     }
     setLaserEnabled(next)
-    if (role === 'instructor' && sessionId) displaySync.setLaserEnabled(next)
+    if (sharedTeachingLaser) displaySync.setLaserEnabled(next)
   }, [displaySync, freezeLocal, frozen, laserEnabled, role, sessionId, setLaserEnabled])
 
   return {
