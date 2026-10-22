@@ -141,9 +141,11 @@ function narrowComplexWithoutP(phase: number, state: MonitorPatientState, tAmpli
     + gaussian(phase, 0.55, tSigma, tAmplitude)
 }
 
-function stSegmentWindow(phase: number): number {
-  const rise = smoothstep(0.285, 0.325, phase)
-  const fall = 1 - smoothstep(0.455, 0.515, phase)
+function stJunctionWindow(phase: number): number {
+  // Begin at the terminal S/J point rather than after the QRS has returned to
+  // baseline. This keeps ST shifts anatomically continuous with the QRS.
+  const rise = smoothstep(0.265, 0.300, phase)
+  const fall = 1 - smoothstep(0.455, 0.525, phase)
   return rise * fall
 }
 
@@ -161,15 +163,23 @@ function applyEcgMorphology(base: number, phase: number, state: MonitorPatientSt
   if (severity <= 0) return base
 
   if (morphology === 'ischaemia') {
-    const depression = 0.34 * severity * stSegmentWindow(phase)
-    const tFlattening = gaussian(phase, 0.55, 0.085, 0.10 * severity)
-    return base - depression - tFlattening
+    // Subendocardial ischaemia: J-point/ST depression with a mildly downsloping
+    // segment, progressing from T-wave flattening to symmetric T inversion.
+    const stSlope = 0.88 + 0.12 * smoothstep(0.31, 0.46, phase)
+    const depression = 0.32 * severity * stJunctionWindow(phase) * stSlope
+    const tInversion = gaussian(phase, 0.55, 0.075, 0.56 * severity)
+    return base - depression - tInversion
   }
 
   if (morphology === 'infarction') {
-    const elevation = 0.42 * severity * stSegmentWindow(phase)
-    const convexShoulder = gaussian(phase, 0.405, 0.085, 0.10 * severity)
-    return base + elevation + convexShoulder
+    // Acute transmural injury: lift the terminal S/J point itself so the trace
+    // does not return to baseline before ST elevation. The elevated segment
+    // then blends into a broad hyperacute T wave.
+    const jPointLift = gaussian(phase, 0.292, 0.036, 0.24 * severity)
+    const stElevation = 0.40 * severity * stJunctionWindow(phase)
+    const convexShoulder = gaussian(phase, 0.405, 0.095, 0.12 * severity)
+    const hyperacuteT = gaussian(phase, 0.55, 0.090, 0.26 * severity)
+    return base + jPointLift + stElevation + convexShoulder + hyperacuteT
   }
 
   if (morphology === 'hyperkalaemia') {
