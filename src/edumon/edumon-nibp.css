@@ -8,6 +8,9 @@
 
 .edumon-nibp-tile {
   position: relative;
+  order: -1;
+  flex: 0 0 170px;
+  min-width: 170px;
 }
 
 .edumon-nibp-tile.measuring strong {
@@ -71,6 +74,11 @@
 }
 
 @media (max-width: 680px) {
+  .edumon-nibp-tile {
+    flex-basis: 150px;
+    min-width: 150px;
+  }
+
   .edumon-nibp-popover {
     left: 6px;
   }
