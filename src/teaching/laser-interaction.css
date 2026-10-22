@@ -1,0 +1,8 @@
+.teaching-laser-exit {
+  display: none !important;
+}
+
+.teaching-laser-layer-active {
+  touch-action: none;
+  overscroll-behavior: contain;
+}

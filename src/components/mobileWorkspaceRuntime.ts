@@ -26,8 +26,10 @@ export function installMobileWorkspaceRuntime({
   let activePage = firstPage.id
   let touchStartX = 0
   let touchStartY = 0
+  let swipeSuppressed = false
 
   const shouldUseMobileWorkspace = () => window.matchMedia(mobileQuery).matches || document.body.classList.contains(tabletBodyClass)
+  const isLaserInteractionTarget = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('.teaching-laser-layer-active'))
 
   const applyPage = (page: string) => {
     activePage = page
@@ -72,18 +74,31 @@ export function installMobileWorkspaceRuntime({
     if (workspace !== nextWorkspace) {
       workspace = nextWorkspace
       workspace.addEventListener('touchstart', (event) => {
+        swipeSuppressed = false
         if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
+        if (isLaserInteractionTarget(event.target)) {
+          swipeSuppressed = true
+          return
+        }
         touchStartX = event.touches[0].clientX
         touchStartY = event.touches[0].clientY
       }, { passive: true })
 
       workspace.addEventListener('touchend', (event) => {
+        if (swipeSuppressed) {
+          swipeSuppressed = false
+          return
+        }
         if (!shouldUseMobileWorkspace() || event.changedTouches.length !== 1) return
         const dx = event.changedTouches[0].clientX - touchStartX
         const dy = event.changedTouches[0].clientY - touchStartY
         if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.2) return
         if (dx < 0 && activePage === firstPage.id) applyPage(secondPage.id)
         else if (dx > 0 && activePage === secondPage.id) applyPage(firstPage.id)
+      }, { passive: true })
+
+      workspace.addEventListener('touchcancel', () => {
+        swipeSuppressed = false
       }, { passive: true })
     }
 

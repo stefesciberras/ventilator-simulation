@@ -26,6 +26,9 @@ const persistence = read('src/core/SimulationPersistence.ts')
 const diagnostics = read('src/core/SimulationDiagnostics.ts')
 const eduventDiagnostics = read('src/diagnostics.ts')
 const transition = read('src/components/SimulationTransitionTimeControl.tsx')
+const displayControls = read('src/components/useSimulationDisplayControls.ts')
+const mobileWorkspace = read('src/components/mobileWorkspaceRuntime.ts')
+const laserInteractionCss = read('src/teaching/laser-interaction.css')
 
 // Existing shared shell / UI ownership regression checks.
 assert(eduvent.includes('<SimulationControlFramework'), 'EDUVENT must use SimulationControlFramework')
@@ -65,6 +68,12 @@ for (const productRuntime of [eduventScenarioRuntime, edumonScenarioAdapter]) {
   assert(productRuntime.includes("trigger.type === 'time'"), 'product scenario adapters must preserve elapsed-time triggers')
   assert(productRuntime.includes("trigger.type === 'condition'"), 'product scenario adapters must preserve condition triggers')
 }
+
+// Shared display interactions: standalone laser stays live; teaching laser may freeze/share.
+assert(displayControls.includes("const sharedTeachingLaser = role === 'instructor' && Boolean(sessionId)"), 'laser freeze must be scoped to an active instructor session')
+assert(displayControls.includes('if (next && sharedTeachingLaser && !frozen)'), 'standalone laser must not force a local waveform freeze')
+assert(mobileWorkspace.includes("closest('.teaching-laser-layer-active')"), 'mobile workspace swipes must ignore active laser interactions')
+assert(laserInteractionCss.includes('.teaching-laser-exit'), 'legacy laser exit affordance must remain hidden')
 
 // Shared persistence and diagnostics infrastructure with product-owned payloads.
 assert(persistence.includes('edusim.${productId}.'), 'shared persistence must namespace values by product')
