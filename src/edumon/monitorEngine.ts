@@ -73,13 +73,17 @@ function beatRandom(index: number, rhythm: CardiacRhythm): number {
 }
 
 function irregularRateScale(index: number, rhythm: CardiacRhythm): number {
-  return 0.85 + 0.30 * beatRandom(index, rhythm)
+  const random = beatRandom(index, rhythm)
+  const rrRatio = rhythm === 'atrial-fibrillation'
+    ? 0.72 + 0.56 * random
+    : 0.85 + 0.30 * random
+  return 1 / rrRatio
 }
 
 function pulseAmplitudeFromRr(rrSeconds: number, nominalRrSeconds: number): number {
-  const rrRatio = clamp(rrSeconds / Math.max(0.12, nominalRrSeconds), 0.55, 1.6)
-  if (rrRatio < 1) return clamp(Math.pow(rrRatio, 4), 0.45, 1)
-  return clamp(1 + (rrRatio - 1) * 0.8, 1, 1.20)
+  const rrRatio = clamp(rrSeconds / Math.max(0.12, nominalRrSeconds), 0.50, 1.7)
+  if (rrRatio < 1) return clamp(Math.pow(rrRatio, 5), 0.28, 1)
+  return clamp(1 + (rrRatio - 1) * 0.9, 1, 1.25)
 }
 
 function ventricularTachycardiaBloodPressure(state: MonitorPatientState): EffectiveBloodPressure {
