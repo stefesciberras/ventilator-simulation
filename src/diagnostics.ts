@@ -5,33 +5,14 @@ import {
   readScenarioLogs,
   type ScenarioLogEntry,
 } from './scenario-logger'
+import {
+  copySimulationDiagnostic,
+  copySimulationJson,
+  type SimulationDiagnosticWaveformSource,
+} from './core/SimulationDiagnostics'
 
-export type DiagnosticWaveformSource = 'live' | 'frozen'
+export type DiagnosticWaveformSource = SimulationDiagnosticWaveformSource
 export type { ScenarioLogEntry } from './scenario-logger'
-
-async function copyJsonPayload(payload: Record<string, unknown>, promptTitle: string, pretty = false): Promise<boolean> {
-  const text = JSON.stringify(payload, null, pretty ? 2 : undefined)
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      const textarea = document.createElement('textarea')
-      textarea.value = text
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.focus()
-      textarea.select()
-      const copied = document.execCommand('copy')
-      textarea.remove()
-      if (!copied) throw new Error('Clipboard copy failed')
-    }
-    return true
-  } catch {
-    window.prompt(promptTitle, text)
-    return false
-  }
-}
 
 /** Backwards-compatible diagnostic helper. New scenario runtime code should use appendStructuredScenarioLog directly. */
 export function appendScenarioLog(event: string, details: Record<string, unknown> = {}) {
@@ -42,11 +23,11 @@ export { readScenarioLogs }
 
 export async function copyScenarioLogs(context: Record<string, unknown> = {}): Promise<boolean> {
   const entries: ScenarioLogEntry[] = readScenarioLogs()
-  return copyJsonPayload({
+  return copySimulationJson({
     schema: 'eduvent-scenario-log-v2',
     loggerVersion: 2,
     capturedAt: new Date().toISOString(),
-    appVersion: APP_VERSION,
+    product: { id: 'eduvent', label: 'EDUVENT', appVersion: APP_VERSION },
     context,
     entries,
   }, 'Copy scenario log JSON')
@@ -54,14 +35,14 @@ export async function copyScenarioLogs(context: Record<string, unknown> = {}): P
 
 export async function copyScenarioSnapshot(snapshot: Record<string, unknown>): Promise<boolean> {
   const entries: ScenarioLogEntry[] = readScenarioLogs()
-  return copyJsonPayload({
+  return copySimulationJson({
     schema: 'eduvent-scenario-diagnostic-v1',
     capturedAt: new Date().toISOString(),
-    appVersion: APP_VERSION,
+    product: { id: 'eduvent', label: 'EDUVENT', appVersion: APP_VERSION },
     purpose: 'Paste this JSON into the EDUVENT development thread for scenario debugging.',
     snapshot,
     recentScenarioEvents: entries.slice(-100),
-  }, 'Copy scenario diagnostic JSON', true)
+  }, 'Copy scenario diagnostic JSON')
 }
 
 export async function copyDiagnosticSnapshot(
@@ -70,16 +51,17 @@ export async function copyDiagnosticSnapshot(
   source: DiagnosticWaveformSource,
   sampleIntervalSeconds: number,
 ): Promise<boolean> {
-  const payload = {
+  return copySimulationDiagnostic<Sample>({
     schema: 'eduvent-diagnostic-v1',
-    capturedAt: new Date().toISOString(),
-    ...diagnostic,
+    productId: 'eduvent',
+    productLabel: 'EDUVENT',
     appVersion: APP_VERSION,
+    kind: 'simulation-snapshot',
+    payload: diagnostic,
     waveform: {
       source,
       sampleIntervalSeconds,
-      sampleCount: samples.length,
-      durationSeconds: samples.length > 1 ? samples[samples.length - 1].time - samples[0].time : 0,
+      samples,
       units: {
         time: 's',
         pressure: 'cmH2O',
@@ -105,7 +87,8 @@ export async function copyDiagnosticSnapshot(
         'expiratoryHold',
         'simvSyncWindow',
       ],
-      samples: samples.map((sample) => [
+      sampleTimeSeconds: (sample) => sample.time,
+      serializeSample: (sample) => [
         sample.time,
         sample.pressure,
         sample.flow,
@@ -119,9 +102,7 @@ export async function copyDiagnosticSnapshot(
         sample.breathTrigger ?? null,
         Boolean(sample.expiratoryHold),
         Boolean(sample.simvSyncWindow),
-      ]),
+      ],
     },
-  }
-
-  return copyJsonPayload(payload, 'Copy diagnostic JSON')
+  })
 }
