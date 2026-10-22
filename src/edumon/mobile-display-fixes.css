@@ -7,6 +7,56 @@
   display: none !important;
 }
 
+/* Keep EDUMON measured values visually consistent with the EDUVENT metric rail.
+   The panel itself owns the waveform colour, and all of its children inherit it. */
+.edumon-measurements .edumon-value-panel {
+  min-height: 0;
+  padding: 11px 10px;
+  display: block;
+  text-align: right;
+}
+
+.edumon-measurements .edumon-value-label {
+  position: static;
+  display: block;
+  text-align: left;
+  font-size: 9px;
+  line-height: 1.05;
+  letter-spacing: .08em;
+  color: currentColor;
+}
+
+.edumon-measurements .edumon-value-main {
+  display: inline-block;
+  margin-top: 1px;
+  font-size: 24px;
+  line-height: 1.05;
+  font-weight: 650;
+  letter-spacing: normal;
+  color: currentColor;
+}
+
+.edumon-measurements .edumon-value-art .edumon-value-main {
+  font-size: 22px;
+}
+
+.edumon-measurements .edumon-value-unit {
+  display: inline-block;
+  margin: 0 0 0 4px;
+  font-size: 8px;
+  line-height: 1;
+  color: currentColor;
+  opacity: .72;
+}
+
+.edumon-measurements .edumon-value-detail {
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.1;
+  color: currentColor;
+  opacity: .82;
+}
+
 @media (max-width: 1180px) {
   .edumon-app-shell {
     display: flex;
@@ -33,11 +83,69 @@
     min-height: 0;
   }
 
+  /* EDUMON's measured-value rail was wider than EDUVENT on mobile/tablet.
+     Keep enough room for ART while giving more horizontal space back to traces. */
+  .edumon-monitor-body {
+    grid-template-columns: minmax(0, 1fr) 150px !important;
+  }
+
   .edumon-control-strip {
     display: flex !important;
     flex: 0 0 74px;
     min-height: 74px;
     visibility: visible !important;
+  }
+}
+
+/* Match EDUVENT's compact mobile metric treatment on narrow phones. */
+@media (max-width: 680px) {
+  .edumon-monitor-body {
+    grid-template-columns: minmax(0, 1fr) 124px !important;
+  }
+
+  .edumon-measurements .edumon-value-panel {
+    padding: 5px 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    column-gap: 3px;
+    text-align: right;
+  }
+
+  .edumon-measurements .edumon-value-label {
+    font-size: 8px;
+    letter-spacing: .03em;
+  }
+
+  .edumon-measurements .edumon-value-main,
+  .edumon-measurements .edumon-value-art .edumon-value-main {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .edumon-measurements .edumon-value-unit {
+    margin: 0;
+    font-size: 6.5px;
+    white-space: nowrap;
+  }
+
+  .edumon-measurements .edumon-value-detail {
+    grid-column: 1 / -1;
+    margin-top: 2px;
+    font-size: 7px;
+    text-align: right;
+  }
+}
+
+@media (max-width: 400px) {
+  .edumon-monitor-body {
+    grid-template-columns: minmax(0, 1fr) 112px !important;
+  }
+
+  .edumon-measurements .edumon-value-panel {
+    padding-left: 4px;
+    padding-right: 4px;
   }
 }
 
@@ -100,6 +208,7 @@ body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-moni
   flex: 0 0 430px !important;
   min-height: 430px !important;
   overflow: hidden !important;
+  grid-template-columns: minmax(0, 1fr) 150px !important;
 }
 
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-waveform-area,
