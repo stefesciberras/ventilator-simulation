@@ -47,6 +47,13 @@
   border-color: #40525d;
 }
 
+/* Legacy product triggers remain in product markup during migration, but the
+   visible control is owned and positioned by the shared console shell. */
+.simulation-console-status-content .mobile-alarm-limits-button,
+.eduvent-console .metrics-panel > .metrics-actions {
+  display: none !important;
+}
+
 .simulation-console-display {
   position: relative;
   flex: 1 1 auto;
