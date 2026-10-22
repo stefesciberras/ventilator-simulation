@@ -259,8 +259,8 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
       >
         <span>NIBP</span>
         <strong>{status}</strong>
-        {meanDetail && <small>{meanDetail}</small>}
-        {phaseDetail && <small>{phaseDetail}</small>}
+        {meanDetail && <small className="edumon-nibp-map">{meanDetail}</small>}
+        {phaseDetail && <small className="edumon-nibp-phase-detail">{phaseDetail}</small>}
       </button>
       <button
         type="button"
