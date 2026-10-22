@@ -16,6 +16,7 @@ type NibpReading = {
 
 const INFLATE_MS = 2200
 const DEFLATE_MS = 5800
+const LONG_PRESS_MS = 650
 const INTERVAL_MS: Record<Exclude<NibpInterval, 'off'>, number> = {
   '2m': 2 * 60_000,
   '3m': 3 * 60_000,
@@ -107,6 +108,8 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
   const cycleIndexRef = useRef(0)
   const timerRef = useRef<number | null>(null)
   const scheduledRef = useRef<number | null>(null)
+  const longPressTimerRef = useRef<number | null>(null)
+  const longPressTriggeredRef = useRef(false)
   const measuringRef = useRef(false)
   const audioContextRef = useRef<AudioContext | null>(null)
 
@@ -137,6 +140,11 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
     if (scheduledRef.current != null) window.clearTimeout(scheduledRef.current)
     timerRef.current = null
     scheduledRef.current = null
+  }, [])
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current != null) window.clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = null
   }, [])
 
   const startMeasurement = useCallback(() => {
@@ -182,8 +190,9 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
 
   useEffect(() => () => {
     clearTimers()
+    clearLongPressTimer()
     void audioContextRef.current?.close()
-  }, [clearTimers])
+  }, [clearTimers, clearLongPressTimer])
 
   const chooseInterval = (next: NibpInterval) => {
     setIntervalMode(next)
@@ -195,7 +204,7 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
     if (next !== 'off' && !measuringRef.current) startMeasurement()
   }
 
-  const runStat = () => {
+  const runStat = useCallback(() => {
     setIntervalMode('off')
     intervalRef.current = 'off'
     if (scheduledRef.current != null) {
@@ -203,30 +212,75 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
       scheduledRef.current = null
     }
     startMeasurement()
+  }, [startMeasurement])
+
+  const handleStartPointerDown = () => {
+    clearLongPressTimer()
+    longPressTriggeredRef.current = false
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null
+      longPressTriggeredRef.current = true
+      runStat()
+    }, LONG_PRESS_MS)
+  }
+
+  const handleStartPointerUp = () => {
+    clearLongPressTimer()
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false
+      return
+    }
+    setOpen(true)
+  }
+
+  const handleStartPointerCancel = () => {
+    clearLongPressTimer()
+    longPressTriggeredRef.current = false
   }
 
   if (!host) return null
 
   const status = phase === 'idle'
-    ? (reading ? `${reading.systolic}/${reading.diastolic} (${reading.mean})` : '—/—')
+    ? (reading ? `${reading.systolic}/${reading.diastolic}` : '—/—')
     : `${cuffPressure}`
-  const detail = phase === 'idle'
-    ? (interval === 'off' ? 'Press for NIBP' : `Cycle ${interval.toUpperCase()}`)
-    : `Cuff mmHg · ${phase === 'inflating' ? 'inflating' : 'measuring'}`
+  const meanDetail = phase === 'idle' && reading ? `MAP ${reading.mean}` : null
+  const cycleDetail = interval === 'off' ? null : `Cycle ${interval.toUpperCase()}`
+  const phaseDetail = phase === 'idle' ? cycleDetail : `Cuff mmHg · ${phase === 'inflating' ? 'inflating' : 'measuring'}`
 
   return createPortal(<>
-    <button
-      type="button"
-      className={`edumon-control-tile edumon-nibp-tile ${phase !== 'idle' ? 'measuring' : ''}`}
-      onClick={() => setOpen((value) => !value)}
-      aria-expanded={open}
-      aria-haspopup="dialog"
-      title="NIBP — press to measure or set automatic interval"
-    >
-      <span>NIBP</span>
-      <strong>{status}</strong>
-      <small>{detail}</small>
-    </button>
+    <div className={`edumon-control-tile edumon-nibp-tile ${phase !== 'idle' ? 'measuring' : ''}`}>
+      <button
+        type="button"
+        className="edumon-nibp-display-button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        title="NIBP — open measurement controls"
+      >
+        <span>NIBP</span>
+        <strong>{status}</strong>
+        {meanDetail && <small>{meanDetail}</small>}
+        {phaseDetail && <small>{phaseDetail}</small>}
+      </button>
+      <button
+        type="button"
+        className="edumon-nibp-start-button"
+        onPointerDown={handleStartPointerDown}
+        onPointerUp={handleStartPointerUp}
+        onPointerCancel={handleStartPointerCancel}
+        onPointerLeave={clearLongPressTimer}
+        onContextMenu={(event) => event.preventDefault()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setOpen(true)
+          }
+        }}
+        title="Press to open NIBP controls. Long press for one immediate reading."
+      >
+        START
+      </button>
+    </div>
     {open && (
       <div className="edumon-nibp-popover" role="dialog" aria-label="NIBP measurement settings">
         <div className="edumon-nibp-popover-heading"><strong>NIBP</strong><span>Measurement interval</span></div>
