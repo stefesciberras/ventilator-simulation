@@ -35,19 +35,45 @@ function effectiveRate(state: MonitorPatientState): number {
   }
 }
 
+/**
+ * Monomorphic VT is intentionally not built from the sinus P-QRS-T template.
+ * A broad, nearly continuous ventricular complex is repeated at the ventricular
+ * rate, producing the wide sine/triangular morphology expected on a monitor.
+ */
+function ventricularTachycardiaAtPhase(phase: number): number {
+  const fundamental = Math.sin(TWO_PI * (phase + 0.015))
+  const secondHarmonic = 0.30 * Math.sin(TWO_PI * 2 * (phase - 0.08))
+  const thirdHarmonic = 0.09 * Math.sin(TWO_PI * 3 * (phase + 0.04))
+  return 1.02 * fundamental + secondHarmonic + thirdHarmonic - 0.03
+}
+
+/**
+ * VF remains deterministic (important for simulation replay) but behaves like a
+ * chaotic signal: several independently drifting oscillators are multiplied by
+ * a slow, irregular amplitude envelope. This gives visible coarse/fine and
+ * beat-to-beat amplitude variation without introducing discontinuous RNG noise.
+ */
+function ventricularFibrillationAtTime(time: number): number {
+  const envelope = clamp(
+    0.68
+      + 0.24 * Math.sin(time * 0.73 + 0.4)
+      + 0.15 * Math.sin(time * 1.31 + 2.1)
+      + 0.08 * Math.sin(time * 2.17 + 0.9),
+    0.26,
+    1.12,
+  )
+  const oscillatorA = 0.58 * Math.sin(time * 18.4 + 0.72 * Math.sin(time * 0.41))
+  const oscillatorB = 0.34 * Math.sin(time * 29.6 + 0.55 * Math.sin(time * 0.67 + 1.2))
+  const oscillatorC = 0.21 * Math.sin(time * 43.1 + 0.44 * Math.sin(time * 0.29 + 2.4))
+  const oscillatorD = 0.10 * Math.sin(time * 57.7 + 0.31 * Math.sin(time * 0.93))
+  return envelope * (oscillatorA + oscillatorB + oscillatorC + oscillatorD)
+}
+
 function ecgAtPhase(time: number, state: MonitorPatientState, phase: number): number {
   const rhythm = state.rhythm
   if (rhythm === 'asystole') return 0.012 * Math.sin(time * 10.7)
-  if (rhythm === 'ventricular-fibrillation') {
-    return 0.65 * Math.sin(time * 18.1) + 0.33 * Math.sin(time * 31.7) + 0.17 * Math.sin(time * 47.3)
-  }
-
-  if (rhythm === 'ventricular-tachycardia') {
-    return gaussian(phase, 0.16, 0.055, 1.55)
-      - gaussian(phase, 0.08, 0.035, 0.45)
-      - gaussian(phase, 0.28, 0.07, 0.7)
-      + gaussian(phase, 0.58, 0.12, 0.22)
-  }
+  if (rhythm === 'ventricular-fibrillation') return ventricularFibrillationAtTime(time)
+  if (rhythm === 'ventricular-tachycardia') return ventricularTachycardiaAtPhase(phase)
 
   const qrsWidth = rhythm === 'svt' ? 0.018 : 0.022
   const fibrillatoryBaseline = rhythm === 'atrial-fibrillation'
