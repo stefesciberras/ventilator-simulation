@@ -1,4 +1,25 @@
 /* Shared EDUSIM top-bar responsive behaviour. Product-specific simulators should not override this layout. */
+.edusim-back-link {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 50%;
+  color: #b8c8d0;
+  text-decoration: none;
+  font-size: 1.8rem;
+  line-height: 1;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.edusim-back-link:hover {
+  color: #ecf7fb;
+  border-color: rgba(255,255,255,.3);
+  background: rgba(255,255,255,.06);
+}
+
 .simulation-topbar-status .simulation-status-text {
   white-space: nowrap;
 }

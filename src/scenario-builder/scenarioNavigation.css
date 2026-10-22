@@ -1,0 +1,15 @@
+.scenario-builder-appbar-actions > .scenario-builder-primary:last-child {
+  width: 38px;
+  min-width: 38px;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  font-size: 0;
+  display: grid;
+  place-items: center;
+}
+
+.scenario-builder-appbar-actions > .scenario-builder-primary:last-child::before {
+  content: '‹';
+  font-size: 1.85rem;
+  line-height: 1;
+}

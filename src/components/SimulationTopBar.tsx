@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { EdusimBackLink } from './EdusimBackLink'
 import './SimulationTopBar.css'
 
 export type SharedSimulationSpeed = 0.5 | 1 | 1.5 | 2 | 4
@@ -74,7 +75,7 @@ export function SimulationTopBar({
   return (
     <header className={`topbar simulation-topbar ${className}`.trim()}>
       <div className={`brand-block ${brandClassName}`.trim()}>
-        {brandLeading}
+        {brandLeading ?? <EdusimBackLink />}
         <div><span className="brand-kicker">{brandKicker}</span><h1>{title}</h1></div>
       </div>
 

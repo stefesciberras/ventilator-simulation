@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import type { EdumonModuleDefinition } from './modules'
 import { SimulationTopBar, type SharedSimulationSpeed } from '../components/SimulationTopBar'
+import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
+import { useInstructorAccountAuth } from '../components/InstructorAccountAuth'
 import { EDUMON_APP_VERSION } from './appVersion'
 import './EdumonTopBar.css'
 
@@ -14,10 +16,6 @@ function ScenarioIcon() {
       <path d="M8 3.5h8v4H8z" fill="#0e171c" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   )
-}
-
-function MenuIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></svg>
 }
 
 interface EdumonTopBarProps {
@@ -35,18 +33,18 @@ interface EdumonTopBarProps {
 }
 
 export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, diagnosticsAction, onAbout }: EdumonTopBarProps) {
+  const settingsAuth = useInstructorAccountAuth({ locked: simulationControlsLocked })
   return (
     <SimulationTopBar
       brandKicker={module.productName}
       title={module.subtitle}
-      brandLeading={<a href="/edumon" className="edumon-topbar-back" aria-label="Choose EDUMON module">‹</a>}
       simulationPaused={simulationPaused}
       simulationSpeed={simulationSpeed}
       elapsedSeconds={elapsedSeconds}
       onPausedChange={onPausedChange}
       onSpeedChange={onSpeedChange}
       controlsControlledByInstructor={simulationControlsLocked}
-      rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button><a className="top-account-button edumon-module-menu-button" href="/edumon" title="EDUMON modules" aria-label="Choose EDUMON module"><MenuIcon /></a>{diagnosticsAction}</>}
+      rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button><InstructorSettingsController productLabel={module.productName} version={EDUMON_APP_VERSION} role={simulationControlsLocked ? 'candidate' : 'standalone'} auth={settingsAuth} />{diagnosticsAction}</>}
       statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
       version={EDUMON_APP_VERSION}
       onAbout={onAbout}
