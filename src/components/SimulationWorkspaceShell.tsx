@@ -11,21 +11,32 @@ interface SimulationWorkspaceShellProps {
   displayPageClassName?: string
   controlsPageClassName?: string
   controlsVisible?: boolean
+  /** Retained for backwards compatibility. Two-finger workspace navigation no longer needs canvas exceptions. */
   allowSwipeFromCanvas?: boolean
 }
 
-const isGlobalLaserInteractionActive = () => (
-  typeof document !== 'undefined' && (
-    document.documentElement.getAttribute('data-edusim-simulator-laser-active') === 'true'
-    || document.documentElement.getAttribute('data-edusim-media-laser-active') === 'true'
-  )
-)
+interface WorkspaceSwipeStart {
+  x: number
+  y: number
+}
 
-const isLaserInteractionTarget = (target: EventTarget | null) => (
-  target instanceof Element && Boolean(target.closest(
-    '.teaching-laser-layer-active, .teaching-media-laser-stage, [data-edusim-block-workspace-swipe="true"]',
-  ))
-)
+const centroidFromTouches = (touches: ArrayLike<Touch>) => {
+  if (touches.length < 1) return null
+  let x = 0
+  let y = 0
+  for (let index = 0; index < touches.length; index += 1) {
+    x += touches[index].clientX
+    y += touches[index].clientY
+  }
+  return { x: x / touches.length, y: y / touches.length }
+}
+
+const twoTouchCentroidAtEnd = (event: TouchEvent<HTMLDivElement>) => {
+  const contacts: Touch[] = []
+  for (let index = 0; index < event.touches.length; index += 1) contacts.push(event.touches[index])
+  for (let index = 0; index < event.changedTouches.length; index += 1) contacts.push(event.changedTouches[index])
+  return contacts.length >= 2 ? centroidFromTouches(contacts.slice(0, 2)) : null
+}
 
 export function SimulationWorkspaceShell({
   display,
@@ -38,45 +49,47 @@ export function SimulationWorkspaceShell({
   displayPageClassName = 'mobile-page-display',
   controlsPageClassName = 'mobile-page-controls',
   controlsVisible = true,
-  allowSwipeFromCanvas = false,
 }: SimulationWorkspaceShellProps) {
   const [page, setPage] = useState<'display' | 'controls'>('display')
-  const swipeStart = useRef<{ x: number; y: number; blocked: boolean } | null>(null)
+  const swipeStart = useRef<WorkspaceSwipeStart | null>(null)
 
   const resetSwipe = () => {
     swipeStart.current = null
   }
 
   const onTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    resetSwipe()
-    if (event.touches.length !== 1) return
-    const touch = event.touches[0]
-    const target = event.target as HTMLElement
-    const laserOwnsGesture = page === 'display' && (isGlobalLaserInteractionActive() || isLaserInteractionTarget(event.target))
-    swipeStart.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-      blocked: laserOwnsGesture || Boolean(target.closest(allowSwipeFromCanvas
-        ? 'button, input, select, textarea, a, [role="slider"]'
-        : 'button, input, select, textarea, a, [role="slider"], canvas')),
+    // A first finger must never arm workspace navigation. The gesture starts
+    // only when a second simultaneous contact is present, so ordinary sliders,
+    // scrolling, waveform interaction and the teaching laser remain one-finger gestures.
+    if (event.touches.length !== 2) {
+      if (event.touches.length < 2) resetSwipe()
+      return
     }
+    swipeStart.current = centroidFromTouches(event.touches)
   }
 
   const onTouchMove = (event: TouchEvent<HTMLDivElement>) => {
-    const start = swipeStart.current
-    if (!start || start.blocked) return
-    if (page === 'display' && (isGlobalLaserInteractionActive() || isLaserInteractionTarget(event.target))) {
-      start.blocked = true
-    }
+    // If a third contact is added, cancel rather than interpreting a pinch or
+    // other multi-touch interaction as workspace navigation.
+    if (swipeStart.current && event.touches.length !== 2) resetSwipe()
   }
 
   const onTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
     const start = swipeStart.current
+    if (!start || !controlsVisible) {
+      if (event.touches.length < 2) resetSwipe()
+      return
+    }
+
+    // touchend normally contains one remaining finger plus the finger that
+    // just lifted. Recombine those contacts so the final position remains the
+    // centre of the same two-finger gesture.
+    const end = twoTouchCentroidAtEnd(event)
     resetSwipe()
-    if (!start || start.blocked || isGlobalLaserInteractionActive() || event.changedTouches.length !== 1 || !controlsVisible) return
-    const touch = event.changedTouches[0]
-    const dx = touch.clientX - start.x
-    const dy = touch.clientY - start.y
+    if (!end) return
+
+    const dx = end.x - start.x
+    const dy = end.y - start.y
     if (Math.abs(dx) < 55 || Math.abs(dx) <= Math.abs(dy) * 1.25) return
     setPage(dx > 0 ? 'display' : 'controls')
   }
