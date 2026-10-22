@@ -1,0 +1,81 @@
+.edumon-control-strip {
+  position: relative;
+}
+
+.edumon-control-strip > button[title*='NIBP'] {
+  display: none;
+}
+
+.edumon-nibp-tile {
+  position: relative;
+}
+
+.edumon-nibp-tile.measuring strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.edumon-nibp-popover {
+  position: absolute;
+  z-index: 40;
+  left: 10px;
+  bottom: calc(100% + 10px);
+  width: min(320px, calc(100vw - 28px));
+  padding: 12px;
+  border: 1px solid #3f5663;
+  border-radius: 10px;
+  background: #10181e;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .38);
+}
+
+.edumon-nibp-popover-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.edumon-nibp-popover-heading strong {
+  color: #f5f7f8;
+}
+
+.edumon-nibp-popover-heading span {
+  color: #9fadb5;
+  font-size: .82rem;
+}
+
+.edumon-nibp-measure-now,
+.edumon-nibp-intervals button {
+  border: 1px solid #40545f;
+  border-radius: 7px;
+  background: #18242b;
+  color: #dce5e9;
+  min-height: 34px;
+}
+
+.edumon-nibp-measure-now {
+  width: 100%;
+  margin-bottom: 9px;
+}
+
+.edumon-nibp-intervals {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.edumon-nibp-intervals button.active {
+  border-color: #f0f2f3;
+  background: #2a3942;
+  color: #fff;
+}
+
+@media (max-width: 680px) {
+  .edumon-nibp-popover {
+    left: 6px;
+  }
+
+  .edumon-nibp-intervals {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
