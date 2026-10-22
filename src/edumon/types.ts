@@ -9,9 +9,17 @@ export type CardiacRhythm =
   | 'ventricular-fibrillation'
   | 'asystole'
 
+export type EcgMorphology =
+  | 'nil'
+  | 'ischaemia'
+  | 'infarction'
+  | 'hyperkalaemia'
+
 export interface MonitorPatientState {
   heartRate: number
   rhythm: CardiacRhythm
+  ecgMorphology: EcgMorphology
+  morphologySeverity: number
   systolicPressure: number
   diastolicPressure: number
   spo2: number
@@ -36,6 +44,8 @@ export interface MonitorMeasurements {
 export const DEFAULT_MONITOR_STATE: MonitorPatientState = {
   heartRate: 78,
   rhythm: 'sinus',
+  ecgMorphology: 'nil',
+  morphologySeverity: 50,
   systolicPressure: 122,
   diastolicPressure: 68,
   spo2: 98,
