@@ -4,7 +4,7 @@ import type { MonitorPatientState } from './types'
 import { measurementsFor } from './monitorEngine'
 import './edumon-nibp.css'
 
-type NibpInterval = 'off' | 'stat' | '2m' | '3m' | '5m'
+type NibpInterval = 'off' | '2m' | '3m' | '5m'
 type NibpPhase = 'idle' | 'inflating' | 'deflating'
 
 type NibpReading = {
@@ -16,8 +16,7 @@ type NibpReading = {
 
 const INFLATE_MS = 2200
 const DEFLATE_MS = 5800
-const STAT_PAUSE_MS = 5000
-const INTERVAL_MS: Record<Exclude<NibpInterval, 'off' | 'stat'>, number> = {
+const INTERVAL_MS: Record<Exclude<NibpInterval, 'off'>, number> = {
   '2m': 2 * 60_000,
   '3m': 3 * 60_000,
   '5m': 5 * 60_000,
@@ -166,8 +165,7 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
 
       const selected = intervalRef.current
       if (selected === 'off') return
-      const delay = selected === 'stat' ? STAT_PAUSE_MS : INTERVAL_MS[selected]
-      scheduledRef.current = window.setTimeout(startMeasurement, delay)
+      scheduledRef.current = window.setTimeout(startMeasurement, INTERVAL_MS[selected])
     }, 80)
   }, [clearTimers])
 
@@ -186,13 +184,23 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
     if (next !== 'off' && !measuringRef.current) startMeasurement()
   }
 
+  const runStat = () => {
+    setIntervalMode('off')
+    intervalRef.current = 'off'
+    if (scheduledRef.current != null) {
+      window.clearTimeout(scheduledRef.current)
+      scheduledRef.current = null
+    }
+    startMeasurement()
+  }
+
   if (!host) return null
 
   const status = phase === 'idle'
     ? (reading ? `${reading.systolic}/${reading.diastolic} (${reading.mean})` : '—/—')
     : `${cuffPressure}`
   const detail = phase === 'idle'
-    ? (interval === 'off' ? 'Manual' : interval.toUpperCase())
+    ? (interval === 'off' ? 'Press for NIBP' : `Cycle ${interval.toUpperCase()}`)
     : `Cuff mmHg · ${phase === 'inflating' ? 'inflating' : 'measuring'}`
 
   return createPortal(<>
@@ -202,6 +210,7 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
       onClick={() => setOpen((value) => !value)}
       aria-expanded={open}
       aria-haspopup="dialog"
+      title="NIBP — press to measure or set automatic interval"
     >
       <span>NIBP</span>
       <strong>{status}</strong>
@@ -210,13 +219,14 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
     {open && (
       <div className="edumon-nibp-popover" role="dialog" aria-label="NIBP measurement settings">
         <div className="edumon-nibp-popover-heading"><strong>NIBP</strong><span>Measurement interval</span></div>
-        <button type="button" className="edumon-nibp-measure-now" onClick={startMeasurement}>Measure now</button>
         <div className="edumon-nibp-intervals">
-          {(['off', 'stat', '2m', '3m', '5m'] as NibpInterval[]).map((option) => (
+          <button type="button" onClick={runStat}>STAT</button>
+          {(['2m', '3m', '5m'] as NibpInterval[]).map((option) => (
             <button key={option} type="button" className={interval === option ? 'active' : ''} onClick={() => chooseInterval(option)}>
-              {option === 'off' ? 'Off' : option.toUpperCase()}
+              {option.toUpperCase()}
             </button>
           ))}
+          <button type="button" className={interval === 'off' ? 'active' : ''} onClick={() => chooseInterval('off')}>Off</button>
         </div>
       </div>
     )}
