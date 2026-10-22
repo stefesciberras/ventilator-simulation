@@ -107,7 +107,11 @@ assert(rollingSignalHistory.includes('append(sample: TSample)'), 'rolling signal
 assert(rollingSignalHistory.includes('trim(endTime: number)'), 'rolling signal history must trim samples by simulation time')
 assert(edumonMonitorEngine.includes("import { RollingSignalHistory } from '../core/RollingSignalHistory'"), 'EDUMON monitor engine must use the shared rolling signal history')
 assert(edumonMonitorEngine.includes('runtime.history.append(generateNextSample'), 'EDUMON must generate and append only future monitor samples')
-assert(edumonMonitorEngine.includes('runtime.phase = fract(runtime.phase +'), 'EDUMON must preserve cardiac phase continuously across rate changes')
+assert(edumonMonitorEngine.includes('const nextPhase = runtime.phase +'), 'EDUMON must advance cardiac phase incrementally rather than recompute historical phase')
+assert(edumonMonitorEngine.includes('runtime.phase = fract(nextPhase)'), 'EDUMON must preserve cardiac phase continuity when a beat completes')
+assert(edumonMonitorEngine.includes('beatHistory'), 'EDUMON derived monitor measurements must be based on generated beat history')
+assert(edumonMonitorEngine.includes('beat.time >= now - 60'), 'EDUMON displayed heart rate must use a rolling 60-second beat window')
+assert(edumonMonitorEngine.includes('beat.time >= now - 30'), 'EDUMON displayed SpO2 must use a rolling 30-second beat window')
 assert(!edumonMonitorEngine.includes('cardiacPhase(time, rate'), 'EDUMON must not derive the whole visible waveform phase from the current heart rate')
 
 // Completed compatibility cleanup must not regress.
