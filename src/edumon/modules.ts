@@ -34,18 +34,6 @@ export const EDUMON_MODULES: Record<EdumonModuleId, EdumonModuleDefinition> = {
         shortLabel: 'Gases',
         description: 'Inspired and expired oxygen, volatile anaesthetic concentration and MAC.',
       },
-      {
-        id: 'trends',
-        label: 'Monitor trends',
-        shortLabel: 'Trends',
-        description: 'Reusable trend display for monitored values.',
-      },
-      {
-        id: 'teaching',
-        label: 'Teaching libraries',
-        shortLabel: 'Teaching',
-        description: 'Shared EDUVENT/EDUMON media and Questions & Polls libraries.',
-      },
     ],
   },
   icu: {
@@ -60,18 +48,6 @@ export const EDUMON_MODULES: Record<EdumonModuleId, EdumonModuleDefinition> = {
         label: 'Neuro monitoring',
         shortLabel: 'ICP / CPP',
         description: 'ICP waveform/value and derived cerebral perfusion pressure.',
-      },
-      {
-        id: 'trends',
-        label: 'Monitor trends',
-        shortLabel: 'Trends',
-        description: 'Reusable trend display for monitored values.',
-      },
-      {
-        id: 'teaching',
-        label: 'Teaching libraries',
-        shortLabel: 'Teaching',
-        description: 'Shared EDUVENT/EDUMON media and Questions & Polls libraries.',
       },
     ],
   },
