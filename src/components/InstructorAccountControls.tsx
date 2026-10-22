@@ -7,7 +7,7 @@ import { asStaticScenario, type DynamicScenarioActionId, type InstructorPresetRo
 import { APP_VERSION } from '../appVersion'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from './InstructorAccountAuth'
 import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
-import { normaliseEduventScenario } from '../eduvent/scenarioCodec'
+import { EDUVENT_SCENARIO_CODEC } from '../eduvent/scenarioCodec'
 import { InstructorWorkspace } from '../teaching/instructor/InstructorWorkspace'
 import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
 import { InstructorScenarioLibraryController } from '../teaching/instructor/InstructorScenarioLibraryController'
@@ -15,11 +15,6 @@ import { useEduventInstructorScenarioRuntime, type EduventDynamicScenarioDiagnos
 import '../account.css'
 
 export type DynamicScenarioDiagnosticContext = EduventDynamicScenarioDiagnosticContext
-
-const EDUVENT_SCENARIO_CODEC = {
-  encode: normaliseEduventScenario,
-  decode: (scenario: unknown) => normaliseEduventScenario(scenario as InstructorScenarioSnapshot),
-}
 
 interface InstructorAccountControlsProps {
   role: SessionRole
