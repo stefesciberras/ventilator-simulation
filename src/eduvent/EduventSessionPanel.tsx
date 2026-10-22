@@ -4,7 +4,8 @@ import type { RuntimeTransportKind, SessionConnection, SessionRole } from '../se
 import type { LocalRuntimeConnection } from '../session/localRuntimeTransport'
 import type { SessionMemberRow, TeachingSessionRow } from '../session/supabase'
 import type { InstructorScenarioSnapshot } from '../instructorAccount'
-import { useEduventScenarioLibrary } from '../teaching/scenario/useEduventScenarioLibrary'
+import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
+import { EDUVENT_SCENARIO_CODEC } from './scenarioCodec'
 import { getSimulationProduct } from '../core/products'
 
 interface EduventSessionPanelProps {
@@ -59,7 +60,7 @@ function summaryFor(scenario: InstructorScenarioSnapshot) {
 }
 
 export function EduventSessionPanel(props: EduventSessionPanelProps) {
-  const library = useEduventScenarioLibrary(props.instructorAuthenticated)
+  const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('eduvent', props.instructorAuthenticated, EDUVENT_SCENARIO_CODEC)
   const staticPresets = useMemo(() => library.items.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'), [library.items])
   const [selectedId, setSelectedId] = useState('')
   useEffect(() => { setSelectedId((current) => staticPresets.some((row) => row.id === current) ? current : (staticPresets[0]?.id ?? '')) }, [staticPresets])

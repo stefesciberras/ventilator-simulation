@@ -1,6 +1,7 @@
 import { calculatePredictedBodyWeight } from '../patientMetrics'
 import { createBranchId, createStageId } from '../scenario-builder/ids'
 import type { PatientSettings } from '../simulation/types'
+import type { ScenarioCodec } from '../teaching/scenario/ScenarioRepository'
 import {
   dynamicBranchTriggerMode,
   dynamicBranchTriggers,
@@ -55,4 +56,10 @@ export function normaliseEduventScenario(scenario: InstructorScenarioSnapshot): 
       }
     }) : undefined,
   }
+}
+
+/** Shared repository codec used by all EDUVENT scenario-library consumers. */
+export const EDUVENT_SCENARIO_CODEC: ScenarioCodec<InstructorScenarioSnapshot> = {
+  encode: normaliseEduventScenario,
+  decode: (scenario) => normaliseEduventScenario(scenario as InstructorScenarioSnapshot),
 }

@@ -6,7 +6,8 @@ import type { SessionMemberRow } from '../session/supabase'
 import { asStaticScenario, type DynamicScenarioActionId, type InstructorPresetRow, type InstructorScenarioSnapshot } from '../instructorAccount'
 import { APP_VERSION } from '../appVersion'
 import { InstructorAccountButton, InstructorAccountDialog, useInstructorAccountAuth } from './InstructorAccountAuth'
-import { useEduventScenarioLibrary } from '../teaching/scenario/useEduventScenarioLibrary'
+import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
+import { EDUVENT_SCENARIO_CODEC } from '../eduvent/scenarioCodec'
 import { InstructorWorkspace } from '../teaching/instructor/InstructorWorkspace'
 import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
 import { InstructorScenarioLibraryController } from '../teaching/instructor/InstructorScenarioLibraryController'
@@ -63,7 +64,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const accountChangeLocked = role !== 'standalone'
   const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
   const account = accountAuth.account
-  const library = useEduventScenarioLibrary(Boolean(account))
+  const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('eduvent', Boolean(account), EDUVENT_SCENARIO_CODEC)
   const requestedScenarioHandledRef = useRef<string | null>(null)
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
   void simulationPaused
