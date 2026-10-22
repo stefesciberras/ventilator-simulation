@@ -1,6 +1,28 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
+export function SharedAlarmLimitsButton({
+  disabled = false,
+  disabledTitle = 'Alarm limits controlled by instructor',
+  onOpen,
+}: {
+  disabled?: boolean
+  disabledTitle?: string
+  onOpen: () => void
+}) {
+  return (
+    <button
+      className="shared-alarm-limits-button"
+      type="button"
+      disabled={disabled}
+      onClick={onOpen}
+      title={disabled ? disabledTitle : 'Set alarm limits'}
+    >
+      Alarm limits
+    </button>
+  )
+}
+
 export function SharedAlarmLimitsControl({
   disabled = false,
   disabledTitle = 'Alarm limits controlled by instructor',
@@ -22,15 +44,7 @@ export function SharedAlarmLimitsControl({
   if (!target) return null
 
   return createPortal(
-    <button
-      className="shared-alarm-limits-button"
-      type="button"
-      disabled={disabled}
-      onClick={onOpen}
-      title={disabled ? disabledTitle : 'Set alarm limits'}
-    >
-      Alarm limits
-    </button>,
+    <SharedAlarmLimitsButton disabled={disabled} disabledTitle={disabledTitle} onOpen={onOpen} />,
     target,
   )
 }
