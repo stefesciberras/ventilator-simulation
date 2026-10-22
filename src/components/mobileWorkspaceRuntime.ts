@@ -30,14 +30,22 @@ export function installMobileWorkspaceRuntime({
 
   const shouldUseMobileWorkspace = () => window.matchMedia(mobileQuery).matches || document.body.classList.contains(tabletBodyClass)
 
-  const isWorkspaceLaserActive = () => activePage === firstPage.id && Boolean(workspace?.querySelector('.teaching-laser-layer-active'))
+  const isGlobalLaserInteractionActive = () => (
+    document.documentElement.getAttribute('data-edusim-simulator-laser-active') === 'true'
+    || document.documentElement.getAttribute('data-edusim-media-laser-active') === 'true'
+  )
+
+  const isWorkspaceLaserActive = () => activePage === firstPage.id && (
+    isGlobalLaserInteractionActive()
+    || Boolean(workspace?.querySelector('.teaching-laser-layer-active'))
+  )
 
   const isSwipeBlockedElement = (element: Element | null) => Boolean(element?.closest(
     '.teaching-laser-layer-active, .teaching-media-laser-stage, [data-edusim-block-workspace-swipe="true"]',
   ))
 
   const isSwipeBlockedTouch = (target: EventTarget | null, clientX: number, clientY: number) => {
-    if (isWorkspaceLaserActive()) return true
+    if (isWorkspaceLaserActive() || isGlobalLaserInteractionActive()) return true
     const targetElement = target instanceof Element ? target : null
     if (isSwipeBlockedElement(targetElement)) return true
     return isSwipeBlockedElement(document.elementFromPoint(clientX, clientY))
@@ -88,7 +96,7 @@ export function installMobileWorkspaceRuntime({
       workspace.addEventListener('touchstart', (event) => {
         swipeSuppressed = false
         if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
-        if (isWorkspaceLaserActive()) {
+        if (isWorkspaceLaserActive() || isGlobalLaserInteractionActive()) {
           swipeSuppressed = true
           return
         }
@@ -102,18 +110,16 @@ export function installMobileWorkspaceRuntime({
       }, { passive: true })
 
       workspace.addEventListener('touchmove', (event) => {
-        if (swipeSuppressed) return
         if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
-        if (isWorkspaceLaserActive()) {
-          swipeSuppressed = true
-          return
-        }
         const touch = event.touches[0]
-        if (isSwipeBlockedTouch(event.target, touch.clientX, touch.clientY)) swipeSuppressed = true
-      }, { passive: true })
+        if (swipeSuppressed || isWorkspaceLaserActive() || isGlobalLaserInteractionActive() || isSwipeBlockedTouch(event.target, touch.clientX, touch.clientY)) {
+          swipeSuppressed = true
+          event.preventDefault()
+        }
+      }, { passive: false })
 
       workspace.addEventListener('touchend', (event) => {
-        if (swipeSuppressed || isWorkspaceLaserActive()) {
+        if (swipeSuppressed || isWorkspaceLaserActive() || isGlobalLaserInteractionActive()) {
           swipeSuppressed = false
           return
         }
