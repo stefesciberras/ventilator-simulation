@@ -5,6 +5,7 @@ import type {
   ScenarioMediaContent,
   ScenarioOperator,
   ScenarioQuestionContent,
+  ScenarioQuestionOption,
   ScenarioStageKind,
   ScenarioTransition,
   ScenarioTriggerMode,
@@ -16,6 +17,7 @@ export type SharedScenarioOperator = ScenarioOperator
 export type SharedScenarioTransition = ScenarioTransition
 export type SharedScenarioMediaContent = ScenarioMediaContent
 export type SharedScenarioQuestionContent = ScenarioQuestionContent
+export type SharedScenarioQuestionOption = ScenarioQuestionOption
 
 export type SharedScenarioAuthoringTrigger =
   | { id: string; type: 'manual' }

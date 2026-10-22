@@ -4,6 +4,7 @@ import type {
   ScenarioDefinition,
   ScenarioMediaContent,
   ScenarioQuestionContent,
+  ScenarioQuestionOption,
   ScenarioRuntimeAdapter,
   ScenarioStage,
   ScenarioStageContent,
@@ -13,6 +14,7 @@ import type {
 
 export type TeachingScenarioMediaContent = ScenarioMediaContent
 export type TeachingScenarioQuestionContent = ScenarioQuestionContent
+export type TeachingScenarioQuestionOption = ScenarioQuestionOption
 export type TeachingScenarioStageContent = ScenarioStageContent
 export type TeachingScenarioTransition = ScenarioTransition
 export type TeachingScenarioStage<TSnapshot, TTrigger> = ScenarioStage<TSnapshot, TTrigger>
