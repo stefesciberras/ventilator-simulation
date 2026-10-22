@@ -2,6 +2,11 @@
   display: none !important;
 }
 
+/* Alarm-limit access belongs to the shared console status area, not the measured-value rail. */
+.edumon-measurements > .metrics-actions {
+  display: none !important;
+}
+
 @media (max-width: 1180px) {
   .edumon-app-shell {
     display: flex;
