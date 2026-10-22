@@ -29,7 +29,12 @@ export function SimulationConsoleShell({
     <section className={`simulation-console-shell ventilator-console ${className}`.trim()} aria-label={ariaLabel}>
       {header && <div className="simulation-console-header">{header}</div>}
       {hardwareControls && <div className="simulation-console-hardware">{hardwareControls}</div>}
-      {status && <div className="simulation-console-status">{status}</div>}
+      {status && (
+        <div className="simulation-console-status">
+          <div className="simulation-console-status-content">{status}</div>
+          <div className="simulation-console-status-actions" />
+        </div>
+      )}
       <div className="simulation-console-display">{display}</div>
       {footer && <div className="simulation-console-footer">{footer}</div>}
     </section>
