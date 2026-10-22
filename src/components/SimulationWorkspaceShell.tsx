@@ -20,7 +20,12 @@ interface WorkspaceSwipeStart {
   y: number
 }
 
-const centroidFromTouches = (touches: ArrayLike<Touch>) => {
+interface WorkspaceTouchPoint {
+  clientX: number
+  clientY: number
+}
+
+const centroidFromTouches = (touches: ArrayLike<WorkspaceTouchPoint>) => {
   if (touches.length < 1) return null
   let x = 0
   let y = 0
@@ -32,7 +37,7 @@ const centroidFromTouches = (touches: ArrayLike<Touch>) => {
 }
 
 const twoTouchCentroidAtEnd = (event: TouchEvent<HTMLDivElement>) => {
-  const contacts: Touch[] = []
+  const contacts: WorkspaceTouchPoint[] = []
   for (let index = 0; index < event.touches.length; index += 1) contacts.push(event.touches[index])
   for (let index = 0; index < event.changedTouches.length; index += 1) contacts.push(event.changedTouches[index])
   return contacts.length >= 2 ? centroidFromTouches(contacts.slice(0, 2)) : null
