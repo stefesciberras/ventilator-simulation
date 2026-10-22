@@ -11,8 +11,8 @@
 }
 
 .edumon-select-control select:focus {
-  border-color: #5cc6e9;
-  box-shadow: 0 0 0 2px rgba(92, 198, 233, .12);
+  border-color: var(--edumon-signal-accent, #5cc6e9);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--edumon-signal-accent, #5cc6e9) 18%, transparent);
 }
 
 .edumon-morphology-severity {
@@ -22,6 +22,62 @@
 @keyframes edumon-morphology-severity-in {
   from { opacity: 0; transform: translateY(-2px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/*
+ * Waveform-linked patient controls.
+ * These deliberately use softened variants of the live trace colours so the
+ * relationship is obvious without compromising text/input contrast.
+ */
+.edumon-signal-control {
+  --edumon-signal-accent: #93a0a8;
+  --edumon-signal-border: rgba(147, 160, 168, .30);
+  --edumon-signal-bg: rgba(147, 160, 168, .055);
+  padding: 7px 9px;
+  border: 1px solid var(--edumon-signal-border);
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--edumon-signal-bg), rgba(255,255,255,.012));
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.edumon-signal-ecg {
+  --edumon-signal-accent: #78d98a;
+  --edumon-signal-border: rgba(103, 231, 127, .30);
+  --edumon-signal-bg: rgba(103, 231, 127, .065);
+}
+
+.edumon-signal-art {
+  --edumon-signal-accent: #ed7777;
+  --edumon-signal-border: rgba(241, 81, 81, .30);
+  --edumon-signal-bg: rgba(241, 81, 81, .060);
+}
+
+.edumon-signal-spo2 {
+  --edumon-signal-accent: #77cce8;
+  --edumon-signal-border: rgba(85, 200, 240, .30);
+  --edumon-signal-bg: rgba(85, 200, 240, .065);
+}
+
+.edumon-signal-control > span b {
+  color: var(--edumon-signal-accent);
+}
+
+.edumon-signal-control input[type='range'] {
+  accent-color: var(--edumon-signal-accent);
+}
+
+.edumon-signal-control.edumon-select-control select {
+  border-color: var(--edumon-signal-border);
+  background-color: #111a20;
+}
+
+.edumon-signal-control:hover:not(:has(:disabled)) {
+  border-color: color-mix(in srgb, var(--edumon-signal-accent) 48%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--edumon-signal-accent) 10%, transparent), rgba(255,255,255,.016));
+}
+
+.edumon-signal-control:has(:disabled) {
+  opacity: .62;
 }
 
 /* Rhythm selection now lives in Patient controls. Hide the legacy v0.1
