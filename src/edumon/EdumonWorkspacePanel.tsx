@@ -30,6 +30,10 @@ interface EdumonWorkspacePanelProps {
   meanPressure: number | null
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
 export function EdumonWorkspacePanel({
   patientState,
   onPatientStateChange,
@@ -45,6 +49,7 @@ export function EdumonWorkspacePanel({
 }: EdumonWorkspacePanelProps) {
   const [tab, setTab] = useState<EdumonControlTab>('patient')
   const [profile, setProfile] = useState<EdumonPatientProfile>('Awake')
+  const [pressuresCoupled, setPressuresCoupled] = useState(false)
 
   const applyProfile = (nextProfile: EdumonPatientProfile) => {
     if (controlsLocked) return
@@ -65,7 +70,36 @@ export function EdumonWorkspacePanel({
 
   const updatePatient = (patch: Partial<MonitorPatientState>) => {
     if (controlsLocked) return
-    onPatientStateChange({ ...patientState, ...patch })
+    const next = { ...patientState, ...patch }
+    if (next.systolicPressure <= next.diastolicPressure) {
+      if (patch.diastolicPressure != null && patch.systolicPressure == null) next.diastolicPressure = Math.max(20, next.systolicPressure - 1)
+      else next.systolicPressure = Math.min(220, next.diastolicPressure + 1)
+    }
+    onPatientStateChange(next)
+  }
+
+  const updateSystolicPressure = (value: number) => {
+    if (controlsLocked) return
+    let systolicPressure = clamp(value, 40, 220)
+    let diastolicPressure = patientState.diastolicPressure
+    if (pressuresCoupled) {
+      const delta = systolicPressure - patientState.systolicPressure
+      diastolicPressure = clamp(patientState.diastolicPressure + delta * 0.3, 20, 140)
+    }
+    if (systolicPressure <= diastolicPressure) systolicPressure = Math.min(220, diastolicPressure + 1)
+    onPatientStateChange({ ...patientState, systolicPressure, diastolicPressure })
+  }
+
+  const updateDiastolicPressure = (value: number) => {
+    if (controlsLocked) return
+    let diastolicPressure = clamp(value, 20, 140)
+    let systolicPressure = patientState.systolicPressure
+    if (pressuresCoupled) {
+      const delta = diastolicPressure - patientState.diastolicPressure
+      systolicPressure = clamp(patientState.systolicPressure + delta * 0.3, 40, 220)
+    }
+    if (diastolicPressure >= systolicPressure) diastolicPressure = Math.max(20, systolicPressure - 1)
+    onPatientStateChange({ ...patientState, systolicPressure, diastolicPressure })
   }
 
   const morphology = patientState.ecgMorphology ?? 'nil'
@@ -112,8 +146,12 @@ export function EdumonWorkspacePanel({
             </label>
           )}
           <label className="edumon-signal-control edumon-signal-ecg"><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input disabled={controlsLocked} type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => updatePatient({ heartRate: Number(event.target.value) })} /></label>
-          <label className="edumon-signal-control edumon-signal-art"><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => updatePatient({ systolicPressure: Number(event.target.value) })} /></label>
-          <label className="edumon-signal-control edumon-signal-art"><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => updatePatient({ diastolicPressure: Number(event.target.value) })} /></label>
+          <label className="edumon-pressure-coupling edumon-signal-control edumon-signal-art">
+            <input disabled={controlsLocked} type="checkbox" checked={pressuresCoupled} onChange={(event) => setPressuresCoupled(event.target.checked)} />
+            <span>Couple pressures <b>30% linked</b></span>
+          </label>
+          <label className="edumon-signal-control edumon-signal-art"><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => updateSystolicPressure(Number(event.target.value))} /></label>
+          <label className="edumon-signal-control edumon-signal-art"><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => updateDiastolicPressure(Number(event.target.value))} /></label>
           <label className="edumon-signal-control edumon-signal-spo2"><span>SpO₂ <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-spo2"><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input disabled={controlsLocked} type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => updatePatient({ peripheralPerfusion: Number(event.target.value) })} /></label>
         </section>
