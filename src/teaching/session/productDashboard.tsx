@@ -17,7 +17,7 @@ export function buildProductSessionDomains(
       id: row.id,
       label: row.label,
       checked: row.checked(session),
-      disabled: row.disabled?.(session) ?? !row.patch || !onUpdatePolicy,
+      disabled: row.disabled?.(session) ?? (!row.patch || !onUpdatePolicy),
       emphasis: row.emphasis,
       readOnly: !row.patch || !onUpdatePolicy,
       onChange: row.patch && onUpdatePolicy ? (checked: boolean) => onUpdatePolicy(row.patch!(checked)) : undefined,
