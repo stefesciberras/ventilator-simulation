@@ -30,11 +30,14 @@ export function installMobileWorkspaceRuntime({
 
   const shouldUseMobileWorkspace = () => window.matchMedia(mobileQuery).matches || document.body.classList.contains(tabletBodyClass)
 
+  const isWorkspaceLaserActive = () => activePage === firstPage.id && Boolean(workspace?.querySelector('.teaching-laser-layer-active'))
+
   const isSwipeBlockedElement = (element: Element | null) => Boolean(element?.closest(
     '.teaching-laser-layer-active, .teaching-media-laser-stage, [data-edusim-block-workspace-swipe="true"]',
   ))
 
   const isSwipeBlockedTouch = (target: EventTarget | null, clientX: number, clientY: number) => {
+    if (isWorkspaceLaserActive()) return true
     const targetElement = target instanceof Element ? target : null
     if (isSwipeBlockedElement(targetElement)) return true
     return isSwipeBlockedElement(document.elementFromPoint(clientX, clientY))
@@ -85,6 +88,10 @@ export function installMobileWorkspaceRuntime({
       workspace.addEventListener('touchstart', (event) => {
         swipeSuppressed = false
         if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
+        if (isWorkspaceLaserActive()) {
+          swipeSuppressed = true
+          return
+        }
         const touch = event.touches[0]
         if (isSwipeBlockedTouch(event.target, touch.clientX, touch.clientY)) {
           swipeSuppressed = true
@@ -97,12 +104,16 @@ export function installMobileWorkspaceRuntime({
       workspace.addEventListener('touchmove', (event) => {
         if (swipeSuppressed) return
         if (!shouldUseMobileWorkspace() || event.touches.length !== 1) return
+        if (isWorkspaceLaserActive()) {
+          swipeSuppressed = true
+          return
+        }
         const touch = event.touches[0]
         if (isSwipeBlockedTouch(event.target, touch.clientX, touch.clientY)) swipeSuppressed = true
       }, { passive: true })
 
       workspace.addEventListener('touchend', (event) => {
-        if (swipeSuppressed) {
+        if (swipeSuppressed || isWorkspaceLaserActive()) {
           swipeSuppressed = false
           return
         }
