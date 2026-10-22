@@ -79,7 +79,7 @@
 .edumon-nibp-display-button strong {
   margin-top: 1px;
   color: #f15151;
-  font-size: 2.5rem;
+  font-size: 1.5rem;
   line-height: .95;
   font-weight: 800;
   letter-spacing: -.035em;
@@ -89,7 +89,7 @@
 .edumon-nibp-display-button .edumon-nibp-map {
   margin-top: 2px;
   color: #f15151;
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   line-height: 1;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -104,7 +104,7 @@
 }
 
 .edumon-nibp-tile.measuring .edumon-nibp-display-button strong {
-  font-size: 2.5rem;
+  font-size: 1.5rem;
 }
 
 .edumon-nibp-start-button {
@@ -204,11 +204,11 @@
   }
 
   .edumon-nibp-display-button strong {
-    font-size: 2.1rem;
+    font-size: 1.25rem;
   }
 
   .edumon-nibp-display-button .edumon-nibp-map {
-    font-size: 1.25rem;
+    font-size: 2.1rem;
   }
 
   .edumon-nibp-start-button {
