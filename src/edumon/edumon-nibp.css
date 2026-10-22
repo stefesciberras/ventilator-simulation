@@ -3,7 +3,7 @@
   min-height: 172px;
 }
 
-.edumon-control-strip > button[title*='NIBP'] {
+.edumon-control-strip > button.edumon-control-tile.disabled[title^='NIBP will be enabled'] {
   display: none;
 }
 
