@@ -40,3 +40,63 @@
     visibility: visible !important;
   }
 }
+
+/* This stylesheet is imported last from main.tsx, so the landscape behavior
+   belongs here. Preserve real monitor geometry and let the Display workspace
+   scroll vertically rather than squeezing three traces into a short viewport. */
+@media (max-width: 1180px) and (orientation: landscape) {
+  .edumon-workspace.mobile-page-monitor {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor > .edumon-console {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 640px !important;
+    overflow: visible !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor .edumon-monitor-body {
+    flex: 0 0 430px !important;
+    min-height: 430px !important;
+    overflow: hidden !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor .edumon-waveform-area {
+    grid-template-rows: repeat(3, minmax(130px, 1fr)) !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor .edumon-measurements {
+    grid-template-rows: repeat(3, minmax(130px, 1fr)) !important;
+  }
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor > .edumon-console {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 640px !important;
+  overflow: visible !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-monitor-body {
+  flex: 0 0 430px !important;
+  min-height: 430px !important;
+  overflow: hidden !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-waveform-area,
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-measurements {
+  grid-template-rows: repeat(3, minmax(130px, 1fr)) !important;
+}
