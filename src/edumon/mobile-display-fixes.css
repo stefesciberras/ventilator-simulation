@@ -66,8 +66,14 @@
     overflow: hidden !important;
   }
 
+  /* The base mobile stylesheet used pan-x here, which prevented a vertical
+     scroll gesture from starting over a waveform. In landscape the Display
+     page itself is the vertical scroller, so let the trace surface participate
+     in that pan just like the measured-value rail. The active laser overlay
+     still owns its gestures with touch-action: none. */
   .edumon-workspace.mobile-page-monitor .edumon-waveform-area {
     grid-template-rows: repeat(3, minmax(130px, 1fr)) !important;
+    touch-action: pan-y !important;
   }
 
   .edumon-workspace.mobile-page-monitor .edumon-measurements {
@@ -99,4 +105,8 @@ body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-moni
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-waveform-area,
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-measurements {
   grid-template-rows: repeat(3, minmax(130px, 1fr)) !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-waveform-area {
+  touch-action: pan-y !important;
 }
