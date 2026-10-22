@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import type { EdumonModuleDefinition } from './modules'
 import { SimulationTopBar, type SharedSimulationSpeed } from '../components/SimulationTopBar'
+import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
+import { useInstructorAccountAuth } from '../components/InstructorAccountAuth'
 import { EDUMON_APP_VERSION } from './appVersion'
 import './EdumonTopBar.css'
 
@@ -26,12 +28,12 @@ interface EdumonTopBarProps {
   simulationControlsLocked?: boolean
   onScenario: () => void
   accountAction: ReactNode
-  settingsAction: ReactNode
   diagnosticsAction: ReactNode
   onAbout: () => void
 }
 
-export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, settingsAction, diagnosticsAction, onAbout }: EdumonTopBarProps) {
+export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, diagnosticsAction, onAbout }: EdumonTopBarProps) {
+  const settingsAuth = useInstructorAccountAuth({ locked: simulationControlsLocked })
   return (
     <SimulationTopBar
       brandKicker={module.productName}
@@ -42,7 +44,7 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
       onPausedChange={onPausedChange}
       onSpeedChange={onSpeedChange}
       controlsControlledByInstructor={simulationControlsLocked}
-      rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button>{settingsAction}{diagnosticsAction}</>}
+      rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button><InstructorSettingsController productLabel={module.productName} version={EDUMON_APP_VERSION} role={simulationControlsLocked ? 'candidate' : 'standalone'} auth={settingsAuth} />{diagnosticsAction}</>}
       statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
       version={EDUMON_APP_VERSION}
       onAbout={onAbout}
