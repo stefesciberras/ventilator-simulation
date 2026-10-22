@@ -32,6 +32,7 @@ import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import { createSimulationPersistence, type SimulationPersistence } from '../core/SimulationPersistence'
 import { copySimulationDiagnostic } from '../core/SimulationDiagnostics'
 import { getSimulationProduct } from '../core/products'
+import { autoscaleWaveformSamples, type WaveformAutoscaleOptions } from '../core/WaveformAutoscale'
 import type { EdumonTeachingState } from './teachingState'
 import './edumon.css'
 import './edumon-console-parity.css'
@@ -63,19 +64,20 @@ interface TraceSpec {
   key: TraceKey
   label: string
   unit: string
-  min: number
-  max: number
   className: string
+  scaleDecimals: number
+  autoscale: WaveformAutoscaleOptions
 }
 
 const TRACE_SPECS: TraceSpec[] = [
-  { key: 'ecg', label: 'ECG II', unit: 'mV', min: -0.8, max: 1.6, className: 'ecg' },
-  { key: 'arterialPressure', label: 'ART', unit: 'mmHg', min: 0, max: 180, className: 'art' },
-  { key: 'pleth', label: 'SpO₂', unit: '', min: 0, max: 1.2, className: 'spo2' },
+  { key: 'ecg', label: 'ECG II', unit: 'mV', className: 'ecg', scaleDecimals: 1, autoscale: { fallbackMin: -0.8, fallbackMax: 1.6, paddingFraction: 0.08, minimumSpan: 1.2, roundTo: 0.1 } },
+  { key: 'arterialPressure', label: 'ART', unit: 'mmHg', className: 'art', scaleDecimals: 0, autoscale: { fallbackMin: 0, fallbackMax: 180, paddingFraction: 0.06, minimumSpan: 40, roundTo: 10, hardMin: 0 } },
+  { key: 'pleth', label: 'SpO₂', unit: '', className: 'spo2', scaleDecimals: 1, autoscale: { fallbackMin: 0, fallbackMax: 1.2, paddingFraction: 0.08, minimumSpan: 0.3, roundTo: 0.1, includeZero: true, hardMin: 0 } },
 ]
 
 function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceSpec }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const scale = useMemo(() => autoscaleWaveformSamples(samples, (sample) => sample[spec.key], spec.autoscale), [samples, spec])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -105,8 +107,8 @@ function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceS
     }
 
     if (!samples.length) return
-    const range = Math.max(0.001, spec.max - spec.min)
-    const toY = (value: number) => height - ((value - spec.min) / range) * height
+    const range = Math.max(0.001, scale.max - scale.min)
+    const toY = (value: number) => height - ((value - scale.min) / range) * height
 
     context.strokeStyle = getComputedStyle(canvas).color
     context.lineWidth = spec.key === 'ecg' ? 1.8 : 2.1
@@ -120,12 +122,13 @@ function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceS
       else context.lineTo(x, y)
     })
     context.stroke()
-  }, [samples, spec])
+  }, [samples, spec, scale.min, scale.max])
 
   return (
     <div className={`edumon-trace edumon-trace-${spec.className} waveform-card`}>
       <div className="edumon-trace-label waveform-label"><strong>{spec.label}</strong>{spec.unit && <span>{spec.unit}</span>}</div>
       <canvas ref={canvasRef} aria-label={`${spec.label} waveform`} />
+      <div className="waveform-scale" aria-hidden="true"><span>{scale.max.toFixed(spec.scaleDecimals)}</span><span>{scale.min.toFixed(spec.scaleDecimals)}</span></div>
     </div>
   )
 }
