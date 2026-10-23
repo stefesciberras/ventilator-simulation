@@ -1,0 +1,211 @@
+.edumon-control-strip.edumon-control-strip-with-ventilator {
+  min-height: 136px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+.edumon-control-strip-with-ventilator > .edumon-ventilator-row {
+  order: 100;
+}
+
+.edumon-ventilator-row {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 42px;
+  min-width: 760px;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 5px;
+  border: 1px solid #666d72;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #697075 0%, #555c61 45%, #444b50 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(0,0,0,.32), 0 1px 2px rgba(0,0,0,.28);
+  color: #f2f5f6;
+  box-sizing: border-box;
+}
+
+.edumon-ventilator-controls {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+}
+
+.edumon-ventilator-mode {
+  flex: 0 0 116px;
+  min-width: 116px;
+  z-index: 120;
+}
+
+.edumon-ventilator-mode .console-mode-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  height: 34px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border-color: #2f373c;
+  background: linear-gradient(#464e53, #333a3f);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+.edumon-ventilator-mode .console-mode-button > span {
+  color: #b7c0c4;
+  font-size: 7px;
+}
+
+.edumon-ventilator-mode .console-mode-button > strong {
+  color: #d8f2f7;
+  font-size: 12px;
+}
+
+.edumon-ventilator-mode-menu {
+  top: calc(100% + 4px);
+  width: 230px;
+  z-index: 140;
+}
+
+.edumon-ventilator-mode-menu button.selected {
+  border-color: #d67a29;
+  color: #ffb15f;
+  background: #2c2118;
+}
+
+.edumon-ventilator-settings {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.edumon-ventilator-settings .interactive-vent-summary {
+  height: 100%;
+  gap: 4px;
+}
+
+.edumon-ventilator-settings .interactive-setting-button {
+  min-width: 54px;
+  min-height: 34px;
+  height: 34px;
+  padding: 2px 5px;
+  border-color: rgba(38,45,49,.9);
+  border-radius: 4px;
+  background: linear-gradient(#51595e, #394146);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+.edumon-ventilator-settings .interactive-setting-button:hover:not(:disabled) {
+  border-color: #78858b;
+  background: linear-gradient(#5d666b, #414a4f);
+}
+
+.edumon-ventilator-settings .interactive-setting-button.active {
+  border-color: #d67a29;
+  background: linear-gradient(#59402b, #39281b);
+  box-shadow: inset 0 0 0 1px rgba(238,138,46,.15);
+}
+
+.edumon-ventilator-settings .interactive-setting-button > span {
+  color: #c0c8cc;
+  font-size: 7px;
+}
+
+.edumon-ventilator-settings .interactive-setting-button > strong > b {
+  font-size: 11px;
+}
+
+.edumon-ventilator-settings .interactive-setting-button > strong > small {
+  margin-top: 1px;
+  color: #a7b0b4;
+  font-size: 5.5px;
+}
+
+.edumon-ventilator-monitor {
+  flex: 0 0 min(400px, 38vw);
+  min-width: 320px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.edumon-ventilator-monitor > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border: 1px solid rgba(28,33,36,.8);
+  border-radius: 4px;
+  background: linear-gradient(#343b40, #293035);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.edumon-ventilator-monitor span {
+  color: #b7c0c5;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  white-space: nowrap;
+}
+
+.edumon-ventilator-monitor strong {
+  justify-self: end;
+  color: #f2f5f6;
+  font-size: 13px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.edumon-ventilator-monitor small {
+  color: #98a3a8;
+  font-size: 5.5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .edumon-control-strip.edumon-control-strip-with-ventilator {
+    min-height: 132px;
+  }
+
+  .edumon-ventilator-row {
+    height: 40px;
+    min-width: 700px;
+  }
+
+  .edumon-ventilator-monitor {
+    flex-basis: 340px;
+    min-width: 300px;
+  }
+}
+
+@media (max-width: 680px) {
+  .edumon-control-strip.edumon-control-strip-with-ventilator {
+    min-height: 126px;
+  }
+
+  .edumon-ventilator-row {
+    height: 38px;
+    min-width: 650px;
+    padding: 2px 3px;
+    gap: 4px;
+  }
+
+  .edumon-ventilator-mode {
+    flex-basis: 104px;
+    min-width: 104px;
+  }
+
+  .edumon-ventilator-mode .console-mode-button,
+  .edumon-ventilator-settings .interactive-setting-button {
+    min-height: 32px;
+    height: 32px;
+  }
+
+  .edumon-ventilator-monitor {
+    flex-basis: 300px;
+    min-width: 280px;
+  }
+}
