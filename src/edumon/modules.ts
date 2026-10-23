@@ -2,9 +2,13 @@ import { EDUMON_PRODUCT_MONITOR_PROFILES, type EdumonProductMonitorProfile } fro
 
 export type EdumonModuleId = 'ana' | 'icu'
 
+// trends/teaching remain compatibility IDs for existing shared surface routing;
+// no product currently exposes them as lower-strip module tiles.
 export type EdumonAuxiliaryMonitorId =
   | 'ana-gases'
   | 'icu-neuro'
+  | 'trends'
+  | 'teaching'
 
 export interface EdumonModuleDefinition {
   id: EdumonModuleId
