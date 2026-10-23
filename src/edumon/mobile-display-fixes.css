@@ -149,71 +149,172 @@
   }
 }
 
-/* This stylesheet is imported last from main.tsx, so the landscape behavior
-   belongs here. Preserve real monitor geometry and let the Display workspace
-   scroll vertically rather than squeezing three traces into a short viewport. */
+/* This stylesheet is imported last from main.tsx, so it owns the final mobile
+   landscape cascade. Use document scrolling like EDUVENT: the top bar and the
+   DISPLAY/CONTROLS switcher are normal document content and scroll away with
+   the monitor rather than sitting above an independently scrolling workspace. */
 @media (max-width: 1180px) and (orientation: landscape) {
-  .edumon-workspace.mobile-page-monitor {
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior-y: contain;
-    -webkit-overflow-scrolling: touch;
+  .edumon-app-shell {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+  }
+
+  .edumon-app-shell > .topbar,
+  .edumon-app-shell > .edumon-mobile-workspace-switcher {
+    position: static !important;
+    inset: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    z-index: auto !important;
+    flex: 0 0 auto !important;
+  }
+
+  .edumon-workspace {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
     touch-action: pan-y !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor {
+    overflow: visible !important;
+    -webkit-overflow-scrolling: auto;
   }
 
   .edumon-workspace.mobile-page-monitor > .edumon-console {
     flex: 0 0 auto !important;
+    width: 100% !important;
     height: auto !important;
     min-height: 640px !important;
     overflow: visible !important;
   }
 
+  /* The hardware wrapper, rather than only the inner action-bar, owns the
+     horizontal alignment. This avoids flex-width rules elsewhere pulling the
+     laser/freeze/alarm controls back to the left in landscape. */
+  .edumon-workspace.mobile-page-monitor .simulation-console-hardware {
+    display: flex !important;
+    width: 100% !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor .simulation-console-hardware > .edumon-console-top-actions {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    justify-content: flex-end !important;
+  }
+
   .edumon-workspace.mobile-page-monitor .edumon-monitor-body {
     flex: 0 0 430px !important;
+    height: 430px !important;
     min-height: 430px !important;
+    max-height: 430px !important;
     overflow: hidden !important;
   }
 
-  /* The base mobile stylesheet used pan-x here, which prevented a vertical
-     scroll gesture from starting over a waveform. In landscape the Display
-     page itself is the vertical scroller, so let the trace surface participate
-     in that pan just like the measured-value rail. The active laser overlay
-     still owns its gestures with touch-action: none. */
-  .edumon-workspace.mobile-page-monitor .edumon-waveform-area {
-    grid-template-rows: repeat(3, minmax(130px, 1fr)) !important;
-    touch-action: pan-y !important;
+  /* Five true equal rows. No legacy 130px row minima: those were the source of
+     the visibly unequal trace heights once capnography added the fourth row. */
+  .edumon-workspace.mobile-page-monitor .edumon-waveform-area,
+  .edumon-workspace.mobile-page-monitor .edumon-measurements {
+    height: 100% !important;
+    min-height: 0 !important;
+    grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+    grid-auto-rows: 0 !important;
   }
 
-  .edumon-workspace.mobile-page-monitor .edumon-measurements {
-    grid-template-rows: repeat(3, minmax(130px, 1fr)) !important;
+  .edumon-workspace.mobile-page-monitor .edumon-trace,
+  .edumon-workspace.mobile-page-monitor .edumon-value-panel {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: none !important;
+  }
+
+  .edumon-workspace.mobile-page-monitor .edumon-waveform-area {
+    touch-action: pan-y !important;
   }
 }
 
-body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor {
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
+/* The tablet runtime adds this class independently of the CSS orientation
+   query. Mirror the same final rules so iPad/large-phone landscape behaves
+   identically. */
+body.eduvent-tablet-landscape .edumon-app-shell {
+  height: auto !important;
+  min-height: 100dvh !important;
+  overflow: visible !important;
+}
+
+body.eduvent-tablet-landscape .edumon-app-shell > .topbar,
+body.eduvent-tablet-landscape .edumon-app-shell > .edumon-mobile-workspace-switcher {
+  position: static !important;
+  inset: auto !important;
+  flex: 0 0 auto !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
   touch-action: pan-y !important;
 }
 
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor > .edumon-console {
+  display: flex !important;
   flex: 0 0 auto !important;
+  width: 100% !important;
   height: auto !important;
   min-height: 640px !important;
   overflow: visible !important;
 }
 
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .simulation-console-hardware {
+  display: flex !important;
+  width: 100% !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .simulation-console-hardware > .edumon-console-top-actions {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  justify-content: flex-end !important;
+}
+
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-monitor-body {
   flex: 0 0 430px !important;
+  height: 430px !important;
   min-height: 430px !important;
+  max-height: 430px !important;
   overflow: hidden !important;
   grid-template-columns: minmax(0, 1fr) 150px !important;
 }
 
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-waveform-area,
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-measurements {
-  grid-template-rows: repeat(3, minmax(130px, 1fr)) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+  grid-auto-rows: 0 !important;
+}
+
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-trace,
+body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-value-panel {
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: none !important;
 }
 
 body.eduvent-tablet-landscape .edumon-workspace.mobile-page-monitor .edumon-waveform-area {
