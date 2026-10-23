@@ -9,7 +9,6 @@ import {
   type EdumonRespiratoryRuntime,
 } from './respiratoryPhysiology'
 import type { MonitorPatientState, MonitorRespiratorySettings } from './types'
-import { EdumonVentilatorControl } from './EdumonVentilatorControl'
 import './edumon-capnography.css'
 
 interface CapnographySample {
@@ -187,7 +186,8 @@ function CapnographyCanvas({ samples, etCo2 }: { samples: CapnographySample[]; e
 
 export function EdumonCapnographySurface({ patientState }: { patientState: MonitorPatientState }) {
   const patientRef = useRef(patientState)
-  const runtimeRef = useRef<EdumonRespiratoryRuntime>(createEdumonRespiratoryRuntime(patientState, 0))
+  const runtimeRef = useRef<EdumonRespiratoryRuntime | null>(null)
+  if (runtimeRef.current == null) runtimeRef.current = createEdumonRespiratoryRuntime(patientState, 0)
   const capnogramRef = useRef<CapnogramRuntime>({ breathPhase: 0, elapsedExpiration: 0, airwayCo2: 0, expiratory: false })
   const historyRef = useRef(new RollingSignalHistory<CapnographySample>(TRACE_WINDOW_SECONDS))
   const simulationTimeRef = useRef(0)
@@ -234,7 +234,9 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
       const simulationTime = simulationTimeRef.current
       let nextSampleTime = lastSampleTimeRef.current + SAMPLE_INTERVAL
       while (nextSampleTime <= simulationTime + SAMPLE_INTERVAL * 0.1) {
-        runtimeRef.current = stepEdumonRespiratoryRuntime(runtimeRef.current, patientRef.current, nextSampleTime)
+        const currentRuntime = runtimeRef.current
+        if (!currentRuntime) break
+        runtimeRef.current = stepEdumonRespiratoryRuntime(currentRuntime, patientRef.current, nextSampleTime)
         const output = runtimeRef.current.output
         const respiratory = resolvedMonitorRespiratorySettings(patientRef.current)
         const co2 = advanceCapnogram(
@@ -250,7 +252,7 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
       }
       historyRef.current.trim(simulationTime)
 
-      if (wallTime - lastPublishWallTime >= 50) {
+      if (wallTime - lastPublishWallTime >= 50 && runtimeRef.current) {
         lastPublishWallTime = wallTime
         setSamples(historyRef.current.snapshot())
         setEtCo2(runtimeRef.current.output.estimatedEtCo2MmHg)
@@ -279,5 +281,5 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
     )
     : null
 
-  return <>{waveform}{measurement}<EdumonVentilatorControl patientState={patientState} onPatientStateChange={() => {}} /></>
+  return <>{waveform}{measurement}</>
 }
