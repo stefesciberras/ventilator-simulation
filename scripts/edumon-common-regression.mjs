@@ -12,7 +12,7 @@ const app = read('src/edumon/EdumonApp.tsx')
 const modules = read('src/edumon/modules.ts')
 const profile = read('src/edumon/commonMonitorProfile.ts')
 const monitorEngine = read('src/edumon/monitorEngine.ts')
-const respiratoryRuntime = read('src/edumon/respiratoryRuntime.ts')
+const respiratoryRuntime = read('src/edumon/respiratoryPhysiology.ts')
 
 assert(app.includes('function EdumonMonitor({ module }'), 'Ana and ICU must continue to render through one shared EdumonMonitor composition')
 assert(app.includes('return <EdumonMonitor module={EDUMON_MODULES[moduleId]} />'), 'module routing must select configuration, not a separate product monitor implementation')
