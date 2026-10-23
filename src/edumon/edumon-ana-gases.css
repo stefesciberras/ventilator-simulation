@@ -1,12 +1,12 @@
 .edumon-ana-gas-footer {
   margin-left: auto;
   align-self: stretch;
-  flex: 0 0 min(470px, 46vw);
-  min-width: 390px;
+  flex: 0 0 min(370px, 38vw);
+  min-width: 310px;
   display: grid;
-  grid-template-columns: minmax(118px, 1fr) minmax(118px, 1fr) minmax(88px, .72fr);
-  gap: 4px;
-  padding: 4px;
+  grid-template-columns: minmax(94px, 1fr) minmax(94px, 1fr) minmax(58px, .58fr);
+  gap: 3px;
+  padding: 3px;
   border: 1px solid #33424b;
   border-radius: 8px;
   background: #0c1317;
@@ -22,29 +22,29 @@
 
 .edumon-gas-group {
   display: grid;
-  grid-template-rows: 20px 1fr 1fr;
+  grid-template-rows: 18px 1fr 1fr;
   overflow: hidden;
 }
 
 .edumon-gas-group-title {
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 6px;
   border-bottom: 1px solid rgba(255, 255, 255, .07);
   color: #c7d3d9;
-  font-size: .68rem;
+  font-size: .61rem;
   font-weight: 900;
-  letter-spacing: .055em;
+  letter-spacing: .05em;
 }
 
 .edumon-gas-row {
   position: relative;
   min-width: 0;
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 18px 28px;
+  grid-template-columns: 22px minmax(0, 1fr) 14px 24px;
   align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
+  gap: 2px;
+  padding: 2px 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -59,15 +59,15 @@
 
 .edumon-gas-row > span {
   color: #9babb3;
-  font-size: .65rem;
+  font-size: .58rem;
   font-weight: 900;
-  letter-spacing: .04em;
+  letter-spacing: .035em;
 }
 
 .edumon-gas-row > strong {
   justify-self: end;
   color: #d7e8ef;
-  font-size: 1.32rem;
+  font-size: 1.08rem;
   line-height: 1;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -75,7 +75,7 @@
 
 .edumon-gas-row > small {
   color: #7f9099;
-  font-size: .56rem;
+  font-size: .49rem;
 }
 
 .edumon-gas-row.adjustable {
@@ -95,8 +95,8 @@
 .edumon-gas-control-knob {
   position: relative;
   justify-self: center;
-  width: 22px;
-  height: 22px;
+  width: 19px;
+  height: 19px;
   border: 1px solid #6f7f87;
   border-radius: 50%;
   background: radial-gradient(circle at 42% 36%, #64747c 0 13%, #344149 38%, #202a30 72%);
@@ -106,9 +106,9 @@
 .edumon-gas-control-knob b {
   position: absolute;
   left: 50%;
-  top: 3px;
+  top: 2px;
   width: 2px;
-  height: 6px;
+  height: 5px;
   border-radius: 2px;
   background: #f1d35f;
   transform: translateX(-50%);
@@ -125,21 +125,21 @@
   grid-template-rows: auto 1fr auto;
   align-items: center;
   justify-items: center;
-  padding: 6px;
+  padding: 4px;
   text-align: center;
 }
 
 .edumon-gas-mac span {
   color: #aebbc1;
-  font-size: .68rem;
+  font-size: .59rem;
   font-weight: 900;
-  letter-spacing: .05em;
+  letter-spacing: .045em;
 }
 
 .edumon-gas-mac strong {
   align-self: center;
   color: #efe8d0;
-  font-size: 1.65rem;
+  font-size: 1.28rem;
   line-height: 1;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -147,7 +147,7 @@
 
 .edumon-gas-mac small {
   color: #7f9099;
-  font-size: .56rem;
+  font-size: .48rem;
 }
 
 .edumon-gas-slider-overlay {
@@ -197,84 +197,84 @@
 
 @media (max-width: 900px) {
   .edumon-ana-gas-footer {
-    flex-basis: min(410px, 60vw);
-    min-width: 344px;
-    grid-template-columns: minmax(104px, 1fr) minmax(104px, 1fr) minmax(76px, .7fr);
+    flex-basis: min(326px, 50vw);
+    min-width: 280px;
+    grid-template-columns: minmax(82px, 1fr) minmax(82px, 1fr) minmax(54px, .58fr);
   }
 
   .edumon-gas-row {
-    grid-template-columns: 24px minmax(0, 1fr) 16px 25px;
-    padding-inline: 5px;
+    grid-template-columns: 20px minmax(0, 1fr) 13px 22px;
+    padding-inline: 4px;
   }
 
   .edumon-gas-row > strong {
-    font-size: 1.15rem;
+    font-size: 1rem;
   }
 
   .edumon-gas-mac strong {
-    font-size: 1.42rem;
+    font-size: 1.18rem;
   }
 
   .edumon-gas-control-knob {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
   }
 }
 
 @media (max-width: 680px) {
   .edumon-ana-gas-footer {
-    flex: 1 1 100%;
-    min-width: 0;
-    grid-template-columns: minmax(92px, 1fr) minmax(92px, 1fr) minmax(62px, .62fr);
-    gap: 3px;
-    padding: 3px;
+    flex: 0 0 276px;
+    min-width: 276px;
+    grid-template-columns: minmax(78px, 1fr) minmax(78px, 1fr) minmax(50px, .56fr);
+    gap: 2px;
+    padding: 2px;
   }
 
   .edumon-gas-group {
-    grid-template-rows: 17px 1fr 1fr;
+    grid-template-rows: 16px 1fr 1fr;
   }
 
   .edumon-gas-group-title {
-    padding-inline: 5px;
-    font-size: .57rem;
+    padding-inline: 4px;
+    font-size: .53rem;
   }
 
   .edumon-gas-row {
-    grid-template-columns: 20px minmax(0, 1fr) 13px 21px;
-    gap: 2px;
-    padding: 1px 3px;
+    grid-template-columns: 18px minmax(0, 1fr) 12px 19px;
+    gap: 1px;
+    padding: 1px 2px;
   }
 
   .edumon-gas-row > span,
   .edumon-gas-mac span {
-    font-size: .53rem;
+    font-size: .48rem;
   }
 
   .edumon-gas-row > strong {
-    font-size: .93rem;
+    font-size: .84rem;
   }
 
   .edumon-gas-row > small,
   .edumon-gas-mac small {
-    font-size: .46rem;
+    font-size: .42rem;
   }
 
   .edumon-gas-control-knob {
-    width: 17px;
-    height: 17px;
+    width: 15px;
+    height: 15px;
   }
 
   .edumon-gas-control-knob b {
     top: 2px;
-    height: 5px;
+    height: 4px;
   }
 
   .edumon-gas-mac {
-    padding: 3px;
+    padding: 2px;
   }
 
   .edumon-gas-mac strong {
-    font-size: 1.08rem;
+    font-size: .98rem;
   }
 
   .edumon-gas-slider-overlay {

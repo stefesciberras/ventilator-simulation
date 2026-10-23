@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import type { EdumonModuleDefinition } from './modules'
 import { SimulationTopBar, type SharedSimulationSpeed } from '../components/SimulationTopBar'
 import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
@@ -34,6 +34,18 @@ interface EdumonTopBarProps {
 
 export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, diagnosticsAction, onAbout }: EdumonTopBarProps) {
   const settingsAuth = useInstructorAccountAuth({ locked: simulationControlsLocked })
+
+  useEffect(() => {
+    const removeLegacyNibpPlaceholder = () => {
+      document.querySelectorAll<HTMLButtonElement>(".edumon-control-strip > button.edumon-control-tile.disabled[title^='NIBP will be enabled']")
+        .forEach((button) => button.remove())
+    }
+    removeLegacyNibpPlaceholder()
+    const observer = new MutationObserver(removeLegacyNibpPlaceholder)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <SimulationTopBar
       brandKicker={module.productName}
