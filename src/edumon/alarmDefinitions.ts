@@ -1,4 +1,5 @@
 import type { SharedAlarmEvaluation } from '../alarms/useSharedAlarmController'
+import { currentEdumonRespiratorySpO2 } from './respiratoryPhysiology'
 import type { MonitorPatientState } from './types'
 
 export interface EdumonAlarmLimits {
@@ -26,13 +27,14 @@ export function evaluateEdumonAlarms(
   limits: EdumonAlarmLimits = DEFAULT_EDUMON_ALARM_LIMITS,
 ): SharedAlarmEvaluation[] {
   const organisedRhythm = patient.rhythm !== 'ventricular-fibrillation' && patient.rhythm !== 'asystole'
+  const physiologicalSpo2 = currentEdumonRespiratorySpO2(patient.spo2)
   return [
     { key: 'heartRateLow', label: 'LOW HEART RATE', active: organisedRhythm && patient.heartRate < limits.heartRateLow, priority: 'warning' },
     { key: 'heartRateHigh', label: 'HIGH HEART RATE', active: organisedRhythm && patient.heartRate > limits.heartRateHigh, priority: 'warning' },
     { key: 'mapLow', label: 'LOW ARTERIAL PRESSURE', active: meanPressure != null && meanPressure < limits.mapLow, priority: 'critical' },
     { key: 'mapHigh', label: 'HIGH ARTERIAL PRESSURE', active: meanPressure != null && meanPressure > limits.mapHigh, priority: 'warning' },
-    { key: 'spo2Low', label: 'LOW SpO₂', active: patient.spo2 < limits.spo2Low, priority: 'critical' },
-    { key: 'spo2High', label: 'HIGH SpO₂', active: patient.spo2 > limits.spo2High, priority: 'warning' },
+    { key: 'spo2Low', label: 'LOW SpO₂', active: physiologicalSpo2 < limits.spo2Low, priority: 'critical' },
+    { key: 'spo2High', label: 'HIGH SpO₂', active: physiologicalSpo2 > limits.spo2High, priority: 'warning' },
     { key: 'vf', label: 'VENTRICULAR FIBRILLATION', active: patient.rhythm === 'ventricular-fibrillation', priority: 'critical', immediateCritical: true },
     { key: 'asystole', label: 'ASYSTOLE', active: patient.rhythm === 'asystole', priority: 'critical', immediateCritical: true },
   ]
