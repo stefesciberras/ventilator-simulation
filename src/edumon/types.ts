@@ -16,8 +16,14 @@ export type EcgMorphology =
   | 'hyperkalaemia'
 
 export interface MonitorRespiratorySettings {
+  /** Effective respiratory rate used by gas exchange/capnography after ventilator + patient interaction. */
   respiratoryRate: number
+  /** Effective tidal volume used by gas exchange/capnography. */
   tidalVolumeMl: number
+  /** Patient's own spontaneous respiratory rate, independent of the ventilator set rate. */
+  spontaneousRespiratoryRate: number
+  /** Simplified spontaneous tidal volume used in Manual mode. Not exposed as a routine control. */
+  spontaneousTidalVolumeMl: number
   deadSpaceMl: number
   fio2: number
   peepCmH2O: number
@@ -35,6 +41,8 @@ export interface MonitorRespiratorySettings {
 export const DEFAULT_MONITOR_RESPIRATORY_SETTINGS: MonitorRespiratorySettings = {
   respiratoryRate: 12,
   tidalVolumeMl: 500,
+  spontaneousRespiratoryRate: 12,
+  spontaneousTidalVolumeMl: 500,
   deadSpaceMl: 150,
   fio2: 0.21,
   peepCmH2O: 0,
