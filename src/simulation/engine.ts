@@ -27,7 +27,8 @@ import { stepEduventRespiratoryPhysiology } from '../eduvent/respiratoryPhysiolo
 export type SimulationOptions = LegacySimulationOptions
 
 export interface SimulationState extends LegacySimulationState {
-  respiratoryPhysiology: RespiratoryPhysiologyState
+  /** Optional so pre-extraction persisted/runtime state can still be resumed. */
+  respiratoryPhysiology?: RespiratoryPhysiologyState
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
@@ -55,6 +56,14 @@ function effectiveRespiratoryRate(
   )
 }
 
+function sharedStateFor(state: SimulationState): RespiratoryPhysiologyState {
+  return state.respiratoryPhysiology ?? createRespiratoryPhysiologyState({
+    alveolarCo2MmHg: state.alveolarCo2,
+    alveolarOxygenFraction: state.alveolarOxygenFraction,
+    spo2Percent: state.spo2,
+  })
+}
+
 export function createSimulationState(): SimulationState {
   const legacy = createLegacySimulationState()
   return {
@@ -80,10 +89,11 @@ export function stepSimulation(
   // physiology state authoritative between simulation steps.
   const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
   const expiredTidalVolumeL = state.lastExpiredTidalVolume
+  const previousSharedState = sharedStateFor(state)
 
   const sample = legacyStepSimulation(state, ventilator, patient, t, dt, options)
   const shared = stepEduventRespiratoryPhysiology(
-    state.respiratoryPhysiology,
+    previousSharedState,
     ventilator,
     patient,
     { respiratoryRate, expiredTidalVolumeL },
@@ -134,8 +144,8 @@ export function calculateMeasurements(samples: Sample[], ventilator: VentilatorS
   return legacyCalculateMeasurements(samples, ventilator)
 }
 
-// Keep this import referenced while the compatibility wrapper is in place. It
-// also provides a compile-time assertion that the legacy and facade APIs remain
-// structurally compatible during the migration.
+// Keep these imports referenced while the compatibility facade is in place. They
+// provide compile-time assertions that the mature engine continues to expose the
+// same batch helpers during the migration.
 void legacyAdvanceSimulation
 void legacyGenerateWaveforms
