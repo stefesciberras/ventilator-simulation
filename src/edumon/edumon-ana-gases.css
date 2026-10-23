@@ -32,7 +32,7 @@
   padding: 0 6px;
   border-bottom: 1px solid rgba(255, 255, 255, .07);
   color: #c7d3d9;
-  font-size: .61rem;
+  font-size: .8rem;
   font-weight: 900;
   letter-spacing: .05em;
 }
@@ -236,7 +236,7 @@
 
   .edumon-gas-group-title {
     padding-inline: 4px;
-    font-size: .53rem;
+    font-size: .8rem;
   }
 
   .edumon-gas-row {
