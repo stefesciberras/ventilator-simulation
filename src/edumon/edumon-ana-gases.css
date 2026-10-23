@@ -150,6 +150,84 @@
   font-size: .48rem;
 }
 
+.edumon-tof-container {
+  align-self: stretch;
+  flex: 0 0 64px;
+  min-width: 64px;
+  margin-left: 3px;
+  padding: 5px;
+  display: grid;
+  grid-template-rows: auto 1fr 1fr auto;
+  gap: 1px;
+  align-items: center;
+  border: 1px solid #33424b;
+  border-radius: 8px;
+  background: #111c22;
+  color: #d9e3e7;
+  font: inherit;
+  text-align: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.edumon-tof-container:hover:not(:disabled) {
+  background: #18272f;
+}
+
+.edumon-tof-container:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.edumon-tof-container:disabled {
+  cursor: default;
+}
+
+.edumon-tof-title {
+  color: #aebbc1;
+  font-size: .59rem;
+  font-weight: 900;
+  letter-spacing: .045em;
+}
+
+.edumon-tof-reading {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 3px;
+}
+
+.edumon-tof-reading small {
+  color: #7f9099;
+  font-size: .42rem;
+  font-weight: 800;
+}
+
+.edumon-tof-reading strong {
+  color: #d7e8ef;
+  font-size: .92rem;
+  line-height: 1;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.edumon-tof-status {
+  color: #687983;
+  font-size: .4rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.edumon-tof-container.measuring {
+  background: #18272f;
+}
+
+.edumon-tof-container.measuring .edumon-tof-status {
+  color: #f1d35f;
+}
+
 .edumon-gas-slider-overlay {
   position: absolute;
   z-index: 90;
@@ -202,6 +280,11 @@
     grid-template-columns: minmax(82px, 1fr) minmax(82px, 1fr) minmax(54px, .58fr);
   }
 
+  .edumon-tof-container {
+    flex-basis: 58px;
+    min-width: 58px;
+  }
+
   .edumon-gas-row {
     grid-template-columns: 20px minmax(0, 1fr) 13px 22px;
     padding-inline: 4px;
@@ -230,6 +313,13 @@
     padding: 2px;
   }
 
+  .edumon-tof-container {
+    flex: 0 0 52px;
+    min-width: 52px;
+    margin-left: 2px;
+    padding: 3px;
+  }
+
   .edumon-gas-group {
     grid-template-rows: 16px 1fr 1fr;
   }
@@ -246,7 +336,8 @@
   }
 
   .edumon-gas-row > span,
-  .edumon-gas-mac span {
+  .edumon-gas-mac span,
+  .edumon-tof-title {
     font-size: .48rem;
   }
 
@@ -255,8 +346,14 @@
   }
 
   .edumon-gas-row > small,
-  .edumon-gas-mac small {
-    font-size: .42rem;
+  .edumon-gas-mac small,
+  .edumon-tof-reading small,
+  .edumon-tof-status {
+    font-size: .38rem;
+  }
+
+  .edumon-tof-reading strong {
+    font-size: .76rem;
   }
 
   .edumon-gas-control-knob {
