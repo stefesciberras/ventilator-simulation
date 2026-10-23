@@ -1,1 +1,1 @@
-export const EDUMON_APP_VERSION = '1.1.0.27'
+export const EDUMON_APP_VERSION = '1.1.0.28'
