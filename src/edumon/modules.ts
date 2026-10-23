@@ -2,8 +2,8 @@ import { EDUMON_PRODUCT_MONITOR_PROFILES, type EdumonProductMonitorProfile } fro
 
 export type EdumonModuleId = 'ana' | 'icu'
 
-// trends/teaching remain compatibility IDs for existing shared surface routing;
-// no product currently exposes them as lower-strip module tiles.
+// trends/teaching and ana-gases remain compatibility IDs for existing shared
+// surface routing; anaesthetic gases now live directly in the Ana footer strip.
 export type EdumonAuxiliaryMonitorId =
   | 'ana-gases'
   | 'icu-neuro'
@@ -32,15 +32,8 @@ export const EDUMON_MODULES: Record<EdumonModuleId, EdumonModuleDefinition> = {
     subtitle: 'Anaesthesia patient monitor',
     defaultTeachingModule: 'Anaesthesia monitoring',
     monitorProfile: EDUMON_PRODUCT_MONITOR_PROFILES.ana,
-    plannedMeasurements: ['EtCO₂', 'FiO₂', 'EtO₂', 'EtAA', 'MAC', 'NIBP', 'Temperature', 'BIS', 'TOF'],
-    auxiliaryMonitors: [
-      {
-        id: 'ana-gases',
-        label: 'Anaesthetic gas analysis',
-        shortLabel: 'Gases',
-        description: 'Inspired and expired oxygen, volatile anaesthetic concentration and MAC.',
-      },
-    ],
+    plannedMeasurements: ['EtCO₂', 'FiO₂', 'EtO₂', 'FiSevo', 'EtSevo', 'MAC', 'NIBP', 'Temperature', 'BIS', 'TOF'],
+    auxiliaryMonitors: [],
   },
   icu: {
     id: 'icu',
