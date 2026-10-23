@@ -35,43 +35,51 @@
 }
 
 .edumon-ventilator-mode {
+  position: relative;
   flex: 0 0 116px;
   min-width: 116px;
-  z-index: 120;
-}
-
-.edumon-ventilator-mode .console-mode-button {
-  width: 100%;
-  min-width: 0;
-  min-height: 34px;
   height: 34px;
-  padding: 3px 7px;
+  display: grid;
+  grid-template-rows: 9px 1fr;
+  gap: 1px;
+  padding: 3px 6px 2px;
+  border: 1px solid #2f373c;
   border-radius: 4px;
-  border-color: #2f373c;
   background: linear-gradient(#464e53, #333a3f);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+  box-sizing: border-box;
 }
 
-.edumon-ventilator-mode .console-mode-button > span {
+.edumon-ventilator-mode > span {
   color: #b7c0c4;
   font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+  pointer-events: none;
 }
 
-.edumon-ventilator-mode .console-mode-button > strong {
+.edumon-ventilator-mode select {
+  width: 100%;
+  min-width: 0;
+  height: 18px;
+  margin: 0;
+  padding: 0 16px 0 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
   color: #d8f2f7;
+  font: inherit;
   font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.edumon-ventilator-mode-menu {
-  top: calc(100% + 4px);
-  width: 230px;
-  z-index: 140;
-}
-
-.edumon-ventilator-mode-menu button.selected {
-  border-color: #d67a29;
-  color: #ffb15f;
-  background: #2c2118;
+.edumon-ventilator-mode select:disabled {
+  cursor: default;
+  opacity: .6;
 }
 
 .edumon-ventilator-settings {
@@ -196,9 +204,9 @@
   .edumon-ventilator-mode {
     flex-basis: 104px;
     min-width: 104px;
+    height: 32px;
   }
 
-  .edumon-ventilator-mode .console-mode-button,
   .edumon-ventilator-settings .interactive-setting-button {
     min-height: 32px;
     height: 32px;
