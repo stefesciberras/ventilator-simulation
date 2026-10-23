@@ -9,6 +9,11 @@ import {
 import './edumon-ana-gases.css'
 
 type AdjustableGas = 'fio2' | 'fisevo'
+type TofReading = {
+  count: number
+  ratio: number
+  measuredAt: number
+}
 
 interface EdumonAnaGasControlProps {
   patientState: MonitorPatientState
@@ -18,6 +23,7 @@ interface EdumonAnaGasControlProps {
 
 const SLIDER_SETTLE_MS = 5200
 const SEVO_MAC_PERCENT = 2.0
+const TOF_MEASUREMENT_MS = 1800
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -53,12 +59,15 @@ export function EdumonAnaGasControl({
 }: EdumonAnaGasControlProps) {
   const patientRef = useRef(patientState)
   const settleTimerRef = useRef<number | null>(null)
+  const tofTimerRef = useRef<number | null>(null)
   const [footerHost, setFooterHost] = useState<HTMLElement | null>(null)
   const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null)
   const [physioHost, setPhysioHost] = useState<HTMLElement | null>(null)
   const [activeGas, setActiveGas] = useState<AdjustableGas | null>(null)
   const [etSevo, setEtSevo] = useState(0)
   const [etO2, setEtO2] = useState(16)
+  const [tofReading, setTofReading] = useState<TofReading | null>(null)
+  const [tofMeasuring, setTofMeasuring] = useState(false)
 
   patientRef.current = patientState
   const respiratory = resolvedMonitorRespiratorySettings(patientState)
@@ -118,6 +127,7 @@ export function EdumonAnaGasControl({
 
   useEffect(() => () => {
     if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
+    if (tofTimerRef.current != null) window.clearTimeout(tofTimerRef.current)
   }, [])
 
   const armSettleTimer = () => {
@@ -153,8 +163,19 @@ export function EdumonAnaGasControl({
     armSettleTimer()
   }
 
+  const startTofMeasurement = () => {
+    if (tofMeasuring) return
+    setTofMeasuring(true)
+    if (tofTimerRef.current != null) window.clearTimeout(tofTimerRef.current)
+    tofTimerRef.current = window.setTimeout(() => {
+      tofTimerRef.current = null
+      setTofReading({ count: 4, ratio: 1.0, measuredAt: Date.now() })
+      setTofMeasuring(false)
+    }, TOF_MEASUREMENT_MS)
+  }
+
   const footer = footerHost ? createPortal(
-    <section className="edumon-ana-gas-footer" aria-label="Anaesthetic gas monitoring">
+    <section className="edumon-ana-gas-footer" aria-label="Anaesthetic gas and neuromuscular monitoring">
       <div className="edumon-gas-group edumon-gas-group-o2">
         <div className="edumon-gas-group-title">O₂</div>
         <button
@@ -196,6 +217,20 @@ export function EdumonAnaGasControl({
         <strong>{mac.toFixed(1)}</strong>
         <small>Sevo</small>
       </div>
+
+      <button
+        type="button"
+        className={`edumon-tof-tile ${tofMeasuring ? 'measuring' : ''}`.trim()}
+        onClick={startTofMeasurement}
+        disabled={tofMeasuring}
+        aria-label={tofMeasuring ? 'TOF measurement in progress' : 'Start TOF measurement'}
+        title="Press to perform an intermittent TOF measurement"
+      >
+        <span className="edumon-tof-title">TOF</span>
+        <span className="edumon-tof-reading"><small>Count</small><strong>{tofReading?.count ?? '—'}</strong></span>
+        <span className="edumon-tof-reading"><small>Ratio</small><strong>{tofReading ? tofReading.ratio.toFixed(1) : '—'}</strong></span>
+        <span className="edumon-tof-status">{tofMeasuring ? 'MEAS' : tofReading ? 'Last' : 'Press'}</span>
+      </button>
     </section>,
     footerHost,
   ) : null
