@@ -1,0 +1,18 @@
+.edumon-trace-capnography,
+.edumon-value-capnography {
+  color: #f2d64b;
+}
+
+.edumon-trace-capnography canvas {
+  color: #f2d64b;
+}
+
+.edumon-value-capnography .edumon-value-main {
+  color: #f2d64b;
+}
+
+.edumon-value-capnography .edumon-value-detail,
+.edumon-value-capnography .edumon-value-label,
+.edumon-value-capnography .edumon-value-unit {
+  color: color-mix(in srgb, #f2d64b 78%, white 22%);
+}

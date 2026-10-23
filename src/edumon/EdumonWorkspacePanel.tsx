@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { MonitorPatientState } from './types'
+import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonNibpControl } from './EdumonNibpControl'
+import { EdumonCapnographySurface } from './EdumonCapnographySurface'
 import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
 import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
 import './edumon-rhythm-control.css'
@@ -52,6 +53,10 @@ export function EdumonWorkspacePanel({
   const [profile, setProfile] = useState<EdumonPatientProfile>('Awake')
   const [pressuresCoupled, setPressuresCoupled] = useState(false)
   const [showInvasiveBloodPressure, setShowInvasiveBloodPressure] = useState(true)
+  const respiratory: MonitorRespiratorySettings = {
+    ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
+    ...(patientState.respiratory ?? {}),
+  }
 
   useEffect(() => {
     const root = document.documentElement
@@ -84,6 +89,13 @@ export function EdumonWorkspacePanel({
       else next.systolicPressure = Math.min(220, next.diastolicPressure + 1)
     }
     onPatientStateChange(next)
+  }
+
+  const updateRespiratory = (patch: Partial<MonitorRespiratorySettings>) => {
+    if (controlsLocked) return
+    const nextRespiratory = { ...respiratory, ...patch }
+    nextRespiratory.deadSpaceMl = Math.min(nextRespiratory.deadSpaceMl, Math.max(0, nextRespiratory.tidalVolumeMl))
+    onPatientStateChange({ ...patientState, respiratory: nextRespiratory })
   }
 
   const updateSystolicPressure = (value: number) => {
@@ -184,6 +196,13 @@ export function EdumonWorkspacePanel({
             <div><span>SpO₂ target</span><strong>{Math.round(patientState.spo2)}</strong><small>%</small></div>
             <div><span>Perfusion</span><strong>{patientState.peripheralPerfusion.toFixed(1)}</strong><small>relative</small></div>
           </div>
+          <div className="control-section-title"><h2>Respiratory / gas exchange</h2></div>
+          <label className="edumon-signal-control edumon-signal-capnography"><span>Respiratory rate <b>{Math.round(respiratory.respiratoryRate)}/min</b></span><input disabled={controlsLocked} type="range" min="0" max="40" step="1" value={respiratory.respiratoryRate} onChange={(event) => updateRespiratory({ respiratoryRate: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-capnography"><span>Tidal volume <b>{Math.round(respiratory.tidalVolumeMl)} mL</b></span><input disabled={controlsLocked} type="range" min="0" max="1000" step="10" value={respiratory.tidalVolumeMl} onChange={(event) => updateRespiratory({ tidalVolumeMl: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-capnography"><span>Dead space <b>{Math.round(respiratory.deadSpaceMl)} mL</b></span><input disabled={controlsLocked} type="range" min="0" max={Math.max(0, respiratory.tidalVolumeMl)} step="10" value={respiratory.deadSpaceMl} onChange={(event) => updateRespiratory({ deadSpaceMl: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-capnography"><span>FiO₂ <b>{Math.round(respiratory.fio2 * 100)}%</b></span><input disabled={controlsLocked} type="range" min="21" max="100" step="1" value={respiratory.fio2 * 100} onChange={(event) => updateRespiratory({ fio2: Number(event.target.value) / 100 })} /></label>
+          <label className="edumon-signal-control edumon-signal-capnography"><span>VCO₂ <b>{Math.round(respiratory.co2ProductionMlMin)} mL/min</b></span><input disabled={controlsLocked} type="range" min="50" max="600" step="10" value={respiratory.co2ProductionMlMin} onChange={(event) => updateRespiratory({ co2ProductionMlMin: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-capnography"><span>VO₂ <b>{Math.round(respiratory.oxygenConsumptionMlMin)} mL/min</b></span><input disabled={controlsLocked} type="range" min="50" max="600" step="10" value={respiratory.oxygenConsumptionMlMin} onChange={(event) => updateRespiratory({ oxygenConsumptionMlMin: Number(event.target.value) })} /></label>
         </section>
       ),
     },
@@ -207,6 +226,7 @@ export function EdumonWorkspacePanel({
   return (
     <>
       <EdumonNibpControl patientState={patientState} />
+      <EdumonCapnographySurface patientState={patientState} />
       <SimulationControlFramework
         activeTab={tab}
         tabs={tabs}
