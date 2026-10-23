@@ -8,7 +8,6 @@ import {
 } from './types'
 import './edumon-ana-gases.css'
 
-type AdjustableGas = 'fio2' | 'fisevo'
 type TofReading = {
   count: number
   ratio: number
@@ -63,7 +62,7 @@ export function EdumonAnaGasControl({
   const [footerHost, setFooterHost] = useState<HTMLElement | null>(null)
   const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null)
   const [physioHost, setPhysioHost] = useState<HTMLElement | null>(null)
-  const [activeGas, setActiveGas] = useState<AdjustableGas | null>(null)
+  const [fiSevoActive, setFiSevoActive] = useState(false)
   const [etSevo, setEtSevo] = useState(0)
   const [etO2, setEtO2] = useState(16)
   const [tofReading, setTofReading] = useState<TofReading | null>(null)
@@ -132,22 +131,12 @@ export function EdumonAnaGasControl({
     if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
     settleTimerRef.current = window.setTimeout(() => {
       settleTimerRef.current = null
-      setActiveGas(null)
+      setFiSevoActive(false)
     }, SLIDER_SETTLE_MS)
   }
 
-  const selectGas = (gas: AdjustableGas) => {
-    setActiveGas((current) => current === gas ? null : gas)
-    armSettleTimer()
-  }
-
-  const updateFio2 = (percent: number) => {
-    const current = patientRef.current
-    const nextRespiratory = {
-      ...resolvedMonitorRespiratorySettings(current),
-      fio2: clamp(percent, 21, 100) / 100,
-    }
-    onPatientStateChange({ ...current, respiratory: nextRespiratory })
+  const selectFiSevo = () => {
+    setFiSevoActive((current) => !current)
     armSettleTimer()
   }
 
@@ -191,17 +180,11 @@ export function EdumonAnaGasControl({
       <section className="edumon-ana-gas-footer" aria-label="Anaesthetic gas monitoring">
         <div className="edumon-gas-group edumon-gas-group-o2">
           <div className="edumon-gas-group-title">O₂</div>
-          <button
-            type="button"
-            className={`edumon-gas-row edumon-gas-row-fi adjustable ${activeGas === 'fio2' ? 'active' : ''}`.trim()}
-            onClick={() => selectGas('fio2')}
-            aria-label={`Adjust inspired oxygen, currently ${fio2Percent} percent`}
-          >
+          <div className="edumon-gas-row edumon-gas-row-fi" aria-label={`Inspired oxygen ${fio2Percent} percent`}>
             <span>Fi</span>
             <strong>{fio2Percent}</strong>
             <small>%</small>
-            <i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
-          </button>
+          </div>
           <div className="edumon-gas-row edumon-gas-row-fe">
             <span>Fe</span><strong>{Math.round(etO2)}</strong><small>%</small>
           </div>
@@ -211,8 +194,8 @@ export function EdumonAnaGasControl({
           <div className="edumon-gas-group-title">Sevo</div>
           <button
             type="button"
-            className={`edumon-gas-row edumon-gas-row-fi adjustable ${activeGas === 'fisevo' ? 'active' : ''}`.trim()}
-            onClick={() => selectGas('fisevo')}
+            className={`edumon-gas-row edumon-gas-row-fi adjustable ${fiSevoActive ? 'active' : ''}`.trim()}
+            onClick={selectFiSevo}
             aria-label={`Adjust inspired sevoflurane, currently ${fiSevo.toFixed(1)} percent`}
           >
             <span>Fi</span>
@@ -235,21 +218,20 @@ export function EdumonAnaGasControl({
     footerHost,
   ) : null
 
-  const activeValue = activeGas === 'fio2' ? fio2Percent : fiSevo
-  const overlay = overlayHost && activeGas ? createPortal(
-    <div className="edumon-gas-slider-overlay" role="group" aria-label={activeGas === 'fio2' ? 'FiO2 quick control' : 'Inspired sevoflurane quick control'}>
+  const overlay = overlayHost && fiSevoActive ? createPortal(
+    <div className="edumon-gas-slider-overlay" role="group" aria-label="Inspired sevoflurane quick control">
       <div className="edumon-gas-slider-heading">
-        <strong>{activeGas === 'fio2' ? 'FiO₂' : 'FiSevo'}</strong>
-        <span>{activeGas === 'fio2' ? `${fio2Percent}%` : `${fiSevo.toFixed(1)}%`}</span>
+        <strong>FiSevo</strong>
+        <span>{fiSevo.toFixed(1)}%</span>
       </div>
       <input
         type="range"
-        min={activeGas === 'fio2' ? 21 : 0}
-        max={activeGas === 'fio2' ? 100 : 8}
-        step={activeGas === 'fio2' ? 1 : 0.1}
-        value={activeValue}
+        min="0"
+        max="8"
+        step="0.1"
+        value={fiSevo}
         onPointerDown={armSettleTimer}
-        onChange={(event) => activeGas === 'fio2' ? updateFio2(Number(event.target.value)) : updateFiSevo(Number(event.target.value))}
+        onChange={(event) => updateFiSevo(Number(event.target.value))}
       />
     </div>,
     overlayHost,
