@@ -5,6 +5,7 @@ import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonNibpControl } from './EdumonNibpControl'
 import { EdumonCapnographySurface } from './EdumonCapnographySurface'
+import { EdumonAnaGasControl } from './EdumonAnaGasControl'
 import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
 import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
 import './edumon-rhythm-control.css'
@@ -66,7 +67,11 @@ export function EdumonWorkspacePanel({
   const applyProfile = (nextProfile: EdumonPatientProfile) => {
     if (controlsLocked) return
     setProfile(nextProfile)
-    onPatientStateChange({ ...EDUMON_PATIENT_PROFILES[nextProfile] })
+    onPatientStateChange({
+      ...EDUMON_PATIENT_PROFILES[nextProfile],
+      respiratory: patientState.respiratory,
+      anaestheticGases: patientState.anaestheticGases,
+    })
   }
 
   const updateRhythm = (rhythm: MonitorPatientState['rhythm']) => {
@@ -219,6 +224,13 @@ export function EdumonWorkspacePanel({
     <>
       <EdumonNibpControl patientState={patientState} />
       <EdumonCapnographySurface patientState={patientState} />
+      {teachingHost.appId === 'edumon-ana' && (
+        <EdumonAnaGasControl
+          patientState={patientState}
+          onPatientStateChange={onPatientStateChange}
+          sideControlsLocked={controlsLocked}
+        />
+      )}
       <SimulationControlFramework
         activeTab={tab}
         tabs={tabs}
