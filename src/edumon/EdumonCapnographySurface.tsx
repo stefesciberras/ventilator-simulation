@@ -4,15 +4,23 @@ import { RollingSignalHistory } from '../core/RollingSignalHistory'
 import { autoscaleWaveformSamples } from '../core/WaveformAutoscale'
 import {
   createEdumonRespiratoryRuntime,
+  resolvedMonitorRespiratorySettings,
   stepEdumonRespiratoryRuntime,
   type EdumonRespiratoryRuntime,
 } from './respiratoryPhysiology'
-import type { MonitorPatientState } from './types'
+import type { MonitorPatientState, MonitorRespiratorySettings } from './types'
 import './edumon-capnography.css'
 
 interface CapnographySample {
   time: number
   co2: number
+}
+
+interface CapnogramRuntime {
+  breathPhase: number
+  elapsedExpiration: number
+  airwayCo2: number
+  expiratory: boolean
 }
 
 const TRACE_WINDOW_SECONDS = 8
@@ -23,39 +31,74 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
-function smoothstep(edge0: number, edge1: number, value: number): number {
-  const x = clamp((value - edge0) / Math.max(0.0001, edge1 - edge0), 0, 1)
-  return x * x * (3 - 2 * x)
+/**
+ * Mirrors the mature EDUVENT capnogram morphology: dead-space delay, phase-II
+ * rise shaped by the expiratory time constant, then a gently rising phase-III
+ * plateau. Unlike the first EDUMON implementation, breath phase is integrated
+ * continuously, so changing RR cannot jump the waveform to another phase.
+ */
+function capnogramSourceValue(
+  expiratory: boolean,
+  elapsedExpiration: number,
+  respiratory: MonitorRespiratorySettings,
+  etCo2: number,
+): number {
+  if (!expiratory || elapsedExpiration < 0) return 0
+
+  const complianceL = Math.max(respiratory.complianceMlPerCmH2O / 1000, 0.005)
+  const tau = Math.max(respiratory.expiratoryResistanceCmH2OLs * complianceL, 0.05)
+  const obstruction = clamp((tau - 0.45) / 1.8, 0, 1)
+  const deadSpaceDelay = 0.03 + respiratory.deadSpaceMl / 5000 + 0.05 * obstruction
+  if (elapsedExpiration <= deadSpaceDelay) return 0
+
+  const riseTime = clamp(0.14 + 0.42 * tau, 0.16, 1.6)
+  const riseProgress = clamp((elapsedExpiration - deadSpaceDelay) / riseTime, 0, 1)
+  const normalRise = 1 - Math.pow(1 - riseProgress, 4)
+  const obstructedRise = Math.pow(riseProgress, 1.35)
+  const riseShape = normalRise * (1 - obstruction) + obstructedRise * obstruction
+  const phaseIIEndFraction = 0.88 - 0.12 * obstruction
+
+  if (riseProgress < 1) return clamp(etCo2 * phaseIIEndFraction * riseShape, 0, 150)
+
+  const plateauElapsed = elapsedExpiration - deadSpaceDelay - riseTime
+  const plateauRise = plateauElapsed * (0.05 + 0.08 * obstruction)
+  return clamp(etCo2 * Math.min(1, phaseIIEndFraction + plateauRise), 0, 150)
 }
 
-/**
- * Product-neutral time capnogram morphology. The shared gas-exchange engine
- * supplies respiratory rate and EtCO2; EDUMON owns only monitor presentation.
- */
-function capnogramAtTime(time: number, respiratoryRate: number, etCo2: number): number {
+function advanceCapnogram(
+  runtime: CapnogramRuntime,
+  deltaTime: number,
+  respiratoryRate: number,
+  etCo2: number,
+  respiratory: MonitorRespiratorySettings,
+): number {
   const rate = clamp(respiratoryRate, 0, 80)
-  if (rate <= 0 || etCo2 <= 0) return 0
-  const phase = ((time * rate) / 60) % 1
-
-  // Inspiration / zero baseline.
-  if (phase < 0.30) return 0
-
-  // Phase II: rapid expiratory upstroke.
-  if (phase < 0.40) {
-    return etCo2 * 0.88 * smoothstep(0.30, 0.40, phase)
+  if (rate <= 0) {
+    runtime.expiratory = false
+    runtime.elapsedExpiration = 0
+    const fraction = 1 - Math.exp(-deltaTime / 4)
+    runtime.airwayCo2 = clamp(runtime.airwayCo2 + (0 - runtime.airwayCo2) * fraction, 0, 150)
+    return runtime.airwayCo2
   }
 
-  // Phase III: gently rising alveolar plateau terminating at EtCO2.
-  if (phase < 0.78) {
-    const plateau = (phase - 0.40) / 0.38
-    return etCo2 * (0.88 + 0.12 * plateau)
-  }
+  const cycleSeconds = 60 / rate
+  const inspiratoryTimeSeconds = Math.min(1, cycleSeconds * 0.45)
+  const inspiratoryFraction = clamp(inspiratoryTimeSeconds / cycleSeconds, 0.18, 0.45)
+  const previousPhase = runtime.breathPhase
+  runtime.breathPhase = (runtime.breathPhase + (rate / 60) * deltaTime) % 1
+  const wrapped = runtime.breathPhase < previousPhase
+  const expiratory = runtime.breathPhase >= inspiratoryFraction
 
-  // Inspiratory downstroke, then a short true zero baseline before the next breath.
-  if (phase < 0.86) {
-    return etCo2 * (1 - smoothstep(0.78, 0.86, phase))
-  }
-  return 0
+  if (wrapped || !expiratory) runtime.elapsedExpiration = 0
+  else if (!runtime.expiratory && expiratory) runtime.elapsedExpiration = 0
+  else runtime.elapsedExpiration += deltaTime
+  runtime.expiratory = expiratory
+
+  const target = capnogramSourceValue(expiratory, runtime.elapsedExpiration, respiratory, etCo2)
+  const sensorResponseSeconds = expiratory ? 0.10 : 0.15
+  const fraction = 1 - Math.exp(-deltaTime / sensorResponseSeconds)
+  runtime.airwayCo2 = clamp(runtime.airwayCo2 + (target - runtime.airwayCo2) * fraction, 0, 150)
+  return runtime.airwayCo2
 }
 
 function findVisibleHost(selector: string): HTMLElement | null {
@@ -74,6 +117,10 @@ function currentSimulationSpeed(): number {
 function simulationIsPaused(): boolean {
   const pauseButton = findVisibleHost('.top-simulation-pause')
   return pauseButton?.classList.contains('paused') ?? false
+}
+
+function waveformIsFrozen(): boolean {
+  return findVisibleHost('.edumon-freeze-indicator') != null
 }
 
 function CapnographyCanvas({ samples, etCo2 }: { samples: CapnographySample[]; etCo2: number }) {
@@ -146,6 +193,7 @@ function CapnographyCanvas({ samples, etCo2 }: { samples: CapnographySample[]; e
 export function EdumonCapnographySurface({ patientState }: { patientState: MonitorPatientState }) {
   const patientRef = useRef(patientState)
   const runtimeRef = useRef<EdumonRespiratoryRuntime>(createEdumonRespiratoryRuntime(patientState, 0))
+  const capnogramRef = useRef<CapnogramRuntime>({ breathPhase: 0, elapsedExpiration: 0, airwayCo2: 0, expiratory: false })
   const historyRef = useRef(new RollingSignalHistory<CapnographySample>(TRACE_WINDOW_SECONDS))
   const simulationTimeRef = useRef(0)
   const lastSampleTimeRef = useRef(-SAMPLE_INTERVAL)
@@ -180,6 +228,14 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
     const tick = (wallTime: number) => {
       const wallDeltaSeconds = clamp((wallTime - previousWallTime) / 1000, 0, 0.1)
       previousWallTime = wallTime
+
+      // Freeze must preserve exactly the currently displayed CO2 history, just as
+      // it does ECG/ART/pleth. Resetting wall time above prevents a catch-up jump.
+      if (waveformIsFrozen()) {
+        frame = requestAnimationFrame(tick)
+        return
+      }
+
       if (!simulationIsPaused()) simulationTimeRef.current += wallDeltaSeconds * currentSimulationSpeed()
 
       const simulationTime = simulationTimeRef.current
@@ -187,10 +243,15 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
       while (nextSampleTime <= simulationTime + SAMPLE_INTERVAL * 0.1) {
         runtimeRef.current = stepEdumonRespiratoryRuntime(runtimeRef.current, patientRef.current, nextSampleTime)
         const output = runtimeRef.current.output
-        historyRef.current.append({
-          time: nextSampleTime,
-          co2: capnogramAtTime(nextSampleTime, output.respiratoryRate, output.estimatedEtCo2MmHg),
-        })
+        const respiratory = resolvedMonitorRespiratorySettings(patientRef.current)
+        const co2 = advanceCapnogram(
+          capnogramRef.current,
+          SAMPLE_INTERVAL,
+          output.respiratoryRate,
+          output.estimatedEtCo2MmHg,
+          respiratory,
+        )
+        historyRef.current.append({ time: nextSampleTime, co2 })
         lastSampleTimeRef.current = nextSampleTime
         nextSampleTime += SAMPLE_INTERVAL
       }
