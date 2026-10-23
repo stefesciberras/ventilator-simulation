@@ -9,6 +9,7 @@ import {
   type EdumonRespiratoryRuntime,
 } from './respiratoryPhysiology'
 import type { MonitorPatientState, MonitorRespiratorySettings } from './types'
+import { EdumonVentilatorControl } from './EdumonVentilatorControl'
 import './edumon-capnography.css'
 
 interface CapnographySample {
@@ -31,12 +32,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
-/**
- * Mirrors the mature EDUVENT capnogram morphology: dead-space delay, phase-II
- * rise shaped by the expiratory time constant, then a gently rising phase-III
- * plateau. Unlike the first EDUMON implementation, breath phase is integrated
- * continuously, so changing RR cannot jump the waveform to another phase.
- */
 function capnogramSourceValue(
   expiratory: boolean,
   elapsedExpiration: number,
@@ -229,8 +224,6 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
       const wallDeltaSeconds = clamp((wallTime - previousWallTime) / 1000, 0, 0.1)
       previousWallTime = wallTime
 
-      // Freeze must preserve exactly the currently displayed CO2 history, just as
-      // it does ECG/ART/pleth. Resetting wall time above prevents a catch-up jump.
       if (waveformIsFrozen()) {
         frame = requestAnimationFrame(tick)
         return
@@ -286,5 +279,5 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
     )
     : null
 
-  return <>{waveform}{measurement}</>
+  return <>{waveform}{measurement}<EdumonVentilatorControl patientState={patientState} onPatientStateChange={() => {}} /></>
 }
