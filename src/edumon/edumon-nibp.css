@@ -132,11 +132,10 @@
 .edumon-nibp-start-button::before {
   content: '';
   position: absolute;
-  inset: 7px 10px;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 40'%3E%3Cg fill='none' stroke='%23161108' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 8h23a7 7 0 0 1 7 7v10a7 7 0 0 1-7 7H15z'/%3E%3Cpath d='M45 15h7a6 6 0 0 1 6 6v3a6 6 0 0 1-6 6h-7'/%3E%3Cpath d='M14 13H7M14 27H7'/%3E%3C/g%3E%3C/svg%3E");
+  inset: 5px 7px;
+  background: currentColor;
+  -webkit-mask: url('/NIBP.svg') center / contain no-repeat;
+  mask: url('/NIBP.svg') center / contain no-repeat;
 }
 
 .edumon-nibp-start-button .edumon-nibp-start-label,
@@ -243,7 +242,7 @@
   }
 
   .edumon-nibp-start-button::before {
-    inset: 6px 6px;
+    inset: 5px 5px;
   }
 
   .edumon-nibp-start-button:active {
