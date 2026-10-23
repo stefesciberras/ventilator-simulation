@@ -155,15 +155,47 @@ export function EdumonAnaGasControl({
 
   const footer = footerHost ? createPortal(
     <section className="edumon-ana-gas-footer" aria-label="Anaesthetic gas monitoring">
-      <button type="button" className={activeGas === 'fio2' ? 'adjustable active' : 'adjustable'} onClick={() => selectGas('fio2')}>
-        <span>FiO₂</span><strong>{fio2Percent}</strong><small>%</small>
-      </button>
-      <div><span>EtO₂</span><strong>{Math.round(etO2)}</strong><small>%</small></div>
-      <button type="button" className={activeGas === 'fisevo' ? 'adjustable active' : 'adjustable'} onClick={() => selectGas('fisevo')}>
-        <span>FiSevo</span><strong>{fiSevo.toFixed(1)}</strong><small>%</small>
-      </button>
-      <div><span>EtSevo</span><strong>{etSevo.toFixed(1)}</strong><small>%</small></div>
-      <div className="mac"><span>MAC</span><strong>{mac.toFixed(1)}</strong><small>Sevo</small></div>
+      <div className="edumon-gas-group edumon-gas-group-o2">
+        <div className="edumon-gas-group-title">O₂</div>
+        <button
+          type="button"
+          className={`edumon-gas-row edumon-gas-row-fi adjustable ${activeGas === 'fio2' ? 'active' : ''}`.trim()}
+          onClick={() => selectGas('fio2')}
+          aria-label={`Adjust inspired oxygen, currently ${fio2Percent} percent`}
+        >
+          <span>Fi</span>
+          <strong>{fio2Percent}</strong>
+          <small>%</small>
+          <i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
+        </button>
+        <div className="edumon-gas-row edumon-gas-row-fe">
+          <span>Fe</span><strong>{Math.round(etO2)}</strong><small>%</small>
+        </div>
+      </div>
+
+      <div className="edumon-gas-group edumon-gas-group-sevo">
+        <div className="edumon-gas-group-title">Sevo</div>
+        <button
+          type="button"
+          className={`edumon-gas-row edumon-gas-row-fi adjustable ${activeGas === 'fisevo' ? 'active' : ''}`.trim()}
+          onClick={() => selectGas('fisevo')}
+          aria-label={`Adjust inspired sevoflurane, currently ${fiSevo.toFixed(1)} percent`}
+        >
+          <span>Fi</span>
+          <strong>{fiSevo.toFixed(1)}</strong>
+          <small>%</small>
+          <i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
+        </button>
+        <div className="edumon-gas-row edumon-gas-row-fe">
+          <span>Fe</span><strong>{etSevo.toFixed(1)}</strong><small>%</small>
+        </div>
+      </div>
+
+      <div className="edumon-gas-mac">
+        <span>MAC</span>
+        <strong>{mac.toFixed(1)}</strong>
+        <small>Sevo</small>
+      </div>
     </section>,
     footerHost,
   ) : null
