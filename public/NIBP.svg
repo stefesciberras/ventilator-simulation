@@ -1,7 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Simplified arm outline: upper arm vertical, elbow flexed to 90 degrees, forearm horizontal. -->
-  <path d="M21 8v24c0 8 6 14 14 14h17"/>
-  <path d="M31 8v23c0 3 2 5 5 5h16"/>
-  <!-- Cuff around the upper arm. -->
-  <rect x="16" y="15" width="20" height="14" rx="3"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 993 702" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:affinity="https://www.affinity.studio/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g transform="matrix(1,0,0,1,-585.002061,-519.375)">
+        <g transform="matrix(0.808496,0,0,1,299.143964,0)">
+            <path d="M395,606C345.212,614.317 552.843,1170.482 770.867,1204C931.581,1228.707 1367,959 1367,959C1545.158,993.269 1574.791,838.447 1557.996,797.724C1519.235,703.738 1467.295,701.522 1351.052,810.103C1351.052,810.103 1369.131,740.061 1358,726C1312.017,667.912 1304.846,812.162 1255.227,842.445C1130.951,918.292 863.793,1004.734 869.394,938C874.283,879.756 650,535 650,535L395,606Z" style="fill:none;stroke:black;stroke-width:34.37px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,189,-2.019087)">
+            <path d="M424.875,727C477.708,672.5 625.5,620.167 700,606C779.981,590.791 838.259,835.951 842,908C845.591,977.157 693.5,1047.667 580,1051C498.281,1053.4 369.973,783.634 424.875,727Z" style="fill:white;stroke:black;stroke-width:31.25px;"/>
+        </g>
+        <path d="M1215.928,822.481C1215.928,822.481 1263.378,786.984 1254,801" style="fill:rgb(235,235,235);stroke:rgb(249,232,207);stroke-width:31.25px;"/>
+    </g>
 </svg>
