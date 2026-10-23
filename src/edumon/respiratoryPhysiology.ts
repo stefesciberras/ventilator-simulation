@@ -17,6 +17,16 @@ export interface EdumonRespiratoryRuntime {
   simulationTime: number
 }
 
+let latestRespiratoryOutput: RespiratoryPhysiologyOutput | null = null
+
+export function latestEdumonRespiratoryOutput(): RespiratoryPhysiologyOutput | null {
+  return latestRespiratoryOutput
+}
+
+export function currentEdumonRespiratorySpO2(fallback: number): number {
+  return latestRespiratoryOutput?.spo2Percent ?? fallback
+}
+
 export function resolvedMonitorRespiratorySettings(state: MonitorPatientState): MonitorRespiratorySettings {
   return {
     ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
@@ -38,7 +48,9 @@ export function monitorRespiratoryInput(state: MonitorPatientState): Respiratory
     expiratoryResistanceCmH2OLs: respiratory.expiratoryResistanceCmH2OLs,
     frcMl: respiratory.frcMl,
     shuntFraction: respiratory.shuntFraction,
-    maxSpO2: respiratory.maxSpO2,
+    // The legacy SpO2 control is now an instructor ceiling, equivalent to
+    // EDUVENT maxSpO2. Gas exchange determines the actual saturation below it.
+    maxSpO2: Math.min(respiratory.maxSpO2, state.spo2),
     oxygenConsumptionMlMin: respiratory.oxygenConsumptionMlMin,
     co2ProductionMlMin: respiratory.co2ProductionMlMin,
     referenceCardiacOutputLMin: 5,
@@ -49,10 +61,11 @@ export function createEdumonRespiratoryRuntime(
   patientState: MonitorPatientState,
   simulationTime = 0,
 ): EdumonRespiratoryRuntime {
-  // Seed the shared gas-exchange state from the current displayed SpO2 so adding
-  // the hidden respiratory runtime does not alter today's EDUMON monitor output.
+  // Seed from the configured ceiling so existing scenarios start without an
+  // artificial jump; subsequent samples are driven by shared gas exchange.
   const initialState = createRespiratoryPhysiologyState({ spo2Percent: patientState.spo2 })
   const { state, output } = stepRespiratoryPhysiology(initialState, monitorRespiratoryInput(patientState), 0)
+  latestRespiratoryOutput = output
   return { state, output, simulationTime }
 }
 
@@ -64,6 +77,7 @@ export function stepEdumonRespiratoryRuntime(
   if (simulationTime < runtime.simulationTime) return createEdumonRespiratoryRuntime(patientState, simulationTime)
   const deltaTime = Math.max(0, simulationTime - runtime.simulationTime)
   const next = stepRespiratoryPhysiology(runtime.state, monitorRespiratoryInput(patientState), deltaTime)
+  latestRespiratoryOutput = next.output
   return {
     state: next.state,
     output: next.output,
