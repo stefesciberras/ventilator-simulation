@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test:core": "node scripts/core-regression.mjs",
+    "test:core": "node scripts/core-regression.mjs && node scripts/edumon-common-regression.mjs",
     "build": "npm run test:core && tsc -b && vite build",
     "preview": "vite preview",
     "deploy": "wrangler deploy",
