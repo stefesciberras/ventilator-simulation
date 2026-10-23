@@ -174,6 +174,20 @@ export function EdumonAnaGasControl({
 
   const footer = footerHost ? createPortal(
     <>
+      <button
+        type="button"
+        className={`edumon-tof-container ${tofMeasuring ? 'measuring' : ''}`.trim()}
+        onClick={startTofMeasurement}
+        disabled={tofMeasuring}
+        aria-label={tofMeasuring ? 'TOF measurement in progress' : 'Start TOF measurement'}
+        title="Press to perform an intermittent TOF measurement"
+      >
+        <span className="edumon-tof-title">TOF</span>
+        <span className="edumon-tof-reading"><small>Count</small><strong>{tofReading?.count ?? '—'}</strong></span>
+        <span className="edumon-tof-reading"><small>Ratio</small><strong>{tofReading ? tofReading.ratio.toFixed(1) : '—'}</strong></span>
+        <span className="edumon-tof-status">{tofMeasuring ? 'MEAS' : tofReading ? 'Last' : 'Press'}</span>
+      </button>
+
       <section className="edumon-ana-gas-footer" aria-label="Anaesthetic gas monitoring">
         <div className="edumon-gas-group edumon-gas-group-o2">
           <div className="edumon-gas-group-title">O₂</div>
@@ -217,20 +231,6 @@ export function EdumonAnaGasControl({
           <small>Sevo</small>
         </div>
       </section>
-
-      <button
-        type="button"
-        className={`edumon-tof-container ${tofMeasuring ? 'measuring' : ''}`.trim()}
-        onClick={startTofMeasurement}
-        disabled={tofMeasuring}
-        aria-label={tofMeasuring ? 'TOF measurement in progress' : 'Start TOF measurement'}
-        title="Press to perform an intermittent TOF measurement"
-      >
-        <span className="edumon-tof-title">TOF</span>
-        <span className="edumon-tof-reading"><small>Count</small><strong>{tofReading?.count ?? '—'}</strong></span>
-        <span className="edumon-tof-reading"><small>Ratio</small><strong>{tofReading ? tofReading.ratio.toFixed(1) : '—'}</strong></span>
-        <span className="edumon-tof-status">{tofMeasuring ? 'MEAS' : tofReading ? 'Last' : 'Press'}</span>
-      </button>
     </>,
     footerHost,
   ) : null
