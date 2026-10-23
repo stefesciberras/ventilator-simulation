@@ -1,16 +1,17 @@
+import { EDUMON_PRODUCT_MONITOR_PROFILES, type EdumonProductMonitorProfile } from './commonMonitorProfile'
+
 export type EdumonModuleId = 'ana' | 'icu'
 
 export type EdumonAuxiliaryMonitorId =
   | 'ana-gases'
   | 'icu-neuro'
-  | 'trends'
-  | 'teaching'
 
 export interface EdumonModuleDefinition {
   id: EdumonModuleId
   productName: string
   subtitle: string
   defaultTeachingModule: string
+  monitorProfile: EdumonProductMonitorProfile
   plannedMeasurements: string[]
   auxiliaryMonitors: Array<{
     id: EdumonAuxiliaryMonitorId
@@ -26,6 +27,7 @@ export const EDUMON_MODULES: Record<EdumonModuleId, EdumonModuleDefinition> = {
     productName: 'EDUMON-Ana',
     subtitle: 'Anaesthesia patient monitor',
     defaultTeachingModule: 'Anaesthesia monitoring',
+    monitorProfile: EDUMON_PRODUCT_MONITOR_PROFILES.ana,
     plannedMeasurements: ['EtCO₂', 'FiO₂', 'EtO₂', 'EtAA', 'MAC', 'NIBP', 'Temperature', 'BIS', 'TOF'],
     auxiliaryMonitors: [
       {
@@ -41,6 +43,7 @@ export const EDUMON_MODULES: Record<EdumonModuleId, EdumonModuleDefinition> = {
     productName: 'EDUMON-ICU',
     subtitle: 'Intensive care patient monitor',
     defaultTeachingModule: 'Intensive care monitoring',
+    monitorProfile: EDUMON_PRODUCT_MONITOR_PROFILES.icu,
     plannedMeasurements: ['EtCO₂', 'CVP', 'ICP', 'CPP', 'NIBP', 'Temperature', 'Advanced haemodynamics'],
     auxiliaryMonitors: [
       {
