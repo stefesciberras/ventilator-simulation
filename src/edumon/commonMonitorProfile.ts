@@ -15,14 +15,16 @@ export interface EdumonCommonMonitorProfile {
   sharedNibp: true
 }
 
-export const EDUMON_COMMON_MONITOR_PROFILE: EdumonCommonMonitorProfile = Object.freeze({
+const COMMON_PROFILE = {
   waveforms: ['ecg', 'arterial-pressure', 'pleth', 'capnography'],
   measurements: ['heart-rate', 'arterial-pressure', 'spo2', 'nibp', 'etco2'],
   respiratoryPhysiology: true,
   sharedMonitorEngine: true,
   sharedAlarmController: true,
   sharedNibp: true,
-})
+} as const satisfies EdumonCommonMonitorProfile
+
+export const EDUMON_COMMON_MONITOR_PROFILE: EdumonCommonMonitorProfile = Object.freeze(COMMON_PROFILE)
 
 export type EdumonProductExtensionId =
   | 'anaesthetic-gases'
