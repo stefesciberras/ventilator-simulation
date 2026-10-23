@@ -191,7 +191,44 @@
 
 @media (max-width: 680px) {
   .edumon-control-strip.edumon-control-strip-with-ventilator {
-    min-height: 126px;
+    min-height: 126px !important;
+    height: 126px !important;
+    flex-basis: 126px !important;
+    gap: 3px;
+    padding: 5px 4px 6px;
+  }
+
+  .simulation-console-footer:has(> .edumon-control-strip.edumon-control-strip-with-ventilator) {
+    min-height: 126px !important;
+    height: 126px !important;
+    flex-basis: 126px !important;
+  }
+
+  .edumon-control-strip-with-ventilator > .edumon-nibp-tile {
+    flex: 0 0 128px;
+    min-width: 128px;
+    padding-left: 38px !important;
+  }
+
+  .edumon-control-strip-with-ventilator > .edumon-tof-container {
+    flex: 0 0 52px;
+    min-width: 52px;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 2px;
+  }
+
+  .edumon-control-strip-with-ventilator > .edumon-ana-gas-footer {
+    flex: 1 1 174px;
+    min-width: 174px;
+    grid-template-columns: minmax(55px, 1fr) minmax(55px, 1fr) minmax(38px, .55fr);
+    gap: 1px;
+    padding: 1px;
+  }
+
+  .edumon-control-strip-with-ventilator .edumon-gas-row {
+    grid-template-columns: 15px minmax(0, 1fr) 10px 15px;
+    padding-inline: 1px;
   }
 
   .edumon-ventilator-row {
