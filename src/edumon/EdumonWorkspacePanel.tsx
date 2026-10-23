@@ -47,7 +47,6 @@ export function EdumonWorkspacePanel({
   candidateCount = 0,
   controlsLocked = false,
   sessionPanel,
-  meanPressure,
 }: EdumonWorkspacePanelProps) {
   const [tab, setTab] = useState<EdumonControlTab>('patient')
   const [profile, setProfile] = useState<EdumonPatientProfile>('Awake')
@@ -178,7 +177,7 @@ export function EdumonWorkspacePanel({
           </div>
           <label className="edumon-signal-control edumon-signal-art"><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => updateSystolicPressure(Number(event.target.value))} /></label>
           <label className="edumon-signal-control edumon-signal-art"><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => updateDiastolicPressure(Number(event.target.value))} /></label>
-          <label className="edumon-signal-control edumon-signal-spo2"><span>SpO₂ <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-spo2"><span>SpO₂ ceiling <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-spo2"><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input disabled={controlsLocked} type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => updatePatient({ peripheralPerfusion: Number(event.target.value) })} /></label>
         </section>
       ),
@@ -189,13 +188,6 @@ export function EdumonWorkspacePanel({
       locked: controlsLocked,
       content: (
         <section className="control-section edumon-physio-panel">
-          <div className="control-section-title"><h2>Physiology</h2></div>
-          <div className="edumon-physio-grid">
-            <div><span>MAP</span><strong>{meanPressure ?? '—'}</strong><small>mmHg</small></div>
-            <div><span>Pulse pressure</span><strong>{Math.max(0, Math.round(patientState.systolicPressure - patientState.diastolicPressure))}</strong><small>mmHg</small></div>
-            <div><span>SpO₂ target</span><strong>{Math.round(patientState.spo2)}</strong><small>%</small></div>
-            <div><span>Perfusion</span><strong>{patientState.peripheralPerfusion.toFixed(1)}</strong><small>relative</small></div>
-          </div>
           <div className="control-section-title"><h2>Respiratory / gas exchange</h2></div>
           <label className="edumon-signal-control edumon-signal-capnography"><span>Respiratory rate <b>{Math.round(respiratory.respiratoryRate)}/min</b></span><input disabled={controlsLocked} type="range" min="0" max="40" step="1" value={respiratory.respiratoryRate} onChange={(event) => updateRespiratory({ respiratoryRate: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>Tidal volume <b>{Math.round(respiratory.tidalVolumeMl)} mL</b></span><input disabled={controlsLocked} type="range" min="0" max="1000" step="10" value={respiratory.tidalVolumeMl} onChange={(event) => updateRespiratory({ tidalVolumeMl: Number(event.target.value) })} /></label>
