@@ -1,5 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-  <rect x="9" y="10" width="23" height="18" rx="4"/>
-  <path d="M31 23c4 1 7 4 9 8l3 5c2 3 5 4 8 2l5-3c2-1 4 .8 3 3-2 5-6 9-11 12l-7 4c-7 3-15 1-19-5l-6-9c-3-5-5-11-5-17"/>
-  <path d="M16 15v8M25 15v8"/>
+  <!-- Simplified arm outline: upper arm vertical, elbow flexed to 90 degrees, forearm horizontal. -->
+  <path d="M21 8v24c0 8 6 14 14 14h17"/>
+  <path d="M31 8v23c0 3 2 5 5 5h16"/>
+  <!-- Cuff around the upper arm. -->
+  <rect x="16" y="15" width="20" height="14" rx="3"/>
 </svg>
