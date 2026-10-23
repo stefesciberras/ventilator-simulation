@@ -15,6 +15,40 @@ export type EcgMorphology =
   | 'infarction'
   | 'hyperkalaemia'
 
+export interface MonitorRespiratorySettings {
+  respiratoryRate: number
+  tidalVolumeMl: number
+  deadSpaceMl: number
+  fio2: number
+  peepCmH2O: number
+  complianceMlPerCmH2O: number
+  expiratoryResistanceCmH2OLs: number
+  frcMl: number
+  shuntFraction: number
+  maxSpO2: number
+  oxygenConsumptionMlMin: number
+  co2ProductionMlMin: number
+  sex: 'male' | 'female'
+  heightCm: number
+}
+
+export const DEFAULT_MONITOR_RESPIRATORY_SETTINGS: MonitorRespiratorySettings = {
+  respiratoryRate: 12,
+  tidalVolumeMl: 500,
+  deadSpaceMl: 150,
+  fio2: 0.21,
+  peepCmH2O: 0,
+  complianceMlPerCmH2O: 70,
+  expiratoryResistanceCmH2OLs: 8,
+  frcMl: 2500,
+  shuntFraction: 0.03,
+  maxSpO2: 100,
+  oxygenConsumptionMlMin: 250,
+  co2ProductionMlMin: 250,
+  sex: 'male',
+  heightCm: 170,
+}
+
 export interface MonitorPatientState {
   heartRate: number
   rhythm: CardiacRhythm
@@ -26,6 +60,12 @@ export interface MonitorPatientState {
   diastolicPressure: number
   spo2: number
   peripheralPerfusion: number
+  /**
+   * Product-neutral respiratory/metabolic inputs for the shared EDUSIM gas-exchange
+   * engine. Optional so existing EDUMON scenarios and teaching payloads remain valid.
+   * These are not yet exposed as EDUMON controls; capnography will consume them next.
+   */
+  respiratory?: Partial<MonitorRespiratorySettings>
 }
 
 export interface MonitorSample {
