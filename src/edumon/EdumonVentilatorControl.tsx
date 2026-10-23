@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { VentilatorMode } from '../simulation/types'
 import { InteractiveSettingControls, type InteractiveSettingSpec } from '../components/InteractiveSettingControls'
@@ -37,6 +37,13 @@ type VentilatorState = {
   simvSyncWindowPercent: number
 }
 
+type EffectiveVentilation = {
+  respiratoryRate: number
+  tidalVolumeMl: number
+  minuteVentilationLMin: number
+  peakPressureCmH2O: number
+}
+
 const MODES: Array<{ value: EdumonVentilatorMode; label: string }> = [
   { value: 'MANUAL', label: 'Manual' },
   { value: 'VC-AC', label: 'VC-AC' },
@@ -65,6 +72,41 @@ function findVisibleFooterHost(): HTMLElement | null {
     ?? null
 }
 
+function deriveEffectiveVentilation(ventilator: VentilatorState, respiratory: MonitorRespiratorySettings): EffectiveVentilation {
+  const compliance = Math.max(20, respiratory.complianceMlPerCmH2O)
+  const spontaneousRate = clamp(respiratory.spontaneousRespiratoryRate, 0, 40)
+  const spontaneousTidalVolume = clamp(respiratory.spontaneousTidalVolumeMl, 0, 1000)
+
+  let respiratoryRate = spontaneousRate
+  let tidalVolumeMl = spontaneousTidalVolume
+  let peakPressureCmH2O = ventilator.peep + spontaneousTidalVolume / compliance + 4
+
+  if (ventilator.mode === 'PSV') {
+    tidalVolumeMl = clamp(ventilator.pressureSupport * compliance * 0.7, 100, 1000)
+    peakPressureCmH2O = ventilator.peep + ventilator.pressureSupport
+  } else if (ventilator.mode !== 'MANUAL') {
+    respiratoryRate = Math.max(ventilator.rate, spontaneousRate)
+
+    if (ventilator.mode === 'PC-AC' || ventilator.mode === 'SIMV-PC') {
+      tidalVolumeMl = clamp(ventilator.pressureControl * compliance * 0.7, 100, 1000)
+      peakPressureCmH2O = ventilator.peep + ventilator.pressureControl
+    } else {
+      tidalVolumeMl = ventilator.tidalVolume
+      peakPressureCmH2O = ventilator.peep + ventilator.tidalVolume / compliance + 4
+      if (ventilator.mode === 'VG-PC') {
+        peakPressureCmH2O = Math.min(ventilator.volumeGuaranteePressureLimit, peakPressureCmH2O)
+      }
+    }
+  }
+
+  return {
+    respiratoryRate,
+    tidalVolumeMl,
+    minuteVentilationLMin: respiratoryRate * tidalVolumeMl / 1000,
+    peakPressureCmH2O,
+  }
+}
+
 interface EdumonVentilatorControlProps {
   patientState: MonitorPatientState
   onPatientStateChange: (state: MonitorPatientState) => void
@@ -73,6 +115,9 @@ interface EdumonVentilatorControlProps {
 
 export function EdumonVentilatorControl({ patientState, onPatientStateChange, disabled = false }: EdumonVentilatorControlProps) {
   const respiratory = resolvedMonitorRespiratorySettings(patientState)
+  const patientRef = useRef(patientState)
+  patientRef.current = patientState
+
   const [host, setHost] = useState<HTMLElement | null>(null)
   const [ventilator, setVentilator] = useState<VentilatorState>(() => ({
     mode: 'MANUAL',
@@ -155,19 +200,31 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
   }, [currentIeRatio, ventilator])
 
   const publishRespiratory = (next: VentilatorState) => {
-    const compliance = Math.max(20, respiratory.complianceMlPerCmH2O)
-    let tidalVolumeMl = next.tidalVolume
-    if (next.mode === 'PC-AC' || next.mode === 'SIMV-PC') tidalVolumeMl = clamp(next.pressureControl * compliance * 0.7, 100, 1000)
-    if (next.mode === 'PSV') tidalVolumeMl = clamp(next.pressureSupport * compliance * 0.7, 100, 1000)
+    const currentPatient = patientRef.current
+    const currentRespiratory = resolvedMonitorRespiratorySettings(currentPatient)
+    const effective = deriveEffectiveVentilation(next, currentRespiratory)
     const nextRespiratory: MonitorRespiratorySettings = {
-      ...respiratory,
-      respiratoryRate: next.mode === 'PSV' || next.mode === 'MANUAL' ? respiratory.respiratoryRate : next.rate,
-      tidalVolumeMl: next.mode === 'MANUAL' ? respiratory.tidalVolumeMl : tidalVolumeMl,
+      ...currentRespiratory,
+      respiratoryRate: effective.respiratoryRate,
+      tidalVolumeMl: effective.tidalVolumeMl,
       peepCmH2O: next.peep,
       fio2: next.fio2 / 100,
     }
-    onPatientStateChange({ ...patientState, respiratory: nextRespiratory })
+    onPatientStateChange({ ...currentPatient, respiratory: nextRespiratory })
   }
+
+  useEffect(() => {
+    const effective = deriveEffectiveVentilation(ventilator, respiratory)
+    if (
+      Math.abs(effective.respiratoryRate - respiratory.respiratoryRate) > 0.001
+      || Math.abs(effective.tidalVolumeMl - respiratory.tidalVolumeMl) > 0.001
+    ) {
+      publishRespiratory(ventilator)
+    }
+    // Patient spontaneous breathing is intentionally the only external input
+    // that changes effective ventilation without the ventilator itself changing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [respiratory.spontaneousRespiratoryRate, respiratory.spontaneousTidalVolumeMl])
 
   const applyValue = (key: VentilatorSettingKey, rawValue: number) => {
     if (disabled) return
@@ -175,7 +232,10 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       const next = { ...current }
       if (key === 'ieRatio') next.inspiratoryTime = cycleTime(current.rate) / (1 + clamp(rawValue, MIN_IE, MAX_IE))
       else (next as unknown as Record<VentilatorSettingKey, number>)[key] = rawValue
-      if (key === 'rate' && hasConventionalMandatoryTiming(current.mode)) next.inspiratoryTime = cycleTime(rawValue) / (1 + currentIeRatio)
+      if (key === 'rate' && hasConventionalMandatoryTiming(current.mode)) {
+        const currentRatio = ieRatioFrom(current)
+        next.inspiratoryTime = cycleTime(rawValue) / (1 + currentRatio)
+      }
       publishRespiratory(next)
       return next
     })
@@ -190,31 +250,10 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     })
   }
 
-  const monitoring = useMemo(() => {
-    const compliance = Math.max(20, respiratory.complianceMlPerCmH2O)
-    let tidalVolume = ventilator.mode === 'MANUAL' ? respiratory.tidalVolumeMl : ventilator.tidalVolume
-    let peakPressure = ventilator.peep + tidalVolume / compliance + 4
-
-    if (ventilator.mode === 'PC-AC' || ventilator.mode === 'SIMV-PC') {
-      tidalVolume = clamp(ventilator.pressureControl * compliance * 0.7, 100, 1000)
-      peakPressure = ventilator.peep + ventilator.pressureControl
-    } else if (ventilator.mode === 'PSV') {
-      tidalVolume = clamp(ventilator.pressureSupport * compliance * 0.7, 100, 1000)
-      peakPressure = ventilator.peep + ventilator.pressureSupport
-    } else if (ventilator.mode === 'VG-PC') {
-      peakPressure = Math.min(ventilator.volumeGuaranteePressureLimit, ventilator.peep + ventilator.tidalVolume / compliance + 4)
-    }
-
-    const respiratoryRate = ventilator.mode === 'PSV' || ventilator.mode === 'MANUAL'
-      ? Math.round(respiratory.respiratoryRate)
-      : ventilator.rate
-    return {
-      respiratoryRate,
-      tidalVolume: Math.round(tidalVolume),
-      minuteVentilation: respiratoryRate * tidalVolume / 1000,
-      peakPressure: Math.round(peakPressure),
-    }
-  }, [respiratory.complianceMlPerCmH2O, respiratory.respiratoryRate, respiratory.tidalVolumeMl, ventilator])
+  const monitoring = useMemo(
+    () => deriveEffectiveVentilation(ventilator, respiratory),
+    [respiratory.complianceMlPerCmH2O, respiratory.spontaneousRespiratoryRate, respiratory.spontaneousTidalVolumeMl, ventilator],
+  )
 
   if (!host) return null
 
@@ -244,10 +283,10 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       </div>
 
       <div className="edumon-ventilator-monitor" aria-label="Ventilator monitored values">
-        <div><span>Resp Rate</span><strong>{monitoring.respiratoryRate}</strong><small>/min</small></div>
-        <div><span>TV</span><strong>{monitoring.tidalVolume}</strong><small>mL</small></div>
-        <div><span>Min Vent</span><strong>{monitoring.minuteVentilation.toFixed(1)}</strong><small>L/min</small></div>
-        <div><span>Peak Press</span><strong>{monitoring.peakPressure}</strong><small>cmH₂O</small></div>
+        <div><span>Resp Rate</span><strong>{Math.round(monitoring.respiratoryRate)}</strong><small>/min</small></div>
+        <div><span>TV</span><strong>{Math.round(monitoring.tidalVolumeMl)}</strong><small>mL</small></div>
+        <div><span>Min Vent</span><strong>{monitoring.minuteVentilationLMin.toFixed(1)}</strong><small>L/min</small></div>
+        <div><span>Peak Press</span><strong>{Math.round(monitoring.peakPressureCmH2O)}</strong><small>cmH₂O</small></div>
       </div>
     </section>,
     host,
