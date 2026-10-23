@@ -10,6 +10,11 @@ const assert = (condition, message) => {
 }
 
 const eduvent = read('src/App.tsx')
+const eduventEngine = read('src/simulation/engine.ts')
+const eduventLegacyEngine = read('src/simulation/engineLegacy.ts')
+const respiratoryCore = read('src/core/physiology/respiratory/RespiratoryPhysiology.ts')
+const eduventRespiratoryAdapter = read('src/eduvent/respiratoryPhysiologyAdapter.ts')
+const edumonRespiratoryAdapter = read('src/edumon/respiratoryPhysiology.ts')
 const edumonPanel = read('src/edumon/EdumonWorkspacePanel.tsx')
 const edumon = read('src/edumon/EdumonApp.tsx')
 const edumonMonitorEngine = read('src/edumon/monitorEngine.ts')
@@ -113,6 +118,23 @@ assert(edumonMonitorEngine.includes('beatHistory'), 'EDUMON derived monitor meas
 assert(edumonMonitorEngine.includes('beat.time >= now - 60'), 'EDUMON displayed heart rate must use a rolling 60-second beat window')
 assert(edumonMonitorEngine.includes('beat.time >= now - 30'), 'EDUMON displayed SpO2 must use a rolling 30-second beat window')
 assert(!edumonMonitorEngine.includes('cardiacPhase(time, rate'), 'EDUMON must not derive the whole visible waveform phase from the current heart rate')
+
+// Respiratory/metabolic gas exchange belongs to EDUSIM core. Products supply
+// mechanics/ventilation inputs and retain product-specific waveform morphology.
+assert(respiratoryCore.includes('interface RespiratoryPhysiologyInput'), 'EDUSIM core must define product-neutral respiratory inputs')
+assert(respiratoryCore.includes('oxygenConsumptionMlMin'), 'shared respiratory core must model VO2')
+assert(respiratoryCore.includes('co2ProductionMlMin'), 'shared respiratory core must model VCO2')
+assert(respiratoryCore.includes('alveolarVentilationLMin'), 'shared respiratory core must expose alveolar ventilation')
+assert(respiratoryCore.includes('stepRespiratoryPhysiology'), 'shared respiratory core must evolve gas exchange over simulation time')
+assert(respiratoryCore.includes('0.863 * netCo2MlMin'), 'shared respiratory core must preserve the EDUVENT CO2 mass-balance model')
+assert(respiratoryCore.includes('metabolicDepletionPerSecond'), 'shared respiratory core must preserve oxygen-consumption depletion of the FRC reservoir')
+assert(eduventRespiratoryAdapter.includes("from '../core/physiology/respiratory'"), 'EDUVENT must adapt mechanics into the shared respiratory core')
+assert(edumonRespiratoryAdapter.includes("from '../core/physiology/respiratory'"), 'EDUMON must consume the same shared respiratory core')
+assert(eduventEngine.includes('stepEduventRespiratoryPhysiology'), 'EDUVENT runtime must advance the shared respiratory physiology state')
+assert(eduventEngine.includes('state.alveolarCo2 = shared.output.alveolarCo2MmHg'), 'EDUVENT alveolar CO2 state must be synchronized from shared physiology')
+assert(eduventEngine.includes('sample.spo2 = shared.output.spo2Percent'), 'EDUVENT displayed oxygenation must be sourced from shared physiology')
+assert(eduventLegacyEngine.includes('capnogramSourceValue'), 'EDUVENT must retain product-owned capnogram morphology during physiology extraction')
+assert(!respiratoryCore.includes('capnogramSourceValue'), 'shared respiratory physiology must not own capnogram waveform morphology')
 
 // Completed compatibility cleanup must not regress.
 assert(!fs.existsSync('src/teaching/scenario/useEduventScenarioLibrary.ts'), 'obsolete EDUVENT-only scenario library hook must not be reintroduced')
