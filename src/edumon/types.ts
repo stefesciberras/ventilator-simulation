@@ -49,6 +49,15 @@ export const DEFAULT_MONITOR_RESPIRATORY_SETTINGS: MonitorRespiratorySettings = 
   heightCm: 170,
 }
 
+export interface MonitorAnaestheticGasSettings {
+  /** Inspired sevoflurane concentration, volume %. */
+  fiSevoPercent: number
+}
+
+export const DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS: MonitorAnaestheticGasSettings = {
+  fiSevoPercent: 0,
+}
+
 export interface MonitorPatientState {
   heartRate: number
   rhythm: CardiacRhythm
@@ -60,12 +69,10 @@ export interface MonitorPatientState {
   diastolicPressure: number
   spo2: number
   peripheralPerfusion: number
-  /**
-   * Product-neutral respiratory/metabolic inputs for the shared EDUSIM gas-exchange
-   * engine. Optional so existing EDUMON scenarios and teaching payloads remain valid.
-   * These are not yet exposed as EDUMON controls; capnography will consume them next.
-   */
+  /** Product-neutral respiratory/metabolic inputs for the shared EDUSIM gas-exchange engine. */
   respiratory?: Partial<MonitorRespiratorySettings>
+  /** Anaesthesia-only volatile-agent controls. Ignored by EDUMON-ICU. */
+  anaestheticGases?: Partial<MonitorAnaestheticGasSettings>
 }
 
 export interface MonitorSample {
