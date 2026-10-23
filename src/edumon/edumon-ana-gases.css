@@ -319,7 +319,7 @@
   .edumon-tof-container {
     flex: 0 0 65px;
     min-width: 65px;
-    margin-left: 0;
+    margin-left: auto;
     margin-right: 2px;
     padding: 3px;
   }
@@ -379,18 +379,20 @@
 }
 
 /* Portrait devices sometimes expose a wider layout viewport inside an installed PWA.
-   Force the compact gas analyser geometry by orientation as well as CSS width. */
+   Keep TOF and the compact analyser grouped at the right edge. */
 @media (orientation: portrait) and (max-width: 900px) {
   .simulation-console-footer .edumon-control-strip .edumon-ana-gas-footer {
     flex: 0 0 164px !important;
     width: 164px !important;
     min-width: 164px !important;
     max-width: 164px !important;
+    margin-left: 0 !important;
     grid-template-columns: 52px 52px 50px !important;
   }
 
   .simulation-console-footer .edumon-control-strip .edumon-tof-container {
-    margin-left: 0 !important;
+    margin-left: auto !important;
+    margin-right: 2px !important;
   }
 
   .simulation-console-footer .edumon-control-strip .edumon-gas-control-knob {
