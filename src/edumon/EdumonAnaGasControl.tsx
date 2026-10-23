@@ -111,8 +111,6 @@ export function EdumonAnaGasControl({
         const alveolarVentilation = output?.alveolarVentilationLMin
           ?? Math.max(0, (respiratoryState.tidalVolumeMl - respiratoryState.deadSpaceMl) * respiratoryState.respiratoryRate / 1000)
         const frcL = Math.max(0.5, respiratoryState.frcMl / 1000)
-        // Alveolar turnover determines wash-in/wash-out. A modest uptake factor
-        // slows sevoflurane equilibration compared with an inert gas.
         const turnoverPerSecond = alveolarVentilation / 60 / frcL
         const timeConstant = Math.max(8, 1 / Math.max(turnoverPerSecond * 0.62, 1 / 180))
         const dt = wallDt * currentSimulationSpeed()
@@ -175,52 +173,54 @@ export function EdumonAnaGasControl({
   }
 
   const footer = footerHost ? createPortal(
-    <section className="edumon-ana-gas-footer" aria-label="Anaesthetic gas and neuromuscular monitoring">
-      <div className="edumon-gas-group edumon-gas-group-o2">
-        <div className="edumon-gas-group-title">O₂</div>
-        <button
-          type="button"
-          className={`edumon-gas-row edumon-gas-row-fi adjustable ${activeGas === 'fio2' ? 'active' : ''}`.trim()}
-          onClick={() => selectGas('fio2')}
-          aria-label={`Adjust inspired oxygen, currently ${fio2Percent} percent`}
-        >
-          <span>Fi</span>
-          <strong>{fio2Percent}</strong>
-          <small>%</small>
-          <i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
-        </button>
-        <div className="edumon-gas-row edumon-gas-row-fe">
-          <span>Fe</span><strong>{Math.round(etO2)}</strong><small>%</small>
+    <>
+      <section className="edumon-ana-gas-footer" aria-label="Anaesthetic gas monitoring">
+        <div className="edumon-gas-group edumon-gas-group-o2">
+          <div className="edumon-gas-group-title">O₂</div>
+          <button
+            type="button"
+            className={`edumon-gas-row edumon-gas-row-fi adjustable ${activeGas === 'fio2' ? 'active' : ''}`.trim()}
+            onClick={() => selectGas('fio2')}
+            aria-label={`Adjust inspired oxygen, currently ${fio2Percent} percent`}
+          >
+            <span>Fi</span>
+            <strong>{fio2Percent}</strong>
+            <small>%</small>
+            <i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
+          </button>
+          <div className="edumon-gas-row edumon-gas-row-fe">
+            <span>Fe</span><strong>{Math.round(etO2)}</strong><small>%</small>
+          </div>
         </div>
-      </div>
 
-      <div className="edumon-gas-group edumon-gas-group-sevo">
-        <div className="edumon-gas-group-title">Sevo</div>
-        <button
-          type="button"
-          className={`edumon-gas-row edumon-gas-row-fi adjustable ${activeGas === 'fisevo' ? 'active' : ''}`.trim()}
-          onClick={() => selectGas('fisevo')}
-          aria-label={`Adjust inspired sevoflurane, currently ${fiSevo.toFixed(1)} percent`}
-        >
-          <span>Fi</span>
-          <strong>{fiSevo.toFixed(1)}</strong>
-          <small>%</small>
-          <i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
-        </button>
-        <div className="edumon-gas-row edumon-gas-row-fe">
-          <span>Fe</span><strong>{etSevo.toFixed(1)}</strong><small>%</small>
+        <div className="edumon-gas-group edumon-gas-group-sevo">
+          <div className="edumon-gas-group-title">Sevo</div>
+          <button
+            type="button"
+            className={`edumon-gas-row edumon-gas-row-fi adjustable ${activeGas === 'fisevo' ? 'active' : ''}`.trim()}
+            onClick={() => selectGas('fisevo')}
+            aria-label={`Adjust inspired sevoflurane, currently ${fiSevo.toFixed(1)} percent`}
+          >
+            <span>Fi</span>
+            <strong>{fiSevo.toFixed(1)}</strong>
+            <small>%</small>
+            <i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
+          </button>
+          <div className="edumon-gas-row edumon-gas-row-fe">
+            <span>Fe</span><strong>{etSevo.toFixed(1)}</strong><small>%</small>
+          </div>
         </div>
-      </div>
 
-      <div className="edumon-gas-mac">
-        <span>MAC</span>
-        <strong>{mac.toFixed(1)}</strong>
-        <small>Sevo</small>
-      </div>
+        <div className="edumon-gas-mac">
+          <span>MAC</span>
+          <strong>{mac.toFixed(1)}</strong>
+          <small>Sevo</small>
+        </div>
+      </section>
 
       <button
         type="button"
-        className={`edumon-tof-tile ${tofMeasuring ? 'measuring' : ''}`.trim()}
+        className={`edumon-tof-container ${tofMeasuring ? 'measuring' : ''}`.trim()}
         onClick={startTofMeasurement}
         disabled={tofMeasuring}
         aria-label={tofMeasuring ? 'TOF measurement in progress' : 'Start TOF measurement'}
@@ -231,7 +231,7 @@ export function EdumonAnaGasControl({
         <span className="edumon-tof-reading"><small>Ratio</small><strong>{tofReading ? tofReading.ratio.toFixed(1) : '—'}</strong></span>
         <span className="edumon-tof-status">{tofMeasuring ? 'MEAS' : tofReading ? 'Last' : 'Press'}</span>
       </button>
-    </section>,
+    </>,
     footerHost,
   ) : null
 
