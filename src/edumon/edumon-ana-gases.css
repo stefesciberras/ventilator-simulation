@@ -1,5 +1,5 @@
 .edumon-ana-gas-footer {
-  margin-left: auto;
+  margin-left: 0;
   align-self: stretch;
   flex: 0 0 min(370px, 38vw);
   min-width: 310px;
@@ -152,9 +152,10 @@
 
 .edumon-tof-container {
   align-self: stretch;
-  flex: 0 0 64px;
-  min-width: 64px;
-  margin-left: 3px;
+  flex: 0 0 80px;
+  min-width: 80px;
+  margin-left: auto;
+  margin-right: 3px;
   padding: 5px;
   display: grid;
   grid-template-rows: auto 1fr 1fr auto;
@@ -281,8 +282,8 @@
   }
 
   .edumon-tof-container {
-    flex-basis: 58px;
-    min-width: 58px;
+    flex-basis: 73px;
+    min-width: 73px;
   }
 
   .edumon-gas-row {
@@ -314,9 +315,10 @@
   }
 
   .edumon-tof-container {
-    flex: 0 0 52px;
-    min-width: 52px;
-    margin-left: 2px;
+    flex: 0 0 65px;
+    min-width: 65px;
+    margin-left: auto;
+    margin-right: 2px;
     padding: 3px;
   }
 
