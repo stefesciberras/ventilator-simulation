@@ -54,7 +54,7 @@ const cycleTime = (rate: number) => 60 / Math.max(rate, 1)
 const isVolumeMandatoryMode = (mode: EdumonVentilatorMode) => mode === 'VC-AC' || mode === 'SIMV-VC'
 const isPressureMandatoryMode = (mode: EdumonVentilatorMode) => mode === 'PC-AC' || mode === 'SIMV-PC'
 const isSimvMode = (mode: EdumonVentilatorMode) => mode === 'SIMV-VC' || mode === 'SIMV-PC'
-const usesTidalVolume = (mode: EdumonVentilatorMode) => mode === 'MANUAL' || isVolumeMandatoryMode(mode) || mode === 'VG-PC'
+const usesTidalVolume = (mode: EdumonVentilatorMode) => isVolumeMandatoryMode(mode) || mode === 'VG-PC'
 const hasConventionalMandatoryTiming = (mode: EdumonVentilatorMode) => mode !== 'MANUAL' && mode !== 'PSV'
 const ieRatioFrom = (state: VentilatorState) => clamp(cycleTime(state.rate) / Math.max(state.inspiratoryTime, 0.2) - 1, MIN_IE, MAX_IE)
 
@@ -74,7 +74,6 @@ interface EdumonVentilatorControlProps {
 export function EdumonVentilatorControl({ patientState, onPatientStateChange, disabled = false }: EdumonVentilatorControlProps) {
   const respiratory = resolvedMonitorRespiratorySettings(patientState)
   const [host, setHost] = useState<HTMLElement | null>(null)
-  const [modeOpen, setModeOpen] = useState(false)
   const [ventilator, setVentilator] = useState<VentilatorState>(() => ({
     mode: 'MANUAL',
     rate: Math.max(5, Math.round(respiratory.respiratoryRate || 12)),
@@ -112,10 +111,6 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     return () => host.classList.remove('edumon-control-strip-with-ventilator')
   }, [host])
 
-  useEffect(() => {
-    if (disabled) setModeOpen(false)
-  }, [disabled])
-
   const currentIeRatio = ieRatioFrom(ventilator)
 
   const controls = useMemo<Array<InteractiveSettingSpec<VentilatorSettingKey>>>(() => {
@@ -124,10 +119,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       { key: 'peep', label: 'PEEP', value: ventilator.peep, display: `${Math.round(ventilator.peep)}`, unit: 'cmH₂O', min: 0, max: 20, step: 1 },
     ]
 
-    if (ventilator.mode === 'MANUAL') {
-      items.push({ key: 'tidalVolume', label: 'VT', value: ventilator.tidalVolume, display: `${Math.round(ventilator.tidalVolume)}`, unit: 'mL', min: 250, max: 800, step: 10 })
-      return items
-    }
+    if (ventilator.mode === 'MANUAL') return items
 
     if (ventilator.mode !== 'PSV') {
       items.push({ key: 'rate', label: isSimvMode(ventilator.mode) ? 'SIMV RR' : 'RR', value: ventilator.rate, display: `${Math.round(ventilator.rate)}`, unit: '/min', min: 5, max: 40, step: 1 })
@@ -169,8 +161,8 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     if (next.mode === 'PSV') tidalVolumeMl = clamp(next.pressureSupport * compliance * 0.7, 100, 1000)
     const nextRespiratory: MonitorRespiratorySettings = {
       ...respiratory,
-      respiratoryRate: next.mode === 'PSV' ? respiratory.respiratoryRate : next.rate,
-      tidalVolumeMl,
+      respiratoryRate: next.mode === 'PSV' || next.mode === 'MANUAL' ? respiratory.respiratoryRate : next.rate,
+      tidalVolumeMl: next.mode === 'MANUAL' ? respiratory.tidalVolumeMl : tidalVolumeMl,
       peepCmH2O: next.peep,
       fio2: next.fio2 / 100,
     }
@@ -181,11 +173,8 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     if (disabled) return
     setVentilator((current) => {
       const next = { ...current }
-      if (key === 'ieRatio') {
-        next.inspiratoryTime = cycleTime(current.rate) / (1 + clamp(rawValue, MIN_IE, MAX_IE))
-      } else {
-        ;(next as unknown as Record<VentilatorSettingKey, number>)[key] = rawValue
-      }
+      if (key === 'ieRatio') next.inspiratoryTime = cycleTime(current.rate) / (1 + clamp(rawValue, MIN_IE, MAX_IE))
+      else (next as unknown as Record<VentilatorSettingKey, number>)[key] = rawValue
       if (key === 'rate' && hasConventionalMandatoryTiming(current.mode)) next.inspiratoryTime = cycleTime(rawValue) / (1 + currentIeRatio)
       publishRespiratory(next)
       return next
@@ -199,13 +188,12 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       publishRespiratory(next)
       return next
     })
-    setModeOpen(false)
   }
 
   const monitoring = useMemo(() => {
     const compliance = Math.max(20, respiratory.complianceMlPerCmH2O)
-    let tidalVolume = ventilator.tidalVolume
-    let peakPressure = ventilator.peep + ventilator.tidalVolume / compliance + 4
+    let tidalVolume = ventilator.mode === 'MANUAL' ? respiratory.tidalVolumeMl : ventilator.tidalVolume
+    let peakPressure = ventilator.peep + tidalVolume / compliance + 4
 
     if (ventilator.mode === 'PC-AC' || ventilator.mode === 'SIMV-PC') {
       tidalVolume = clamp(ventilator.pressureControl * compliance * 0.7, 100, 1000)
@@ -217,44 +205,33 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       peakPressure = Math.min(ventilator.volumeGuaranteePressureLimit, ventilator.peep + ventilator.tidalVolume / compliance + 4)
     }
 
-    const respiratoryRate = ventilator.mode === 'PSV' ? Math.round(respiratory.respiratoryRate) : ventilator.rate
+    const respiratoryRate = ventilator.mode === 'PSV' || ventilator.mode === 'MANUAL'
+      ? Math.round(respiratory.respiratoryRate)
+      : ventilator.rate
     return {
       respiratoryRate,
       tidalVolume: Math.round(tidalVolume),
       minuteVentilation: respiratoryRate * tidalVolume / 1000,
       peakPressure: Math.round(peakPressure),
     }
-  }, [respiratory.complianceMlPerCmH2O, respiratory.respiratoryRate, ventilator])
+  }, [respiratory.complianceMlPerCmH2O, respiratory.respiratoryRate, respiratory.tidalVolumeMl, ventilator])
 
   if (!host) return null
 
   return createPortal(
     <section className="edumon-ventilator-row" aria-label="Ventilator settings and monitoring">
       <div className="edumon-ventilator-controls">
-        <div className={`console-mode-control edumon-ventilator-mode ${modeOpen ? 'open' : ''}`}>
-          <button
-            type="button"
-            className="console-mode-button"
+        <label className="edumon-ventilator-mode" title={disabled ? 'Ventilator mode controlled by instructor' : 'Change ventilation mode'}>
+          <span>VENT MODE</span>
+          <select
             disabled={disabled}
-            onClick={() => setModeOpen((value) => !value)}
-            aria-haspopup="menu"
-            aria-expanded={modeOpen}
-            title={disabled ? 'Ventilator mode controlled by instructor' : 'Change ventilation mode'}
+            value={ventilator.mode}
+            onChange={(event) => selectMode(event.target.value as EdumonVentilatorMode)}
+            aria-label="Ventilation mode"
           >
-            <span>VENT MODE</span>
-            <strong>{ventilator.mode === 'MANUAL' ? 'Manual' : ventilator.mode}</strong>
-            <b aria-hidden="true">▾</b>
-          </button>
-          {modeOpen && !disabled && (
-            <div className="console-mode-menu edumon-ventilator-mode-menu" role="menu" aria-label="Ventilation mode">
-              {MODES.map((mode) => (
-                <button key={mode.value} type="button" role="menuitem" className={ventilator.mode === mode.value ? 'selected' : ''} onClick={() => selectMode(mode.value)}>
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            {MODES.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+          </select>
+        </label>
 
         <InteractiveSettingControls
           controls={controls}
