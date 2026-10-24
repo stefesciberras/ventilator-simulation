@@ -38,17 +38,21 @@ export function applyEdumonActionPhysiology(state: MonitorPatientState, simulati
   const block = clamp(resolveNumericActionEffect('neuromuscular.block', 0, simulationTime), 0, 1)
   const airwayObstruction = clamp(resolveNumericActionEffect('respiration.airwayObstruction', 0, simulationTime), 0, 1)
   const muscleFraction = 1 - block
-  const effectiveLooksSpontaneous = Math.abs(baselineRespiratory.respiratoryRate - baselineRespiratory.spontaneousRespiratoryRate) < 0.01
-    && Math.abs(baselineRespiratory.tidalVolumeMl - baselineRespiratory.spontaneousTidalVolumeMl) < 1
+  const ventilationMode = baselineRespiratory.ventilatorMode ?? 'MANUAL'
+  const effectiveDependsOnSpontaneousDrive = ventilationMode === 'MANUAL' || ventilationMode === 'PSV'
 
+  const spontaneousRespiratoryRate = baselineRespiratory.spontaneousRespiratoryRate * drive
+  const spontaneousTidalVolumeMl = baselineRespiratory.spontaneousTidalVolumeMl * drive * muscleFraction
   const respiratory = {
     ...baselineRespiratory,
-    spontaneousRespiratoryRate: baselineRespiratory.spontaneousRespiratoryRate * drive,
-    spontaneousTidalVolumeMl: baselineRespiratory.spontaneousTidalVolumeMl * drive * muscleFraction,
+    spontaneousRespiratoryRate,
+    spontaneousTidalVolumeMl,
     expiratoryResistanceCmH2OLs: baselineRespiratory.expiratoryResistanceCmH2OLs * (1 + 4 * airwayObstruction),
-    ...(effectiveLooksSpontaneous ? {
-      respiratoryRate: baselineRespiratory.respiratoryRate * drive,
-      tidalVolumeMl: baselineRespiratory.tidalVolumeMl * drive * muscleFraction,
+    ...(effectiveDependsOnSpontaneousDrive ? {
+      respiratoryRate: spontaneousRespiratoryRate,
+      tidalVolumeMl: ventilationMode === 'PSV' && spontaneousRespiratoryRate > 0
+        ? baselineRespiratory.tidalVolumeMl * muscleFraction
+        : spontaneousTidalVolumeMl,
     } : {}),
   }
 
