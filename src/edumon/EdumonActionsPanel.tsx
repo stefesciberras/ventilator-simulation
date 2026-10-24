@@ -20,8 +20,8 @@ const LEVEL_STEPS: Record<ActionLevel, { label: string; scale: number; bars: num
 // when an adjustable action is not currently running.
 const ACTION_LEVEL_SELECTIONS = new Map<string, ActionLevel>()
 
-const CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline', 'adrenaline'])
-const CARDIOVASCULAR_EVENT_IDS = new Set(['hypertension', 'hypotension', 'tachycardia', 'bradycardia', 'hypovolaemia', 'bleeding', 'beta-blocker'])
+const CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline', 'adrenaline', 'beta-blocker'])
+const CARDIOVASCULAR_EVENT_IDS = new Set(['hypertension', 'hypotension', 'tachycardia', 'bradycardia', 'hypovolaemia', 'bleeding'])
 const RESPIRATORY_EVENT_IDS = new Set(['apnoea', 'diaphragm-return', 'bronchospasm'])
 
 const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
@@ -65,6 +65,9 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     { id: 'adrenaline-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 15, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 45 },
     { id: 'adrenaline-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 15, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 45 },
   ], sort_order: 150, created_at: '', updated_at: '' },
+  { id: 'beta-blocker', kind: 'drug', name: 'Beta blocker', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Simulate clinically significant beta blockade: suppresses positive chronotropic responses from lower-priority effects while leaving other targets intact.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [
+    { id: 'beta-blocker-positive-chronotropy', target: 'haemodynamics.heartRate', operation: 'constraint', constraint: 'block-increase', value: 0, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
+  ], priority: 70, sort_order: 160, created_at: '', updated_at: '' },
 
   { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
   { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 20, created_at: '', updated_at: '' },
@@ -85,9 +88,6 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     { id: 'bleeding-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -25, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 120, releaseBehaviour: 'persist' },
     { id: 'bleeding-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 20, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 120, releaseBehaviour: 'persist' },
   ], sort_order: 160, created_at: '', updated_at: '' },
-  { id: 'beta-blocker', kind: 'event', name: 'Beta blocker', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Simulate clinically significant beta blockade: suppresses positive chronotropic responses from lower-priority effects while leaving other targets intact.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [
-    { id: 'beta-blocker-positive-chronotropy', target: 'haemodynamics.heartRate', operation: 'constraint', constraint: 'block-increase', value: 0, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
-  ], priority: 70, sort_order: 170, created_at: '', updated_at: '' },
 
   { id: 'apnoea', kind: 'event', name: 'Apnoea', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle absent spontaneous respiratory drive.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'apnoea-respiratory-drive', target: 'respiration.drive', operation: 'set', value: 0, onsetSeconds: 2, durationSeconds: 0, recoverySeconds: 5 }], sort_order: 210, created_at: '', updated_at: '' },
   { id: 'diaphragm-return', kind: 'event', name: 'Return of diaphragm breathing', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Return of spontaneous diaphragmatic effort after reversal; also guarantees at least one TOF response.', setting: 'ana', environments: ['edumon-ana'], effects: [
