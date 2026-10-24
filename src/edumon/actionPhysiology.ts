@@ -15,7 +15,8 @@ function sympatheticResponse(state: MonitorPatientState, simulationTime: number)
   const stimulus = Math.max(0, resolveNumericActionEffect('stimulus.sympathetic', 0, simulationTime))
   const nociceptiveResponse = Math.max(0, resolveNumericActionEffect('anaesthesia.nociceptiveResponse', 1, simulationTime))
   const depthResponse = anaestheticStimulusResponseScale(effectiveAnaestheticDepth(state, simulationTime))
-  const response = saturatingSympatheticResponse(stimulus * nociceptiveResponse * depthResponse)
+  const composedResponse = stimulus * nociceptiveResponse * depthResponse
+  const response = saturatingSympatheticResponse(composedResponse)
   return { heartRateOffset: 25 * response, mapOffset: 30 * response }
 }
 
