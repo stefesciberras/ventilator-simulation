@@ -14,7 +14,7 @@ Never make a Drug/Event button directly mutate monitor values, respiratory trace
 
 - `src/edusim/actions/ActionEffect.ts` — validated targets/operations and release behaviour.
 - `src/edusim/actions/ActionRuntime.ts` — momentary/toggle timing, recover/persist release, stacking, adjustable intensity and target supersession.
-- `src/edumon/EdumonActionsPanel.tsx` — fallback definitions, Drug/Event subclasses, generic long-press level UI.
+- `src/edumon/EdumonActionsPanel.tsx` — fallback definitions, Drug/Event subclasses, generic long-press level UI, and runtime-derived toggle state.
 - `src/edumon/actionPhysiology.ts` — EDUMON-specific interpretation.
 - `src/edumon/EdumonWorkspacePanel.tsx` — displays current action-aware values; direct instructor edits supersede the corresponding action target.
 - `src/edumon/monitorEngine.ts` — rhythm constraints, waveforms and measurements.
@@ -49,6 +49,12 @@ Toggle: onset -> sustained indefinitely -> switch-off -> effect-specific release
 Do not implement persist by applying an opposite or duplicate numerical mutation. Runtime weight owns the retained contribution. Hypovolaemia and Bleeding currently persist their HR/MAP surrogate consequences.
 
 All timing uses simulation time.
+
+## Toggle UI state
+
+For toggle actions, `ActionRuntime` is the source of truth for ON/OFF state. Do not maintain a separate component-local toggle set in `EdumonActionsPanel`; tab/view remounts would lose it and visually desynchronise the button from the physiology.
+
+The ACTIONS panel should derive a toggle's coloured/pressed state from running toggle `ActiveEffect` instances (`mode === 'toggle'` and no `stoppedAtSimulationTime`). For adjustable toggles, derive the active L/M/H badge from the running effect's `intensity`. A separate retained level preference may be used only for the next start of an inactive action.
 
 ## Current-value controls and instructor ownership
 
@@ -106,13 +112,14 @@ Surgery/Laryngoscopy/Pain create sympathetic stimulus. Opioids alter nociceptive
 6. Preserve momentary/toggle semantics and simulation time.
 7. Use generic `dose-levels` / `severity-levels`, not drug/event-specific menus.
 8. Keep physiology out of action click handlers.
-9. Never reconstruct hidden baselines from current modelled values; use explicit target ownership/supersession.
-10. Treat rhythm constraints before ordinary monitor interpretation; do not let incompatible rhythms acquire nonsensical effective rates.
-11. Update regression coverage.
-12. Update both documentation files.
-13. Bump EDUMON version.
-14. Run full CI and merge only when green.
+9. Derive toggle active state from `ActionRuntime`; never duplicate runtime ON/OFF truth in local UI state.
+10. Never reconstruct hidden baselines from current modelled values; use explicit target ownership/supersession.
+11. Treat rhythm constraints before ordinary monitor interpretation; do not let incompatible rhythms acquire nonsensical effective rates.
+12. Update regression coverage.
+13. Update both documentation files.
+14. Bump EDUMON version.
+15. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that no action button directly mutates monitor values, manual model-driven edits supersede only the intended target, recover/persist semantics are explicit and backward-compatible, rhythm changes do not conflict with HR modifiers, no hidden inverse baseline is created, no waveform is redrawn by an Event handler, persistent/fallback definitions agree where applicable, docs are current, and build/regressions pass.
+Confirm that no action button directly mutates monitor values, toggle colour/pressed state survives tab/view remounts because it derives from the runtime, adjustable active levels derive from runtime intensity, manual model-driven edits supersede only the intended target, recover/persist semantics are explicit and backward-compatible, rhythm changes do not conflict with HR modifiers, no hidden inverse baseline is created, no waveform is redrawn by an Event handler, persistent/fallback definitions agree where applicable, docs are current, and build/regressions pass.
