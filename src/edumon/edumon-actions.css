@@ -28,7 +28,7 @@
 .edumon-action-section {
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 9px;
-  overflow: hidden;
+  overflow: visible;
   background: rgba(255,255,255,0.018);
 }
 
@@ -40,6 +40,7 @@
   justify-content: space-between;
   gap: 10px;
   background: rgba(255,255,255,0.025);
+  border-radius: 9px 9px 0 0;
 }
 
 .edumon-action-section-heading h3 {
@@ -91,6 +92,30 @@
   font-size: 0.72rem;
 }
 
+.edumon-drug-classes {
+  display: grid;
+  gap: 14px;
+}
+
+.edumon-drug-class {
+  display: grid;
+  gap: 7px;
+}
+
+.edumon-drug-class + .edumon-drug-class {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.edumon-drug-class h4 {
+  margin: 0;
+  color: #9eabb4;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .edumon-action-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -99,7 +124,13 @@
   min-width: 220px;
 }
 
+.edumon-action-button-wrap {
+  position: relative;
+  min-width: 0;
+}
+
 .edumon-action-button {
+  width: 100%;
   min-height: 38px;
   padding: 7px 9px;
   border: 1px solid rgba(255,255,255,0.11);
@@ -109,6 +140,13 @@
   font-size: 0.74rem;
   font-weight: 750;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
   transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease;
 }
 
@@ -132,10 +170,91 @@
   background: rgba(240,160,58,0.28);
 }
 
+.edumon-action-dose-badge {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.08);
+  color: #aebbc4;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.edumon-action-button.active .edumon-action-dose-badge {
+  background: rgba(240,160,58,0.16);
+  color: #ffd19a;
+}
+
+.edumon-dose-menu {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(58px, 1fr));
+  gap: 4px;
+  min-width: 206px;
+  padding: 5px;
+  border: 1px solid rgba(240,160,58,0.38);
+  border-radius: 9px;
+  background: #192128;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+
+.edumon-dose-menu button {
+  min-height: 46px;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #aebbc4;
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.edumon-dose-menu button:hover,
+.edumon-dose-menu button.selected {
+  border-color: rgba(240,160,58,0.35);
+  background: rgba(240,160,58,0.11);
+  color: #ffd19a;
+}
+
+.edumon-dose-bars {
+  height: 20px;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.edumon-dose-bars i {
+  display: block;
+  width: 4px;
+  border-radius: 2px 2px 0 0;
+  background: rgba(255,255,255,0.15);
+}
+
+.edumon-dose-bars i:nth-child(1) { height: 7px; }
+.edumon-dose-bars i:nth-child(2) { height: 13px; }
+.edumon-dose-bars i:nth-child(3) { height: 19px; }
+.edumon-dose-bars i.on { background: #f0a03a; }
+
 @media (max-width: 680px) {
   .edumon-action-grid {
     width: 100%;
     min-width: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .edumon-dose-menu {
+    min-width: 190px;
+    grid-template-columns: repeat(3, minmax(54px, 1fr));
   }
 }
