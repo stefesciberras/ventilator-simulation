@@ -64,7 +64,7 @@ Constraint strength follows onset/recovery weight and intensity. Do not fake blo
 
 ### Beta blocker reference implementation
 
-`beta-blocker` is a toggle event, setting `all`, priority **70**, with:
+`beta-blocker` is a cardiovascular **Drug** toggle, setting `all`, priority **70**, with:
 
 - target `haemodynamics.heartRate`
 - operation `constraint`
@@ -122,9 +122,12 @@ For `offset`/`increment`, scale additive magnitude. For `multiplier`, scale dist
 - `bradycardia` — toggle HR decrease.
 - `hypovolaemia` — severity toggle; MAP down + HR up surrogate; release persists.
 - `bleeding` — severity toggle; MAP down + HR up surrogate; release persists.
-- `beta-blocker` — priority-70 HR `block-increase` constraint.
 
 Hypovolaemia and Bleeding do not yet modify an explicit blood-volume compartment. Future work should model circulating volume/preload/CO and bleeding rate rather than extending the surrogate indefinitely.
+
+## Cardiovascular Drugs
+
+- `beta-blocker` — priority-70 HR `block-increase` constraint.
 
 ## Respiratory Events
 
@@ -141,6 +144,8 @@ Surgery/Laryngoscopy/Pain create sympathetic stimulus. Opioids alter nociceptive
 ## Persistence/editor rules
 
 `public.edusim_action_definitions.priority` is the action-level default. Per-effect `priority`, `constraint` and `releaseBehaviour` remain inside each effect object in `effects` JSONB. The `/actions` editor must preserve and expose these semantics. Existing rows without explicit priority behave as priority 30.
+
+The editor-facing setting choice is **Anaesthesia** while the stored compatibility key remains `ana` (`ana | itu | all`).
 
 ## Change checklist
 
@@ -164,4 +169,4 @@ Surgery/Laryngoscopy/Pain create sympathetic stimulus. Opioids alter nociceptive
 
 ## Review checklist
 
-Confirm that priority defaults to 30, higher priority resolves later, same-priority constraints resolve after ordinary modifiers, Beta blocker suppresses positive chronotropy without cancelling Hypovolaemia MAP effect or creating bradycardia, manual control supersedes all action effects on that target, toggle state derives from runtime, recover/persist remains backward-compatible, persistent/fallback definitions agree, the action editor preserves priority/constraint metadata, docs are current, and build/regressions pass.
+Confirm that priority defaults to 30, higher priority resolves later, same-priority constraints resolve after ordinary modifiers, Beta blocker is a cardiovascular Drug and suppresses positive chronotropy without cancelling Hypovolaemia MAP effect or creating bradycardia, manual control supersedes all action effects on that target, toggle state derives from runtime, recover/persist remains backward-compatible, persistent/fallback definitions agree, the action editor preserves priority/constraint metadata, the Anaesthesia setting label does not change the stored `ana` key, docs are current, and build/regressions pass.
