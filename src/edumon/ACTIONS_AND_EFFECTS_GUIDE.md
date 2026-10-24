@@ -44,6 +44,16 @@ The button shows L/M/H. A running toggle can change level without stopping or re
 
 For offsets, intensity scales the offset. For multipliers, intensity scales the distance from neutral 1.0. For target/set operations, intensity scales interpolation weight.
 
+## Modelled-value control sliders
+
+Patient controls that correspond directly to action-modelled physiology show the **current modelled value**, not the untouched baseline. This currently includes heart rate, systolic/diastolic pressure and spontaneous respiratory rate.
+
+For example, activating Bradycardia moves the HR slider down as the effect develops; Hypotension/Hypovolaemia/Bleeding move the pressure sliders; and Apnoea moves spontaneous respiratory rate to zero. This keeps the instructor controls visually consistent with the physiology actually driving the monitor.
+
+When the instructor moves an affected HR or pressure slider while an offset effect is active, EDUMON adjusts the underlying patient baseline by the requested difference rather than writing the already-effected value back as a new baseline. This prevents double application and allows fine tuning while the action remains active. For partial respiratory-drive effects, respiratory-rate edits are converted back through the current drive scale. A hard zero-drive effect such as Apnoea continues to own respiratory rate while active, preserving the underlying baseline for recovery when Apnoea is switched off.
+
+This is a UI/control projection of physiology, not a violation of the central rule: action buttons still only create declarative effects; `actionPhysiology.ts` remains the source of the effective values.
+
 ## Current validated effect targets
 
 - `haemodynamics.heartRate`
@@ -107,6 +117,7 @@ Changing existing magnitudes/timings/group members is usually data work. New phy
 - `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, toggles, recovery, intensity.
 - `src/edumon/EdumonActionsPanel.tsx` — grouping and generic dose/severity UI.
 - `src/edumon/actionPhysiology.ts` — haemodynamic, respiratory obstruction and TOF-related interpretation.
+- `src/edumon/EdumonWorkspacePanel.tsx` — projects effective modelled physiology into instructor sliders and translates fine-tuning edits back to baseline controls.
 - `src/edumon/EdumonAnaGasControl.tsx` — TOF measurement derived from neuromuscular state.
 - `src/edumon/EdumonCapnographySurface.tsx` — capnogram shape derived from respiratory mechanics.
 - `supabase/migrations/` — persistent action definitions.
