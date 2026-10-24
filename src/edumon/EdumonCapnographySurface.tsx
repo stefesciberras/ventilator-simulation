@@ -26,6 +26,7 @@ interface CapnogramRuntime {
 const TRACE_WINDOW_SECONDS = 8
 const SAMPLE_RATE = 50
 const SAMPLE_INTERVAL = 1 / SAMPLE_RATE
+const MIN_CAPNOGRAPHY_MAX_MMHG = 30
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
@@ -124,15 +125,16 @@ function CapnographyCanvas({ samples, etCo2 }: { samples: CapnographySample[]; e
     (sample) => sample.co2,
     {
       fallbackMin: 0,
-      fallbackMax: 50,
+      fallbackMax: MIN_CAPNOGRAPHY_MAX_MMHG,
       paddingFraction: 0.08,
-      minimumSpan: 50,
+      minimumSpan: MIN_CAPNOGRAPHY_MAX_MMHG,
       roundTo: 10,
       hardMin: 0,
       hardMax: 150,
     },
   )
-  if (etCo2 > scale.max) scale.max = Math.min(150, Math.ceil(etCo2 / 10) * 10)
+  scale.max = Math.max(MIN_CAPNOGRAPHY_MAX_MMHG, scale.max)
+  if (etCo2 > scale.max) scale.max = Math.min(150, Math.max(MIN_CAPNOGRAPHY_MAX_MMHG, Math.ceil(etCo2 / 10) * 10))
 
   useEffect(() => {
     const canvas = canvasRef.current
