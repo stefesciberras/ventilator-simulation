@@ -3,9 +3,20 @@ import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type MonitorPatientState } from '
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
-function applyMeanPressureEffect(state: MonitorPatientState, simulationTime: number): Pick<MonitorPatientState, 'systolicPressure' | 'diastolicPressure'> {
+function sympatheticResponse(simulationTime: number): { heartRateOffset: number; mapOffset: number } {
+  const stimulus = Math.max(0, resolveNumericActionEffect('stimulus.sympathetic', 0, simulationTime))
+  const nociceptiveResponse = Math.max(0, resolveNumericActionEffect('anaesthesia.nociceptiveResponse', 1, simulationTime))
+  const response = stimulus * nociceptiveResponse
+  return {
+    heartRateOffset: 25 * response,
+    mapOffset: 30 * response,
+  }
+}
+
+function applyMeanPressureEffect(state: MonitorPatientState, simulationTime: number, sympatheticMapOffset: number): Pick<MonitorPatientState, 'systolicPressure' | 'diastolicPressure'> {
   const baselineMean = state.diastolicPressure + (state.systolicPressure - state.diastolicPressure) / 3
-  const targetMean = resolveNumericActionEffect('haemodynamics.meanArterialPressure', baselineMean, simulationTime)
+  const actionMean = resolveNumericActionEffect('haemodynamics.meanArterialPressure', baselineMean, simulationTime)
+  const targetMean = actionMean + sympatheticMapOffset
   const shift = targetMean - baselineMean
   return {
     systolicPressure: clamp(state.systolicPressure + shift, 20, 260),
@@ -14,7 +25,8 @@ function applyMeanPressureEffect(state: MonitorPatientState, simulationTime: num
 }
 
 export function applyEdumonActionPhysiology(state: MonitorPatientState, simulationTime: number): MonitorPatientState {
-  const pressure = applyMeanPressureEffect(state, simulationTime)
+  const sympathetic = sympatheticResponse(simulationTime)
+  const pressure = applyMeanPressureEffect(state, simulationTime, sympathetic.mapOffset)
   const baselineRespiratory = {
     ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
     ...(state.respiratory ?? {}),
@@ -38,9 +50,11 @@ export function applyEdumonActionPhysiology(state: MonitorPatientState, simulati
     } : {}),
   }
 
+  const actionHeartRate = resolveNumericActionEffect('haemodynamics.heartRate', state.heartRate, simulationTime)
+
   return {
     ...state,
-    heartRate: clamp(resolveNumericActionEffect('haemodynamics.heartRate', state.heartRate, simulationTime), 0, 300),
+    heartRate: clamp(actionHeartRate + sympathetic.heartRateOffset, 0, 300),
     ...pressure,
     respiratory,
   }
@@ -52,4 +66,8 @@ export function currentNeuromuscularBlock(simulationTime: number): number {
 
 export function currentNociceptiveResponse(simulationTime: number): number {
   return Math.max(0, resolveNumericActionEffect('anaesthesia.nociceptiveResponse', 1, simulationTime))
+}
+
+export function currentSympatheticStimulus(simulationTime: number): number {
+  return Math.max(0, resolveNumericActionEffect('stimulus.sympathetic', 0, simulationTime))
 }
