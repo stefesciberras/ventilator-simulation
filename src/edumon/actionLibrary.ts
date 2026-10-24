@@ -4,6 +4,7 @@ import { requireInstructorAccount } from '../teaching/account/InstructorAccountS
 export type EdusimActionKind = 'drug' | 'event'
 export type EdusimShortPressAction = 'momentary' | 'toggle'
 export type EdusimActionEnvironment = 'edumon-ana' | 'edumon-icu'
+export type EdusimActionSetting = 'ana' | 'itu' | 'all'
 
 export interface EdusimActionDefinition {
   id: string
@@ -13,6 +14,7 @@ export interface EdusimActionDefinition {
   long_press_action: string | null
   duration_seconds: number
   description: string
+  setting: EdusimActionSetting
   environments: EdusimActionEnvironment[]
   sort_order: number
   created_at: string
@@ -20,12 +22,18 @@ export interface EdusimActionDefinition {
 }
 
 export type EdusimActionDraft = Pick<EdusimActionDefinition,
-  'id' | 'kind' | 'name' | 'short_press_action' | 'long_press_action' | 'duration_seconds' | 'description' | 'environments' | 'sort_order'
+  'id' | 'kind' | 'name' | 'short_press_action' | 'long_press_action' | 'duration_seconds' | 'description' | 'setting' | 'sort_order'
 >
 
-const selectColumns = 'id,kind,name,short_press_action,long_press_action,duration_seconds,description,environments,sort_order,created_at,updated_at'
+const selectColumns = 'id,kind,name,short_press_action,long_press_action,duration_seconds,description,setting,environments,sort_order,created_at,updated_at'
+
+function settingToEnvironments(setting: EdusimActionSetting): EdusimActionEnvironment[] {
+  if (setting === 'all') return ['edumon-ana', 'edumon-icu']
+  return setting === 'itu' ? ['edumon-icu'] : ['edumon-ana']
+}
 
 function normalise(row: Record<string, unknown>): EdusimActionDefinition {
+  const setting: EdusimActionSetting = row.setting === 'itu' || row.setting === 'all' ? row.setting : 'ana'
   return {
     id: String(row.id),
     kind: row.kind === 'event' ? 'event' : 'drug',
@@ -34,9 +42,8 @@ function normalise(row: Record<string, unknown>): EdusimActionDefinition {
     long_press_action: typeof row.long_press_action === 'string' && row.long_press_action.length ? row.long_press_action : null,
     duration_seconds: Number(row.duration_seconds ?? 0),
     description: String(row.description ?? ''),
-    environments: Array.isArray(row.environments)
-      ? row.environments.filter((value): value is EdusimActionEnvironment => value === 'edumon-ana' || value === 'edumon-icu')
-      : ['edumon-ana'],
+    setting,
+    environments: settingToEnvironments(setting),
     sort_order: Number(row.sort_order ?? 0),
     created_at: String(row.created_at ?? ''),
     updated_at: String(row.updated_at ?? ''),
@@ -45,7 +52,10 @@ function normalise(row: Record<string, unknown>): EdusimActionDefinition {
 
 export async function listEdusimActions(environment?: EdusimActionEnvironment): Promise<EdusimActionDefinition[]> {
   let query = supabase.from('edusim_action_definitions').select(selectColumns).order('kind').order('sort_order').order('name')
-  if (environment) query = query.contains('environments', [environment])
+  if (environment) {
+    const setting = environment === 'edumon-icu' ? 'itu' : 'ana'
+    query = query.in('setting', [setting, 'all'])
+  }
   const { data, error } = await query
   if (error) throw error
   return (data ?? []).map((row) => normalise(row as Record<string, unknown>))
@@ -60,7 +70,7 @@ export async function saveEdusimAction(draft: EdusimActionDraft): Promise<Edusim
     description: draft.description.trim(),
     long_press_action: draft.long_press_action?.trim() || null,
     duration_seconds: Math.max(0, Number(draft.duration_seconds) || 0),
-    environments: [...new Set(draft.environments)],
+    environments: settingToEnvironments(draft.setting),
     updated_at: new Date().toISOString(),
   }
   const { data, error } = await supabase
