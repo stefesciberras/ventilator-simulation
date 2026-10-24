@@ -60,19 +60,27 @@ Do not treat priority as globally cancelling lower-priority actions. It is targe
 - `minimum` — constrain toward/not below `effect.value`.
 - `maximum` — constrain toward/not above `effect.value`.
 
-Constraint strength follows onset/recovery weight and intensity. Do not fake blockade as a large opposite offset; that produces paradoxical bradycardia/hypotension interactions instead of suppressing the intended response.
+Constraint strength follows onset/recovery weight and intensity. Use constraints for physiological limits rather than trying to simulate every interaction with opposite offsets.
 
 ### Beta blocker reference implementation
 
-`beta-blocker` is a cardiovascular **Drug** toggle, setting `all`, priority **70**, with:
+`beta-blocker` is a cardiovascular **Drug** toggle, setting `all`, priority **70**. It owns three `haemodynamics.heartRate` effects:
 
-- target `haemodynamics.heartRate`
-- operation `constraint`
-- constraint `block-increase`
+- `offset -15` bpm — modest direct negative chronotropy;
+- `constraint: block-increase` — suppresses lower-priority positive chronotropic responses;
+- `constraint: minimum` with value `50` — applies a 50 bpm floor while fully active.
 
-Thus ordinary priority-30 Hypovolaemia still lowers MAP, but its +HR response is suppressed toward the patient's reference HR. Beta blocker does not itself manufacture bradycardia. A lower-priority negative HR effect can remain. Manual HR change supersedes the beta-blocker HR constraint and all other HR actions, while unrelated targets continue.
+All three currently use 10-second onset and 30-second recovery.
 
-Use this as the model for future receptor blockade, conduction disease, pacing and other dominant target-specific physiology. Do not encode such interactions by naming other actions in click handlers.
+Resolution examples:
+
+- HR 80 with no competing effect -> approximately 65 bpm at full Beta blocker effect.
+- HR 55 -> the offset would request 40, then the minimum constraint limits the resolved HR to 50.
+- Hypovolaemia can still lower MAP. Its lower-priority +HR response is suppressed, while Beta blocker contributes its own modest HR reduction.
+- The 50 bpm floor is not a universal physiological law. Future dominant conduction/rhythm states may use priority >70 or the rhythm/conduction model to produce rates below 50 when appropriate.
+- Manual HR change supersedes all Beta blocker HR effects and all other action effects on HR. Unrelated targets remain active.
+
+Do not remove the HR offset and do not replace the floor with an arbitrary clamp in UI code. Keep all three effects declarative in the action definition.
 
 ## Timing and release
 
@@ -127,7 +135,7 @@ Hypovolaemia and Bleeding do not yet modify an explicit blood-volume compartment
 
 ## Cardiovascular Drugs
 
-- `beta-blocker` — priority-70 HR `block-increase` constraint.
+- `beta-blocker` — priority-70 HR `offset -15` + `block-increase` + `minimum 50`.
 
 ## Respiratory Events
 
@@ -157,7 +165,7 @@ The editor-facing setting choice is **Anaesthesia** while the stored compatibili
 6. Preserve momentary/toggle semantics and simulation time.
 7. Use generic `dose-levels` / `severity-levels`, not drug/event-specific menus.
 8. Keep physiology out of action click handlers.
-9. Use priority + constraints for dominant target-specific interactions; do not simulate blockade with arbitrary opposite offsets.
+9. Use priority + constraints for dominant target-specific interactions.
 10. Derive toggle active state from `ActionRuntime`; never duplicate runtime ON/OFF truth in local UI state.
 11. Never reconstruct hidden baselines from current modelled values; use target ownership/supersession.
 12. Keep manual instructor target supersession above the action priority system.
@@ -169,4 +177,4 @@ The editor-facing setting choice is **Anaesthesia** while the stored compatibili
 
 ## Review checklist
 
-Confirm that priority defaults to 30, higher priority resolves later, same-priority constraints resolve after ordinary modifiers, Beta blocker is a cardiovascular Drug and suppresses positive chronotropy without cancelling Hypovolaemia MAP effect or creating bradycardia, manual control supersedes all action effects on that target, toggle state derives from runtime, recover/persist remains backward-compatible, persistent/fallback definitions agree, the action editor preserves priority/constraint metadata, the Anaesthesia setting label does not change the stored `ana` key, docs are current, and build/regressions pass.
+Confirm that priority defaults to 30, higher priority resolves later, same-priority constraints resolve after ordinary modifiers, Beta blocker is a cardiovascular Drug with −15 bpm, `block-increase`, and `minimum 50` effects, Hypovolaemia MAP remains independent, manual control supersedes all action effects on that target, toggle state derives from runtime, recover/persist remains backward-compatible, persistent/fallback definitions agree, the action editor preserves priority/constraint metadata, the Anaesthesia setting label does not change the stored `ana` key, docs are current, and build/regressions pass.
