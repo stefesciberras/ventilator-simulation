@@ -1,0 +1,4 @@
+.teaching-prompt-section-heading:has(.teaching-workspace-collapse),
+.edumon-action-section-heading:has(.edumon-action-collapse) {
+  cursor: pointer;
+}
