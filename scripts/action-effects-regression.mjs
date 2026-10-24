@@ -79,8 +79,10 @@ assert(actionLibrary.includes("effects,priority,sort_order"), 'action library qu
 assert(editor.includes('<span>Priority</span>'), 'action editor must expose action priority')
 assert(editor.includes('Priority override'), 'action editor must expose per-effect priority override')
 assert(editor.includes('EDUSIM_ACTION_EFFECT_CONSTRAINTS'), 'action editor must expose constraint vocabulary')
+assert(editor.includes('<option value="ana">Anaesthesia</option>'), 'action editor must label ana setting as Anaesthesia')
 
-assert(panel.includes("id: 'beta-blocker', kind: 'event'"), 'Beta blocker fallback event must exist')
+assert(panel.includes("id: 'beta-blocker', kind: 'drug'"), 'Beta blocker fallback must remain a Drug')
+assert(panel.includes("CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline', 'adrenaline', 'beta-blocker'])"), 'Beta blocker must remain in the Cardiovascular Drugs group')
 assert(panel.includes("operation: 'constraint', constraint: 'block-increase'"), 'Beta blocker must suppress positive chronotropy with a constraint')
 assert(panel.includes('priority: 70'), 'Beta blocker must use higher-than-ordinary priority')
 assert(priorityMigration.includes('add column if not exists priority integer not null default 30'), 'priority migration must add the default priority column')
