@@ -74,19 +74,21 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  width: 50%;
+  min-width: 220px;
 }
 
 .edumon-action-button {
-  min-height: 42px;
-  padding: 8px 10px;
+  min-height: 38px;
+  padding: 7px 9px;
   border: 1px solid rgba(255,255,255,0.11);
   border-radius: 8px;
   background: #202a31;
   color: #dce6ec;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 750;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease;
 }
 
 .edumon-action-button:hover {
@@ -95,14 +97,24 @@
 }
 
 .edumon-action-button.active {
-  border-color: rgba(240,160,58,0.72);
-  background: rgba(240,160,58,0.12);
-  color: #ffc170;
-  box-shadow: inset 0 0 0 1px rgba(240,160,58,0.18);
+  border-color: rgba(240,160,58,0.62);
+  background: rgba(240,160,58,0.18);
+  color: #ffd19a;
+  box-shadow: inset 0 0 0 1px rgba(240,160,58,0.14);
+}
+
+.edumon-action-button.toggle.active {
+  background: rgba(240,160,58,0.22);
+}
+
+.edumon-action-button.momentary.active {
+  background: rgba(240,160,58,0.28);
 }
 
 @media (max-width: 680px) {
   .edumon-action-grid {
-    grid-template-columns: 1fr;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
