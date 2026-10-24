@@ -4,7 +4,6 @@ import {
   listEdusimActions,
   type EdusimActionDefinition,
   type EdusimActionEnvironment,
-  type EdusimShortPressAction,
 } from './actionLibrary'
 import './edumon-actions.css'
 
@@ -23,13 +22,13 @@ interface EdumonActionButtonProps {
 }
 
 const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
-  { id: 'propofol', kind: 'drug', name: 'Propofol', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', environments: ['edumon-ana'], sort_order: 10, created_at: '', updated_at: '' },
-  { id: 'fentanyl', kind: 'drug', name: 'Fentanyl', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', environments: ['edumon-ana'], sort_order: 20, created_at: '', updated_at: '' },
-  { id: 'relaxant', kind: 'drug', name: 'Relaxant', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', environments: ['edumon-ana'], sort_order: 30, created_at: '', updated_at: '' },
-  { id: 'tiva', kind: 'drug', name: 'TIVA', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: '', environments: ['edumon-ana'], sort_order: 40, created_at: '', updated_at: '' },
-  { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', environments: ['edumon-ana'], sort_order: 10, created_at: '', updated_at: '' },
-  { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', environments: ['edumon-ana'], sort_order: 20, created_at: '', updated_at: '' },
-  { id: 'awakening', kind: 'event', name: 'Awakening', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', environments: ['edumon-ana'], sort_order: 30, created_at: '', updated_at: '' },
+  { id: 'propofol', kind: 'drug', name: 'Propofol', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 10, created_at: '', updated_at: '' },
+  { id: 'fentanyl', kind: 'drug', name: 'Fentanyl', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 20, created_at: '', updated_at: '' },
+  { id: 'relaxant', kind: 'drug', name: 'Relaxant', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 30, created_at: '', updated_at: '' },
+  { id: 'tiva', kind: 'drug', name: 'TIVA', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 40, created_at: '', updated_at: '' },
+  { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 10, created_at: '', updated_at: '' },
+  { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 20, created_at: '', updated_at: '' },
+  { id: 'awakening', kind: 'event', name: 'Awakening', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 30, created_at: '', updated_at: '' },
 ]
 
 function currentEnvironment(): EdusimActionEnvironment {
