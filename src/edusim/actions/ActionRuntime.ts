@@ -9,8 +9,10 @@ export interface EdusimActionRuntimeDefinition {
 export interface ActiveEffect {
   instanceId: string
   actionId: string
+  mode: 'momentary' | 'toggle'
   effect: EdusimActionEffect
   startedAtSimulationTime: number
+  stoppedAtSimulationTime?: number
 }
 
 export interface ActionRuntimeSnapshot {
@@ -31,14 +33,37 @@ function effectLifetime(effect: EdusimActionEffect): number {
 export function setActionRuntimeSimulationTime(value: number): void {
   if (!Number.isFinite(value)) return
   simulationTime = Math.max(0, value)
-  activeEffects = activeEffects.filter((active) => simulationTime <= active.startedAtSimulationTime + effectLifetime(active.effect))
+  activeEffects = activeEffects.filter((active) => {
+    if (active.mode === 'toggle') {
+      if (active.stoppedAtSimulationTime == null) return true
+      return simulationTime <= active.stoppedAtSimulationTime + Math.max(0, active.effect.recoverySeconds)
+    }
+    return simulationTime <= active.startedAtSimulationTime + effectLifetime(active.effect)
+  })
 }
 
 export function getActionRuntimeSimulationTime(): number {
   return simulationTime
 }
 
+function runningToggleWeight(active: ActiveEffect, atSimulationTime: number): number {
+  const elapsed = Math.max(0, atSimulationTime - active.startedAtSimulationTime)
+  const onset = Math.max(0, active.effect.onsetSeconds)
+  if (onset > 0 && elapsed < onset) return clamp01(elapsed / onset)
+  return 1
+}
+
 export function actionEffectWeight(active: ActiveEffect, atSimulationTime = simulationTime): number {
+  if (active.mode === 'toggle') {
+    const stop = active.stoppedAtSimulationTime
+    if (stop == null || atSimulationTime <= stop) return runningToggleWeight(active, atSimulationTime)
+
+    const recovery = Math.max(0, active.effect.recoverySeconds)
+    if (recovery <= 0) return 0
+    const weightAtStop = runningToggleWeight(active, stop)
+    return weightAtStop * clamp01(1 - ((atSimulationTime - stop) / recovery))
+  }
+
   const elapsed = Math.max(0, atSimulationTime - active.startedAtSimulationTime)
   const onset = Math.max(0, active.effect.onsetSeconds)
   const duration = Math.max(0, active.effect.durationSeconds)
@@ -55,9 +80,11 @@ export function activateAction(definition: EdusimActionRuntimeDefinition, atSimu
   setActionRuntimeSimulationTime(atSimulationTime)
 
   if (definition.short_press_action === 'toggle') {
-    const alreadyActive = activeEffects.some((active) => active.actionId === definition.id)
-    if (alreadyActive) {
-      activeEffects = activeEffects.filter((active) => active.actionId !== definition.id)
+    const running = activeEffects.filter((active) => active.actionId === definition.id && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
+    if (running.length > 0) {
+      activeEffects = activeEffects.map((active) => running.includes(active)
+        ? { ...active, stoppedAtSimulationTime: atSimulationTime }
+        : active)
       return []
     }
   }
@@ -65,6 +92,7 @@ export function activateAction(definition: EdusimActionRuntimeDefinition, atSimu
   const created = definition.effects.map((effect) => ({
     instanceId: `${definition.id}:${effect.id}:${++sequence}`,
     actionId: definition.id,
+    mode: definition.short_press_action,
     effect,
     startedAtSimulationTime: atSimulationTime,
   }))
@@ -73,7 +101,9 @@ export function activateAction(definition: EdusimActionRuntimeDefinition, atSimu
 }
 
 export function deactivateAction(actionId: string): void {
-  activeEffects = activeEffects.filter((active) => active.actionId !== actionId)
+  activeEffects = activeEffects.map((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null
+    ? { ...active, stoppedAtSimulationTime: simulationTime }
+    : active)
 }
 
 export function clearActionRuntime(): void {

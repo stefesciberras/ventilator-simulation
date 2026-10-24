@@ -14,20 +14,17 @@ You are modifying the EDUSIM/EDUMON action framework in `stefesciberras/ventilat
 
 Never make a Drug/Event button directly mutate monitor values, waveforms, BIS, respiratory measurements or patient physiology. Buttons only activate an `ActionDefinition`. The runtime creates simulation-time `ActiveEffect` instances. EDUMON physiology consumes those effects and derives patient/monitor behaviour.
 
-Do not add logic of the form `if action === X then HR += ...` in UI code.
-
 ## Current architecture
 
 Core files:
 
 - `src/edusim/actions/ActionEffect.ts` — validated target/operation vocabulary and normalisation.
-- `src/edusim/actions/ActionRuntime.ts` — simulation-time active effects, onset/duration/recovery, stacking and numeric effect resolution.
+- `src/edusim/actions/ActionRuntime.ts` — simulation-time active effects, momentary timing, sustained toggle state, recovery, stacking and numeric effect resolution.
 - `src/edumon/actionLibrary.ts` — Supabase persistence and definition loading/saving.
 - `src/action-editor/ActionEditorApp.tsx` — instructor editor.
 - `src/edumon/EdumonActionsPanel.tsx` — activates definitions and contains local fallback actions.
 - `src/edumon/actionPhysiology.ts` — EDUMON-specific interpretation of generic effects, including sympathetic-response saturation.
 - `src/edumon/anaestheticPhysiology.ts` — anaesthetic depth/sensitivity/response and effective action-driven depth.
-- `src/edumon/respiratoryPhysiology.ts` — gas exchange/respiratory interpretation.
 - `src/edumon/EdumonBisTrend.tsx` — BIS derived from effective anaesthetic depth.
 - `supabase/migrations/` — persistent seeded definitions/data migrations.
 - `src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md` — instructor-facing explanation; update it when architecture or examples change.
@@ -51,78 +48,88 @@ Current operations:
 - `increment`
 - `trigger`
 
-Use only operations allowed for the chosen target in `ActionEffect.ts`. If the requested concept cannot be expressed with the validated vocabulary, add a proper new target and corresponding physiology interpretation rather than using arbitrary property paths or direct UI mutation.
+## Timing and toggle semantics
 
-## Timing semantics
+All effects run on **simulation time**, not wall-clock time.
 
-Every effect has `onsetSeconds`, `durationSeconds`, and `recoverySeconds` and runs on **simulation time**, not wall-clock time. Onset is a ramp from zero to full effect; duration is full effect; recovery ramps back to zero. Effects pause with the simulation and follow simulation speed.
+For `momentary` actions:
+- onset ramps from zero to full effect;
+- duration is the full-effect interval;
+- recovery ramps back to baseline;
+- repeated presses create separate instances and may stack.
 
-Momentary actions can create overlapping instances. Consider stacking semantics deliberately:
+For `toggle` actions:
+- the first press starts the action;
+- onset ramps to full effect;
+- after onset the effect remains fully active indefinitely while the toggle is on;
+- `durationSeconds` does not stop a toggle effect;
+- the second press marks the effect as stopped and starts its configured recovery ramp;
+- do not delete toggle effects immediately on switch-off, because recovery is part of the physiology.
 
-- offsets add;
-- multipliers compound;
-- target/set operations are order-sensitive and do not necessarily model repeated doses;
-- clamp or saturate physiological quantities where appropriate in the interpreting physiology layer.
+Use toggle for sustained infusions and sustained Events unless there is a better dedicated abstraction.
 
 ## Existing composition rules
 
 Do not duplicate these in individual actions:
 
-- Fentanyl lowers `anaesthesia.nociceptiveResponse`.
-- Laryngoscopy/Pain/Surgical stimulus create `stimulus.sympathetic`.
-- Raw sympathetic drive is composed as `stimulus × nociceptive response × anaesthetic-depth response`.
-- That raw composed sympathetic value is then passed through `saturatingSympatheticResponse(...)` in `src/edumon/actionPhysiology.ts` before HR/MAP effects are generated.
-- The saturation curve preserves a composed response of 1.0, gives about 1.25 at a composed response of 2.0, and approaches a ceiling of about 1.67 for very large input. This prevents repeated/overlapping Events from producing linear runaway haemodynamic responses while retaining additive stimulus semantics in the action runtime.
-- Do not compensate individual Event definitions for this saturation curve; Event definitions describe stimulus magnitude/duration, while physiology owns the transfer function.
+- Fentanyl and Remifentanil lower `anaesthesia.nociceptiveResponse`.
+- Laryngoscopy, Pain and Surgery create `stimulus.sympathetic`.
+- Surgery is a sustained toggle Event rather than a fixed-duration momentary event.
+- Raw sympathetic drive is `stimulus × nociceptive response × anaesthetic-depth response`, then passes through the shared saturating sympathetic transfer function before HR/MAP effects are generated.
 - `anaesthesia.hypnoticEffect` deepens the same effective anaesthetic depth used by BIS and stimulus attenuation.
-- Volatile anaesthesia and IV hypnotic actions therefore converge on one effective-depth concept.
+- Propofol bolus and TIVA (Propofol TCI) therefore share the same hypnotic-depth pathway.
+- TIVA is currently a teaching surrogate for maintained Propofol TCI effect, not a detailed Marsh/Schnider/Eleveld or pump model.
+- Remifentanil infusion is currently a teaching surrogate with rapid onset/recovery, not a detailed PK/PD model.
 - Relaxant acts through `neuromuscular.block`, not central respiratory drive.
-- Mandatory mechanical ventilation should not disappear solely because respiratory drive or neuromuscular function is reduced.
+
+## Current sustained actions
+
+### Remifentanil infusion
+
+`remifentanil` is a `toggle` Drug using:
+- `anaesthesia.nociceptiveResponse` multiplier below 1;
+- `respiration.drive` multiplier below 1;
+- modest negative `haemodynamics.heartRate` offset.
+
+### TIVA (Propofol TCI)
+
+`tiva` is a `toggle` Drug using:
+- positive `anaesthesia.hypnoticEffect` offset;
+- reduced `respiration.drive`;
+- negative MAP offset.
+
+Do not create a separate TIVA-only BIS or stimulus pathway.
+
+### Surgery
+
+`surgery` is a `toggle` Event using sustained `stimulus.sympathetic`. It remains active for the instructor-controlled duration of surgery, then decays over recovery after switch-off.
 
 ## When adding/editing a Drug or Event
 
-1. Inspect the current implementation before editing; do not rely on stale assumptions.
+1. Inspect the current implementation before editing.
 2. Decide whether the behaviour can be expressed with existing declarative targets.
 3. Add/update the persistent Supabase definition via a new migration; do not rewrite previously deployed migrations.
-4. Keep the local fallback definition in `EdumonActionsPanel.tsx` consistent with the seeded persistent definition.
-5. Put physiological combination logic and transfer/saturation functions in EDUMON physiology modules, not in action buttons or action definitions.
-6. Ensure simulation-time behaviour, stacking and recovery are correct.
-7. Update BIS/respiratory/haemodynamic/device consumers if the new physiological state should affect them.
+4. Keep the local fallback definition in `EdumonActionsPanel.tsx` consistent with the persistent definition.
+5. Put physiological combination logic and transfer functions in EDUMON physiology modules, not in action buttons.
+6. Deliberately choose `momentary` versus `toggle` semantics.
+7. Ensure onset, indefinite toggle sustain, switch-off recovery, stacking and simulation-time behaviour are correct.
 8. Add or update regression checks.
-9. Update both documentation files when the architecture, vocabulary, semantics or worked examples have changed:
-   - `src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md`
-   - `src/edumon/ACTIONS_AND_EFFECTS_AI_PROMPT.md`
+9. Update both documentation files when architecture, semantics or examples change.
 10. Bump the EDUMON version appropriately.
-11. Run the full build/CI and merge only after it passes.
+11. Run full CI and merge only when green.
 
-## Current Propofol example
+## Review checklist
 
-Propofol is modelled as a generic momentary bolus with declarative effects:
-
-- `anaesthesia.hypnoticEffect` → additive hypnotic burden;
-- `respiration.drive` → multiplier below 1;
-- `haemodynamics.meanArterialPressure` → negative offset.
-
-Its hypnotic effect changes effective anaesthetic depth, which in turn affects BIS and stimulus-response attenuation. Do not create a separate Propofol-only BIS or stimulus pathway.
-
-## Current Event example
-
-Laryngoscopy should describe the stimulus, not the result. It therefore produces `stimulus.sympathetic`; physiology calculates HR/MAP response after accounting for opioid/nociceptive state, anaesthetic depth and the shared saturating sympathetic transfer function.
-
-## Review checklist before finishing
-
-Confirm all of the following:
-
+Confirm:
 - no direct monitor mutation from a button;
 - no arbitrary/unvalidated target path;
 - persistent and fallback definitions agree;
-- timing uses simulation time;
-- repeated administrations behave intentionally;
-- physiology owns interpretation and any saturation/transfer function;
-- relevant displays/alarms use effective physiology;
-- documentation is still accurate;
+- toggle actions sustain until stopped and recover after stop;
+- momentary actions retain finite onset/duration/recovery behaviour;
+- physiology owns interpretation and saturation;
+- documentation is current;
 - regression/build passes.
 
-If any requested change conflicts with this architecture, preserve the architecture and implement the missing physiological abstraction instead of taking a UI shortcut.
+If a requested change cannot be represented cleanly with the current abstractions, add the missing physiological/runtime abstraction rather than taking a UI shortcut.
 
 ---
