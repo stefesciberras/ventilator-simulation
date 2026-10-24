@@ -52,7 +52,9 @@ export function monitorRespiratoryInput(state: MonitorPatientState, simulationTi
     expiratoryResistanceCmH2OLs: respiratory.expiratoryResistanceCmH2OLs,
     frcMl: respiratory.frcMl,
     shuntFraction: respiratory.shuntFraction,
-    maxSpO2: Math.min(respiratory.maxSpO2, effectiveState.spo2),
+    // The configured SpO2 remains an instructor ceiling. Current action effects
+    // modify respiratory physiology, not that ceiling itself.
+    maxSpO2: Math.min(respiratory.maxSpO2, state.spo2),
     oxygenConsumptionMlMin: respiratory.oxygenConsumptionMlMin,
     co2ProductionMlMin: respiratory.co2ProductionMlMin,
     referenceCardiacOutputLMin: 5,
