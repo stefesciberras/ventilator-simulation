@@ -12,11 +12,11 @@ Buttons activate declarative effects. They must not directly mutate displayed mo
 
 ### Drugs
 - **Anaesthesia** — Propofol, Fentanyl, Remifentanil infusion, Relaxant, Neostigmine, Sugammadex, TIVA.
-- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion, Adrenaline infusion.
+- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion, Adrenaline infusion, Beta blocker.
 
 ### Events
 - **Anaesthesia** — Induction, Maintenance, Awakening, Laryngoscopy, Pain, Surgery.
-- **Cardiovascular** — Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding, Beta blocker.
+- **Cardiovascular** — Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding.
 - **Respiratory** — Apnoea, Return of diaphragm breathing, Bronchospasm.
 
 These subclasses are presentation/taxonomy. The underlying rows remain ordinary `ActionDefinition` objects.
@@ -70,7 +70,7 @@ Constraint strength follows the normal onset/recovery weight and intensity. This
 
 ### Beta blocker example
 
-`Beta blocker` is a cardiovascular toggle available to both EDUMON-Ana and EDUMON-ICU. It has priority **70** and applies a `block-increase` constraint to `haemodynamics.heartRate`.
+`Beta blocker` is a cardiovascular **Drug** toggle available to both EDUMON-Ana and EDUMON-ICU. It has priority **70** and applies a `block-increase` constraint to `haemodynamics.heartRate`.
 
 Example:
 
@@ -136,6 +136,8 @@ A toggle event with `severity-levels`. The current surrogate lowers MAP and rais
 ### Bleeding
 A toggle event with `severity-levels`. The current surrogate produces a somewhat stronger hypotensive/tachycardic effect than Hypovolaemia and persists when the toggle is stopped. It does not yet accumulate actual blood-volume loss; future volume-state physiology should replace this approximation with bleeding rate plus circulating-volume state.
 
+## Cardiovascular Drugs
+
 ### Beta blocker
 A priority-70 toggle constraint that suppresses lower-priority positive chronotropic responses without directly applying a negative HR offset.
 
@@ -163,6 +165,8 @@ Propofol/TIVA use `anaesthesia.hypnoticEffect`. Relaxant and reversal agents use
 Permanent instructors can edit the shared action library via `/actions`. Persistent rows are stored in `public.edusim_action_definitions`; local fallback definitions remain in `src/edumon/EdumonActionsPanel.tsx`.
 
 The editor exposes the action-level priority and optional per-effect priority override. Selecting `constraint` exposes the constraint type. Action priority is persisted in the table `priority` column; per-effect priority and constraint metadata live in the existing `effects` JSONB objects.
+
+The editor-facing setting label is **Anaesthesia** while the stored compatibility key remains `ana` (`ana | itu | all`).
 
 `releaseBehaviour` also lives inside each effect JSON object. Existing definitions without explicit priority behave as priority 30; definitions without `releaseBehaviour` recover normally.
 
