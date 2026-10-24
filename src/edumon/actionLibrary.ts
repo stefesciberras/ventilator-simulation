@@ -22,7 +22,7 @@ export interface EdusimActionDefinition {
   setting: EdusimActionSetting
   environments: EdusimActionEnvironment[]
   effects: EdusimActionEffect[]
-  priority: number
+  priority?: number
   sort_order: number
   created_at: string
   updated_at: string
