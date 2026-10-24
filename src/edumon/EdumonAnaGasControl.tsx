@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { latestEdumonRespiratoryOutput, resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
+import { depthFromMac, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import {
   DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS,
+  type AnaestheticDepth,
   type MonitorAnaestheticGasSettings,
   type MonitorPatientState,
 } from './types'
@@ -59,6 +61,8 @@ export function EdumonAnaGasControl({
   const patientRef = useRef(patientState)
   const settleTimerRef = useRef<number | null>(null)
   const tofTimerRef = useRef<number | null>(null)
+  const etSevoRef = useRef(0)
+  const lastAutoDepthRef = useRef<AnaestheticDepth | null>(null)
   const [footerHost, setFooterHost] = useState<HTMLElement | null>(null)
   const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null)
   const [physioHost, setPhysioHost] = useState<HTMLElement | null>(null)
@@ -114,13 +118,32 @@ export function EdumonAnaGasControl({
         const timeConstant = Math.max(8, 1 / Math.max(turnoverPerSecond * 0.62, 1 / 180))
         const dt = wallDt * currentSimulationSpeed()
         const fraction = 1 - Math.exp(-dt / timeConstant)
-        setEtSevo((value) => clamp(value + (gases.fiSevoPercent - value) * fraction, 0, 8))
+        const nextEtSevo = clamp(etSevoRef.current + (gases.fiSevoPercent - etSevoRef.current) * fraction, 0, 8)
+        etSevoRef.current = nextEtSevo
+        setEtSevo(nextEtSevo)
+
+        const physiology = resolvedAnaestheticPhysiology(current)
+        const nextDepth = depthFromMac(nextEtSevo / SEVO_MAC_PERCENT, physiology.anaestheticSensitivity)
+        if (lastAutoDepthRef.current !== nextDepth) {
+          lastAutoDepthRef.current = nextDepth
+          if (physiology.depthOfAnaesthesia !== nextDepth) {
+            const nextState: MonitorPatientState = {
+              ...current,
+              anaestheticPhysiology: {
+                ...physiology,
+                depthOfAnaesthesia: nextDepth,
+              },
+            }
+            patientRef.current = nextState
+            onPatientStateChange(nextState)
+          }
+        }
       }
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [onPatientStateChange])
 
   useEffect(() => () => {
     if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
@@ -146,7 +169,9 @@ export function EdumonAnaGasControl({
       ...resolvedAnaestheticGases(current),
       fiSevoPercent: clamp(percent, 0, 8),
     }
-    onPatientStateChange({ ...current, anaestheticGases: nextGases })
+    const nextState = { ...current, anaestheticGases: nextGases }
+    patientRef.current = nextState
+    onPatientStateChange(nextState)
     armSettleTimer()
   }
 
