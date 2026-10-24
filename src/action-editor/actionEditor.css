@@ -19,9 +19,11 @@
 
 .action-editor-appbar h1,
 .action-editor-heading h2,
-.action-editor-group h2 { margin: 0; }
+.action-editor-group h2,
+.action-editor-effects-heading h3 { margin: 0; }
 .action-editor-appbar > div > span,
-.action-editor-heading span { color: #f0a03a; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.action-editor-heading span,
+.action-editor-effects-heading > div > span { color: #f0a03a; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .action-editor-appbar small { color: #8b99a2; }
 .action-editor-appbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
@@ -73,7 +75,8 @@
 .action-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .action-editor-grid > label,
 .action-editor-description,
-.action-editor-signin label { display: grid; gap: 6px; color: #aebac2; font-size: .76rem; }
+.action-editor-signin label,
+.action-editor-effect-row label { display: grid; gap: 6px; color: #aebac2; font-size: .76rem; }
 .action-editor-app input,
 .action-editor-app select,
 .action-editor-app textarea {
@@ -88,9 +91,53 @@
 .action-editor-grid label.check { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: .78rem; }
 .action-editor-grid label.check input { width: auto; }
 .action-editor-description { margin-top: 12px; }
+
+.action-editor-effects {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,.09);
+}
+.action-editor-effects-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.action-editor-effects-heading p {
+  max-width: 720px;
+  margin: 4px 0 0;
+  color: #7f8d96;
+  font-size: .78rem;
+}
+.action-editor-effects-empty {
+  padding: 14px;
+  border: 1px dashed rgba(255,255,255,.12);
+  border-radius: 8px;
+  color: #7f8d96;
+  font-size: .8rem;
+}
+.action-editor-effects-list { display: grid; gap: 9px; }
+.action-editor-effect-row {
+  display: grid;
+  grid-template-columns: minmax(165px, 1.4fr) minmax(120px, .9fr) minmax(105px, .8fr) repeat(3, minmax(95px, .7fr)) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 9px;
+  background: #11191e;
+}
+.action-editor-effect-remove { align-self: end; }
 .action-editor-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
 .action-editor-message { color: #9ed99e; }
 .action-editor-error { color: #ff9c9c; }
+
+@media (max-width: 1180px) {
+  .action-editor-effect-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .action-editor-effect-row .effect-target { grid-column: span 2; }
+  .action-editor-effect-remove { justify-self: start; }
+}
 
 @media (max-width: 760px) {
   .action-editor-app { padding: 10px; }
@@ -98,4 +145,12 @@
   .action-editor-workspace { grid-template-columns: 1fr; }
   .action-editor-grid { grid-template-columns: 1fr; }
   .action-editor-signin { grid-template-columns: 1fr; }
+  .action-editor-effects-heading { flex-direction: column; }
+  .action-editor-effect-row { grid-template-columns: 1fr 1fr; }
+  .action-editor-effect-row .effect-target { grid-column: 1 / -1; }
+}
+
+@media (max-width: 480px) {
+  .action-editor-effect-row { grid-template-columns: 1fr; }
+  .action-editor-effect-row .effect-target { grid-column: auto; }
 }
