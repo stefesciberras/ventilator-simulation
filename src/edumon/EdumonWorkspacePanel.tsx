@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type AnaestheticDepth, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
-import { resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { applyAnaestheticDepthEffects, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
@@ -119,13 +119,8 @@ export function EdumonWorkspacePanel({
 
   const updateAnaestheticDepth = (value: number) => {
     if (controlsLocked) return
-    onPatientStateChange({
-      ...patientState,
-      anaestheticPhysiology: {
-        ...anaestheticPhysiology,
-        depthOfAnaesthesia: clamp(Math.round(value), 1, 5) as AnaestheticDepth,
-      },
-    })
+    const depth = clamp(Math.round(value), 1, 5) as AnaestheticDepth
+    onPatientStateChange(applyAnaestheticDepthEffects(patientState, depth, anaestheticPhysiology.anaestheticResponse))
   }
 
   const updateSystolicPressure = (value: number) => {
