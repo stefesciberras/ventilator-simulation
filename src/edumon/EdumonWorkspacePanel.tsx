@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
+import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type AnaestheticDepth, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
+import { resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
@@ -58,6 +59,7 @@ export function EdumonWorkspacePanel({
     ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
     ...(patientState.respiratory ?? {}),
   }
+  const anaestheticPhysiology = resolvedAnaestheticPhysiology(patientState)
 
   useEffect(() => {
     const root = document.documentElement
@@ -72,6 +74,7 @@ export function EdumonWorkspacePanel({
       ...EDUMON_PATIENT_PROFILES[nextProfile],
       respiratory: patientState.respiratory,
       anaestheticGases: patientState.anaestheticGases,
+      anaestheticPhysiology: patientState.anaestheticPhysiology,
     })
   }
 
@@ -101,6 +104,28 @@ export function EdumonWorkspacePanel({
     const nextRespiratory = { ...respiratory, ...patch }
     nextRespiratory.deadSpaceMl = Math.min(nextRespiratory.deadSpaceMl, Math.max(0, nextRespiratory.tidalVolumeMl))
     onPatientStateChange({ ...patientState, respiratory: nextRespiratory })
+  }
+
+  const updateAnaestheticSensitivity = (value: number) => {
+    if (controlsLocked) return
+    onPatientStateChange({
+      ...patientState,
+      anaestheticPhysiology: {
+        ...anaestheticPhysiology,
+        anaestheticSensitivity: clamp(value, -1, 1),
+      },
+    })
+  }
+
+  const updateAnaestheticDepth = (value: number) => {
+    if (controlsLocked) return
+    onPatientStateChange({
+      ...patientState,
+      anaestheticPhysiology: {
+        ...anaestheticPhysiology,
+        depthOfAnaesthesia: clamp(Math.round(value), 1, 5) as AnaestheticDepth,
+      },
+    })
   }
 
   const updateSystolicPressure = (value: number) => {
@@ -199,6 +224,19 @@ export function EdumonWorkspacePanel({
           <label className="edumon-signal-control edumon-signal-capnography"><span>Dead space <b>{Math.round(respiratory.deadSpaceMl)} mL</b></span><input disabled={controlsLocked} type="range" min="0" max={Math.max(0, respiratory.tidalVolumeMl)} step="10" value={respiratory.deadSpaceMl} onChange={(event) => updateRespiratory({ deadSpaceMl: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>VCO₂ <b>{Math.round(respiratory.co2ProductionMlMin)} mL/min</b></span><input disabled={controlsLocked} type="range" min="50" max="600" step="10" value={respiratory.co2ProductionMlMin} onChange={(event) => updateRespiratory({ co2ProductionMlMin: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>VO₂ <b>{Math.round(respiratory.oxygenConsumptionMlMin)} mL/min</b></span><input disabled={controlsLocked} type="range" min="50" max="600" step="10" value={respiratory.oxygenConsumptionMlMin} onChange={(event) => updateRespiratory({ oxygenConsumptionMlMin: Number(event.target.value) })} /></label>
+          {teachingHost.appId === 'edumon-ana' && (
+            <>
+              <div className="control-section-title"><h2>Anaesthetic physiology</h2></div>
+              <label className="edumon-signal-control edumon-signal-agent">
+                <span>Anaesthetic sensitivity <b>{anaestheticPhysiology.anaestheticSensitivity >= 0 ? '+' : ''}{anaestheticPhysiology.anaestheticSensitivity.toFixed(1)}</b></span>
+                <input disabled={controlsLocked} type="range" min="-1" max="1" step="0.1" value={anaestheticPhysiology.anaestheticSensitivity} onChange={(event) => updateAnaestheticSensitivity(Number(event.target.value))} />
+              </label>
+              <label className="edumon-signal-control edumon-signal-agent">
+                <span>Depth of anaesthesia <b>Step {anaestheticPhysiology.depthOfAnaesthesia}</b></span>
+                <input disabled={controlsLocked} type="range" min="1" max="5" step="1" value={anaestheticPhysiology.depthOfAnaesthesia} onChange={(event) => updateAnaestheticDepth(Number(event.target.value))} />
+              </label>
+            </>
+          )}
         </section>
       ),
     },
