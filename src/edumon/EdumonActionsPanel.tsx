@@ -18,7 +18,7 @@ const DOSE_STEPS: Record<InfusionDoseLevel, { label: string; scale: number; bars
   high: { label: 'High', scale: 1.35, bars: 3 },
 }
 
-const CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline'])
+const CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline', 'adrenaline'])
 
 interface EdumonActionSectionProps {
   id: EdumonActionSectionId
@@ -75,6 +75,20 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     sort_order: 40, created_at: '', updated_at: '',
   },
   {
+    id: 'neostigmine', kind: 'drug', name: 'Neostigmine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0,
+    description: 'Generic neuromuscular-block reversal action with slower, incomplete reversal in the current teaching model.',
+    setting: 'ana', environments: ['edumon-ana'],
+    effects: [{ id: 'neostigmine-neuromuscular-reversal', target: 'neuromuscular.block', operation: 'target', value: 0.2, onsetSeconds: 180, durationSeconds: 7200, recoverySeconds: 0 }],
+    sort_order: 45, created_at: '', updated_at: '',
+  },
+  {
+    id: 'sugammadex', kind: 'drug', name: 'Sugammadex', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0,
+    description: 'Rapid neuromuscular-block reversal action. Current generic block model does not yet distinguish aminosteroid from other relaxants.',
+    setting: 'ana', environments: ['edumon-ana'],
+    effects: [{ id: 'sugammadex-neuromuscular-reversal', target: 'neuromuscular.block', operation: 'target', value: 0, onsetSeconds: 60, durationSeconds: 7200, recoverySeconds: 0 }],
+    sort_order: 47, created_at: '', updated_at: '',
+  },
+  {
     id: 'tiva', kind: 'drug', name: 'TIVA (Propofol TCI)', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0,
     description: 'Toggle Propofol TCI-style infusion. Long press selects low, medium or high target intensity.',
     setting: 'ana', environments: ['edumon-ana'],
@@ -117,6 +131,15 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
       { id: 'noradrenaline-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 20, onsetSeconds: 30, durationSeconds: 0, recoverySeconds: 60 },
       { id: 'noradrenaline-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -3, onsetSeconds: 30, durationSeconds: 0, recoverySeconds: 60 },
     ], sort_order: 140, created_at: '', updated_at: '',
+  },
+  {
+    id: 'adrenaline', kind: 'drug', name: 'Adrenaline infusion', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0,
+    description: 'Toggle adrenaline inotrope/vasopressor infusion. Long press selects low, medium or high infusion intensity.',
+    setting: 'ana', environments: ['edumon-ana'],
+    effects: [
+      { id: 'adrenaline-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 15, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 45 },
+      { id: 'adrenaline-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 15, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 45 },
+    ], sort_order: 150, created_at: '', updated_at: '',
   },
   { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
   { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 20, created_at: '', updated_at: '' },

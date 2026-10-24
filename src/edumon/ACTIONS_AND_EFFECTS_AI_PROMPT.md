@@ -51,8 +51,8 @@ Current operations:
 
 The monitor currently displays two Drug subclasses:
 
-- **Anaesthesia** — existing anaesthetic drugs/actions.
-- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine and Noradrenaline infusion.
+- **Anaesthesia** — anaesthetic, opioid, neuromuscular-block and reversal actions, including Neostigmine and Sugammadex.
+- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion and Adrenaline infusion.
 
 This grouping is presentation/taxonomy. It must not move physiological logic into the UI.
 
@@ -96,7 +96,8 @@ The Low/Medium/High steps are educational relative intensity levels, not clinica
 - Raw sympathetic drive is `stimulus × nociceptive response × anaesthetic-depth response`, then passes through the shared saturating sympathetic transfer function.
 - `anaesthesia.hypnoticEffect` deepens the effective anaesthetic depth used by BIS and stimulus attenuation.
 - Propofol bolus and TIVA therefore share the hypnotic-depth pathway.
-- Relaxant acts through `neuromuscular.block` rather than central drive.
+- Relaxant increases `neuromuscular.block`.
+- Neostigmine and Sugammadex are later momentary actions targeting the same `neuromuscular.block` state, so reversal composes through the generic action runtime rather than directly editing ventilation or TOF displays.
 
 ## Current infusion actions
 
@@ -112,6 +113,10 @@ The Low/Medium/High steps are educational relative intensity levels, not clinica
 
 `noradrenaline` is a Cardiovascular toggle Drug with `long_press_action = 'dose-levels'`. Its base/Medium effects raise MAP and apply a small negative HR offset. It remains active until switched off, then recovers.
 
+### Adrenaline
+
+`adrenaline` is a Cardiovascular toggle Drug with `long_press_action = 'dose-levels'`. Its base/Medium teaching-model effects raise both MAP and HR. It uses the same generic Low/Medium/High runtime intensity mechanism as other adjustable infusions.
+
 ## Current Cardiovascular boluses
 
 - `atropine` — positive HR offset.
@@ -119,6 +124,13 @@ The Low/Medium/High steps are educational relative intensity levels, not clinica
 - `phenylephrine` — positive MAP offset plus modest negative HR offset.
 
 These are teaching-model responses rather than fixed clinical dose claims.
+
+## Neuromuscular reversal
+
+- `neostigmine` — momentary `neuromuscular.block` target of about 0.2 with slower onset, representing slower/incomplete reversal in the current teaching model.
+- `sugammadex` — momentary `neuromuscular.block` target of 0 with faster onset, representing rapid near-complete reversal.
+
+Important limitation: the current `Relaxant` action represents a generic non-depolarising block. EDUMON does not yet store the identity/class of the blocker. Therefore Sugammadex currently acts on the generic block state and cannot yet enforce aminosteroid-only compatibility. When individual relaxants are introduced, add drug-specific block metadata/physiology and enforce compatibility there; do not hard-code it into the Sugammadex button.
 
 ## When adding/editing a Drug or Event
 
@@ -130,10 +142,11 @@ These are teaching-model responses rather than fixed clinical dose claims.
 6. Choose momentary versus toggle deliberately.
 7. For adjustable infusions use the generic `dose-levels` long press and runtime intensity; do not create drug-specific dose UI logic.
 8. Preserve multiplier-intensity mathematics around neutral 1.0.
-9. Add/update regressions.
-10. Update both documentation files.
-11. Bump EDUMON version appropriately.
-12. Run full CI and merge only when green.
+9. For reversal agents, prefer composition through `neuromuscular.block`; if blocker identity or mechanism matters, extend the physiology model rather than adding UI conditionals.
+10. Add/update regressions.
+11. Update both documentation files.
+12. Bump EDUMON version appropriately.
+13. Run full CI and merge only when green.
 
 ## Review checklist
 
@@ -144,6 +157,8 @@ Confirm:
 - toggle actions sustain until stopped and recover after stop;
 - Low/Medium/High can change while an infusion is running;
 - multiplier dose scaling is relative to neutral 1.0;
+- reversal agents compose through the neuromuscular block state;
+- Sugammadex blocker-specific limitation is documented until relaxant identity exists;
 - drug grouping is presentation-only;
 - documentation and regressions are current;
 - build passes.

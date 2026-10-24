@@ -16,8 +16,8 @@ This allows effects to combine. For example, Surgery creates a sympathetic stimu
 
 The Drugs section is currently subdivided into:
 
-- **Anaesthesia** — Propofol, Fentanyl, Remifentanil infusion, Relaxant and TIVA (Propofol TCI).
-- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine and Noradrenaline infusion.
+- **Anaesthesia** — Propofol, Fentanyl, Remifentanil infusion, Relaxant, Neostigmine, Sugammadex and TIVA (Propofol TCI).
+- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion and Adrenaline infusion.
 
 The subdivision is presentation/taxonomy only. The individual Drug definitions remain declarative ActionDefinitions and physiology still interprets their effects.
 
@@ -119,6 +119,16 @@ Remifentanil is a **toggle** infusion with Low/Medium/High intensity selection. 
 
 Relaxant increases `neuromuscular.block`. EDUMON interprets this as reduced respiratory muscle function. It does not directly suppress central respiratory drive.
 
+### Neostigmine
+
+Neostigmine is a momentary reversal action acting on `neuromuscular.block`. In the current teaching model it has a slower onset and drives block toward a residual level of about 0.2 rather than zero, representing slower/incomplete reversal compared with Sugammadex.
+
+### Sugammadex
+
+Sugammadex is a momentary rapid reversal action that drives `neuromuscular.block` toward zero more quickly than Neostigmine.
+
+The current EDUMON relaxant model is still generic. It does **not yet distinguish aminosteroid neuromuscular blockers from benzylisoquinolinium agents**, so Sugammadex currently reverses the generic block state. When individual relaxants are modelled, drug-specific reversibility should be enforced in physiology rather than in the button UI.
+
 ### Atropine
 
 Atropine is a momentary Cardiovascular action with a predominantly positive HR offset in the current teaching model.
@@ -134,6 +144,10 @@ Phenylephrine is a momentary Cardiovascular vasopressor action with a positive M
 ### Noradrenaline infusion
 
 Noradrenaline is a **toggle** Cardiovascular infusion with Low/Medium/High intensity selection. The base/Medium action raises MAP and applies a small negative HR offset. It remains active until switched off and then follows its configured recovery ramp.
+
+### Adrenaline infusion
+
+Adrenaline is a **toggle** Cardiovascular infusion with Low/Medium/High intensity selection. The current base/Medium teaching model applies positive HR and MAP offsets, representing combined chronotropic/inotropic and vasopressor effects without claiming a fixed clinical infusion rate.
 
 ### Laryngoscopy and Pain
 
@@ -174,4 +188,4 @@ Do not work around a missing physiological concept by making a button directly c
 
 ## Simulation-design caution
 
-EDUMON is an educational simulator. Effect values, infusion intensity levels and response curves are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.
+EDUMON is an educational simulator. Effect values, infusion intensity levels, reversal surrogates and response curves are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.
