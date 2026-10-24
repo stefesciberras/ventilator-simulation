@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type AnaestheticDepth, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
 import { applyAnaestheticDepthEffects, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { applyEdumonActionPhysiology } from './actionPhysiology'
+import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
@@ -60,6 +62,11 @@ export function EdumonWorkspacePanel({
     ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
     ...(patientState.respiratory ?? {}),
   }
+  const modelledPatientState = applyEdumonActionPhysiology(patientState, getActionRuntimeSimulationTime())
+  const modelledRespiratory: MonitorRespiratorySettings = {
+    ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
+    ...(modelledPatientState.respiratory ?? {}),
+  }
   const anaestheticPhysiology = resolvedAnaestheticPhysiology(patientState)
 
   useEffect(() => {
@@ -107,6 +114,31 @@ export function EdumonWorkspacePanel({
     onPatientStateChange({ ...patientState, respiratory: nextRespiratory })
   }
 
+  const updateModelledHeartRate = (value: number) => {
+    if (controlsLocked) return
+    const desired = clamp(value, 30, 220)
+    const delta = desired - modelledPatientState.heartRate
+    updatePatient({ heartRate: clamp(patientState.heartRate + delta, 0, 300) })
+  }
+
+  const updateModelledRespiratoryRate = (value: number) => {
+    if (controlsLocked) return
+    const desired = clamp(value, 0, 40)
+    const currentEffective = modelledRespiratory.spontaneousRespiratoryRate
+    const baseRate = respiratory.spontaneousRespiratoryRate
+    if (baseRate > 0 && currentEffective > 0) {
+      const effectiveScale = currentEffective / baseRate
+      updateRespiratory({ spontaneousRespiratoryRate: clamp(desired / effectiveScale, 0, 80) })
+      return
+    }
+    if (currentEffective > 0) {
+      updateRespiratory({ spontaneousRespiratoryRate: clamp(baseRate + desired - currentEffective, 0, 80) })
+      return
+    }
+    // A hard action such as Apnoea deliberately owns respiratory drive while active.
+    // Keep the underlying instructor baseline intact so it returns correctly when the action is released.
+  }
+
   const updateAnaestheticSensitivity = (value: number) => {
     if (controlsLocked) return
     onPatientStateChange({
@@ -126,24 +158,22 @@ export function EdumonWorkspacePanel({
 
   const updateSystolicPressure = (value: number) => {
     if (controlsLocked) return
-    let systolicPressure = clamp(value, 40, 220)
+    const desired = clamp(value, 40, 220)
+    const delta = desired - modelledPatientState.systolicPressure
+    let systolicPressure = clamp(patientState.systolicPressure + delta, 40, 220)
     let diastolicPressure = patientState.diastolicPressure
-    if (pressuresCoupled) {
-      const delta = systolicPressure - patientState.systolicPressure
-      diastolicPressure = clamp(patientState.diastolicPressure + delta * 0.3, 20, 140)
-    }
+    if (pressuresCoupled) diastolicPressure = clamp(patientState.diastolicPressure + delta * 0.3, 20, 140)
     if (systolicPressure <= diastolicPressure) systolicPressure = Math.min(220, diastolicPressure + 1)
     onPatientStateChange({ ...patientState, systolicPressure, diastolicPressure })
   }
 
   const updateDiastolicPressure = (value: number) => {
     if (controlsLocked) return
-    let diastolicPressure = clamp(value, 20, 140)
+    const desired = clamp(value, 20, 140)
+    const delta = desired - modelledPatientState.diastolicPressure
+    let diastolicPressure = clamp(patientState.diastolicPressure + delta, 20, 140)
     let systolicPressure = patientState.systolicPressure
-    if (pressuresCoupled) {
-      const delta = diastolicPressure - patientState.diastolicPressure
-      systolicPressure = clamp(patientState.systolicPressure + delta * 0.3, 40, 220)
-    }
+    if (pressuresCoupled) systolicPressure = clamp(patientState.systolicPressure + delta * 0.3, 40, 220)
     if (diastolicPressure >= systolicPressure) diastolicPressure = Math.max(20, systolicPressure - 1)
     onPatientStateChange({ ...patientState, systolicPressure, diastolicPressure })
   }
@@ -191,7 +221,7 @@ export function EdumonWorkspacePanel({
               <input disabled={controlsLocked} type="range" min="0" max="100" step="1" value={morphologySeverity} onChange={(event) => updatePatient({ morphologySeverity: Number(event.target.value) })} />
             </label>
           )}
-          <label className="edumon-signal-control edumon-signal-ecg"><span>Heart rate <b>{Math.round(patientState.heartRate)}</b></span><input disabled={controlsLocked} type="range" min="30" max="220" step="1" value={patientState.heartRate} onChange={(event) => updatePatient({ heartRate: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-ecg"><span>Heart rate <b>{Math.round(modelledPatientState.heartRate)}</b></span><input disabled={controlsLocked} type="range" min="30" max="220" step="1" value={clamp(modelledPatientState.heartRate, 30, 220)} onChange={(event) => updateModelledHeartRate(Number(event.target.value))} /></label>
           <div className="edumon-art-options" aria-label="Arterial pressure options">
             <label className="edumon-inline-checkbox edumon-signal-control edumon-signal-art">
               <input disabled={controlsLocked} type="checkbox" checked={pressuresCoupled} onChange={(event) => setPressuresCoupled(event.target.checked)} />
@@ -202,8 +232,8 @@ export function EdumonWorkspacePanel({
               <span>Show invasive blood pressure</span>
             </label>
           </div>
-          <label className="edumon-signal-control edumon-signal-art"><span>Systolic pressure <b>{Math.round(patientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={patientState.systolicPressure} onChange={(event) => updateSystolicPressure(Number(event.target.value))} /></label>
-          <label className="edumon-signal-control edumon-signal-art"><span>Diastolic pressure <b>{Math.round(patientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={patientState.diastolicPressure} onChange={(event) => updateDiastolicPressure(Number(event.target.value))} /></label>
+          <label className="edumon-signal-control edumon-signal-art"><span>Systolic pressure <b>{Math.round(modelledPatientState.systolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="40" max="220" step="1" value={clamp(modelledPatientState.systolicPressure, 40, 220)} onChange={(event) => updateSystolicPressure(Number(event.target.value))} /></label>
+          <label className="edumon-signal-control edumon-signal-art"><span>Diastolic pressure <b>{Math.round(modelledPatientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={clamp(modelledPatientState.diastolicPressure, 20, 140)} onChange={(event) => updateDiastolicPressure(Number(event.target.value))} /></label>
           <label className="edumon-signal-control edumon-signal-spo2"><span>SpO₂ ceiling <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-spo2"><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input disabled={controlsLocked} type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => updatePatient({ peripheralPerfusion: Number(event.target.value) })} /></label>
         </section>
@@ -216,7 +246,7 @@ export function EdumonWorkspacePanel({
       content: (
         <section className="control-section edumon-physio-panel">
           <div className="control-section-title"><h2>Respiratory / gas exchange</h2></div>
-          <label className="edumon-signal-control edumon-signal-capnography"><span>Patient respiratory rate <b>{Math.round(respiratory.spontaneousRespiratoryRate)}/min</b></span><input disabled={controlsLocked} type="range" min="0" max="40" step="1" value={respiratory.spontaneousRespiratoryRate} onChange={(event) => updateRespiratory({ spontaneousRespiratoryRate: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-capnography"><span>Patient respiratory rate <b>{Math.round(modelledRespiratory.spontaneousRespiratoryRate)}/min</b></span><input disabled={controlsLocked} type="range" min="0" max="40" step="1" value={clamp(modelledRespiratory.spontaneousRespiratoryRate, 0, 40)} onChange={(event) => updateModelledRespiratoryRate(Number(event.target.value))} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>Dead space <b>{Math.round(respiratory.deadSpaceMl)} mL</b></span><input disabled={controlsLocked} type="range" min="0" max={Math.max(0, respiratory.tidalVolumeMl)} step="10" value={respiratory.deadSpaceMl} onChange={(event) => updateRespiratory({ deadSpaceMl: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>VCO₂ <b>{Math.round(respiratory.co2ProductionMlMin)} mL/min</b></span><input disabled={controlsLocked} type="range" min="50" max="600" step="10" value={respiratory.co2ProductionMlMin} onChange={(event) => updateRespiratory({ co2ProductionMlMin: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>VO₂ <b>{Math.round(respiratory.oxygenConsumptionMlMin)} mL/min</b></span><input disabled={controlsLocked} type="range" min="50" max="600" step="10" value={respiratory.oxygenConsumptionMlMin} onChange={(event) => updateRespiratory({ oxygenConsumptionMlMin: Number(event.target.value) })} /></label>
