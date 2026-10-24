@@ -12,11 +12,12 @@ Never make a Drug/Event button directly mutate monitor values, respiratory trace
 
 ## Core files
 
-- `src/edusim/actions/ActionEffect.ts` — validated targets/operations.
-- `src/edusim/actions/ActionRuntime.ts` — momentary/toggle timing, recovery, stacking and adjustable intensity.
+- `src/edusim/actions/ActionEffect.ts` — validated targets/operations and release behaviour.
+- `src/edusim/actions/ActionRuntime.ts` — momentary/toggle timing, recover/persist release, stacking, adjustable intensity and target supersession.
 - `src/edumon/EdumonActionsPanel.tsx` — fallback definitions, Drug/Event subclasses, generic long-press level UI.
 - `src/edumon/actionPhysiology.ts` — EDUMON-specific interpretation.
-- `src/edumon/EdumonWorkspacePanel.tsx` — displays modelled action-aware control values and translates instructor fine tuning back to baseline controls.
+- `src/edumon/EdumonWorkspacePanel.tsx` — displays current action-aware values; direct instructor edits supersede the corresponding action target.
+- `src/edumon/monitorEngine.ts` — rhythm constraints, waveforms and measurements.
 - `src/edumon/EdumonAnaGasControl.tsx` — TOF measurement derived from neuromuscular state.
 - `src/edumon/EdumonCapnographySurface.tsx` — CO₂ waveform derived from respiratory mechanics.
 - `supabase/migrations/` — persistent definitions.
@@ -35,78 +36,61 @@ Never make a Drug/Event button directly mutate monitor values, respiratory trace
 
 Operations: `offset`, `set`, `multiplier`, `target`, `increment`, `trigger`.
 
-## Grouping
-
-Drugs:
-- Anaesthesia
-- Cardiovascular
-
-Events:
-- Anaesthesia
-- Cardiovascular
-- Respiratory
-
-Grouping is presentation only; physiology stays declarative.
-
-## Timing
+## Timing and release
 
 Momentary: onset -> finite duration -> recovery.
 
-Toggle: onset -> sustained indefinitely -> switch-off -> recovery.
+Toggle: onset -> sustained indefinitely -> switch-off -> effect-specific release behaviour.
+
+`releaseBehaviour` is optional per effect and normalizes to `recover`:
+- `recover`: decay the remaining contribution over `recoverySeconds`.
+- `persist`: retain the contribution after the toggle is stopped until that target is explicitly superseded/changed.
+
+Do not implement persist by applying an opposite or duplicate numerical mutation. Runtime weight owns the retained contribution. Hypovolaemia and Bleeding currently persist their HR/MAP surrogate consequences.
 
 All timing uses simulation time.
 
-## Modelled-value control sliders
+## Current-value controls and instructor ownership
 
-For physiological controls directly modified by actions, the instructor slider must display the value returned by `applyEdumonActionPhysiology(...)`, not the untouched baseline. Current action-aware sliders are HR, systolic/diastolic pressure and spontaneous respiratory rate.
+Action-aware sliders display the value returned by `applyEdumonActionPhysiology(...)`. Current examples are HR, systolic/diastolic pressure and spontaneous respiratory rate.
 
-Do not solve this by copying effective values into patient state every render: that would compound effects. When an instructor fine-tunes an affected additive haemodynamic control, translate the desired effective-value delta back to the baseline. For a non-zero multiplicative respiratory-drive effect, invert the current effective scale when changing the baseline respiratory rate. If an active hard `set` effect owns the value (for example Apnoea setting drive to zero), preserve the baseline until that action releases rather than fighting the effect or destroying the recovery baseline.
+**Do not reintroduce inverse-baseline fine tuning.** The previous approach could turn HR 78 -> Bradycardia 43 -> instructor 50 into a hidden baseline of 85, causing paradoxical tachycardia when the modifier changed.
 
-The purpose is that Bradycardia visibly moves the HR slider, Hypotension/Hypovolaemia/Bleeding move pressure sliders, and Apnoea moves respiratory rate to zero, while the declarative action architecture remains intact.
+The rule is now:
+
+1. Show the current modelled value.
+2. When the instructor directly edits a model-driven control, call `supersedeActionTarget(...)` for the owned target.
+3. Commit the selected current value to patient state.
+4. Do not cancel unrelated targets from the same action.
+
+For HR, manual HR or rhythm selection supersedes `haemodynamics.heartRate`. For SBP/DBP, direct pressure editing supersedes `haemodynamics.meanArterialPressure` and commits the current companion pressure. For respiratory rate, the current implementation supersedes `respiration.drive`; if future respiratory effects need independent RR and tidal-volume ownership, introduce finer validated targets rather than hidden inverse maths.
+
+Rhythm is a physiological constraint: VF/asystole have no effective perfusing ventricular rate; VT/SVT/sinus-family rhythms constrain effective rate in `monitorEngine.ts`. Do not model VF as ordinary HR plus/minus Bradycardia.
 
 ## Adjustable level semantics
 
-Two generic long-press actions exist:
+`dose-levels` and `severity-levels` both use `ActiveEffect.intensity`: Low 0.65, Medium 1.0, High 1.35. Changing a running toggle's level must use `setActionIntensity()` without restarting it.
 
-- `dose-levels` for adjustable infusions;
-- `severity-levels` for adjustable clinical events.
+For `offset`/`increment`, scale additive magnitude. For `multiplier`, scale distance from neutral 1.0. For `target`/`set`, scale interpolation weight and clamp safely.
 
-Both use `ActiveEffect.intensity`:
-- Low 0.65
-- Medium 1.0
-- High 1.35
-
-Changing a running toggle's level must use `setActionIntensity()` without restarting it.
-
-For `offset`/`increment`, scale additive magnitude. For `multiplier`, scale distance from neutral 1.0: `1 + (effect.value - 1) * weight * intensity`. For `target`/`set`, scale interpolation weight and clamp safely.
-
-## Current Cardiovascular Events
+## Cardiovascular Events
 
 - `hypertension` — toggle MAP increase.
 - `hypotension` — toggle MAP decrease.
 - `tachycardia` — toggle HR increase.
 - `bradycardia` — toggle HR decrease.
-- `hypovolaemia` — toggle with `severity-levels`; currently MAP down + HR up surrogate.
-- `bleeding` — toggle with `severity-levels`; currently MAP down + HR up surrogate.
+- `hypovolaemia` — severity toggle; MAP down + HR up surrogate; release persists.
+- `bleeding` — severity toggle; MAP down + HR up surrogate; release persists.
 
-Hypovolaemia and Bleeding do not yet modify an explicit blood-volume compartment. Do not fake such a state in the UI; add a future validated physiology target/state when needed.
+Hypovolaemia and Bleeding do not yet modify an explicit blood-volume compartment. Future work should model circulating volume/preload/CO and bleeding rate rather than extending the surrogate indefinitely.
 
-## Current Respiratory Events
+## Respiratory Events
 
-### Apnoea
-`apnoea` is a toggle using `respiration.drive` set to 0. Recovery occurs through the generic toggle recovery semantics.
+- **Apnoea** uses `respiration.drive = 0`.
+- **Return of diaphragm breathing** (`diaphragm-return`) targets respiratory drive toward 1 and TOF minimum count toward 1.
+- **Bronchospasm** uses `respiration.airwayObstruction`, interpreted as increased expiratory resistance.
 
-### Return of diaphragm breathing
-`diaphragm-return` is momentary and uses:
-- `respiration.drive` target 1;
-- `neuromuscular.tofMinimumCount` target 1.
-
-TOF is derived from current `neuromuscular.block`; the minimum-count effect guarantees at least one response, not exactly one.
-
-### Bronchospasm
-`bronchospasm` is a toggle with `long_press_action = 'severity-levels'` and uses `respiration.airwayObstruction`.
-
-`actionPhysiology.ts` interprets this as increased expiratory resistance. Capnography derives obstruction from resistance/compliance, so bronchospasm must change the CO₂ waveform through respiratory mechanics, never through button-specific waveform drawing.
+Capnography must remain derived from mechanics.
 
 ## Existing anaesthesia composition
 
@@ -121,13 +105,14 @@ Surgery/Laryngoscopy/Pain create sympathetic stimulus. Opioids alter nociceptive
 5. Keep fallback definitions aligned.
 6. Preserve momentary/toggle semantics and simulation time.
 7. Use generic `dose-levels` / `severity-levels`, not drug/event-specific menus.
-8. Keep physiology out of click handlers.
-9. Keep action-aware sliders projected from effective physiology without feeding effective values back recursively.
-10. Update regression coverage.
-11. Update both documentation files.
-12. Bump EDUMON version.
-13. Run full CI and merge only when green.
+8. Keep physiology out of action click handlers.
+9. Never reconstruct hidden baselines from current modelled values; use explicit target ownership/supersession.
+10. Treat rhythm constraints before ordinary monitor interpretation; do not let incompatible rhythms acquire nonsensical effective rates.
+11. Update regression coverage.
+12. Update both documentation files.
+13. Bump EDUMON version.
+14. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that no button directly mutates monitor values, action-aware sliders display effective physiology without compounding it, no waveform is redrawn by an Event handler, persistent/fallback definitions agree, severity can change while toggles run, TOF derives from neuromuscular state, bronchospasm alters expiratory mechanics, docs are current, and build/regressions pass.
+Confirm that no action button directly mutates monitor values, manual model-driven edits supersede only the intended target, recover/persist semantics are explicit and backward-compatible, rhythm changes do not conflict with HR modifiers, no hidden inverse baseline is created, no waveform is redrawn by an Event handler, persistent/fallback definitions agree where applicable, docs are current, and build/regressions pass.

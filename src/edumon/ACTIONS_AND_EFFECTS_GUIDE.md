@@ -24,9 +24,18 @@ These subclasses are presentation/taxonomy. The underlying rows remain ordinary 
 ## Momentary and toggle actions
 
 - **momentary** — onset, finite duration, then recovery.
-- **toggle** — onset, stays active indefinitely until switched off, then follows recovery.
+- **toggle** — onset, stays active indefinitely until switched off, then follows the effect's release behaviour.
 
 All timing uses simulation time.
+
+### Release behaviour
+
+Each effect may define `releaseBehaviour`:
+
+- `recover` — default. When a toggle is stopped, the remaining contribution decays to zero over `recoverySeconds`.
+- `persist` — stopping the toggle does not reverse that effect. Its contribution remains until physiology is explicitly changed/superseded.
+
+This is defined per effect, not per action, so one action may recover one target while leaving another physiological consequence behind. Hypovolaemia and Bleeding currently use `persist` for their haemodynamic surrogate effects: stopping the event does not magically restore the volume deficit. Definitions without the field remain backward-compatible and recover.
 
 ## Long-press levels
 
@@ -35,24 +44,24 @@ Two generic long-press controls use the same runtime intensity mechanism:
 - `dose-levels` — adjustable infusion dose/intensity;
 - `severity-levels` — adjustable event severity.
 
-Both offer:
-- Low = 0.65 × base intensity
-- Medium = 1.0 × base intensity
-- High = 1.35 × base intensity
-
-The button shows L/M/H. A running toggle can change level without stopping or restarting its onset timer.
+Both offer Low = 0.65 ×, Medium = 1.0 × and High = 1.35 × base intensity. The button shows L/M/H. A running toggle can change level without stopping or restarting its onset timer.
 
 For offsets, intensity scales the offset. For multipliers, intensity scales the distance from neutral 1.0. For target/set operations, intensity scales interpolation weight.
 
-## Modelled-value control sliders
+## Current-value controls and target ownership
 
-Patient controls that correspond directly to action-modelled physiology show the **current modelled value**, not the untouched baseline. This currently includes heart rate, systolic/diastolic pressure and spontaneous respiratory rate.
+Patient controls corresponding to action-modelled physiology show the **current modelled value**, including HR, systolic/diastolic pressure and spontaneous respiratory rate.
 
-For example, activating Bradycardia moves the HR slider down as the effect develops; Hypotension/Hypovolaemia/Bleeding move the pressure sliders; and Apnoea moves spontaneous respiratory rate to zero. This keeps the instructor controls visually consistent with the physiology actually driving the monitor.
+The old inverse-baseline behaviour has been removed. EDUMON no longer turns an instructor edit such as modelled HR 43 → 50 into a hidden baseline HR of 85. Instead, an explicit instructor edit **supersedes the active action target** and commits the selected current value as the patient value. Other targets from the same action continue running.
 
-When the instructor moves an affected HR or pressure slider while an offset effect is active, EDUMON adjusts the underlying patient baseline by the requested difference rather than writing the already-effected value back as a new baseline. This prevents double application and allows fine tuning while the action remains active. For partial respiratory-drive effects, respiratory-rate edits are converted back through the current drive scale. A hard zero-drive effect such as Apnoea continues to own respiratory rate while active, preserving the underlying baseline for recovery when Apnoea is switched off.
+Examples:
 
-This is a UI/control projection of physiology, not a violation of the central rule: action buttons still only create declarative effects; `actionPhysiology.ts` remains the source of the effective values.
+- HR 78 + Bradycardia → 43. Instructor sets HR to 50: the active `haemodynamics.heartRate` modifier is superseded and current HR becomes 50. Turning Bradycardia off later cannot expose a hidden 85 bpm baseline.
+- A MAP modifier affecting both displayed pressures is superseded when the instructor directly changes SBP or DBP; the currently modelled companion pressure is committed at the same time.
+- Changing ECG rhythm supersedes action ownership of HR. Rhythm selection establishes the appropriate current ventricular-rate control value; VF/asystole still produce no effective perfusing rate in `monitorEngine.ts`.
+- Direct respiratory-rate editing supersedes `respiration.drive` and commits the selected spontaneous rate. This is intentionally simple until respiratory drive is decomposed into finer independent output targets.
+
+This is **target-level ownership**, not cancellation of the whole action. If a future event modifies HR and another parameter, taking manual control of HR must not cancel the other parameter's effect.
 
 ## Current validated effect targets
 
@@ -68,36 +77,32 @@ This is a UI/control projection of physiology, not a violation of the central ru
 
 Operations remain `offset`, `set`, `multiplier`, `target`, `increment`, `trigger`.
 
-## New Cardiovascular Events
+## Cardiovascular Events
 
 ### Hypertension / Hypotension
 Toggle sustained MAP offsets. These are direct teaching-state disturbances, independent of a specific cause.
 
 ### Tachycardia / Bradycardia
-Toggle sustained HR offsets.
+Toggle sustained HR offsets. Manual HR or rhythm intervention supersedes the HR target rather than reverse-calculating a hidden baseline.
 
 ### Hypovolaemia
-A toggle event with `severity-levels`. The current surrogate lowers MAP and raises HR. It does not yet model an explicit circulating-volume compartment, so this should be treated as a haemodynamic teaching approximation.
+A toggle event with `severity-levels`. The current surrogate lowers MAP and raises HR. Both haemodynamic effects use `releaseBehaviour: persist`, because switching the event off should not automatically restore volume. It does not yet model an explicit circulating-volume compartment.
 
 ### Bleeding
-A toggle event with `severity-levels`. The current surrogate produces a somewhat stronger hypotensive/tachycardic effect than Hypovolaemia. It does not yet accumulate actual blood-volume loss; future volume-state physiology can replace this approximation without changing the ActionDefinition pattern.
+A toggle event with `severity-levels`. The current surrogate produces a somewhat stronger hypotensive/tachycardic effect than Hypovolaemia and persists when the toggle is stopped. It does not yet accumulate actual blood-volume loss; future volume-state physiology should replace this approximation with bleeding rate plus circulating-volume state.
 
-## New Respiratory Events
+## Respiratory Events
 
 ### Apnoea
-A toggle event acting through `respiration.drive = 0`. Switching it off allows respiratory drive to recover rather than directly redrawing or hiding the capnogram.
+A toggle event acting through `respiration.drive = 0`. Switching it off normally allows respiratory drive to recover. A direct instructor respiratory-rate intervention supersedes that drive target.
 
 ### Return of diaphragm breathing
-A momentary event representing return of spontaneous diaphragmatic effort after reversal. It:
-- targets `respiration.drive` toward 1;
-- targets `neuromuscular.tofMinimumCount` to at least 1 for the active interval.
+A momentary event representing return of spontaneous diaphragmatic effort after reversal. It targets `respiration.drive` toward 1 and `neuromuscular.tofMinimumCount` to at least 1 for the active interval.
 
-TOF measurement is now derived from current `neuromuscular.block` rather than remaining fixed at 4/1.0. The minimum-count effect guarantees at least one response while allowing better recovery to display 2–4 responses.
+TOF measurement is derived from current `neuromuscular.block`. The minimum-count effect guarantees at least one response while allowing better recovery to display 2–4 responses.
 
 ### Bronchospasm
-A toggle event with `severity-levels` acting through `respiration.airwayObstruction`.
-
-EDUMON physiology converts that obstruction into increased expiratory airway resistance. The capnogram already derives its expiratory shape from resistance/compliance time constants, so progressively severe Bronchospasm naturally produces a more obstructive/shark-fin CO₂ waveform. The event itself does not draw a waveform.
+A toggle event with `severity-levels` acting through `respiration.airwayObstruction`. EDUMON physiology converts obstruction into increased expiratory airway resistance; capnogram shape remains derived from mechanics rather than drawn directly by the event.
 
 ## Existing anaesthesia composition
 
@@ -109,15 +114,18 @@ Propofol/TIVA use `anaesthesia.hypnoticEffect`. Relaxant and reversal agents use
 
 Permanent instructors can edit the shared action library via `/actions`. Persistent rows are stored in `public.edusim_action_definitions`; local fallback definitions remain in `src/edumon/EdumonActionsPanel.tsx`.
 
+`releaseBehaviour` lives inside each effect JSON object in the existing `effects` JSONB column; no new table column is required. Existing rows without it normalize to `recover`.
+
 Changing existing magnitudes/timings/group members is usually data work. New physiological concepts require a validated target plus physiology/monitor interpretation.
 
 ## Architecture reference
 
-- `src/edusim/actions/ActionEffect.ts` — validated targets/operations.
-- `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, toggles, recovery, intensity.
+- `src/edusim/actions/ActionEffect.ts` — validated targets/operations and `recover | persist` release vocabulary.
+- `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, toggles, release behaviour, intensity and target supersession.
 - `src/edumon/EdumonActionsPanel.tsx` — grouping and generic dose/severity UI.
 - `src/edumon/actionPhysiology.ts` — haemodynamic, respiratory obstruction and TOF-related interpretation.
-- `src/edumon/EdumonWorkspacePanel.tsx` — projects effective modelled physiology into instructor sliders and translates fine-tuning edits back to baseline controls.
+- `src/edumon/EdumonWorkspacePanel.tsx` — projects current modelled physiology into instructor sliders; direct edits supersede the corresponding action target and commit the selected current value.
+- `src/edumon/monitorEngine.ts` — rhythm-specific effective ventricular-rate constraints and waveform/measurement generation.
 - `src/edumon/EdumonAnaGasControl.tsx` — TOF measurement derived from neuromuscular state.
 - `src/edumon/EdumonCapnographySurface.tsx` — capnogram shape derived from respiratory mechanics.
 - `supabase/migrations/` — persistent action definitions.

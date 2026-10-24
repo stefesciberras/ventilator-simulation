@@ -27,6 +27,7 @@ let activeEffects: ActiveEffect[] = []
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 const normaliseIntensity = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 1
+const releaseBehaviour = (active: ActiveEffect) => active.effect.releaseBehaviour ?? 'recover'
 
 function effectLifetime(effect: EdusimActionEffect): number {
   return Math.max(0, effect.onsetSeconds) + Math.max(0, effect.durationSeconds) + Math.max(0, effect.recoverySeconds)
@@ -38,6 +39,7 @@ export function setActionRuntimeSimulationTime(value: number): void {
   activeEffects = activeEffects.filter((active) => {
     if (active.mode === 'toggle') {
       if (active.stoppedAtSimulationTime == null) return true
+      if (releaseBehaviour(active) === 'persist') return true
       return simulationTime <= active.stoppedAtSimulationTime + Math.max(0, active.effect.recoverySeconds)
     }
     return simulationTime <= active.startedAtSimulationTime + effectLifetime(active.effect)
@@ -60,9 +62,11 @@ export function actionEffectWeight(active: ActiveEffect, atSimulationTime = simu
     const stop = active.stoppedAtSimulationTime
     if (stop == null || atSimulationTime <= stop) return runningToggleWeight(active, atSimulationTime)
 
+    const weightAtStop = runningToggleWeight(active, stop)
+    if (releaseBehaviour(active) === 'persist') return weightAtStop
+
     const recovery = Math.max(0, active.effect.recoverySeconds)
     if (recovery <= 0) return 0
-    const weightAtStop = runningToggleWeight(active, stop)
     return weightAtStop * clamp01(1 - ((atSimulationTime - stop) / recovery))
   }
 
@@ -118,6 +122,17 @@ export function deactivateAction(actionId: string): void {
   activeEffects = activeEffects.map((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null
     ? { ...active, stoppedAtSimulationTime: simulationTime }
     : active)
+}
+
+/**
+ * Instructor ownership of a physiological target wins over active modifiers.
+ * Removing only this target leaves the other effects of the same action running.
+ * The caller should commit the currently selected physiological value to patient state.
+ */
+export function supersedeActionTarget(target: EdusimActionEffectTarget): number {
+  const before = activeEffects.length
+  activeEffects = activeEffects.filter((active) => active.effect.target !== target)
+  return before - activeEffects.length
 }
 
 export function clearActionRuntime(): void {

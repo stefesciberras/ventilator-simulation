@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type AnaestheticDepth, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
 import { applyAnaestheticDepthEffects, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import { applyEdumonActionPhysiology } from './actionPhysiology'
-import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
+import { getActionRuntimeSimulationTime, supersedeActionTarget } from '../edusim/actions/ActionRuntime'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
 import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
@@ -78,6 +78,8 @@ export function EdumonWorkspacePanel({
   const applyProfile = (nextProfile: EdumonPatientProfile) => {
     if (controlsLocked) return
     setProfile(nextProfile)
+    supersedeActionTarget('haemodynamics.heartRate')
+    supersedeActionTarget('haemodynamics.meanArterialPressure')
     onPatientStateChange({
       ...EDUMON_PATIENT_PROFILES[nextProfile],
       respiratory: patientState.respiratory,
@@ -88,12 +90,13 @@ export function EdumonWorkspacePanel({
 
   const updateRhythm = (rhythm: MonitorPatientState['rhythm']) => {
     if (controlsLocked) return
-    let heartRate = patientState.heartRate
+    let heartRate = modelledPatientState.heartRate
     if (rhythm === 'sinus-bradycardia' && heartRate >= 60) heartRate = 48
     if (rhythm === 'sinus-tachycardia' && heartRate <= 100) heartRate = 125
     if (rhythm === 'svt' && heartRate < 140) heartRate = 180
     if (rhythm === 'ventricular-tachycardia' && heartRate < 110) heartRate = 160
     if (rhythm === 'sinus' && (heartRate < 60 || heartRate > 100)) heartRate = 78
+    supersedeActionTarget('haemodynamics.heartRate')
     onPatientStateChange({ ...patientState, rhythm, heartRate })
   }
 
@@ -117,26 +120,18 @@ export function EdumonWorkspacePanel({
   const updateModelledHeartRate = (value: number) => {
     if (controlsLocked) return
     const desired = clamp(value, 30, 220)
-    const delta = desired - modelledPatientState.heartRate
-    updatePatient({ heartRate: clamp(patientState.heartRate + delta, 0, 300) })
+    supersedeActionTarget('haemodynamics.heartRate')
+    updatePatient({ heartRate: desired })
   }
 
   const updateModelledRespiratoryRate = (value: number) => {
     if (controlsLocked) return
     const desired = clamp(value, 0, 40)
-    const currentEffective = modelledRespiratory.spontaneousRespiratoryRate
-    const baseRate = respiratory.spontaneousRespiratoryRate
-    if (baseRate > 0 && currentEffective > 0) {
-      const effectiveScale = currentEffective / baseRate
-      updateRespiratory({ spontaneousRespiratoryRate: clamp(desired / effectiveScale, 0, 80) })
-      return
-    }
-    if (currentEffective > 0) {
-      updateRespiratory({ spontaneousRespiratoryRate: clamp(baseRate + desired - currentEffective, 0, 80) })
-      return
-    }
-    // A hard action such as Apnoea deliberately owns respiratory drive while active.
-    // Keep the underlying instructor baseline intact so it returns correctly when the action is released.
+    supersedeActionTarget('respiration.drive')
+    updateRespiratory({
+      spontaneousRespiratoryRate: desired,
+      respiratoryRate: respiratory.ventilatorMode === 'MANUAL' || respiratory.ventilatorMode === 'PSV' ? desired : respiratory.respiratoryRate,
+    })
   }
 
   const updateAnaestheticSensitivity = (value: number) => {
@@ -159,22 +154,22 @@ export function EdumonWorkspacePanel({
   const updateSystolicPressure = (value: number) => {
     if (controlsLocked) return
     const desired = clamp(value, 40, 220)
-    const delta = desired - modelledPatientState.systolicPressure
-    let systolicPressure = clamp(patientState.systolicPressure + delta, 40, 220)
-    let diastolicPressure = patientState.diastolicPressure
-    if (pressuresCoupled) diastolicPressure = clamp(patientState.diastolicPressure + delta * 0.3, 20, 140)
+    let systolicPressure = desired
+    let diastolicPressure = modelledPatientState.diastolicPressure
+    if (pressuresCoupled) diastolicPressure = clamp(modelledPatientState.diastolicPressure + (desired - modelledPatientState.systolicPressure) * 0.3, 20, 140)
     if (systolicPressure <= diastolicPressure) systolicPressure = Math.min(220, diastolicPressure + 1)
+    supersedeActionTarget('haemodynamics.meanArterialPressure')
     onPatientStateChange({ ...patientState, systolicPressure, diastolicPressure })
   }
 
   const updateDiastolicPressure = (value: number) => {
     if (controlsLocked) return
     const desired = clamp(value, 20, 140)
-    const delta = desired - modelledPatientState.diastolicPressure
-    let diastolicPressure = clamp(patientState.diastolicPressure + delta, 20, 140)
-    let systolicPressure = patientState.systolicPressure
-    if (pressuresCoupled) systolicPressure = clamp(patientState.systolicPressure + delta * 0.3, 40, 220)
+    let diastolicPressure = desired
+    let systolicPressure = modelledPatientState.systolicPressure
+    if (pressuresCoupled) systolicPressure = clamp(modelledPatientState.systolicPressure + (desired - modelledPatientState.diastolicPressure) * 0.3, 40, 220)
     if (diastolicPressure >= systolicPressure) diastolicPressure = Math.max(20, systolicPressure - 1)
+    supersedeActionTarget('haemodynamics.meanArterialPressure')
     onPatientStateChange({ ...patientState, systolicPressure, diastolicPressure })
   }
 
@@ -271,13 +266,7 @@ export function EdumonWorkspacePanel({
       label: 'TEACHING',
       content: (
         <div className="edumon-side-teaching">
-          <EdumonTeachingLibraries
-            host={teachingHost}
-            role={teachingRole}
-            sessionId={teachingSessionId}
-            candidateCount={candidateCount}
-            sessionPanel={sessionPanel}
-          />
+          <EdumonTeachingLibraries host={teachingHost} role={teachingRole} sessionId={teachingSessionId} candidateCount={candidateCount} sessionPanel={sessionPanel} />
         </div>
       ),
     },
@@ -289,11 +278,7 @@ export function EdumonWorkspacePanel({
       <EdumonCapnographySurface patientState={patientState} />
       <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} disabled={controlsLocked} />
       {teachingHost.appId === 'edumon-ana' && (
-        <EdumonAnaGasControl
-          patientState={patientState}
-          onPatientStateChange={onPatientStateChange}
-          sideControlsLocked={controlsLocked}
-        />
+        <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={controlsLocked} />
       )}
       <SimulationControlFramework
         activeTab={tab}
