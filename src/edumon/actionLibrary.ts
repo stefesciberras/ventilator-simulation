@@ -44,7 +44,6 @@ function normalise(row: Record<string, unknown>): EdusimActionDefinition {
 }
 
 export async function listEdusimActions(environment?: EdusimActionEnvironment): Promise<EdusimActionDefinition[]> {
-  await requireInstructorAccount()
   let query = supabase.from('edusim_action_definitions').select(selectColumns).order('kind').order('sort_order').order('name')
   if (environment) query = query.contains('environments', [environment])
   const { data, error } = await query
