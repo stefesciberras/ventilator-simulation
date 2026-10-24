@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { latestEdumonRespiratoryOutput, resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
-import { depthFromMac, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { applyAnaestheticDepthEffects, depthFromMac, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import {
   DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS,
   type AnaestheticDepth,
@@ -128,13 +128,7 @@ export function EdumonAnaGasControl({
         if (lastAutoDepthRef.current !== nextDepth) {
           lastAutoDepthRef.current = nextDepth
           if (physiology.depthOfAnaesthesia !== nextDepth) {
-            const nextState: MonitorPatientState = {
-              ...current,
-              anaestheticPhysiology: {
-                ...physiology,
-                depthOfAnaesthesia: nextDepth,
-              },
-            }
+            const nextState = applyAnaestheticDepthEffects(current, nextDepth, physiology.anaestheticResponse)
             patientRef.current = nextState
             onPatientStateChange(nextState)
           }
@@ -179,13 +173,11 @@ export function EdumonAnaGasControl({
   const updateAnaestheticResponse = (value: number) => {
     const current = patientRef.current
     const physiology = resolvedAnaestheticPhysiology(current)
-    const nextState: MonitorPatientState = {
-      ...current,
-      anaestheticPhysiology: {
-        ...physiology,
-        anaestheticResponse: clamp(value, -1, 1),
-      },
-    }
+    const nextState = applyAnaestheticDepthEffects(
+      current,
+      physiology.depthOfAnaesthesia,
+      clamp(value, -1, 1),
+    )
     patientRef.current = nextState
     onPatientStateChange(nextState)
   }
