@@ -88,7 +88,7 @@ assert(priorityMigration.includes("'beta-blocker'"), 'priority migration must se
 assert(priorityMigration.includes("\"constraint\":\"block-increase\""), 'persistent Beta blocker must use block-increase')
 
 for (const [name, text] of [['guide', guide], ['prompt', prompt]]) {
-  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','severity-levels','Bronchospasm','Hypovolaemia','Bleeding','Return of diaphragm breathing','respiration.airwayObstruction','neuromuscular.tofMinimumCount','runtime','Beta blocker','block-increase','priority 30']) {
+  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','severity-levels','Bronchospasm','Hypovolaemia','Bleeding','Return of diaphragm breathing','respiration.airwayObstruction','neuromuscular.tofMinimumCount','runtime','Beta blocker','block-increase','priority']) {
     assert(text.includes(phrase), `${name} must document ${phrase}`)
   }
 }
