@@ -207,6 +207,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       ...currentRespiratory,
       respiratoryRate: effective.respiratoryRate,
       tidalVolumeMl: effective.tidalVolumeMl,
+      ventilatorMode: next.mode,
       peepCmH2O: next.peep,
       fio2: next.fio2 / 100,
     }
@@ -218,6 +219,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     if (
       Math.abs(effective.respiratoryRate - respiratory.respiratoryRate) > 0.001
       || Math.abs(effective.tidalVolumeMl - respiratory.tidalVolumeMl) > 0.001
+      || respiratory.ventilatorMode !== ventilator.mode
     ) {
       publishRespiratory(ventilator)
     }
