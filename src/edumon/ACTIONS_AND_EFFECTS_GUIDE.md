@@ -45,14 +45,14 @@ This is defined per effect, not per action, so one action may recover one target
 
 ## Priority and constraints
 
-EDUMON now resolves competing effects on the same target by **priority**. This is deliberately separate from action intensity and release behaviour.
+EDUMON resolves competing effects on the same target by **priority**. This is deliberately separate from action intensity and release behaviour.
 
 - Ordinary actions default to priority **30**.
 - `public.edusim_action_definitions.priority` stores the action's default priority.
 - An individual effect may optionally specify a JSON `priority`; this overrides the action default for that effect only.
 - Lower priority effects resolve first; higher priority effects resolve later and can constrain or override the lower-priority result.
 - At the same priority, ordinary numerical modifiers resolve before a `constraint`, so the constraint wins at that level.
-- A still-higher-priority ordinary effect may act after a lower-priority constraint. This allows future explicit rescue/dominant physiology without hard-coding action names.
+- A still-higher-priority ordinary effect may act after a lower-priority constraint.
 - Manual instructor intervention is **outside and above** this numerical priority system. `supersedeActionTarget(...)` removes action ownership of that target and commits the instructor-selected value.
 
 Priority is therefore not a universal "winner takes all" switch. It defines target-resolution order. Multi-target actions can retain different effects independently and may use different per-effect priorities.
@@ -62,25 +62,29 @@ Priority is therefore not a universal "winner takes all" switch. It defines targ
 The `constraint` operation represents a physiological limit rather than an additive drug/event effect. Current constraint types are:
 
 - `block-increase` — progressively removes positive deviation above the current patient reference value.
-- `block-decrease` — progressively removes negative deviation below the current patient reference value.
+- `block-decrease` — progressively removes negative deviation below the reference/base value.
 - `minimum` — prevents the resolved value falling below the constraint value.
 - `maximum` — prevents the resolved value rising above the constraint value.
 
-Constraint strength follows the normal onset/recovery weight and intensity. This allows a constraint to develop and recover rather than switching instantaneously unless its timing is configured that way.
+Constraint strength follows the normal onset/recovery weight and intensity.
 
 ### Beta blocker example
 
-`Beta blocker` is a cardiovascular **Drug** toggle available to both EDUMON-Ana and EDUMON-ICU. It has priority **70** and applies a `block-increase` constraint to `haemodynamics.heartRate`.
+`Beta blocker` is a cardiovascular **Drug** toggle available to both EDUMON-Ana and EDUMON-ICU. It has priority **70** and now has three HR effects, all with 10-second onset and 30-second recovery:
 
-Example:
+- HR `offset` **−15 bpm** — produces modest direct bradycardia.
+- HR `block-increase` constraint — suppresses lower-priority positive chronotropic responses.
+- HR `minimum` constraint at **50 bpm** — prevents the beta-blocker action and lower-priority HR effects from taking the resolved HR below 50 while the constraint is fully active.
 
-- Patient HR 70, MAP normal.
-- Hypovolaemia (priority 30) attempts MAP −20 and HR +15.
-- Beta blocker (priority 70) suppresses the positive HR deviation, so HR remains approximately at the patient's reference HR while the hypotension remains.
-- It does **not** create bradycardia: a pre-existing lower-priority negative HR effect is not removed by `block-increase`.
-- If the instructor manually sets HR to 95, manual target ownership supersedes both the beta-blocker constraint and other active HR effects; unrelated MAP effects remain active.
+Examples:
 
-This pattern is intended for future dominant physiological states such as conduction disease, pacing, receptor blockade and other target-specific interactions. Rhythm remains a separate higher-order physiological concept in `monitorEngine.ts`; do not use ordinary HR offsets to simulate VF/asystole.
+- Patient HR 80 with no competing effects: Beta blocker resolves toward about 65 bpm.
+- Patient HR 55: the −15 bpm offset would request 40, but the 50 bpm minimum constraint limits the resolved HR to about 50.
+- Patient HR 70 with Hypovolaemia: Hypovolaemia still lowers MAP and attempts HR +15; Beta blocker then applies its own −15 bpm effect and suppresses the lower-priority positive chronotropic deviation, while the hypotension remains.
+- A lower-priority bradycardic effect may contribute, but the beta-blocker minimum constraint prevents the final resolved HR dropping below 50.
+- If the instructor manually changes HR, manual target ownership supersedes all Beta blocker HR effects and all other active HR effects; unrelated targets remain active.
+
+The 50 bpm floor is a teaching-model constraint, not a claim that beta-blocked patients cannot become more bradycardic from dominant conduction disease or other future higher-priority physiology. Such states should use a higher-priority effect or rhythm/conduction model.
 
 ## Long-press levels
 
@@ -139,7 +143,7 @@ A toggle event with `severity-levels`. The current surrogate produces a somewhat
 ## Cardiovascular Drugs
 
 ### Beta blocker
-A priority-70 toggle constraint that suppresses lower-priority positive chronotropic responses without directly applying a negative HR offset.
+A priority-70 toggle with a −15 bpm HR offset, a `block-increase` constraint and a 50 bpm `minimum` constraint. It therefore produces modest bradycardia, suppresses lower-priority tachycardic responses and applies a floor at 50 bpm unless a higher-priority physiological state or manual instructor control supersedes it.
 
 ## Respiratory Events
 
