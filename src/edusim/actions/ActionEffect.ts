@@ -4,6 +4,7 @@ export const EDUSIM_ACTION_EFFECT_OPERATIONS = [
   'multiplier',
   'target',
   'increment',
+  'constraint',
   'trigger',
 ] as const
 
@@ -11,6 +12,11 @@ export type EdusimActionEffectOperation = typeof EDUSIM_ACTION_EFFECT_OPERATIONS
 
 export const EDUSIM_ACTION_EFFECT_RELEASE_BEHAVIOURS = ['recover', 'persist'] as const
 export type EdusimActionEffectReleaseBehaviour = typeof EDUSIM_ACTION_EFFECT_RELEASE_BEHAVIOURS[number]
+
+export const EDUSIM_ACTION_EFFECT_CONSTRAINTS = ['block-increase', 'block-decrease', 'minimum', 'maximum'] as const
+export type EdusimActionEffectConstraint = typeof EDUSIM_ACTION_EFFECT_CONSTRAINTS[number]
+
+export const DEFAULT_EDUSIM_ACTION_PRIORITY = 30
 
 export type EdusimActionEffectTarget =
   | 'haemodynamics.heartRate'
@@ -31,15 +37,15 @@ export interface EdusimActionEffectTargetDefinition {
 }
 
 export const EDUSIM_ACTION_EFFECT_TARGETS: readonly EdusimActionEffectTargetDefinition[] = [
-  { id: 'haemodynamics.heartRate', label: 'Heart rate', unit: 'bpm', allowedOperations: ['offset', 'set', 'target', 'increment'] },
-  { id: 'haemodynamics.meanArterialPressure', label: 'Mean arterial pressure', unit: 'mmHg', allowedOperations: ['offset', 'set', 'target', 'increment'] },
-  { id: 'respiration.drive', label: 'Respiratory drive', allowedOperations: ['multiplier', 'set', 'target', 'increment'] },
-  { id: 'respiration.airwayObstruction', label: 'Airway obstruction', unit: '0–1', allowedOperations: ['offset', 'set', 'target', 'increment'] },
-  { id: 'neuromuscular.block', label: 'Neuromuscular block', unit: '0–1', allowedOperations: ['target', 'set', 'offset', 'increment'] },
-  { id: 'neuromuscular.tofMinimumCount', label: 'TOF minimum count', unit: '0–4', allowedOperations: ['target', 'set', 'offset', 'increment'] },
-  { id: 'anaesthesia.hypnoticEffect', label: 'Hypnotic effect', allowedOperations: ['offset', 'multiplier', 'target', 'increment'] },
-  { id: 'anaesthesia.nociceptiveResponse', label: 'Nociceptive response', allowedOperations: ['multiplier', 'offset', 'target', 'increment'] },
-  { id: 'stimulus.sympathetic', label: 'Sympathetic stimulus', allowedOperations: ['trigger', 'offset', 'target', 'increment'] },
+  { id: 'haemodynamics.heartRate', label: 'Heart rate', unit: 'bpm', allowedOperations: ['offset', 'set', 'target', 'increment', 'constraint'] },
+  { id: 'haemodynamics.meanArterialPressure', label: 'Mean arterial pressure', unit: 'mmHg', allowedOperations: ['offset', 'set', 'target', 'increment', 'constraint'] },
+  { id: 'respiration.drive', label: 'Respiratory drive', allowedOperations: ['multiplier', 'set', 'target', 'increment', 'constraint'] },
+  { id: 'respiration.airwayObstruction', label: 'Airway obstruction', unit: '0–1', allowedOperations: ['offset', 'set', 'target', 'increment', 'constraint'] },
+  { id: 'neuromuscular.block', label: 'Neuromuscular block', unit: '0–1', allowedOperations: ['target', 'set', 'offset', 'increment', 'constraint'] },
+  { id: 'neuromuscular.tofMinimumCount', label: 'TOF minimum count', unit: '0–4', allowedOperations: ['target', 'set', 'offset', 'increment', 'constraint'] },
+  { id: 'anaesthesia.hypnoticEffect', label: 'Hypnotic effect', allowedOperations: ['offset', 'multiplier', 'target', 'increment', 'constraint'] },
+  { id: 'anaesthesia.nociceptiveResponse', label: 'Nociceptive response', allowedOperations: ['multiplier', 'offset', 'target', 'increment', 'constraint'] },
+  { id: 'stimulus.sympathetic', label: 'Sympathetic stimulus', allowedOperations: ['trigger', 'offset', 'target', 'increment', 'constraint'] },
 ]
 
 export interface EdusimActionEffect {
@@ -50,6 +56,10 @@ export interface EdusimActionEffect {
   onsetSeconds: number
   durationSeconds: number
   recoverySeconds: number
+  /** Higher priority effects are resolved after lower priority effects. */
+  priority?: number
+  /** Required when operation is constraint. */
+  constraint?: EdusimActionEffectConstraint
   /** What happens to this target when a toggle action is stopped. Defaults to recover. */
   releaseBehaviour?: EdusimActionEffectReleaseBehaviour
 }
@@ -57,6 +67,7 @@ export interface EdusimActionEffect {
 const targetIds = new Set<EdusimActionEffectTarget>(EDUSIM_ACTION_EFFECT_TARGETS.map((target) => target.id))
 const operationIds = new Set<EdusimActionEffectOperation>(EDUSIM_ACTION_EFFECT_OPERATIONS)
 const releaseBehaviourIds = new Set<EdusimActionEffectReleaseBehaviour>(EDUSIM_ACTION_EFFECT_RELEASE_BEHAVIOURS)
+const constraintIds = new Set<EdusimActionEffectConstraint>(EDUSIM_ACTION_EFFECT_CONSTRAINTS)
 
 export function isEdusimActionEffectTarget(value: unknown): value is EdusimActionEffectTarget {
   return typeof value === 'string' && targetIds.has(value as EdusimActionEffectTarget)
@@ -68,6 +79,10 @@ export function isEdusimActionEffectOperation(value: unknown): value is EdusimAc
 
 export function isEdusimActionEffectReleaseBehaviour(value: unknown): value is EdusimActionEffectReleaseBehaviour {
   return typeof value === 'string' && releaseBehaviourIds.has(value as EdusimActionEffectReleaseBehaviour)
+}
+
+export function isEdusimActionEffectConstraint(value: unknown): value is EdusimActionEffectConstraint {
+  return typeof value === 'string' && constraintIds.has(value as EdusimActionEffectConstraint)
 }
 
 export function getEdusimActionEffectTargetDefinition(target: EdusimActionEffectTarget): EdusimActionEffectTargetDefinition {
@@ -84,6 +99,9 @@ export function normaliseEdusimActionEffects(value: unknown): EdusimActionEffect
 
     const numericValue = Number(row.value)
     if (!Number.isFinite(numericValue)) return []
+    const priority = Number(row.priority)
+    const constraint = isEdusimActionEffectConstraint(row.constraint) ? row.constraint : undefined
+    if (row.operation === 'constraint' && !constraint) return []
 
     return [{
       id: typeof row.id === 'string' && row.id.trim() ? row.id.trim() : `effect-${index + 1}`,
@@ -93,6 +111,8 @@ export function normaliseEdusimActionEffects(value: unknown): EdusimActionEffect
       onsetSeconds: Math.max(0, Number(row.onsetSeconds) || 0),
       durationSeconds: Math.max(0, Number(row.durationSeconds) || 0),
       recoverySeconds: Math.max(0, Number(row.recoverySeconds) || 0),
+      priority: Number.isFinite(priority) ? priority : undefined,
+      constraint,
       releaseBehaviour: isEdusimActionEffectReleaseBehaviour(row.releaseBehaviour) ? row.releaseBehaviour : 'recover',
     }]
   })
