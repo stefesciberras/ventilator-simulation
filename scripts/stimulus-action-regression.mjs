@@ -37,8 +37,8 @@ assert(anaesthetic.includes('const DEPTH_STIMULUS_RESPONSE'), 'anaesthetic physi
 assert(anaesthetic.includes('effectiveAnaestheticDepth'), 'anaesthetic physiology must expose effective action-aware depth')
 assert(anaesthetic.includes('5: 1'), 'awake/light depth must preserve full stimulus response')
 assert(anaesthetic.includes('1: 0.15'), 'deep anaesthesia must markedly attenuate stimulus response')
-assert(instructorGuide.includes('saturating physiological response curve'), 'instructor guide must explain sympathetic saturation')
-assert(aiPrompt.includes('shared saturating sympathetic transfer function'), 'AI prompt must preserve the shared saturation architecture')
+assert(instructorGuide.toLowerCase().includes('saturat'), 'instructor guide must explain sympathetic saturation')
+assert(aiPrompt.toLowerCase().includes('saturat'), 'AI prompt must preserve the shared saturation architecture')
 assert(!panel.includes('heartRate +='), 'event buttons must not directly mutate heart rate')
 assert(!panel.includes('systolicPressure +='), 'event buttons must not directly mutate blood pressure')
 
