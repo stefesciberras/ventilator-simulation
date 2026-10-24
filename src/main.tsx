@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { EdusimLanding } from './EdusimLanding'
 import { EduventApp } from './eduvent/EduventApp'
 import { ScenarioBuilderApp } from './scenario-builder/ScenarioBuilderApp'
+import { ActionEditorApp } from './action-editor/ActionEditorApp'
 import { EdumonApp } from './edumon/EdumonApp'
 import { installTabletResponsiveMode } from './tabletResponsiveRuntime'
 import { installSelfDirectedScenarioPanelDrag } from './selfDirectedScenarioPanel'
@@ -25,6 +26,7 @@ const isLandingRoute = pathname === '/'
 const isEduventRoute = pathname === '/eduvent' || pathname.startsWith('/eduvent/')
 const isEdumonRoute = pathname === '/edumon' || pathname.startsWith('/edumon/')
 const isScenarioBuilderRoute = pathname === '/scenarios' || pathname.startsWith('/scenarios/')
+const isActionEditorRoute = pathname === '/actions' || pathname.startsWith('/actions/')
 
 if (isEduventRoute || isEdumonRoute) {
   installTabletResponsiveMode()
@@ -32,6 +34,7 @@ if (isEduventRoute || isEdumonRoute) {
 }
 
 function RoutedApp() {
+  if (isActionEditorRoute) return <ActionEditorApp />
   if (isScenarioBuilderRoute) return <ScenarioBuilderApp />
   if (isEdumonRoute) return <EdumonApp />
   if (isEduventRoute) return <EduventApp />
