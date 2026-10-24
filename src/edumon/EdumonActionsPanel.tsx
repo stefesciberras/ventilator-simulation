@@ -65,8 +65,10 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     { id: 'adrenaline-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 15, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 45 },
     { id: 'adrenaline-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 15, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 45 },
   ], sort_order: 150, created_at: '', updated_at: '' },
-  { id: 'beta-blocker', kind: 'drug', name: 'Beta blocker', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Simulate clinically significant beta blockade: suppresses positive chronotropic responses from lower-priority effects while leaving other targets intact.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [
+  { id: 'beta-blocker', kind: 'drug', name: 'Beta blocker', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Simulate clinically significant beta blockade: modestly lowers heart rate, suppresses lower-priority positive chronotropic responses, and maintains a 50 bpm floor.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [
+    { id: 'beta-blocker-heart-rate-offset', target: 'haemodynamics.heartRate', operation: 'offset', value: -15, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
     { id: 'beta-blocker-positive-chronotropy', target: 'haemodynamics.heartRate', operation: 'constraint', constraint: 'block-increase', value: 0, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
+    { id: 'beta-blocker-heart-rate-floor', target: 'haemodynamics.heartRate', operation: 'constraint', constraint: 'minimum', value: 50, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
   ], priority: 70, sort_order: 160, created_at: '', updated_at: '' },
 
   { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
