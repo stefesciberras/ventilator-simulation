@@ -15,6 +15,8 @@ export type EcgMorphology =
   | 'infarction'
   | 'hyperkalaemia'
 
+export type MonitorVentilationMode = 'MANUAL' | 'VC-AC' | 'PC-AC' | 'PSV' | 'SIMV-VC' | 'SIMV-PC' | 'VG-PC'
+
 export interface MonitorRespiratorySettings {
   /** Effective respiratory rate used by gas exchange/capnography after ventilator + patient interaction. */
   respiratoryRate: number
@@ -24,6 +26,8 @@ export interface MonitorRespiratorySettings {
   spontaneousRespiratoryRate: number
   /** Simplified spontaneous tidal volume used in Manual mode. Not exposed as a routine control. */
   spontaneousTidalVolumeMl: number
+  /** Current EDUMON ventilation mode. Older scenarios omit this and are treated as Manual/spontaneous. */
+  ventilatorMode?: MonitorVentilationMode
   deadSpaceMl: number
   fio2: number
   peepCmH2O: number
