@@ -28,6 +28,12 @@ These subclasses are presentation/taxonomy. The underlying rows remain ordinary 
 
 All timing uses simulation time.
 
+### Toggle UI state
+
+For toggle actions, `ActionRuntime` is the source of truth for whether the action is ON. The ACTIONS panel must derive the coloured/pressed state from currently running toggle `ActiveEffect` instances, rather than keeping a separate component-local boolean set. This means an active Bradycardia, Surgery, infusion, Apnoea, Bronchospasm, etc. remains visibly active after changing tabs/views and returning to ACTIONS.
+
+For adjustable toggles, the active L/M/H badge is reconstructed from the running effect's `intensity`. The most recently selected inactive level is retained separately only as the instructor's next-start preference; it does not determine whether an action is active.
+
 ### Release behaviour
 
 Each effect may define `releaseBehaviour`:
@@ -122,7 +128,7 @@ Changing existing magnitudes/timings/group members is usually data work. New phy
 
 - `src/edusim/actions/ActionEffect.ts` — validated targets/operations and `recover | persist` release vocabulary.
 - `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, toggles, release behaviour, intensity and target supersession.
-- `src/edumon/EdumonActionsPanel.tsx` — grouping and generic dose/severity UI.
+- `src/edumon/EdumonActionsPanel.tsx` — grouping, generic dose/severity UI, and runtime-derived toggle/level display state.
 - `src/edumon/actionPhysiology.ts` — haemodynamic, respiratory obstruction and TOF-related interpretation.
 - `src/edumon/EdumonWorkspacePanel.tsx` — projects current modelled physiology into instructor sliders; direct edits supersede the corresponding action target and commit the selected current value.
 - `src/edumon/monitorEngine.ts` — rhythm-specific effective ventricular-rate constraints and waveform/measurement generation.
