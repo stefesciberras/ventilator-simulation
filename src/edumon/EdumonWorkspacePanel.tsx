@@ -8,6 +8,7 @@ import { EdumonNibpControl } from './EdumonNibpControl'
 import { EdumonCapnographySurface } from './EdumonCapnographySurface'
 import { EdumonAnaGasControl } from './EdumonAnaGasControl'
 import { EdumonVentilatorControl } from './EdumonVentilatorControl'
+import { EdumonActionsPanel } from './EdumonActionsPanel'
 import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
 import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
 import './edumon-rhythm-control.css'
@@ -161,7 +162,7 @@ export function EdumonWorkspacePanel({
   }))
 
   const tabs: Array<SimulationControlTabDefinition<EdumonControlTab>> = [
-    { id: 'actions', label: 'ACTIONS', content: <div className="edumon-empty-actions" aria-label="Actions" /> },
+    { id: 'actions', label: 'ACTIONS', content: <EdumonActionsPanel /> },
     {
       id: 'patient',
       label: 'PATIENT',
