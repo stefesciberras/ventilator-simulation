@@ -10,6 +10,7 @@ export interface ActiveEffect {
   instanceId: string
   actionId: string
   mode: 'momentary' | 'toggle'
+  intensity: number
   effect: EdusimActionEffect
   startedAtSimulationTime: number
   stoppedAtSimulationTime?: number
@@ -25,6 +26,7 @@ let sequence = 0
 let activeEffects: ActiveEffect[] = []
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
+const normaliseIntensity = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 1
 
 function effectLifetime(effect: EdusimActionEffect): number {
   return Math.max(0, effect.onsetSeconds) + Math.max(0, effect.durationSeconds) + Math.max(0, effect.recoverySeconds)
@@ -76,7 +78,11 @@ export function actionEffectWeight(active: ActiveEffect, atSimulationTime = simu
   return clamp01(1 - (afterOnset - duration) / recovery)
 }
 
-export function activateAction(definition: EdusimActionRuntimeDefinition, atSimulationTime = simulationTime): ActiveEffect[] {
+export function activateAction(
+  definition: EdusimActionRuntimeDefinition,
+  atSimulationTime = simulationTime,
+  intensity = 1,
+): ActiveEffect[] {
   setActionRuntimeSimulationTime(atSimulationTime)
 
   if (definition.short_press_action === 'toggle') {
@@ -93,11 +99,19 @@ export function activateAction(definition: EdusimActionRuntimeDefinition, atSimu
     instanceId: `${definition.id}:${effect.id}:${++sequence}`,
     actionId: definition.id,
     mode: definition.short_press_action,
+    intensity: normaliseIntensity(intensity),
     effect,
     startedAtSimulationTime: atSimulationTime,
   }))
   activeEffects = [...activeEffects, ...created]
   return created
+}
+
+export function setActionIntensity(actionId: string, intensity: number): void {
+  const nextIntensity = normaliseIntensity(intensity)
+  activeEffects = activeEffects.map((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null
+    ? { ...active, intensity: nextIntensity }
+    : active)
 }
 
 export function deactivateAction(actionId: string): void {
@@ -133,18 +147,19 @@ export function resolveNumericActionEffect(
   for (const active of candidates) {
     const weight = actionEffectWeight(active, atSimulationTime)
     if (weight <= 0) continue
+    const intensity = normaliseIntensity(active.intensity)
     const effect = active.effect
     switch (effect.operation) {
       case 'offset':
       case 'increment':
-        value += effect.value * weight
+        value += effect.value * weight * intensity
         break
       case 'multiplier':
-        value *= 1 + (effect.value - 1) * weight
+        value *= 1 + (effect.value - 1) * weight * intensity
         break
       case 'target':
       case 'set':
-        value += (effect.value - value) * weight
+        value += (effect.value - value) * clamp01(weight * intensity)
         break
       case 'trigger':
         break
