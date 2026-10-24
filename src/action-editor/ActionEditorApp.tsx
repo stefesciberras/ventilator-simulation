@@ -17,9 +17,12 @@ import {
   type EdusimShortPressAction,
 } from '../edumon/actionLibrary'
 import {
+  DEFAULT_EDUSIM_ACTION_PRIORITY,
+  EDUSIM_ACTION_EFFECT_CONSTRAINTS,
   EDUSIM_ACTION_EFFECT_TARGETS,
   getEdusimActionEffectTargetDefinition,
   type EdusimActionEffect,
+  type EdusimActionEffectConstraint,
   type EdusimActionEffectOperation,
   type EdusimActionEffectTarget,
 } from '../edusim/actions/ActionEffect'
@@ -35,6 +38,7 @@ const emptyDraft = (): EdusimActionDraft => ({
   description: '',
   setting: 'ana',
   effects: [],
+  priority: DEFAULT_EDUSIM_ACTION_PRIORITY,
   sort_order: 0,
 })
 
@@ -49,6 +53,7 @@ function toDraft(action: EdusimActionDefinition): EdusimActionDraft {
     description: action.description,
     setting: action.setting,
     effects: action.effects.map((effect) => ({ ...effect })),
+    priority: action.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY,
     sort_order: action.sort_order,
   }
 }
@@ -68,6 +73,15 @@ function createEffect(): EdusimActionEffect {
     onsetSeconds: 0,
     durationSeconds: 0,
     recoverySeconds: 0,
+  }
+}
+
+const constraintLabel = (constraint: EdusimActionEffectConstraint): string => {
+  switch (constraint) {
+    case 'block-increase': return 'Block increase above reference'
+    case 'block-decrease': return 'Block decrease below reference'
+    case 'minimum': return 'Minimum value'
+    case 'maximum': return 'Maximum value'
   }
 }
 
@@ -170,6 +184,13 @@ export function ActionEditorApp() {
     updateEffect(effect.id, { target, operation })
   }
 
+  const changeEffectOperation = (effect: EdusimActionEffect, operation: EdusimActionEffectOperation) => {
+    updateEffect(effect.id, {
+      operation,
+      constraint: operation === 'constraint' ? (effect.constraint ?? 'block-increase') : undefined,
+    })
+  }
+
   const removeEffect = (effectId: string) => {
     setDraft((current) => ({ ...current, effects: current.effects.filter((effect) => effect.id !== effectId) }))
   }
@@ -244,7 +265,7 @@ export function ActionEditorApp() {
                 <h2>{kind === 'drug' ? 'Drugs' : 'Events'}</h2>
                 {actions.filter((action) => action.kind === kind).map((action) => (
                   <button key={action.id} type="button" className={selectedId === action.id ? 'selected' : ''} onClick={() => setSelectedId(action.id)}>
-                    <strong>{action.name}</strong><small>{action.id} · {action.short_press_action} · {action.setting.toUpperCase()}</small>
+                    <strong>{action.name}</strong><small>{action.id} · {action.short_press_action} · {action.setting.toUpperCase()} · P{action.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY}</small>
                   </button>
                 ))}
               </div>
@@ -265,6 +286,7 @@ export function ActionEditorApp() {
               <label><span>Short press</span><select value={draft.short_press_action} onChange={(event) => setDraft({ ...draft, short_press_action: event.target.value as EdusimShortPressAction })}><option value="momentary">Momentary</option><option value="toggle">Toggle</option></select></label>
               <label><span>Long press</span><input value="Not configured yet" disabled /></label>
               <label><span>Duration of action</span><div className="action-editor-number"><input type="number" min="0" step="0.1" value={draft.duration_seconds} onChange={(event) => setDraft({ ...draft, duration_seconds: Math.max(0, Number(event.target.value) || 0) })} /><small>seconds</small></div></label>
+              <label><span>Priority</span><input type="number" step="1" value={draft.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY} onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) || 0 })} /><small>Higher resolves later; ordinary default is 30</small></label>
               <label><span>Order</span><input type="number" step="1" value={draft.sort_order} onChange={(event) => setDraft({ ...draft, sort_order: Number(event.target.value) || 0 })} /></label>
             </div>
 
@@ -275,7 +297,7 @@ export function ActionEditorApp() {
                 <div>
                   <span>Effects</span>
                   <h3>Declarative physiological effects</h3>
-                  <p>Effects are interpreted by the physiology engine and do not directly set monitor values.</p>
+                  <p>Effects are interpreted by the physiology engine. Priority is target-specific: an effect may inherit the action priority or override it.</p>
                 </div>
                 <button type="button" onClick={addEffect}>+ Add effect</button>
               </div>
@@ -289,8 +311,10 @@ export function ActionEditorApp() {
                     return (
                       <div className="action-editor-effect-row" key={effect.id}>
                         <label className="effect-target"><span>Target</span><select value={effect.target} onChange={(event) => changeEffectTarget(effect, event.target.value as EdusimActionEffectTarget)}>{EDUSIM_ACTION_EFFECT_TARGETS.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>
-                        <label><span>Operation</span><select value={effect.operation} onChange={(event) => updateEffect(effect.id, { operation: event.target.value as EdusimActionEffectOperation })}>{targetDefinition.allowedOperations.map((operation) => <option key={operation} value={operation}>{operation}</option>)}</select></label>
+                        <label><span>Operation</span><select value={effect.operation} onChange={(event) => changeEffectOperation(effect, event.target.value as EdusimActionEffectOperation)}>{targetDefinition.allowedOperations.map((operation) => <option key={operation} value={operation}>{operation}</option>)}</select></label>
+                        {effect.operation === 'constraint' && <label><span>Constraint</span><select value={effect.constraint ?? 'block-increase'} onChange={(event) => updateEffect(effect.id, { constraint: event.target.value as EdusimActionEffectConstraint })}>{EDUSIM_ACTION_EFFECT_CONSTRAINTS.map((constraint) => <option key={constraint} value={constraint}>{constraintLabel(constraint)}</option>)}</select></label>}
                         <label><span>Value{targetDefinition.unit ? ` (${targetDefinition.unit})` : ''}</span><input type="number" step="any" value={effect.value} onChange={(event) => updateEffect(effect.id, { value: Number(event.target.value) || 0 })} /></label>
+                        <label><span>Priority override</span><input type="number" step="1" placeholder={`inherit ${draft.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY}`} value={effect.priority ?? ''} onChange={(event) => updateEffect(effect.id, { priority: event.target.value === '' ? undefined : Number(event.target.value) })} /></label>
                         <label><span>Onset (s)</span><input type="number" min="0" step="0.1" value={effect.onsetSeconds} onChange={(event) => updateEffect(effect.id, { onsetSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label>
                         <label><span>Duration (s)</span><input type="number" min="0" step="0.1" value={effect.durationSeconds} onChange={(event) => updateEffect(effect.id, { durationSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label>
                         <label><span>Recovery (s)</span><input type="number" min="0" step="0.1" value={effect.recoverySeconds} onChange={(event) => updateEffect(effect.id, { recoverySeconds: Math.max(0, Number(event.target.value) || 0) })} /></label>
