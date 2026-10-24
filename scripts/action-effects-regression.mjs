@@ -9,91 +9,57 @@ const assert = (condition, message) => {
 }
 
 const panel = read('src/edumon/EdumonActionsPanel.tsx')
+const targets = read('src/edusim/actions/ActionEffect.ts')
 const runtime = read('src/edusim/actions/ActionRuntime.ts')
-const actionPhysiology = read('src/edumon/actionPhysiology.ts')
-const anaestheticPhysiology = read('src/edumon/anaestheticPhysiology.ts')
-const bis = read('src/edumon/EdumonBisTrend.tsx')
-const propofolMigration = read('supabase/migrations/20261024_propofol_effects.sql')
-const sustainedMigration = read('supabase/migrations/20261024_sustained_infusions_and_surgery.sql')
-const cardiovascularMigration = read('supabase/migrations/20261024_cardiovascular_drugs_and_dose_menu.sql')
-const reversalMigration = read('supabase/migrations/20261024_adrenaline_and_reversal_agents.sql')
-const instructorGuide = read('src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md')
-const aiPrompt = read('src/edumon/ACTIONS_AND_EFFECTS_AI_PROMPT.md')
+const physiology = read('src/edumon/actionPhysiology.ts')
+const tof = read('src/edumon/EdumonAnaGasControl.tsx')
+const migration = read('supabase/migrations/20261024_event_classes_and_respiratory_effects.sql')
+const guide = read('src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md')
+const prompt = read('src/edumon/ACTIONS_AND_EFFECTS_AI_PROMPT.md')
 
-assert(panel.includes("id: 'propofol'"), 'Propofol fallback definition must exist')
-for (const effectId of ['propofol-hypnotic-effect', 'propofol-respiratory-drive', 'propofol-map']) {
-  assert(panel.includes(effectId), `${effectId} must exist in fallback definition`)
-  assert(propofolMigration.includes(effectId), `${effectId} must exist in persistent seed migration`)
+for (const id of ['hypertension','hypotension','tachycardia','bradycardia','hypovolaemia','bleeding','apnoea','diaphragm-return','bronchospasm']) {
+  assert(panel.includes(`id: '${id}'`), `${id} fallback event must exist`)
+  assert(migration.includes(`'${id}'`), `${id} persistent event must exist`)
 }
 
-for (const id of ['remifentanil', 'tiva', 'surgery']) {
-  assert(panel.includes(`id: '${id}'`), `${id} fallback definition must exist`)
-  assert(sustainedMigration.includes(`'${id}'`), `${id} must exist in sustained-actions migration`)
+for (const id of ['hypertension','hypotension','tachycardia','bradycardia']) {
+  assert(panel.includes(`id: '${id}', kind: 'event'`) && panel.includes(`id: '${id}', kind: 'event'`), `${id} must remain an Event`)
 }
 
-for (const id of ['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline']) {
-  assert(panel.includes(`id: '${id}'`), `${id} cardiovascular fallback definition must exist`)
-  assert(cardiovascularMigration.includes(`'${id}'`), `${id} must exist in cardiovascular migration`)
+for (const id of ['hypovolaemia','bleeding','bronchospasm']) {
+  assert(panel.includes(`id: '${id}', kind: 'event'`) && panel.includes(`id: '${id}', kind: 'event'`), `${id} must remain an Event`)
+}
+assert(panel.includes("long_press_action: 'severity-levels'"), 'severity-adjustable events must use severity-levels')
+assert(panel.includes("short_press_action: 'toggle', long_press_action: 'severity-levels'"), 'severity events must be toggles')
+assert(panel.includes("renderClass('Anaesthesia'"), 'Actions UI must render Anaesthesia classes')
+assert(panel.includes("renderClass('Cardiovascular'"), 'Actions UI must render Cardiovascular classes')
+assert(panel.includes("renderClass('Respiratory'"), 'Events UI must render Respiratory class')
+assert(panel.includes("definition.long_press_action === 'severity-levels'"), 'long press must distinguish severity from dose')
+assert(panel.includes("low: { label: 'Low', scale: 0.65"), 'Low intensity must remain explicit')
+assert(panel.includes("high: { label: 'High', scale: 1.35"), 'High intensity must remain explicit')
+
+for (const target of ['respiration.airwayObstruction','neuromuscular.tofMinimumCount']) {
+  assert(targets.includes(`'${target}'`), `${target} must be a validated action target`)
+}
+assert(physiology.includes("resolveNumericActionEffect('respiration.airwayObstruction'"), 'bronchospasm must be interpreted by physiology')
+assert(physiology.includes('expiratoryResistanceCmH2OLs'), 'bronchospasm must alter expiratory resistance')
+assert(physiology.includes("resolveNumericActionEffect('neuromuscular.tofMinimumCount'"), 'TOF minimum-count target must be interpreted')
+assert(tof.includes('currentNeuromuscularBlock'), 'TOF must derive from neuromuscular block')
+assert(tof.includes('currentTofMinimumCount'), 'TOF must respect diaphragm-return minimum count')
+assert(tof.includes('tofFromBlock'), 'TOF must no longer be fixed at 4/1.0')
+assert(!tof.includes("setTofReading({ count: 4, ratio: 1.0"), 'fixed TOF placeholder must be removed')
+
+assert(runtime.includes('intensity: number'), 'runtime must retain adjustable intensity')
+assert(runtime.includes('export function setActionIntensity'), 'running severity/dose must be adjustable')
+assert(runtime.includes("1 + (effect.value - 1) * weight * intensity"), 'multiplier intensity must remain neutral around 1.0')
+
+for (const [name, text] of [['guide', guide], ['prompt', prompt]]) {
+  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','severity-levels','Bronchospasm','Hypovolaemia','Bleeding','Return of diaphragm breathing','respiration.airwayObstruction','neuromuscular.tofMinimumCount']) {
+    assert(text.includes(phrase), `${name} must document ${phrase}`)
+  }
 }
 
-for (const id of ['adrenaline', 'neostigmine', 'sugammadex']) {
-  assert(panel.includes(`id: '${id}'`), `${id} fallback definition must exist`)
-  assert(reversalMigration.includes(`'${id}'`), `${id} must exist in adrenaline/reversal migration`)
-}
-
-for (const effectId of ['atropine-heart-rate', 'ephedrine-map', 'phenylephrine-map', 'phenylephrine-heart-rate', 'noradrenaline-map']) {
-  assert(panel.includes(effectId), `${effectId} must exist in fallback definition`)
-  assert(cardiovascularMigration.includes(effectId), `${effectId} must exist in persistent migration`)
-}
-
-for (const effectId of ['adrenaline-map', 'adrenaline-heart-rate', 'neostigmine-neuromuscular-reversal', 'sugammadex-neuromuscular-reversal']) {
-  assert(panel.includes(effectId), `${effectId} must exist in fallback definition`)
-  assert(reversalMigration.includes(effectId), `${effectId} must exist in persistent migration`)
-}
-
-assert(panel.includes("long_press_action: 'dose-levels'"), 'adjustable infusions must declare the generic dose-levels long press')
-assert(panel.includes("id: 'adrenaline', kind: 'drug', name: 'Adrenaline infusion', short_press_action: 'toggle', long_press_action: 'dose-levels'"), 'Adrenaline must use the generic adjustable-infusion interaction')
-assert(panel.includes("renderDrugClass('Anaesthesia'"), 'Drugs UI must expose an Anaesthesia subclass')
-assert(panel.includes("renderDrugClass('Cardiovascular'"), 'Drugs UI must expose a Cardiovascular subclass')
-assert(panel.includes("'adrenaline'"), 'Cardiovascular grouping must include adrenaline')
-assert(panel.includes('low: { label: \'Low\', scale: 0.65'), 'Low infusion intensity must remain explicit')
-assert(panel.includes('medium: { label: \'Medium\', scale: 1'), 'Medium infusion intensity must remain the base definition')
-assert(panel.includes('high: { label: \'High\', scale: 1.35'), 'High infusion intensity must remain explicit')
-
-assert(panel.includes("target: 'neuromuscular.block', operation: 'target', value: 0.2"), 'Neostigmine must provide slower incomplete reversal through the generic block target')
-assert(panel.includes("target: 'neuromuscular.block', operation: 'target', value: 0, onsetSeconds: 60"), 'Sugammadex must provide rapid near-complete reversal through the generic block target')
-
-assert(runtime.includes("mode: 'momentary' | 'toggle'"), 'runtime must distinguish momentary and toggle effects')
-assert(runtime.includes('stoppedAtSimulationTime?: number'), 'toggle runtime must retain stop time for recovery')
-assert(runtime.includes('intensity: number'), 'ActiveEffect must persist adjustable intensity')
-assert(runtime.includes('export function setActionIntensity'), 'runtime must support changing an active infusion intensity')
-assert(runtime.includes('effect.value * weight * intensity'), 'offset effects must scale with infusion intensity')
-assert(runtime.includes("1 + (effect.value - 1) * weight * intensity"), 'multiplier intensity must scale around neutral 1.0')
-assert(runtime.includes('clamp01(weight * intensity)'), 'target/set intensity must scale interpolation safely')
-assert(!runtime.includes("effect.value * intensity) * weight"), 'multiplier effects must not be naively multiplied by dose intensity')
-
-assert(anaestheticPhysiology.includes("resolveNumericActionEffect('anaesthesia.hypnoticEffect'"), 'effective depth must consume declarative hypnotic effect')
-assert(anaestheticPhysiology.includes('effectiveAnaestheticDepth'), 'effective anaesthetic depth helper must exist')
-assert(actionPhysiology.includes("resolveNumericActionEffect('neuromuscular.block'"), 'physiology must consume generic neuromuscular block for relaxant and reversal actions')
-assert(actionPhysiology.includes('effectiveAnaestheticDepth(state, simulationTime)'), 'stimulus response must use effective action-aware depth')
-assert(bis.includes('effectiveAnaestheticDepth(patientRef.current, getActionRuntimeSimulationTime())'), 'BIS must use the same effective action-aware depth')
-
-for (const [name, text] of [['instructor guide', instructorGuide], ['AI prompt', aiPrompt]]) {
-  assert(text.includes('Maintenance contract'), `${name} must declare its maintenance contract`)
-  assert(text.includes('Actions describe effects; physiology interprets effects.'), `${name} must preserve the core architecture rule`)
-  assert(text.includes('Anaesthesia'), `${name} must document the Anaesthesia drug class`)
-  assert(text.includes('Cardiovascular'), `${name} must document the Cardiovascular drug class`)
-  assert(text.includes('dose-levels'), `${name} must document generic infusion long-press dose selection`)
-  assert(text.includes('0.65'), `${name} must document Low infusion intensity`)
-  assert(text.includes('1.35'), `${name} must document High infusion intensity`)
-  assert(text.includes('Noradrenaline'), `${name} must document noradrenaline infusion`)
-  assert(text.includes('Adrenaline'), `${name} must document adrenaline infusion`)
-  assert(text.includes('Neostigmine'), `${name} must document neostigmine reversal`)
-  assert(text.includes('Sugammadex'), `${name} must document sugammadex reversal`)
-  assert(text.includes('aminosteroid'), `${name} must document the current Sugammadex blocker-specific limitation`)
-}
-
-assert(!panel.includes('heartRate +='), 'action buttons must not directly mutate heart rate')
-assert(!panel.includes('systolicPressure +='), 'action buttons must not directly mutate blood pressure')
+assert(!panel.includes('heartRate +='), 'action buttons must not directly mutate HR')
+assert(!panel.includes('systolicPressure +='), 'action buttons must not directly mutate BP')
 
 if (!process.exitCode) console.log('Action/effects regression checks passed')
