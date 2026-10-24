@@ -10,7 +10,7 @@ This guide is for instructors and simulation faculty who want to understand or e
 
 A Drug or Event button should not directly change the displayed heart rate, blood pressure, BIS, ventilation or another monitor value. Instead, the action contains one or more declarative effects. EDUMON physiology reads those effects and calculates what the patient and monitor should do.
 
-This is important because different effects can combine. For example, Laryngoscopy produces a sympathetic stimulus. Fentanyl reduces nociceptive response. Anaesthetic depth reduces the cardiovascular response to that stimulus. The final HR and BP response is therefore calculated from all of those states rather than being hard-coded into the Laryngoscopy button.
+This allows effects to combine. For example, Surgery creates a sympathetic stimulus. Fentanyl or Remifentanil reduces nociceptive response. Anaesthetic depth from volatile anaesthesia, Propofol bolus or TIVA reduces the cardiovascular response to that stimulus. The final HR and BP response is calculated from all of those states rather than being hard-coded into the Surgery button.
 
 ## Where instructors edit actions
 
@@ -18,11 +18,30 @@ Permanent instructors can use the **Edit action library** control and the `/acti
 
 ## Action fields
 
-Each action has Kind, Name, Short press action, Setting, Description, Effects and Sort order. Short press is usually `momentary`; some ongoing actions can be `toggle`. Authoritative settings are `ana`, `itu` and `all`.
+Each action has Kind, Name, Short press action, Setting, Description, Effects and Sort order. Authoritative settings are `ana`, `itu` and `all`.
+
+There are two important short-press behaviours:
+
+- **momentary** — each press creates a new timed administration/event instance;
+- **toggle** — first press starts an ongoing effect, second press stops it.
+
+Toggle actions are used for infusions and sustained events. They ramp to full effect over **Onset**, stay active indefinitely while the toggle is on, and after switch-off ramp back toward baseline over **Recovery**. For a toggle action, `durationSeconds` does not determine how long the effect stays on.
 
 ## Effect fields
 
-Each effect contains Target, Operation, Value, Onset, Duration and Recovery. Onset is a ramp to full effect, Duration is the full-effect period, and Recovery is the ramp back to baseline.
+Each effect contains Target, Operation, Value, Onset, Duration and Recovery.
+
+For **momentary** actions:
+
+- Onset = ramp to full effect;
+- Duration = full-effect period;
+- Recovery = ramp back to baseline.
+
+For **toggle** actions:
+
+- Onset = ramp after switching on;
+- the effect remains at full strength until switched off;
+- Recovery = ramp after switching off.
 
 All timing uses **simulation time**, not wall-clock time. Pausing the simulation pauses effect progression, and simulation speed changes how quickly effects progress in real time.
 
@@ -55,29 +74,45 @@ Repeated momentary administrations create separate active instances. Offsets can
 
 ## Current examples
 
-### Fentanyl
+### Propofol bolus
 
-Fentanyl modestly lowers HR, reduces respiratory drive and reduces `anaesthesia.nociceptiveResponse`. Therefore it automatically blunts Laryngoscopy, Pain and Surgical stimulus without those Events knowing anything about Fentanyl.
-
-### Relaxant
-
-Relaxant increases `neuromuscular.block`. EDUMON interprets this as reduced respiratory muscle function. It does not directly suppress central respiratory drive, and mandatory ventilation is not disabled simply because the patient is paralysed.
-
-### Propofol
-
-Propofol is a generic bolus model with three declarative effects:
+Propofol is a generic momentary bolus with three declarative effects:
 
 - increases `anaesthesia.hypnoticEffect`;
 - reduces `respiration.drive`;
 - lowers `haemodynamics.meanArterialPressure`.
 
-The hypnotic component deepens the **effective anaesthetic depth** used by BIS and stimulus-response attenuation. Volatile anaesthesia and Propofol therefore share one conceptual depth pathway.
+The hypnotic component deepens the **effective anaesthetic depth** used by BIS and stimulus-response attenuation.
 
-The initial values are teaching-model parameters, not a claim that one button equals one fixed clinical dose in every patient.
+### TIVA (Propofol TCI)
 
-### Laryngoscopy, Pain and Surgical stimulus
+TIVA is a **toggle** action representing a Propofol TCI-style infusion. Switching it on creates a sustained hypnotic effect, respiratory-drive depression and MAP reduction; switching it off starts the configured recovery ramps.
 
-These Events create `stimulus.sympathetic` with different strengths and durations. Their raw composed cardiovascular stimulus is:
+The current implementation is deliberately a teaching abstraction. It represents the physiological result of a maintained TCI rather than modelling a specific pump algorithm, target plasma concentration, target effect-site concentration or named pharmacokinetic model. A future TCI module can replace this surrogate without changing the action/physiology separation.
+
+### Fentanyl
+
+Fentanyl is a momentary opioid administration. It modestly lowers HR, reduces respiratory drive and reduces `anaesthesia.nociceptiveResponse`.
+
+### Remifentanil infusion
+
+Remifentanil is a **toggle** infusion. While running it strongly attenuates `anaesthesia.nociceptiveResponse`, depresses spontaneous respiratory drive and modestly lowers HR. Because its effects are declarative, Surgery and Laryngoscopy automatically become less haemodynamically stimulating while the infusion is active.
+
+Its onset/recovery parameters are educational approximations rather than a complete pharmacokinetic model.
+
+### Relaxant
+
+Relaxant increases `neuromuscular.block`. EDUMON interprets this as reduced respiratory muscle function. It does not directly suppress central respiratory drive, and mandatory ventilation is not disabled simply because the patient is paralysed.
+
+### Laryngoscopy and Pain
+
+These are momentary Events. They create `stimulus.sympathetic` for a defined period.
+
+### Surgery
+
+Surgery is a **toggle Event** representing sustained operative nociceptive stimulation. Turn it on at the start of surgery and turn it off when surgery finishes. While on, it continuously contributes `stimulus.sympathetic`; after it is switched off, the stimulus decays over its recovery period.
+
+The raw composed cardiovascular stimulus is:
 
 `stimulus × nociceptive response × anaesthetic-depth response`
 
@@ -89,11 +124,13 @@ The current saturation curve is normalized so:
 - composed response 2.0 → effective response about 1.25;
 - very large composed responses approach an effective ceiling of about 1.67.
 
-This saturation is part of **physiology**, not part of the Event definition. Therefore instructors should normally continue to describe how strong and how long the stimulus is, rather than manually compensating Event values for the saturation curve.
+This saturation is part of **physiology**, not part of the Event definition.
 
 ## What instructors can edit without programming
 
-You can usually edit an existing Drug or Event in `/actions` when changing its name/description, ordering, Ana/ICU availability, magnitude, timing, or an existing validated target/operation.
+You can usually edit an existing Drug or Event in `/actions` when changing its name/description, ordering, Ana/ICU availability, magnitude, timing, momentary/toggle behaviour, or an existing validated target/operation.
+
+When changing an action from momentary to toggle, remember that Duration no longer determines the on-time; the instructor controls the duration by switching the action off.
 
 ## When programming is required
 
@@ -104,7 +141,7 @@ Do not work around a missing physiological concept by making a button directly c
 ## Architecture reference for maintainers
 
 - `src/edusim/actions/ActionEffect.ts` — validated targets and operations.
-- `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, stacking and resolution.
+- `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, momentary timing, sustained toggle state, recovery and stacking.
 - `src/edumon/actionLibrary.ts` — persistence/shared action library.
 - `src/action-editor/ActionEditorApp.tsx` — instructor editor.
 - `src/edumon/actionPhysiology.ts` — EDUMON interpretation of generic effects, including sympathetic-response saturation.
@@ -116,4 +153,4 @@ Do not work around a missing physiological concept by making a button directly c
 
 ## Simulation-design caution
 
-EDUMON is an educational simulator. Effect values and response curves are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.
+EDUMON is an educational simulator. Effect values, infusion surrogates and response curves are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.
