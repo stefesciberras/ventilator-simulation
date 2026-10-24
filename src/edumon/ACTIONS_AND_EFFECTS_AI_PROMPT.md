@@ -86,7 +86,11 @@ Hypovolaemia and Bleeding do not yet modify an explicit blood-volume compartment
 
 ## Respiratory Events
 
-`apnoea` uses `respiration.drive = 0`. `diaphragm-return` targets respiratory drive toward 1 and TOF minimum count toward 1. `bronchospasm` uses `respiration.airwayObstruction`, interpreted as increased expiratory resistance. Capnography must remain derived from mechanics.
+- **Apnoea** uses `respiration.drive = 0`.
+- **Return of diaphragm breathing** (`diaphragm-return`) targets respiratory drive toward 1 and TOF minimum count toward 1.
+- **Bronchospasm** uses `respiration.airwayObstruction`, interpreted as increased expiratory resistance.
+
+Capnography must remain derived from mechanics.
 
 ## Existing anaesthesia composition
 
