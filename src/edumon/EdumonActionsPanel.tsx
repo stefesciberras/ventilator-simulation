@@ -23,7 +23,25 @@ interface EdumonActionButtonProps {
 }
 
 const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
-  { id: 'propofol', kind: 'drug', name: 'Propofol', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
+  {
+    id: 'propofol',
+    kind: 'drug',
+    name: 'Propofol',
+    short_press_action: 'momentary',
+    long_press_action: null,
+    duration_seconds: 0,
+    description: 'Generic Propofol bolus: increases hypnotic effect, depresses spontaneous respiratory drive and lowers mean arterial pressure.',
+    setting: 'ana',
+    environments: ['edumon-ana'],
+    effects: [
+      { id: 'propofol-hypnotic-effect', target: 'anaesthesia.hypnoticEffect', operation: 'offset', value: 0.65, onsetSeconds: 25, durationSeconds: 180, recoverySeconds: 240 },
+      { id: 'propofol-respiratory-drive', target: 'respiration.drive', operation: 'multiplier', value: 0.4, onsetSeconds: 20, durationSeconds: 150, recoverySeconds: 180 },
+      { id: 'propofol-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -15, onsetSeconds: 20, durationSeconds: 180, recoverySeconds: 180 },
+    ],
+    sort_order: 10,
+    created_at: '',
+    updated_at: '',
+  },
   {
     id: 'fentanyl',
     kind: 'drug',
