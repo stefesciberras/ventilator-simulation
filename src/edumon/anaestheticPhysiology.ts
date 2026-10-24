@@ -1,3 +1,4 @@
+import { resolveNumericActionEffect } from '../edusim/actions/ActionRuntime'
 import {
   DEFAULT_MONITOR_ANAESTHETIC_PHYSIOLOGY_SETTINGS,
   DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
@@ -40,6 +41,16 @@ export function effectiveMacForSensitivity(mac: number, sensitivity: number): nu
 export function depthFromMac(mac: number, sensitivity: number): AnaestheticDepth {
   const effectiveMac = effectiveMacForSensitivity(mac, sensitivity)
   return clamp(Math.round(5 - (2 * effectiveMac)), 1, 5) as AnaestheticDepth
+}
+
+export function currentHypnoticEffect(simulationTime: number): number {
+  return clamp(resolveNumericActionEffect('anaesthesia.hypnoticEffect', 0, simulationTime), 0, 1)
+}
+
+export function effectiveAnaestheticDepth(state: MonitorPatientState, simulationTime: number): AnaestheticDepth {
+  const baseDepth = resolvedAnaestheticPhysiology(state).depthOfAnaesthesia
+  const hypnoticEffect = currentHypnoticEffect(simulationTime)
+  return clamp(Math.round(baseDepth - (4 * hypnoticEffect)), 1, 5) as AnaestheticDepth
 }
 
 export function anaestheticStimulusResponseScale(depth: AnaestheticDepth): number {

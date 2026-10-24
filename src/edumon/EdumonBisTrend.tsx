@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
+import { effectiveAnaestheticDepth } from './anaestheticPhysiology'
 import type { AnaestheticDepth, MonitorPatientState } from './types'
 import './edumon-bis.css'
 
@@ -151,8 +152,7 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
         simulationTimeRef.current += dt
         sampleAccumulatorRef.current += dt
 
-        const physiology = resolvedAnaestheticPhysiology(patientRef.current)
-        const depth = physiology.depthOfAnaesthesia
+        const depth = effectiveAnaestheticDepth(patientRef.current, getActionRuntimeSimulationTime())
         const awake = depth === 5
         const target = BIS_TARGETS[depth]
 

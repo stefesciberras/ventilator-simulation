@@ -1,5 +1,5 @@
 import { resolveNumericActionEffect } from '../edusim/actions/ActionRuntime'
-import { anaestheticStimulusResponseScale, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { anaestheticStimulusResponseScale, effectiveAnaestheticDepth } from './anaestheticPhysiology'
 import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type MonitorPatientState } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -7,8 +7,7 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 function sympatheticResponse(state: MonitorPatientState, simulationTime: number): { heartRateOffset: number; mapOffset: number } {
   const stimulus = Math.max(0, resolveNumericActionEffect('stimulus.sympathetic', 0, simulationTime))
   const nociceptiveResponse = Math.max(0, resolveNumericActionEffect('anaesthesia.nociceptiveResponse', 1, simulationTime))
-  const depth = resolvedAnaestheticPhysiology(state).depthOfAnaesthesia
-  const depthResponse = anaestheticStimulusResponseScale(depth)
+  const depthResponse = anaestheticStimulusResponseScale(effectiveAnaestheticDepth(state, simulationTime))
   const response = stimulus * nociceptiveResponse * depthResponse
   return {
     heartRateOffset: 25 * response,
