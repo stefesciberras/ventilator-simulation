@@ -17,6 +17,14 @@ const DEPTH_EFFECTS: Record<AnaestheticDepth, { bp: number; hr: number; rr: numb
   1: { bp: 0.25, hr: 0.10, rr: 0.20 },
 }
 
+const DEPTH_STIMULUS_RESPONSE: Record<AnaestheticDepth, number> = {
+  5: 1,
+  4: 0.85,
+  3: 0.60,
+  2: 0.35,
+  1: 0.15,
+}
+
 export function resolvedAnaestheticPhysiology(state: MonitorPatientState): MonitorAnaestheticPhysiologySettings {
   return {
     ...DEFAULT_MONITOR_ANAESTHETIC_PHYSIOLOGY_SETTINGS,
@@ -32,6 +40,10 @@ export function effectiveMacForSensitivity(mac: number, sensitivity: number): nu
 export function depthFromMac(mac: number, sensitivity: number): AnaestheticDepth {
   const effectiveMac = effectiveMacForSensitivity(mac, sensitivity)
   return clamp(Math.round(5 - (2 * effectiveMac)), 1, 5) as AnaestheticDepth
+}
+
+export function anaestheticStimulusResponseScale(depth: AnaestheticDepth): number {
+  return DEPTH_STIMULUS_RESPONSE[depth]
 }
 
 function captureResponseBaseline(state: MonitorPatientState): AnaestheticResponseBaseline {
