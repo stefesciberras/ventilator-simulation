@@ -1,191 +1,116 @@
 # EDUMON actions and effects — instructor guide
 
-> Maintenance contract: keep this guide updated whenever the action/effect vocabulary, action editor, runtime behaviour, physiological interpretation, seeded Drugs/Events, drug grouping, dose controls, or timing semantics change.
+> Maintenance contract: keep this guide updated whenever the action/effect vocabulary, runtime behaviour, physiology interpretation, seeded Drugs/Events, drug/event grouping, long-press controls, persistence model, timing semantics or relevant file locations change.
 
-This guide is for instructors and simulation faculty who want to understand or edit EDUMON Drugs and Events without needing to understand the source code.
-
-## The central rule
+## Central rule
 
 **Actions describe effects; physiology interprets effects.**
 
-A Drug or Event button should not directly change the displayed heart rate, blood pressure, BIS, ventilation or another monitor value. Instead, the action contains one or more declarative effects. EDUMON physiology reads those effects and calculates what the patient and monitor should do.
+Buttons activate declarative effects. They must not directly mutate displayed monitor values or waveform pixels. EDUMON physiology and monitor modules interpret the active effects and derive haemodynamics, ventilation, TOF, BIS and waveforms.
 
-This allows effects to combine. For example, Surgery creates a sympathetic stimulus. Fentanyl or Remifentanil reduces nociceptive response. Anaesthetic depth from volatile anaesthesia, Propofol bolus or TIVA reduces the cardiovascular response to that stimulus. The final HR and BP response is calculated from all of those states rather than being hard-coded into the Surgery button.
+## Action groups
 
-## Drug classes in the monitor
+### Drugs
+- **Anaesthesia** — Propofol, Fentanyl, Remifentanil infusion, Relaxant, Neostigmine, Sugammadex, TIVA.
+- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion, Adrenaline infusion.
 
-The Drugs section is currently subdivided into:
+### Events
+- **Anaesthesia** — Induction, Maintenance, Awakening, Laryngoscopy, Pain, Surgery.
+- **Cardiovascular** — Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding.
+- **Respiratory** — Apnoea, Return of diaphragm breathing, Bronchospasm.
 
-- **Anaesthesia** — Propofol, Fentanyl, Remifentanil infusion, Relaxant, Neostigmine, Sugammadex and TIVA (Propofol TCI).
-- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion and Adrenaline infusion.
+These subclasses are presentation/taxonomy. The underlying rows remain ordinary `ActionDefinition` objects.
 
-The subdivision is presentation/taxonomy only. The individual Drug definitions remain declarative ActionDefinitions and physiology still interprets their effects.
+## Momentary and toggle actions
 
-## Where instructors edit actions
+- **momentary** — onset, finite duration, then recovery.
+- **toggle** — onset, stays active indefinitely until switched off, then follows recovery.
 
-Permanent instructors can use the **Edit action library** control and the `/actions` page. The shared definitions are stored in Supabase in `public.edusim_action_definitions`. EDUMON also contains local fallback definitions so the simulator remains usable if the shared library cannot be loaded.
+All timing uses simulation time.
 
-## Action fields
+## Long-press levels
 
-Each action has Kind, Name, Short press action, Long press action, Setting, Description, Effects and Sort order. Authoritative settings are `ana`, `itu` and `all`.
+Two generic long-press controls use the same runtime intensity mechanism:
 
-There are two important short-press behaviours:
+- `dose-levels` — adjustable infusion dose/intensity;
+- `severity-levels` — adjustable event severity.
 
-- **momentary** — each press creates a new timed administration/event instance;
-- **toggle** — first press starts an ongoing effect, second press stops it.
+Both offer:
+- Low = 0.65 × base intensity
+- Medium = 1.0 × base intensity
+- High = 1.35 × base intensity
 
-Toggle actions are used for infusions and sustained events. They ramp to full effect over **Onset**, stay active indefinitely while the toggle is on, and after switch-off ramp back toward baseline over **Recovery**. For a toggle action, `durationSeconds` does not determine how long the effect stays on.
+The button shows L/M/H. A running toggle can change level without stopping or restarting its onset timer.
 
-## Infusion dose-level long press
+For offsets, intensity scales the offset. For multipliers, intensity scales the distance from neutral 1.0. For target/set operations, intensity scales interpolation weight.
 
-An infusion can set `long_press_action = dose-levels`.
-
-A normal short press still starts/stops the infusion. A long press opens a compact three-step selector:
-
-- **Low** = 0.65 × the stored/base effect intensity;
-- **Medium** = 1.0 × and is the default;
-- **High** = 1.35 ×.
-
-The selected level is shown on the infusion button as **L / M / H**. If the infusion is already running, choosing another level changes the active infusion intensity without switching it off.
-
-For additive effects such as MAP +20 mmHg, intensity scales the offset directly. For multiplier effects such as respiratory drive ×0.65, intensity scales the distance from the neutral multiplier 1.0. This is important: a higher dose must strengthen a suppressive multiplier, not accidentally reverse it.
-
-The current dose steps are educational intensity levels rather than clinical dose units. They do not imply a specific µg/kg/min, ng/ml effect-site target, syringe concentration or pump algorithm.
-
-## Effect fields
-
-Each effect contains Target, Operation, Value, Onset, Duration and Recovery.
-
-For **momentary** actions:
-
-- Onset = ramp to full effect;
-- Duration = full-effect period;
-- Recovery = ramp back to baseline.
-
-For **toggle** actions:
-
-- Onset = ramp after switching on;
-- the effect remains at full strength until switched off;
-- Recovery = ramp after switching off.
-
-All timing uses **simulation time**, not wall-clock time. Pausing the simulation pauses effect progression, and simulation speed changes how quickly effects progress in real time.
-
-## Current effect targets
-
-The current validated vocabulary is:
+## Current validated effect targets
 
 - `haemodynamics.heartRate`
 - `haemodynamics.meanArterialPressure`
 - `respiration.drive`
+- `respiration.airwayObstruction`
 - `neuromuscular.block`
+- `neuromuscular.tofMinimumCount`
 - `anaesthesia.hypnoticEffect`
 - `anaesthesia.nociceptiveResponse`
 - `stimulus.sympathetic`
 
-Use the target dropdown. Do not invent new target text. A genuinely new physiological concept requires programming so the target can be validated and interpreted by physiology.
+Operations remain `offset`, `set`, `multiplier`, `target`, `increment`, `trigger`.
 
-## Operations
+## New Cardiovascular Events
 
-The editor only offers operations appropriate to the selected target.
+### Hypertension / Hypotension
+Toggle sustained MAP offsets. These are direct teaching-state disturbances, independent of a specific cause.
 
-- **offset** — add/subtract an amount.
-- **multiplier** — multiply baseline by a factor.
-- **target** — move toward a target value.
-- **set** — set/interpolate toward a value.
-- **increment** — additive state change where supported.
-- **trigger** — event-style effect interpreted by the runtime/physiology layer.
+### Tachycardia / Bradycardia
+Toggle sustained HR offsets.
 
-Repeated momentary administrations create separate active instances. Offsets can accumulate and multipliers can compound. Target/set effects do not necessarily behave like repeated doses, so choose the operation deliberately.
+### Hypovolaemia
+A toggle event with `severity-levels`. The current surrogate lowers MAP and raises HR. It does not yet model an explicit circulating-volume compartment, so this should be treated as a haemodynamic teaching approximation.
 
-## Current examples
+### Bleeding
+A toggle event with `severity-levels`. The current surrogate produces a somewhat stronger hypotensive/tachycardic effect than Hypovolaemia. It does not yet accumulate actual blood-volume loss; future volume-state physiology can replace this approximation without changing the ActionDefinition pattern.
 
-### Propofol bolus
+## New Respiratory Events
 
-Propofol is a generic momentary bolus with declarative hypnotic, respiratory-drive and MAP effects. The hypnotic component deepens the **effective anaesthetic depth** used by BIS and stimulus-response attenuation.
+### Apnoea
+A toggle event acting through `respiration.drive = 0`. Switching it off allows respiratory drive to recover rather than directly redrawing or hiding the capnogram.
 
-### TIVA (Propofol TCI)
+### Return of diaphragm breathing
+A momentary event representing return of spontaneous diaphragmatic effort after reversal. It:
+- targets `respiration.drive` toward 1;
+- targets `neuromuscular.tofMinimumCount` to at least 1 for the active interval.
 
-TIVA is a **toggle** action representing a Propofol TCI-style infusion and supports the Low/Medium/High long-press selector. It is deliberately a teaching abstraction of maintained physiological effect rather than a named PK/PD pump model.
+TOF measurement is now derived from current `neuromuscular.block` rather than remaining fixed at 4/1.0. The minimum-count effect guarantees at least one response while allowing better recovery to display 2–4 responses.
 
-### Fentanyl
+### Bronchospasm
+A toggle event with `severity-levels` acting through `respiration.airwayObstruction`.
 
-Fentanyl is a momentary opioid administration. It modestly lowers HR, reduces respiratory drive and reduces `anaesthesia.nociceptiveResponse`.
+EDUMON physiology converts that obstruction into increased expiratory airway resistance. The capnogram already derives its expiratory shape from resistance/compliance time constants, so progressively severe Bronchospasm naturally produces a more obstructive/shark-fin CO₂ waveform. The event itself does not draw a waveform.
 
-### Remifentanil infusion
+## Existing anaesthesia composition
 
-Remifentanil is a **toggle** infusion with Low/Medium/High intensity selection. While running it attenuates `anaesthesia.nociceptiveResponse`, depresses spontaneous respiratory drive and modestly lowers HR.
+Surgery/Laryngoscopy/Pain produce `stimulus.sympathetic`. Opioids lower `anaesthesia.nociceptiveResponse`. Effective anaesthetic depth attenuates stimulus response. The raw composed response is then passed through the shared saturating sympathetic transfer function before HR/MAP translation.
 
-### Relaxant
+Propofol/TIVA use `anaesthesia.hypnoticEffect`. Relaxant and reversal agents use `neuromuscular.block`.
 
-Relaxant increases `neuromuscular.block`. EDUMON interprets this as reduced respiratory muscle function. It does not directly suppress central respiratory drive.
+## Editing and persistence
 
-### Neostigmine
+Permanent instructors can edit the shared action library via `/actions`. Persistent rows are stored in `public.edusim_action_definitions`; local fallback definitions remain in `src/edumon/EdumonActionsPanel.tsx`.
 
-Neostigmine is a momentary reversal action acting on `neuromuscular.block`. In the current teaching model it has a slower onset and drives block toward a residual level of about 0.2 rather than zero, representing slower/incomplete reversal compared with Sugammadex.
+Changing existing magnitudes/timings/group members is usually data work. New physiological concepts require a validated target plus physiology/monitor interpretation.
 
-### Sugammadex
+## Architecture reference
 
-Sugammadex is a momentary rapid reversal action that drives `neuromuscular.block` toward zero more quickly than Neostigmine.
-
-The current EDUMON relaxant model is still generic. It does **not yet distinguish aminosteroid neuromuscular blockers from benzylisoquinolinium agents**, so Sugammadex currently reverses the generic block state. When individual relaxants are modelled, drug-specific reversibility should be enforced in physiology rather than in the button UI.
-
-### Atropine
-
-Atropine is a momentary Cardiovascular action with a predominantly positive HR offset in the current teaching model.
-
-### Ephedrine
-
-Ephedrine is a momentary Cardiovascular vasopressor action with positive HR and MAP offsets.
-
-### Phenylephrine
-
-Phenylephrine is a momentary Cardiovascular vasopressor action with a positive MAP offset and modest negative HR offset representing reflex bradycardia.
-
-### Noradrenaline infusion
-
-Noradrenaline is a **toggle** Cardiovascular infusion with Low/Medium/High intensity selection. The base/Medium action raises MAP and applies a small negative HR offset. It remains active until switched off and then follows its configured recovery ramp.
-
-### Adrenaline infusion
-
-Adrenaline is a **toggle** Cardiovascular infusion with Low/Medium/High intensity selection. The current base/Medium teaching model applies positive HR and MAP offsets, representing combined chronotropic/inotropic and vasopressor effects without claiming a fixed clinical infusion rate.
-
-### Laryngoscopy and Pain
-
-These are momentary Events. They create `stimulus.sympathetic` for a defined period.
-
-### Surgery
-
-Surgery is a **toggle Event** representing sustained operative nociceptive stimulation. Turn it on at the start of surgery and turn it off when surgery finishes.
-
-The raw composed cardiovascular stimulus is:
-
-`stimulus × nociceptive response × anaesthetic-depth response`
-
-That value passes through the shared saturating physiological response curve before EDUMON translates it into HR and MAP change.
-
-## What instructors can edit without programming
-
-You can usually edit an existing Drug or Event in `/actions` when changing its name/description, ordering, Ana/ICU availability, magnitude, timing, momentary/toggle behaviour, or an existing validated target/operation.
-
-The current monitor drug-class grouping and `dose-levels` long-press control are application features. Adding a genuinely new drug class or a different long-press interaction currently requires code changes.
-
-## When programming is required
-
-Programming is required for a new target, new physiological state, new combination rule, new saturation/transfer function, new operation meaning, new drug class, new long-press interaction, a device/monitor that does not yet consume the physiology, or new scenario/session/debrief behaviour.
-
-Do not work around a missing physiological concept by making a button directly change displayed monitor values.
-
-## Architecture reference for maintainers
-
-- `src/edusim/actions/ActionEffect.ts` — validated targets and operations.
-- `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, sustained toggle state, adjustable intensity, recovery and stacking.
-- `src/edumon/actionLibrary.ts` — persistence/shared action library.
-- `src/action-editor/ActionEditorApp.tsx` — instructor editor.
-- `src/edumon/actionPhysiology.ts` — EDUMON interpretation of generic effects.
-- `src/edumon/anaestheticPhysiology.ts` — action-driven effective anaesthetic depth.
-- `src/edumon/EdumonActionsPanel.tsx` — drug classes, long-press dose selector, buttons and fallback definitions; it activates actions but does not own physiology.
-- `supabase/migrations/` — persistent seeded definitions and schema/data migrations.
+- `src/edusim/actions/ActionEffect.ts` — validated targets/operations.
+- `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, toggles, recovery, intensity.
+- `src/edumon/EdumonActionsPanel.tsx` — grouping and generic dose/severity UI.
+- `src/edumon/actionPhysiology.ts` — haemodynamic, respiratory obstruction and TOF-related interpretation.
+- `src/edumon/EdumonAnaGasControl.tsx` — TOF measurement derived from neuromuscular state.
+- `src/edumon/EdumonCapnographySurface.tsx` — capnogram shape derived from respiratory mechanics.
+- `supabase/migrations/` — persistent action definitions.
 
 ## Simulation-design caution
 
-EDUMON is an educational simulator. Effect values, infusion intensity levels, reversal surrogates and response curves are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.
+EDUMON is an educational simulator. Current effect magnitudes, onset/recovery values, dose/severity multipliers, volume-loss surrogates and TOF mapping are configurable teaching approximations rather than fixed clinical-dose claims or a validated patient model.
