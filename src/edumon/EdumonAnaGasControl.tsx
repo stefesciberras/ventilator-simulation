@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { latestEdumonRespiratoryOutput, resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
 import { applyAnaestheticDepthEffects, depthFromMac, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { EdumonBisTrend } from './EdumonBisTrend'
 import {
   DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS,
   type AnaestheticDepth,
@@ -291,5 +292,5 @@ export function EdumonAnaGasControl({
     physioHost,
   ) : null
 
-  return <>{footer}{overlay}{sideControl}</>
+  return <><EdumonBisTrend patientState={patientState} />{footer}{overlay}{sideControl}</>
 }
