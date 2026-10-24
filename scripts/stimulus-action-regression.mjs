@@ -14,11 +14,17 @@ const anaesthetic = read('src/edumon/anaestheticPhysiology.ts')
 const instructorGuide = read('src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md')
 const aiPrompt = read('src/edumon/ACTIONS_AND_EFFECTS_AI_PROMPT.md')
 const migration = read('supabase/migrations/20261024_stimulus_events.sql')
+const sustainedMigration = read('supabase/migrations/20261024_sustained_infusions_and_surgery.sql')
 
-for (const id of ['laryngoscopy', 'pain', 'surgical-stimulus']) {
+for (const id of ['laryngoscopy', 'pain']) {
   assert(panel.includes(`id: '${id}'`), `${id} fallback action must exist`)
   assert(migration.includes(`'${id}'`), `${id} must be seeded in Supabase migration`)
 }
+assert(panel.includes("id: 'surgery'"), 'Surgery fallback action must exist')
+assert(panel.includes("name: 'Surgery'"), 'Surgery must replace the Surgical stimulus label')
+assert(panel.includes("id: 'surgery', kind: 'event', name: 'Surgery', short_press_action: 'toggle'"), 'Surgery must be a sustained toggle event')
+assert(sustainedMigration.includes("'surgery', 'event', 'Surgery', 'toggle'"), 'Surgery must be persisted as a toggle event')
+assert(sustainedMigration.includes("delete from public.edusim_action_definitions where id = 'surgical-stimulus'"), 'persistent migration must remove the superseded Surgical stimulus action')
 
 assert(physiology.includes("resolveNumericActionEffect('stimulus.sympathetic'"), 'physiology must consume sympathetic stimulus declaratively')
 assert(physiology.includes("resolveNumericActionEffect('anaesthesia.nociceptiveResponse'"), 'stimulus response must be attenuated by analgesic/nociceptive state')
@@ -32,7 +38,7 @@ assert(anaesthetic.includes('effectiveAnaestheticDepth'), 'anaesthetic physiolog
 assert(anaesthetic.includes('5: 1'), 'awake/light depth must preserve full stimulus response')
 assert(anaesthetic.includes('1: 0.15'), 'deep anaesthesia must markedly attenuate stimulus response')
 assert(instructorGuide.includes('saturating physiological response curve'), 'instructor guide must explain sympathetic saturation')
-assert(aiPrompt.includes('saturatingSympatheticResponse'), 'AI prompt must preserve the shared saturation architecture')
+assert(aiPrompt.includes('shared saturating sympathetic transfer function'), 'AI prompt must preserve the shared saturation architecture')
 assert(!panel.includes('heartRate +='), 'event buttons must not directly mutate heart rate')
 assert(!panel.includes('systolicPressure +='), 'event buttons must not directly mutate blood pressure')
 
