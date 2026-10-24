@@ -64,6 +64,24 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
   { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
   { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 20, created_at: '', updated_at: '' },
   { id: 'awakening', kind: 'event', name: 'Awakening', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 30, created_at: '', updated_at: '' },
+  {
+    id: 'laryngoscopy', kind: 'event', name: 'Laryngoscopy', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0,
+    description: 'Brief intense sympathetic/nociceptive stimulus, attenuated by current analgesic state.', setting: 'ana', environments: ['edumon-ana'],
+    effects: [{ id: 'laryngoscopy-sympathetic-stimulus', target: 'stimulus.sympathetic', operation: 'offset', value: 1, onsetSeconds: 2, durationSeconds: 30, recoverySeconds: 30 }],
+    sort_order: 40, created_at: '', updated_at: '',
+  },
+  {
+    id: 'pain', kind: 'event', name: 'Pain', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0,
+    description: 'Moderate nociceptive stimulus, attenuated by current analgesic state.', setting: 'ana', environments: ['edumon-ana'],
+    effects: [{ id: 'pain-sympathetic-stimulus', target: 'stimulus.sympathetic', operation: 'offset', value: 0.55, onsetSeconds: 3, durationSeconds: 120, recoverySeconds: 60 }],
+    sort_order: 50, created_at: '', updated_at: '',
+  },
+  {
+    id: 'surgical-stimulus', kind: 'event', name: 'Surgical stimulus', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0,
+    description: 'Sustained operative nociceptive stimulus, attenuated by current analgesic state.', setting: 'ana', environments: ['edumon-ana'],
+    effects: [{ id: 'surgical-stimulus-sympathetic', target: 'stimulus.sympathetic', operation: 'offset', value: 0.75, onsetSeconds: 5, durationSeconds: 600, recoverySeconds: 120 }],
+    sort_order: 60, created_at: '', updated_at: '',
+  },
 ]
 
 function currentEnvironment(): EdusimActionEnvironment {
