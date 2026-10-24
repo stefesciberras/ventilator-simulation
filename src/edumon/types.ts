@@ -68,6 +68,13 @@ export const DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS: MonitorAnaestheticGasSett
 
 export type AnaestheticDepth = 1 | 2 | 3 | 4 | 5
 
+export interface AnaestheticResponseBaseline {
+  heartRate: number
+  systolicPressure: number
+  diastolicPressure: number
+  spontaneousRespiratoryRate: number
+}
+
 export interface MonitorAnaestheticPhysiologySettings {
   /** Relative sensitivity to anaesthesia, -1 (less sensitive) to +1 (more sensitive). */
   anaestheticSensitivity: number
@@ -75,6 +82,8 @@ export interface MonitorAnaestheticPhysiologySettings {
   anaestheticResponse: number
   /** Discrete depth state: 1 deepest, 5 lightest / awake. */
   depthOfAnaesthesia: AnaestheticDepth
+  /** Pre-anaesthetic baseline used to make depth effects reversible and non-compounding. */
+  responseBaseline?: AnaestheticResponseBaseline
 }
 
 export const DEFAULT_MONITOR_ANAESTHETIC_PHYSIOLOGY_SETTINGS: MonitorAnaestheticPhysiologySettings = {
