@@ -25,7 +25,7 @@ Core files:
 - `src/edumon/actionLibrary.ts` — Supabase persistence and definition loading/saving.
 - `src/action-editor/ActionEditorApp.tsx` — instructor editor.
 - `src/edumon/EdumonActionsPanel.tsx` — activates definitions and contains local fallback actions.
-- `src/edumon/actionPhysiology.ts` — EDUMON-specific interpretation of generic effects.
+- `src/edumon/actionPhysiology.ts` — EDUMON-specific interpretation of generic effects, including sympathetic-response saturation.
 - `src/edumon/anaestheticPhysiology.ts` — anaesthetic depth/sensitivity/response and effective action-driven depth.
 - `src/edumon/respiratoryPhysiology.ts` — gas exchange/respiratory interpretation.
 - `src/edumon/EdumonBisTrend.tsx` — BIS derived from effective anaesthetic depth.
@@ -62,7 +62,7 @@ Momentary actions can create overlapping instances. Consider stacking semantics 
 - offsets add;
 - multipliers compound;
 - target/set operations are order-sensitive and do not necessarily model repeated doses;
-- clamp physiological quantities where appropriate in the interpreting physiology layer.
+- clamp or saturate physiological quantities where appropriate in the interpreting physiology layer.
 
 ## Existing composition rules
 
@@ -70,7 +70,10 @@ Do not duplicate these in individual actions:
 
 - Fentanyl lowers `anaesthesia.nociceptiveResponse`.
 - Laryngoscopy/Pain/Surgical stimulus create `stimulus.sympathetic`.
-- Sympathetic response is approximately `stimulus × nociceptive response × anaesthetic-depth response`.
+- Raw sympathetic drive is composed as `stimulus × nociceptive response × anaesthetic-depth response`.
+- That raw composed sympathetic value is then passed through `saturatingSympatheticResponse(...)` in `src/edumon/actionPhysiology.ts` before HR/MAP effects are generated.
+- The saturation curve preserves a composed response of 1.0, gives about 1.25 at a composed response of 2.0, and approaches a ceiling of about 1.67 for very large input. This prevents repeated/overlapping Events from producing linear runaway haemodynamic responses while retaining additive stimulus semantics in the action runtime.
+- Do not compensate individual Event definitions for this saturation curve; Event definitions describe stimulus magnitude/duration, while physiology owns the transfer function.
 - `anaesthesia.hypnoticEffect` deepens the same effective anaesthetic depth used by BIS and stimulus attenuation.
 - Volatile anaesthesia and IV hypnotic actions therefore converge on one effective-depth concept.
 - Relaxant acts through `neuromuscular.block`, not central respiratory drive.
@@ -82,7 +85,7 @@ Do not duplicate these in individual actions:
 2. Decide whether the behaviour can be expressed with existing declarative targets.
 3. Add/update the persistent Supabase definition via a new migration; do not rewrite previously deployed migrations.
 4. Keep the local fallback definition in `EdumonActionsPanel.tsx` consistent with the seeded persistent definition.
-5. Put physiological combination logic in EDUMON physiology modules, not in action buttons.
+5. Put physiological combination logic and transfer/saturation functions in EDUMON physiology modules, not in action buttons or action definitions.
 6. Ensure simulation-time behaviour, stacking and recovery are correct.
 7. Update BIS/respiratory/haemodynamic/device consumers if the new physiological state should affect them.
 8. Add or update regression checks.
@@ -104,7 +107,7 @@ Its hypnotic effect changes effective anaesthetic depth, which in turn affects B
 
 ## Current Event example
 
-Laryngoscopy should describe the stimulus, not the result. It therefore produces `stimulus.sympathetic`; physiology calculates HR/MAP response after accounting for opioid/nociceptive state and anaesthetic depth.
+Laryngoscopy should describe the stimulus, not the result. It therefore produces `stimulus.sympathetic`; physiology calculates HR/MAP response after accounting for opioid/nociceptive state, anaesthetic depth and the shared saturating sympathetic transfer function.
 
 ## Review checklist before finishing
 
@@ -115,7 +118,7 @@ Confirm all of the following:
 - persistent and fallback definitions agree;
 - timing uses simulation time;
 - repeated administrations behave intentionally;
-- physiology owns interpretation;
+- physiology owns interpretation and any saturation/transfer function;
 - relevant displays/alarms use effective physiology;
 - documentation is still accurate;
 - regression/build passes.
