@@ -75,6 +75,7 @@ export function EdumonAnaGasControl({
   patientRef.current = patientState
   const respiratory = resolvedMonitorRespiratorySettings(patientState)
   const anaesthetic = resolvedAnaestheticGases(patientState)
+  const anaestheticPhysiology = resolvedAnaestheticPhysiology(patientState)
   const fio2Percent = Math.round(respiratory.fio2 * 100)
   const fiSevo = clamp(anaesthetic.fiSevoPercent, 0, 8)
   const mac = etSevo / SEVO_MAC_PERCENT
@@ -175,6 +176,20 @@ export function EdumonAnaGasControl({
     armSettleTimer()
   }
 
+  const updateAnaestheticResponse = (value: number) => {
+    const current = patientRef.current
+    const physiology = resolvedAnaestheticPhysiology(current)
+    const nextState: MonitorPatientState = {
+      ...current,
+      anaestheticPhysiology: {
+        ...physiology,
+        anaestheticResponse: clamp(value, -1, 1),
+      },
+    }
+    patientRef.current = nextState
+    onPatientStateChange(nextState)
+  }
+
   const startTofMeasurement = () => {
     if (tofMeasuring) return
     setTofMeasuring(true)
@@ -263,10 +278,24 @@ export function EdumonAnaGasControl({
   ) : null
 
   const sideControl = physioHost ? createPortal(
-    <label className="edumon-signal-control edumon-signal-agent edumon-ana-fisevo-side-control">
-      <span>FiSevo <b>{fiSevo.toFixed(1)}%</b></span>
-      <input disabled={sideControlsLocked} type="range" min="0" max="8" step="0.1" value={fiSevo} onChange={(event) => updateFiSevo(Number(event.target.value))} />
-    </label>,
+    <>
+      <label className="edumon-signal-control edumon-signal-agent edumon-ana-response-side-control">
+        <span>Anaesthesia response <b>{anaestheticPhysiology.anaestheticResponse >= 0 ? '+' : ''}{anaestheticPhysiology.anaestheticResponse.toFixed(1)}</b></span>
+        <input
+          disabled={sideControlsLocked}
+          type="range"
+          min="-1"
+          max="1"
+          step="0.1"
+          value={anaestheticPhysiology.anaestheticResponse}
+          onChange={(event) => updateAnaestheticResponse(Number(event.target.value))}
+        />
+      </label>
+      <label className="edumon-signal-control edumon-signal-agent edumon-ana-fisevo-side-control">
+        <span>FiSevo <b>{fiSevo.toFixed(1)}%</b></span>
+        <input disabled={sideControlsLocked} type="range" min="0" max="8" step="0.1" value={fiSevo} onChange={(event) => updateFiSevo(Number(event.target.value))} />
+      </label>
+    </>,
     physioHost,
   ) : null
 
