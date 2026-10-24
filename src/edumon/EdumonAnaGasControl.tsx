@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
 import { latestEdumonRespiratoryOutput, resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
 import { applyAnaestheticDepthEffects, depthFromMac, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { currentNeuromuscularBlock, currentTofMinimumCount } from './actionPhysiology'
 import { EdumonBisTrend } from './EdumonBisTrend'
 import {
   DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS,
@@ -11,11 +13,7 @@ import {
 } from './types'
 import './edumon-ana-gases.css'
 
-type TofReading = {
-  count: number
-  ratio: number
-  measuredAt: number
-}
+type TofReading = { count: number; ratio: number; measuredAt: number }
 
 interface EdumonAnaGasControlProps {
   patientState: MonitorPatientState
@@ -26,7 +24,6 @@ interface EdumonAnaGasControlProps {
 const SLIDER_SETTLE_MS = 5200
 const SEVO_MAC_PERCENT = 2.0
 const TOF_MEASUREMENT_MS = 1800
-
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 function findVisibleHost(selector: string): HTMLElement | null {
@@ -48,17 +45,18 @@ function simulationIsPaused(): boolean {
 }
 
 function resolvedAnaestheticGases(state: MonitorPatientState): MonitorAnaestheticGasSettings {
-  return {
-    ...DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS,
-    ...(state.anaestheticGases ?? {}),
-  }
+  return { ...DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS, ...(state.anaestheticGases ?? {}) }
 }
 
-export function EdumonAnaGasControl({
-  patientState,
-  onPatientStateChange,
-  sideControlsLocked = false,
-}: EdumonAnaGasControlProps) {
+function tofFromBlock(block: number, minimumCount: number): Pick<TofReading, 'count' | 'ratio'> {
+  const residualBlock = clamp(block, 0, 1)
+  let count = residualBlock >= 0.95 ? 0 : residualBlock >= 0.8 ? 1 : residualBlock >= 0.6 ? 2 : residualBlock >= 0.35 ? 3 : 4
+  count = Math.max(count, Math.round(clamp(minimumCount, 0, 4)))
+  const ratio = count < 4 ? 0 : clamp(1 - residualBlock * 1.2, 0, 1)
+  return { count, ratio }
+}
+
+export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideControlsLocked = false }: EdumonAnaGasControlProps) {
   const patientRef = useRef(patientState)
   const settleTimerRef = useRef<number | null>(null)
   const tofTimerRef = useRef<number | null>(null)
@@ -91,10 +89,7 @@ export function EdumonAnaGasControl({
     const observer = new MutationObserver(findHosts)
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
     window.addEventListener('resize', findHosts)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', findHosts)
-    }
+    return () => { observer.disconnect(); window.removeEventListener('resize', findHosts) }
   }, [])
 
   useEffect(() => {
@@ -105,10 +100,7 @@ export function EdumonAnaGasControl({
       const wallDt = clamp((now - previous) / 1000, 0, 0.1)
       previous = now
       const output = latestEdumonRespiratoryOutput()
-      if (output && now - lastPublish > 100) {
-        setEtO2(clamp(output.alveolarOxygenFraction * 100, 0, 100))
-        lastPublish = now
-      }
+      if (output && now - lastPublish > 100) { setEtO2(clamp(output.alveolarOxygenFraction * 100, 0, 100)); lastPublish = now }
       if (!simulationIsPaused()) {
         const current = patientRef.current
         const respiratoryState = resolvedMonitorRespiratorySettings(current)
@@ -123,7 +115,6 @@ export function EdumonAnaGasControl({
         const nextEtSevo = clamp(etSevoRef.current + (gases.fiSevoPercent - etSevoRef.current) * fraction, 0, 8)
         etSevoRef.current = nextEtSevo
         setEtSevo(nextEtSevo)
-
         const physiology = resolvedAnaestheticPhysiology(current)
         const nextDepth = depthFromMac(nextEtSevo / SEVO_MAC_PERCENT, physiology.anaestheticSensitivity)
         if (lastAutoDepthRef.current !== nextDepth) {
@@ -148,24 +139,14 @@ export function EdumonAnaGasControl({
 
   const armSettleTimer = () => {
     if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
-    settleTimerRef.current = window.setTimeout(() => {
-      settleTimerRef.current = null
-      setFiSevoActive(false)
-    }, SLIDER_SETTLE_MS)
+    settleTimerRef.current = window.setTimeout(() => { settleTimerRef.current = null; setFiSevoActive(false) }, SLIDER_SETTLE_MS)
   }
 
-  const selectFiSevo = () => {
-    setFiSevoActive((current) => !current)
-    armSettleTimer()
-  }
+  const selectFiSevo = () => { setFiSevoActive((current) => !current); armSettleTimer() }
 
   const updateFiSevo = (percent: number) => {
     const current = patientRef.current
-    const nextGases = {
-      ...resolvedAnaestheticGases(current),
-      fiSevoPercent: clamp(percent, 0, 8),
-    }
-    const nextState = { ...current, anaestheticGases: nextGases }
+    const nextState = { ...current, anaestheticGases: { ...resolvedAnaestheticGases(current), fiSevoPercent: clamp(percent, 0, 8) } }
     patientRef.current = nextState
     onPatientStateChange(nextState)
     armSettleTimer()
@@ -174,11 +155,7 @@ export function EdumonAnaGasControl({
   const updateAnaestheticResponse = (value: number) => {
     const current = patientRef.current
     const physiology = resolvedAnaestheticPhysiology(current)
-    const nextState = applyAnaestheticDepthEffects(
-      current,
-      physiology.depthOfAnaesthesia,
-      clamp(value, -1, 1),
-    )
+    const nextState = applyAnaestheticDepthEffects(current, physiology.depthOfAnaesthesia, clamp(value, -1, 1))
     patientRef.current = nextState
     onPatientStateChange(nextState)
   }
@@ -189,107 +166,57 @@ export function EdumonAnaGasControl({
     if (tofTimerRef.current != null) window.clearTimeout(tofTimerRef.current)
     tofTimerRef.current = window.setTimeout(() => {
       tofTimerRef.current = null
-      setTofReading({ count: 4, ratio: 1.0, measuredAt: Date.now() })
+      const simulationTime = getActionRuntimeSimulationTime()
+      const reading = tofFromBlock(currentNeuromuscularBlock(simulationTime), currentTofMinimumCount(simulationTime))
+      setTofReading({ ...reading, measuredAt: Date.now() })
       setTofMeasuring(false)
     }, TOF_MEASUREMENT_MS)
   }
 
   const footer = footerHost ? createPortal(
     <>
-      <button
-        type="button"
-        className={`edumon-tof-container ${tofMeasuring ? 'measuring' : ''}`.trim()}
-        onClick={startTofMeasurement}
-        disabled={tofMeasuring}
-        aria-label={tofMeasuring ? 'TOF measurement in progress' : 'Start TOF measurement'}
-        title="Press to perform an intermittent TOF measurement"
-      >
+      <button type="button" className={`edumon-tof-container ${tofMeasuring ? 'measuring' : ''}`.trim()} onClick={startTofMeasurement} disabled={tofMeasuring} aria-label={tofMeasuring ? 'TOF measurement in progress' : 'Start TOF measurement'} title="Press to perform an intermittent TOF measurement">
         <span className="edumon-tof-title">TOF</span>
         <span className="edumon-tof-reading"><small>Count</small><strong>{tofReading?.count ?? '—'}</strong></span>
         <span className="edumon-tof-reading"><small>Ratio</small><strong>{tofReading ? tofReading.ratio.toFixed(1) : '—'}</strong></span>
         <span className="edumon-tof-status">{tofMeasuring ? 'MEAS' : tofReading ? 'Last' : 'Press'}</span>
       </button>
-
       <section className="edumon-ana-gas-footer" aria-label="Anaesthetic gas monitoring">
         <div className="edumon-gas-group edumon-gas-group-o2">
           <div className="edumon-gas-group-title">O₂</div>
-          <div className="edumon-gas-row edumon-gas-row-fi" aria-label={`Inspired oxygen ${fio2Percent} percent`}>
-            <span>Fi</span>
-            <strong>{fio2Percent}</strong>
-            <small>%</small>
-          </div>
-          <div className="edumon-gas-row edumon-gas-row-fe">
-            <span>Fe</span><strong>{Math.round(etO2)}</strong><small>%</small>
-          </div>
+          <div className="edumon-gas-row edumon-gas-row-fi" aria-label={`Inspired oxygen ${fio2Percent} percent`}><span>Fi</span><strong>{fio2Percent}</strong><small>%</small></div>
+          <div className="edumon-gas-row edumon-gas-row-fe"><span>Fe</span><strong>{Math.round(etO2)}</strong><small>%</small></div>
         </div>
-
         <div className="edumon-gas-group edumon-gas-group-sevo">
           <div className="edumon-gas-group-title">Sevo</div>
-          <button
-            type="button"
-            className={`edumon-gas-row edumon-gas-row-fi adjustable ${fiSevoActive ? 'active' : ''}`.trim()}
-            onClick={selectFiSevo}
-            aria-label={`Adjust inspired sevoflurane, currently ${fiSevo.toFixed(1)} percent`}
-          >
-            <span>Fi</span>
-            <strong>{fiSevo.toFixed(1)}</strong>
-            <small>%</small>
-            <i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
+          <button type="button" className={`edumon-gas-row edumon-gas-row-fi adjustable ${fiSevoActive ? 'active' : ''}`.trim()} onClick={selectFiSevo} aria-label={`Adjust inspired sevoflurane, currently ${fiSevo.toFixed(1)} percent`}>
+            <span>Fi</span><strong>{fiSevo.toFixed(1)}</strong><small>%</small><i className="edumon-gas-control-knob" aria-hidden="true"><b /></i>
           </button>
-          <div className="edumon-gas-row edumon-gas-row-fe">
-            <span>Fe</span><strong>{etSevo.toFixed(1)}</strong><small>%</small>
-          </div>
+          <div className="edumon-gas-row edumon-gas-row-fe"><span>Fe</span><strong>{etSevo.toFixed(1)}</strong><small>%</small></div>
         </div>
-
-        <div className="edumon-gas-mac">
-          <span>MAC</span>
-          <strong>{mac.toFixed(1)}</strong>
-          <small>Sevo</small>
-        </div>
+        <div className="edumon-gas-mac"><span>MAC</span><strong>{mac.toFixed(1)}</strong><small>Sevo</small></div>
       </section>
-    </>,
-    footerHost,
+    </>, footerHost,
   ) : null
 
   const overlay = overlayHost && fiSevoActive ? createPortal(
     <div className="edumon-gas-slider-overlay" role="group" aria-label="Inspired sevoflurane quick control">
-      <div className="edumon-gas-slider-heading">
-        <strong>FiSevo</strong>
-        <span>{fiSevo.toFixed(1)}%</span>
-      </div>
-      <input
-        type="range"
-        min="0"
-        max="8"
-        step="0.1"
-        value={fiSevo}
-        onPointerDown={armSettleTimer}
-        onChange={(event) => updateFiSevo(Number(event.target.value))}
-      />
-    </div>,
-    overlayHost,
+      <div className="edumon-gas-slider-heading"><strong>FiSevo</strong><span>{fiSevo.toFixed(1)}%</span></div>
+      <input type="range" min="0" max="8" step="0.1" value={fiSevo} onPointerDown={armSettleTimer} onChange={(event) => updateFiSevo(Number(event.target.value))} />
+    </div>, overlayHost,
   ) : null
 
   const sideControl = physioHost ? createPortal(
     <>
       <label className="edumon-signal-control edumon-signal-agent edumon-ana-response-side-control">
         <span>Anaesthesia response <b>{anaestheticPhysiology.anaestheticResponse >= 0 ? '+' : ''}{anaestheticPhysiology.anaestheticResponse.toFixed(1)}</b></span>
-        <input
-          disabled={sideControlsLocked}
-          type="range"
-          min="-1"
-          max="1"
-          step="0.1"
-          value={anaestheticPhysiology.anaestheticResponse}
-          onChange={(event) => updateAnaestheticResponse(Number(event.target.value))}
-        />
+        <input disabled={sideControlsLocked} type="range" min="-1" max="1" step="0.1" value={anaestheticPhysiology.anaestheticResponse} onChange={(event) => updateAnaestheticResponse(Number(event.target.value))} />
       </label>
       <label className="edumon-signal-control edumon-signal-agent edumon-ana-fisevo-side-control">
         <span>FiSevo <b>{fiSevo.toFixed(1)}%</b></span>
         <input disabled={sideControlsLocked} type="range" min="0" max="8" step="0.1" value={fiSevo} onChange={(event) => updateFiSevo(Number(event.target.value))} />
       </label>
-    </>,
-    physioHost,
+    </>, physioHost,
   ) : null
 
   return <><EdumonBisTrend patientState={patientState} />{footer}{overlay}{sideControl}</>

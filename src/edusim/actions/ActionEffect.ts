@@ -13,7 +13,9 @@ export type EdusimActionEffectTarget =
   | 'haemodynamics.heartRate'
   | 'haemodynamics.meanArterialPressure'
   | 'respiration.drive'
+  | 'respiration.airwayObstruction'
   | 'neuromuscular.block'
+  | 'neuromuscular.tofMinimumCount'
   | 'anaesthesia.hypnoticEffect'
   | 'anaesthesia.nociceptiveResponse'
   | 'stimulus.sympathetic'
@@ -44,9 +46,21 @@ export const EDUSIM_ACTION_EFFECT_TARGETS: readonly EdusimActionEffectTargetDefi
     allowedOperations: ['multiplier', 'set', 'target', 'increment'],
   },
   {
+    id: 'respiration.airwayObstruction',
+    label: 'Airway obstruction',
+    unit: '0–1',
+    allowedOperations: ['offset', 'set', 'target', 'increment'],
+  },
+  {
     id: 'neuromuscular.block',
     label: 'Neuromuscular block',
     unit: '0–1',
+    allowedOperations: ['target', 'set', 'offset', 'increment'],
+  },
+  {
+    id: 'neuromuscular.tofMinimumCount',
+    label: 'TOF minimum count',
+    unit: '0–4',
     allowedOperations: ['target', 'set', 'offset', 'increment'],
   },
   {

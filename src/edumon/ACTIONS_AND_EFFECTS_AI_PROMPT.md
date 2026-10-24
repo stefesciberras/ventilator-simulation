@@ -1,168 +1,123 @@
 # EDUMON actions/effects — prompt for AI coding agents
 
-> Maintenance contract: update this prompt whenever the action/effect vocabulary, runtime semantics, physiology interpretation, persistence model, seeded actions, drug grouping, dose controls, or relevant file locations change.
+> Maintenance contract: update this prompt whenever action/effect vocabulary, runtime semantics, physiology interpretation, persistence, seeded actions, grouping, long-press controls, timing or relevant file locations change.
 
-Use this prompt when asking an AI coding agent to add or edit EDUMON Drugs, Events or physiological responses.
-
----
-
-You are modifying the EDUSIM/EDUMON action framework in `stefesciberras/ventilator-simulation`.
+Use this prompt when modifying EDUSIM/EDUMON Drugs, Events or physiological responses.
 
 ## Non-negotiable architecture
 
 **Actions describe effects; physiology interprets effects.**
 
-Never make a Drug/Event button directly mutate monitor values, waveforms, BIS, respiratory measurements or patient physiology. Buttons activate an `ActionDefinition`; `ActionRuntime` creates simulation-time `ActiveEffect` instances; EDUMON physiology consumes those effects.
+Never make a Drug/Event button directly mutate monitor values, respiratory traces, BIS, TOF or waveform pixels. Buttons activate `ActionDefinition`; `ActionRuntime` creates simulation-time `ActiveEffect` instances; EDUMON physiology/monitor code interprets those effects.
 
-## Current architecture
+## Core files
 
-Core files:
+- `src/edusim/actions/ActionEffect.ts` — validated targets/operations.
+- `src/edusim/actions/ActionRuntime.ts` — momentary/toggle timing, recovery, stacking and adjustable intensity.
+- `src/edumon/EdumonActionsPanel.tsx` — fallback definitions, Drug/Event subclasses, generic long-press level UI.
+- `src/edumon/actionPhysiology.ts` — EDUMON-specific interpretation.
+- `src/edumon/EdumonAnaGasControl.tsx` — TOF measurement derived from neuromuscular state.
+- `src/edumon/EdumonCapnographySurface.tsx` — CO₂ waveform derived from respiratory mechanics.
+- `supabase/migrations/` — persistent definitions.
 
-- `src/edusim/actions/ActionEffect.ts` — validated target/operation vocabulary.
-- `src/edusim/actions/ActionRuntime.ts` — momentary/toggle timing, recovery, adjustable action intensity, stacking and numeric resolution.
-- `src/edumon/actionLibrary.ts` — Supabase persistence.
-- `src/action-editor/ActionEditorApp.tsx` — instructor editor.
-- `src/edumon/EdumonActionsPanel.tsx` — buttons, drug-class presentation, long-press dose selector and fallback actions.
-- `src/edumon/actionPhysiology.ts` — EDUMON interpretation of generic effects.
-- `src/edumon/anaestheticPhysiology.ts` — effective anaesthetic depth.
-- `supabase/migrations/` — persistent seeded definitions/data migrations.
-- `src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md` — instructor-facing guide; keep synchronized.
-
-Current targets:
+## Current targets
 
 - `haemodynamics.heartRate`
 - `haemodynamics.meanArterialPressure`
 - `respiration.drive`
+- `respiration.airwayObstruction`
 - `neuromuscular.block`
+- `neuromuscular.tofMinimumCount`
 - `anaesthesia.hypnoticEffect`
 - `anaesthesia.nociceptiveResponse`
 - `stimulus.sympathetic`
 
-Current operations:
+Operations: `offset`, `set`, `multiplier`, `target`, `increment`, `trigger`.
 
-- `offset`
-- `set`
-- `multiplier`
-- `target`
-- `increment`
-- `trigger`
+## Grouping
 
-## Drug classes
+Drugs:
+- Anaesthesia
+- Cardiovascular
 
-The monitor currently displays two Drug subclasses:
+Events:
+- Anaesthesia
+- Cardiovascular
+- Respiratory
 
-- **Anaesthesia** — anaesthetic, opioid, neuromuscular-block and reversal actions, including Neostigmine and Sugammadex.
-- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion and Adrenaline infusion.
+Grouping is presentation only; physiology stays declarative.
 
-This grouping is presentation/taxonomy. It must not move physiological logic into the UI.
+## Timing
 
-## Timing and toggle semantics
+Momentary: onset -> finite duration -> recovery.
 
-All effects use **simulation time**.
+Toggle: onset -> sustained indefinitely -> switch-off -> recovery.
 
-For `momentary` actions: onset -> duration -> recovery, and repeated presses may stack.
+All timing uses simulation time.
 
-For `toggle` actions: first press starts the action, onset ramps to full effect, the effect remains indefinitely until the second press, and then recovery starts. `durationSeconds` does not terminate a running toggle.
+## Adjustable level semantics
 
-## Infusion dose-level semantics
+Two generic long-press actions exist:
 
-Infusions that support dose selection set:
+- `dose-levels` for adjustable infusions;
+- `severity-levels` for adjustable clinical events.
 
-`long_press_action = 'dose-levels'`
+Both use `ActiveEffect.intensity`:
+- Low 0.65
+- Medium 1.0
+- High 1.35
 
-The normal short press remains start/stop. Long press opens a three-step selector:
+Changing a running toggle's level must use `setActionIntensity()` without restarting it.
 
-- Low = intensity 0.65
-- Medium = intensity 1.0 (default)
-- High = intensity 1.35
+For `offset`/`increment`, scale additive magnitude. For `multiplier`, scale distance from neutral 1.0: `1 + (effect.value - 1) * weight * intensity`. For `target`/`set`, scale interpolation weight and clamp safely.
 
-Changing the level of an already-running infusion updates its active `ActiveEffect.intensity` without stopping/restarting the infusion.
+## Current Cardiovascular Events
 
-Intensity is interpreted generically in `ActionRuntime`:
+- `hypertension` — toggle MAP increase.
+- `hypotension` — toggle MAP decrease.
+- `tachycardia` — toggle HR increase.
+- `bradycardia` — toggle HR decrease.
+- `hypovolaemia` — toggle with `severity-levels`; currently MAP down + HR up surrogate.
+- `bleeding` — toggle with `severity-levels`; currently MAP down + HR up surrogate.
 
-- `offset` / `increment`: scale the additive effect directly;
-- `multiplier`: scale the distance from neutral 1.0, i.e. `1 + (effect.value - 1) * weight * intensity`;
-- `target` / `set`: intensity scales the interpolation weight, clamped to 1;
-- `trigger`: unchanged.
+Hypovolaemia and Bleeding do not yet modify an explicit blood-volume compartment. Do not fake such a state in the UI; add a future validated physiology target/state when needed.
 
-Do not scale multiplier values by simple multiplication (`effect.value * intensity`), because that makes suppressive multipliers behave backwards.
+## Current Respiratory Events
 
-The Low/Medium/High steps are educational relative intensity levels, not clinical dosing units or a detailed PK/PD model.
+### Apnoea
+`apnoea` is a toggle using `respiration.drive` set to 0. Recovery occurs through the generic toggle recovery semantics.
 
-## Existing composition rules
+### Return of diaphragm breathing
+`diaphragm-return` is momentary and uses:
+- `respiration.drive` target 1;
+- `neuromuscular.tofMinimumCount` target 1.
 
-- Fentanyl and Remifentanil lower `anaesthesia.nociceptiveResponse`.
-- Laryngoscopy, Pain and Surgery create `stimulus.sympathetic`.
-- Raw sympathetic drive is `stimulus × nociceptive response × anaesthetic-depth response`, then passes through the shared saturating sympathetic transfer function.
-- `anaesthesia.hypnoticEffect` deepens the effective anaesthetic depth used by BIS and stimulus attenuation.
-- Propofol bolus and TIVA therefore share the hypnotic-depth pathway.
-- Relaxant increases `neuromuscular.block`.
-- Neostigmine and Sugammadex are later momentary actions targeting the same `neuromuscular.block` state, so reversal composes through the generic action runtime rather than directly editing ventilation or TOF displays.
+TOF is derived from current `neuromuscular.block`; the minimum-count effect guarantees at least one response, not exactly one.
 
-## Current infusion actions
+### Bronchospasm
+`bronchospasm` is a toggle with `long_press_action = 'severity-levels'` and uses `respiration.airwayObstruction`.
 
-### Remifentanil
+`actionPhysiology.ts` interprets this as increased expiratory resistance. Capnography derives obstruction from resistance/compliance, so bronchospasm must change the CO₂ waveform through respiratory mechanics, never through button-specific waveform drawing.
 
-`remifentanil` is a toggle Drug with `long_press_action = 'dose-levels'`. Its base/Medium effects reduce nociceptive response and respiratory drive and modestly reduce HR.
+## Existing anaesthesia composition
 
-### TIVA (Propofol TCI)
+Surgery/Laryngoscopy/Pain create sympathetic stimulus. Opioids alter nociceptive response. Effective anaesthetic depth attenuates response. Shared saturation limits excessive sympathetic response. Propofol/TIVA use hypnotic effect; Relaxant/reversal agents use neuromuscular block.
 
-`tiva` is a toggle Drug with `long_press_action = 'dose-levels'`. Its base/Medium effects increase hypnotic effect, reduce respiratory drive and lower MAP. Do not add a separate TIVA-only BIS pathway.
+## Change checklist
 
-### Noradrenaline
-
-`noradrenaline` is a Cardiovascular toggle Drug with `long_press_action = 'dose-levels'`. Its base/Medium effects raise MAP and apply a small negative HR offset. It remains active until switched off, then recovers.
-
-### Adrenaline
-
-`adrenaline` is a Cardiovascular toggle Drug with `long_press_action = 'dose-levels'`. Its base/Medium teaching-model effects raise both MAP and HR. It uses the same generic Low/Medium/High runtime intensity mechanism as other adjustable infusions.
-
-## Current Cardiovascular boluses
-
-- `atropine` — positive HR offset.
-- `ephedrine` — positive HR and MAP offsets.
-- `phenylephrine` — positive MAP offset plus modest negative HR offset.
-
-These are teaching-model responses rather than fixed clinical dose claims.
-
-## Neuromuscular reversal
-
-- `neostigmine` — momentary `neuromuscular.block` target of about 0.2 with slower onset, representing slower/incomplete reversal in the current teaching model.
-- `sugammadex` — momentary `neuromuscular.block` target of 0 with faster onset, representing rapid near-complete reversal.
-
-Important limitation: the current `Relaxant` action represents a generic non-depolarising block. EDUMON does not yet store the identity/class of the blocker. Therefore Sugammadex currently acts on the generic block state and cannot yet enforce aminosteroid-only compatibility. When individual relaxants are introduced, add drug-specific block metadata/physiology and enforce compatibility there; do not hard-code it into the Sugammadex button.
-
-## When adding/editing a Drug or Event
-
-1. Inspect current implementation first.
-2. Use existing declarative targets where possible.
-3. Add/update persistent Supabase definitions via a new migration; do not rewrite deployed migrations.
-4. Keep fallback definitions aligned.
-5. Put physiology in physiology/runtime layers, never in action button click handlers.
-6. Choose momentary versus toggle deliberately.
-7. For adjustable infusions use the generic `dose-levels` long press and runtime intensity; do not create drug-specific dose UI logic.
-8. Preserve multiplier-intensity mathematics around neutral 1.0.
-9. For reversal agents, prefer composition through `neuromuscular.block`; if blocker identity or mechanism matters, extend the physiology model rather than adding UI conditionals.
-10. Add/update regressions.
-11. Update both documentation files.
-12. Bump EDUMON version appropriately.
-13. Run full CI and merge only when green.
+1. Inspect current implementation.
+2. Prefer existing declarative targets.
+3. If a new concept is needed, add a validated target and physiology consumer.
+4. Add/update a new Supabase migration; never rewrite deployed migrations.
+5. Keep fallback definitions aligned.
+6. Preserve momentary/toggle semantics and simulation time.
+7. Use generic `dose-levels` / `severity-levels`, not drug/event-specific menus.
+8. Keep physiology out of click handlers.
+9. Update regression coverage.
+10. Update both documentation files.
+11. Bump EDUMON version.
+12. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm:
-- no direct monitor mutation from buttons;
-- no arbitrary target paths;
-- fallback and persistent definitions agree;
-- toggle actions sustain until stopped and recover after stop;
-- Low/Medium/High can change while an infusion is running;
-- multiplier dose scaling is relative to neutral 1.0;
-- reversal agents compose through the neuromuscular block state;
-- Sugammadex blocker-specific limitation is documented until relaxant identity exists;
-- drug grouping is presentation-only;
-- documentation and regressions are current;
-- build passes.
-
-If a requested feature cannot be represented cleanly with these abstractions, add the missing runtime/physiology abstraction rather than taking a UI shortcut.
-
----
+Confirm that no button directly mutates monitor values, no waveform is redrawn by an Event handler, persistent/fallback definitions agree, severity can change while toggles run, TOF derives from neuromuscular state, bronchospasm alters expiratory mechanics, docs are current, and build/regressions pass.
