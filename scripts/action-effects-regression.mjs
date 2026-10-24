@@ -38,6 +38,11 @@ assert(panel.includes("definition.long_press_action === 'severity-levels'"), 'lo
 assert(panel.includes("low: { label: 'Low', scale: 0.65"), 'Low intensity must remain explicit')
 assert(panel.includes("high: { label: 'High', scale: 1.35"), 'High intensity must remain explicit')
 
+assert(panel.includes('getActiveEffects'), 'toggle UI must derive active state from ActionRuntime')
+assert(panel.includes("active.mode === 'toggle' && active.stoppedAtSimulationTime == null"), 'toggle UI must recognise only running toggle effects as active')
+assert(panel.includes('levelFromIntensity'), 'active adjustable toggle level must derive from runtime intensity')
+assert(!panel.includes('toggleStates'), 'toggle UI must not duplicate runtime ON/OFF state in local component state')
+
 for (const target of ['respiration.airwayObstruction','neuromuscular.tofMinimumCount']) {
   assert(targets.includes(`'${target}'`), `${target} must be a validated action target`)
 }
@@ -54,7 +59,7 @@ assert(runtime.includes('export function setActionIntensity'), 'running severity
 assert(runtime.includes("1 + (effect.value - 1) * weight * intensity"), 'multiplier intensity must remain neutral around 1.0')
 
 for (const [name, text] of [['guide', guide], ['prompt', prompt]]) {
-  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','severity-levels','Bronchospasm','Hypovolaemia','Bleeding','Return of diaphragm breathing','respiration.airwayObstruction','neuromuscular.tofMinimumCount']) {
+  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','severity-levels','Bronchospasm','Hypovolaemia','Bleeding','Return of diaphragm breathing','respiration.airwayObstruction','neuromuscular.tofMinimumCount','runtime']) {
     assert(text.includes(phrase), `${name} must document ${phrase}`)
   }
 }
