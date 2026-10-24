@@ -17,6 +17,7 @@ const physiology = read('src/edumon/actionPhysiology.ts')
 const tof = read('src/edumon/EdumonAnaGasControl.tsx')
 const migration = read('supabase/migrations/20261024_event_classes_and_respiratory_effects.sql')
 const priorityMigration = read('supabase/migrations/20261024_action_priorities_and_constraints.sql')
+const betaBlockerMigration = read('supabase/migrations/20261024_beta_blocker_hr_floor.sql')
 const guide = read('src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md')
 const prompt = read('src/edumon/ACTIONS_AND_EFFECTS_AI_PROMPT.md')
 
@@ -83,14 +84,21 @@ assert(editor.includes('<option value="ana">Anaesthesia</option>'), 'action edit
 
 assert(panel.includes("id: 'beta-blocker', kind: 'drug'"), 'Beta blocker fallback must remain a Drug')
 assert(panel.includes("CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline', 'adrenaline', 'beta-blocker'])"), 'Beta blocker must remain in the Cardiovascular Drugs group')
+assert(panel.includes("id: 'beta-blocker-heart-rate-offset'"), 'Beta blocker must have a direct HR offset')
+assert(panel.includes("operation: 'offset', value: -15"), 'Beta blocker HR offset must be -15 bpm')
 assert(panel.includes("operation: 'constraint', constraint: 'block-increase'"), 'Beta blocker must suppress positive chronotropy with a constraint')
+assert(panel.includes("id: 'beta-blocker-heart-rate-floor'"), 'Beta blocker must have an HR floor effect')
+assert(panel.includes("constraint: 'minimum', value: 50"), 'Beta blocker HR floor must be 50 bpm')
 assert(panel.includes('priority: 70'), 'Beta blocker must use higher-than-ordinary priority')
 assert(priorityMigration.includes('add column if not exists priority integer not null default 30'), 'priority migration must add the default priority column')
 assert(priorityMigration.includes("'beta-blocker'"), 'priority migration must seed Beta blocker')
-assert(priorityMigration.includes("\"constraint\":\"block-increase\""), 'persistent Beta blocker must use block-increase')
+assert(betaBlockerMigration.includes('"value":-15'), 'Beta blocker migration must persist the -15 bpm offset')
+assert(betaBlockerMigration.includes('"constraint":"block-increase"'), 'Beta blocker migration must persist block-increase')
+assert(betaBlockerMigration.includes('"constraint":"minimum"'), 'Beta blocker migration must persist the minimum constraint')
+assert(betaBlockerMigration.includes('"value":50'), 'Beta blocker migration must persist the 50 bpm floor')
 
 for (const [name, text] of [['guide', guide], ['prompt', prompt]]) {
-  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','severity-levels','Bronchospasm','Hypovolaemia','Bleeding','Return of diaphragm breathing','respiration.airwayObstruction','neuromuscular.tofMinimumCount','runtime','Beta blocker','block-increase','priority']) {
+  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','severity-levels','Bronchospasm','Hypovolaemia','Bleeding','Return of diaphragm breathing','respiration.airwayObstruction','neuromuscular.tofMinimumCount','runtime','Beta blocker','block-increase','minimum','50 bpm','priority']) {
     assert(text.includes(phrase), `${name} must document ${phrase}`)
   }
 }
