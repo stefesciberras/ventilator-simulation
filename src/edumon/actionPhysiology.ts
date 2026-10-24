@@ -1,12 +1,15 @@
 import { resolveNumericActionEffect } from '../edusim/actions/ActionRuntime'
+import { anaestheticStimulusResponseScale, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type MonitorPatientState } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
-function sympatheticResponse(simulationTime: number): { heartRateOffset: number; mapOffset: number } {
+function sympatheticResponse(state: MonitorPatientState, simulationTime: number): { heartRateOffset: number; mapOffset: number } {
   const stimulus = Math.max(0, resolveNumericActionEffect('stimulus.sympathetic', 0, simulationTime))
   const nociceptiveResponse = Math.max(0, resolveNumericActionEffect('anaesthesia.nociceptiveResponse', 1, simulationTime))
-  const response = stimulus * nociceptiveResponse
+  const depth = resolvedAnaestheticPhysiology(state).depthOfAnaesthesia
+  const depthResponse = anaestheticStimulusResponseScale(depth)
+  const response = stimulus * nociceptiveResponse * depthResponse
   return {
     heartRateOffset: 25 * response,
     mapOffset: 30 * response,
@@ -25,7 +28,7 @@ function applyMeanPressureEffect(state: MonitorPatientState, simulationTime: num
 }
 
 export function applyEdumonActionPhysiology(state: MonitorPatientState, simulationTime: number): MonitorPatientState {
-  const sympathetic = sympatheticResponse(simulationTime)
+  const sympathetic = sympatheticResponse(state, simulationTime)
   const pressure = applyMeanPressureEffect(state, simulationTime, sympathetic.mapOffset)
   const baselineRespiratory = {
     ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
