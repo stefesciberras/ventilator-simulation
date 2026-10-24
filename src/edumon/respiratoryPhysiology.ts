@@ -5,6 +5,8 @@ import {
   type RespiratoryPhysiologyOutput,
   type RespiratoryPhysiologyState,
 } from '../core/physiology/respiratory'
+import { setActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
+import { applyEdumonActionPhysiology } from './actionPhysiology'
 import {
   DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
   type MonitorPatientState,
@@ -34,8 +36,10 @@ export function resolvedMonitorRespiratorySettings(state: MonitorPatientState): 
   }
 }
 
-export function monitorRespiratoryInput(state: MonitorPatientState): RespiratoryPhysiologyInput {
-  const respiratory = resolvedMonitorRespiratorySettings(state)
+export function monitorRespiratoryInput(state: MonitorPatientState, simulationTime = 0): RespiratoryPhysiologyInput {
+  setActionRuntimeSimulationTime(simulationTime)
+  const effectiveState = applyEdumonActionPhysiology(state, simulationTime)
+  const respiratory = resolvedMonitorRespiratorySettings(effectiveState)
   return {
     sex: respiratory.sex,
     heightCm: respiratory.heightCm,
@@ -48,9 +52,7 @@ export function monitorRespiratoryInput(state: MonitorPatientState): Respiratory
     expiratoryResistanceCmH2OLs: respiratory.expiratoryResistanceCmH2OLs,
     frcMl: respiratory.frcMl,
     shuntFraction: respiratory.shuntFraction,
-    // The legacy SpO2 control is now an instructor ceiling, equivalent to
-    // EDUVENT maxSpO2. Gas exchange determines the actual saturation below it.
-    maxSpO2: Math.min(respiratory.maxSpO2, state.spo2),
+    maxSpO2: Math.min(respiratory.maxSpO2, effectiveState.spo2),
     oxygenConsumptionMlMin: respiratory.oxygenConsumptionMlMin,
     co2ProductionMlMin: respiratory.co2ProductionMlMin,
     referenceCardiacOutputLMin: 5,
@@ -61,10 +63,9 @@ export function createEdumonRespiratoryRuntime(
   patientState: MonitorPatientState,
   simulationTime = 0,
 ): EdumonRespiratoryRuntime {
-  // Seed from the configured ceiling so existing scenarios start without an
-  // artificial jump; subsequent samples are driven by shared gas exchange.
+  setActionRuntimeSimulationTime(simulationTime)
   const initialState = createRespiratoryPhysiologyState({ spo2Percent: patientState.spo2 })
-  const { state, output } = stepRespiratoryPhysiology(initialState, monitorRespiratoryInput(patientState), 0)
+  const { state, output } = stepRespiratoryPhysiology(initialState, monitorRespiratoryInput(patientState, simulationTime), 0)
   latestRespiratoryOutput = output
   return { state, output, simulationTime }
 }
@@ -75,8 +76,9 @@ export function stepEdumonRespiratoryRuntime(
   simulationTime: number,
 ): EdumonRespiratoryRuntime {
   if (simulationTime < runtime.simulationTime) return createEdumonRespiratoryRuntime(patientState, simulationTime)
+  setActionRuntimeSimulationTime(simulationTime)
   const deltaTime = Math.max(0, simulationTime - runtime.simulationTime)
-  const next = stepRespiratoryPhysiology(runtime.state, monitorRespiratoryInput(patientState), deltaTime)
+  const next = stepRespiratoryPhysiology(runtime.state, monitorRespiratoryInput(patientState, simulationTime), deltaTime)
   latestRespiratoryOutput = next.output
   return {
     state: next.state,
