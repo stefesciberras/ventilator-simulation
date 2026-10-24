@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { getInstructorAccount, subscribeToInstructorAccount } from '../teaching/account/InstructorAccountService'
-import { activateAction, getActionRuntimeSimulationTime, setActionIntensity } from '../edusim/actions/ActionRuntime'
+import { activateAction, getActiveEffects, getActionRuntimeSimulationTime, setActionIntensity } from '../edusim/actions/ActionRuntime'
 import { listEdusimActions, type EdusimActionDefinition, type EdusimActionEnvironment } from './actionLibrary'
 import './edumon-actions.css'
 
@@ -14,6 +14,11 @@ const LEVEL_STEPS: Record<ActionLevel, { label: string; scale: number; bars: num
   medium: { label: 'Medium', scale: 1, bars: 2 },
   high: { label: 'High', scale: 1.35, bars: 3 },
 }
+
+// Retain the instructor's chosen level across ACTIONS panel remounts. Running toggle
+// truth still comes from ActionRuntime; this map only remembers the next selected level
+// when an adjustable action is not currently running.
+const ACTION_LEVEL_SELECTIONS = new Map<string, ActionLevel>()
 
 const CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline', 'adrenaline'])
 const CARDIOVASCULAR_EVENT_IDS = new Set(['hypertension', 'hypotension', 'tachycardia', 'bradycardia', 'hypovolaemia', 'bleeding'])
@@ -107,6 +112,12 @@ function supportsLevel(definition: EdusimActionDefinition): boolean {
   return definition.long_press_action === 'dose-levels' || definition.long_press_action === 'severity-levels'
 }
 
+function levelFromIntensity(intensity: number): ActionLevel {
+  return (Object.keys(LEVEL_STEPS) as ActionLevel[]).reduce((closest, candidate) =>
+    Math.abs(LEVEL_STEPS[candidate].scale - intensity) < Math.abs(LEVEL_STEPS[closest].scale - intensity) ? candidate : closest,
+  'medium')
+}
+
 function EdumonActionSection({ id, title, children }: { id: EdumonActionSectionId; title: string; children?: ReactNode }) {
   const [collapsed, setCollapsed] = useState(true)
   return (
@@ -173,11 +184,10 @@ export function EdumonActionsPanel() {
   const environment = currentEnvironment()
   const fallback = environment === 'edumon-ana' ? FALLBACK_ANA_ACTIONS : []
   const [definitions, setDefinitions] = useState<EdusimActionDefinition[]>(fallback)
-  const [toggleStates, setToggleStates] = useState<Set<string>>(new Set())
   const [flashing, setFlashing] = useState<Set<string>>(new Set())
-  const [levels, setLevels] = useState<Map<string, ActionLevel>>(new Map())
   const [levelMenuActionId, setLevelMenuActionId] = useState<string | null>(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [, setRuntimeRevision] = useState(0)
   const timersRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
@@ -195,15 +205,24 @@ export function EdumonActionsPanel() {
 
   useEffect(() => () => { for (const timer of timersRef.current.values()) window.clearTimeout(timer); timersRef.current.clear() }, [])
 
-  const currentLevel = (definition: EdusimActionDefinition): ActionLevel => levels.get(definition.id) ?? 'medium'
+  const runningToggleEffects = (actionId: string) => getActiveEffects(getActionRuntimeSimulationTime())
+    .filter((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
+
+  const isRunningToggle = (actionId: string) => runningToggleEffects(actionId).length > 0
+
+  const currentLevel = (definition: EdusimActionDefinition): ActionLevel => {
+    const running = runningToggleEffects(definition.id)[0]
+    if (running) return levelFromIntensity(running.intensity)
+    return ACTION_LEVEL_SELECTIONS.get(definition.id) ?? 'medium'
+  }
+
   const trigger = (definition: EdusimActionDefinition) => {
     const intensity = LEVEL_STEPS[currentLevel(definition)].scale
     activateAction(definition, getActionRuntimeSimulationTime(), supportsLevel(definition) ? intensity : 1)
+    setRuntimeRevision((value) => value + 1)
     setLevelMenuActionId(null)
-    if (definition.short_press_action === 'toggle') {
-      setToggleStates((current) => { const next = new Set(current); if (next.has(definition.id)) next.delete(definition.id); else next.add(definition.id); return next })
-      return
-    }
+    if (definition.short_press_action === 'toggle') return
+
     setFlashing((current) => new Set(current).add(definition.id))
     const existing = timersRef.current.get(definition.id)
     if (existing != null) window.clearTimeout(existing)
@@ -212,12 +231,13 @@ export function EdumonActionsPanel() {
   }
 
   const selectLevel = (definition: EdusimActionDefinition, level: ActionLevel) => {
-    setLevels((current) => { const next = new Map(current); next.set(definition.id, level); return next })
-    if (toggleStates.has(definition.id)) setActionIntensity(definition.id, LEVEL_STEPS[level].scale)
+    ACTION_LEVEL_SELECTIONS.set(definition.id, level)
+    if (isRunningToggle(definition.id)) setActionIntensity(definition.id, LEVEL_STEPS[level].scale)
+    setRuntimeRevision((value) => value + 1)
     setLevelMenuActionId(null)
   }
 
-  const isActive = (definition: EdusimActionDefinition) => definition.short_press_action === 'toggle' ? toggleStates.has(definition.id) : flashing.has(definition.id)
+  const isActive = (definition: EdusimActionDefinition) => definition.short_press_action === 'toggle' ? isRunningToggle(definition.id) : flashing.has(definition.id)
   const drugs = definitions.filter((definition) => definition.kind === 'drug')
   const events = definitions.filter((definition) => definition.kind === 'event')
 
