@@ -22,13 +22,47 @@ interface EdumonActionButtonProps {
 }
 
 const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
-  { id: 'propofol', kind: 'drug', name: 'Propofol', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 10, created_at: '', updated_at: '' },
-  { id: 'fentanyl', kind: 'drug', name: 'Fentanyl', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 20, created_at: '', updated_at: '' },
-  { id: 'relaxant', kind: 'drug', name: 'Relaxant', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 30, created_at: '', updated_at: '' },
-  { id: 'tiva', kind: 'drug', name: 'TIVA', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 40, created_at: '', updated_at: '' },
-  { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 10, created_at: '', updated_at: '' },
-  { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 20, created_at: '', updated_at: '' },
-  { id: 'awakening', kind: 'event', name: 'Awakening', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], sort_order: 30, created_at: '', updated_at: '' },
+  { id: 'propofol', kind: 'drug', name: 'Propofol', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
+  {
+    id: 'fentanyl',
+    kind: 'drug',
+    name: 'Fentanyl',
+    short_press_action: 'momentary',
+    long_press_action: null,
+    duration_seconds: 0,
+    description: 'Opioid action with modest bradycardic and respiratory-depressant effects plus attenuation of nociceptive response.',
+    setting: 'ana',
+    environments: ['edumon-ana'],
+    effects: [
+      { id: 'fentanyl-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -6, onsetSeconds: 15, durationSeconds: 180, recoverySeconds: 120 },
+      { id: 'fentanyl-respiratory-drive', target: 'respiration.drive', operation: 'multiplier', value: 0.75, onsetSeconds: 20, durationSeconds: 240, recoverySeconds: 180 },
+      { id: 'fentanyl-nociceptive-response', target: 'anaesthesia.nociceptiveResponse', operation: 'multiplier', value: 0.55, onsetSeconds: 15, durationSeconds: 300, recoverySeconds: 180 },
+    ],
+    sort_order: 20,
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'atracurium',
+    kind: 'drug',
+    name: 'Atracurium',
+    short_press_action: 'momentary',
+    long_press_action: null,
+    duration_seconds: 0,
+    description: 'Non-depolarising neuromuscular blocker. The drug acts on neuromuscular block rather than directly suppressing central respiratory drive.',
+    setting: 'ana',
+    environments: ['edumon-ana'],
+    effects: [
+      { id: 'atracurium-neuromuscular-block', target: 'neuromuscular.block', operation: 'target', value: 1, onsetSeconds: 120, durationSeconds: 1200, recoverySeconds: 600 },
+    ],
+    sort_order: 30,
+    created_at: '',
+    updated_at: '',
+  },
+  { id: 'tiva', kind: 'drug', name: 'TIVA', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 40, created_at: '', updated_at: '' },
+  { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
+  { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 20, created_at: '', updated_at: '' },
+  { id: 'awakening', kind: 'event', name: 'Awakening', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 30, created_at: '', updated_at: '' },
 ]
 
 function currentEnvironment(): EdusimActionEnvironment {
