@@ -16,6 +16,13 @@ import {
   type EdusimActionSetting,
   type EdusimShortPressAction,
 } from '../edumon/actionLibrary'
+import {
+  EDUSIM_ACTION_EFFECT_TARGETS,
+  getEdusimActionEffectTargetDefinition,
+  type EdusimActionEffect,
+  type EdusimActionEffectOperation,
+  type EdusimActionEffectTarget,
+} from '../edusim/actions/ActionEffect'
 import './actionEditor.css'
 
 const emptyDraft = (): EdusimActionDraft => ({
@@ -27,6 +34,7 @@ const emptyDraft = (): EdusimActionDraft => ({
   duration_seconds: 0,
   description: '',
   setting: 'ana',
+  effects: [],
   sort_order: 0,
 })
 
@@ -40,7 +48,26 @@ function toDraft(action: EdusimActionDefinition): EdusimActionDraft {
     duration_seconds: action.duration_seconds,
     description: action.description,
     setting: action.setting,
+    effects: action.effects.map((effect) => ({ ...effect })),
     sort_order: action.sort_order,
+  }
+}
+
+function newEffectId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return `effect-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function createEffect(): EdusimActionEffect {
+  const target = EDUSIM_ACTION_EFFECT_TARGETS[0]
+  return {
+    id: newEffectId(),
+    target: target.id,
+    operation: target.allowedOperations[0],
+    value: 0,
+    onsetSeconds: 0,
+    durationSeconds: 0,
+    recoverySeconds: 0,
   }
 }
 
@@ -122,6 +149,29 @@ export function ActionEditorApp() {
     setSelectedId(null)
     setDraft({ ...emptyDraft(), kind, sort_order: actions.filter((action) => action.kind === kind).length * 10 + 10 })
     setMessage(null); setError(null)
+  }
+
+  const addEffect = () => {
+    setDraft((current) => ({ ...current, effects: [...current.effects, createEffect()] }))
+  }
+
+  const updateEffect = (effectId: string, patch: Partial<EdusimActionEffect>) => {
+    setDraft((current) => ({
+      ...current,
+      effects: current.effects.map((effect) => effect.id === effectId ? { ...effect, ...patch } : effect),
+    }))
+  }
+
+  const changeEffectTarget = (effect: EdusimActionEffect, target: EdusimActionEffectTarget) => {
+    const targetDefinition = getEdusimActionEffectTargetDefinition(target)
+    const operation = targetDefinition.allowedOperations.includes(effect.operation)
+      ? effect.operation
+      : targetDefinition.allowedOperations[0]
+    updateEffect(effect.id, { target, operation })
+  }
+
+  const removeEffect = (effectId: string) => {
+    setDraft((current) => ({ ...current, effects: current.effects.filter((effect) => effect.id !== effectId) }))
   }
 
   const save = async (event: React.FormEvent) => {
@@ -219,6 +269,38 @@ export function ActionEditorApp() {
             </div>
 
             <label className="action-editor-description"><span>Description</span><textarea rows={5} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Instructor-facing description of the action and intended physiological effect." /></label>
+
+            <section className="action-editor-effects" aria-label="Physiological effects">
+              <div className="action-editor-effects-heading">
+                <div>
+                  <span>Effects</span>
+                  <h3>Declarative physiological effects</h3>
+                  <p>Effects are interpreted by the physiology engine and do not directly set monitor values.</p>
+                </div>
+                <button type="button" onClick={addEffect}>+ Add effect</button>
+              </div>
+
+              {draft.effects.length === 0 ? (
+                <div className="action-editor-effects-empty">No physiological effects have been defined for this action.</div>
+              ) : (
+                <div className="action-editor-effects-list">
+                  {draft.effects.map((effect) => {
+                    const targetDefinition = getEdusimActionEffectTargetDefinition(effect.target)
+                    return (
+                      <div className="action-editor-effect-row" key={effect.id}>
+                        <label className="effect-target"><span>Target</span><select value={effect.target} onChange={(event) => changeEffectTarget(effect, event.target.value as EdusimActionEffectTarget)}>{EDUSIM_ACTION_EFFECT_TARGETS.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>
+                        <label><span>Operation</span><select value={effect.operation} onChange={(event) => updateEffect(effect.id, { operation: event.target.value as EdusimActionEffectOperation })}>{targetDefinition.allowedOperations.map((operation) => <option key={operation} value={operation}>{operation}</option>)}</select></label>
+                        <label><span>Value{targetDefinition.unit ? ` (${targetDefinition.unit})` : ''}</span><input type="number" step="any" value={effect.value} onChange={(event) => updateEffect(effect.id, { value: Number(event.target.value) || 0 })} /></label>
+                        <label><span>Onset (s)</span><input type="number" min="0" step="0.1" value={effect.onsetSeconds} onChange={(event) => updateEffect(effect.id, { onsetSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label>
+                        <label><span>Duration (s)</span><input type="number" min="0" step="0.1" value={effect.durationSeconds} onChange={(event) => updateEffect(effect.id, { durationSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label>
+                        <label><span>Recovery (s)</span><input type="number" min="0" step="0.1" value={effect.recoverySeconds} onChange={(event) => updateEffect(effect.id, { recoverySeconds: Math.max(0, Number(event.target.value) || 0) })} /></label>
+                        <button type="button" className="danger action-editor-effect-remove" onClick={() => removeEffect(effect.id)} aria-label={`Remove ${targetDefinition.label} effect`}>Remove</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
 
             <div className="action-editor-footer">
               <button type="submit" className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save action'}</button>

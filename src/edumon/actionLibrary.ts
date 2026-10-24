@@ -1,5 +1,9 @@
 import { supabase } from '../session/supabase'
 import { requireInstructorAccount } from '../teaching/account/InstructorAccountService'
+import {
+  normaliseEdusimActionEffects,
+  type EdusimActionEffect,
+} from '../edusim/actions/ActionEffect'
 
 export type EdusimActionKind = 'drug' | 'event'
 export type EdusimShortPressAction = 'momentary' | 'toggle'
@@ -16,16 +20,17 @@ export interface EdusimActionDefinition {
   description: string
   setting: EdusimActionSetting
   environments: EdusimActionEnvironment[]
+  effects: EdusimActionEffect[]
   sort_order: number
   created_at: string
   updated_at: string
 }
 
 export type EdusimActionDraft = Pick<EdusimActionDefinition,
-  'id' | 'kind' | 'name' | 'short_press_action' | 'long_press_action' | 'duration_seconds' | 'description' | 'setting' | 'sort_order'
+  'id' | 'kind' | 'name' | 'short_press_action' | 'long_press_action' | 'duration_seconds' | 'description' | 'setting' | 'effects' | 'sort_order'
 >
 
-const selectColumns = 'id,kind,name,short_press_action,long_press_action,duration_seconds,description,setting,environments,sort_order,created_at,updated_at'
+const selectColumns = 'id,kind,name,short_press_action,long_press_action,duration_seconds,description,setting,environments,effects,sort_order,created_at,updated_at'
 
 function settingToEnvironments(setting: EdusimActionSetting): EdusimActionEnvironment[] {
   if (setting === 'all') return ['edumon-ana', 'edumon-icu']
@@ -44,6 +49,7 @@ function normalise(row: Record<string, unknown>): EdusimActionDefinition {
     description: String(row.description ?? ''),
     setting,
     environments: settingToEnvironments(setting),
+    effects: normaliseEdusimActionEffects(row.effects),
     sort_order: Number(row.sort_order ?? 0),
     created_at: String(row.created_at ?? ''),
     updated_at: String(row.updated_at ?? ''),
@@ -70,6 +76,7 @@ export async function saveEdusimAction(draft: EdusimActionDraft): Promise<Edusim
     description: draft.description.trim(),
     long_press_action: draft.long_press_action?.trim() || null,
     duration_seconds: Math.max(0, Number(draft.duration_seconds) || 0),
+    effects: normaliseEdusimActionEffects(draft.effects),
     environments: settingToEnvironments(draft.setting),
     updated_at: new Date().toISOString(),
   }
