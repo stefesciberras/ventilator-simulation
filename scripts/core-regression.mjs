@@ -115,7 +115,7 @@ assert(edumonMonitorEngine.includes('runtime.history.append(generateNextSample')
 assert(edumonMonitorEngine.includes('const nextPhase = runtime.phase +'), 'EDUMON must advance cardiac phase incrementally rather than recompute historical phase')
 assert(edumonMonitorEngine.includes('runtime.phase = fract(nextPhase)'), 'EDUMON must preserve cardiac phase continuity when a beat completes')
 assert(edumonMonitorEngine.includes('beatHistory'), 'EDUMON derived monitor measurements must be based on generated beat history')
-assert(edumonMonitorEngine.includes('beat.time >= now - 60'), 'EDUMON displayed heart rate must use a rolling 60-second beat window')
+assert(edumonMonitorEngine.includes('beats.slice(-5)'), 'EDUMON displayed heart rate must average the last five detected beats')
 assert(edumonMonitorEngine.includes('beat.time >= now - 30'), 'EDUMON displayed SpO2 must use a rolling 30-second beat window')
 assert(!edumonMonitorEngine.includes('cardiacPhase(time, rate'), 'EDUMON must not derive the whole visible waveform phase from the current heart rate')
 
