@@ -1,0 +1,71 @@
+.edumon-actions-panel {
+  display: grid;
+  gap: 10px;
+  padding: 4px 0 10px;
+}
+
+.edumon-action-section {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.018);
+}
+
+.edumon-action-section-heading {
+  min-height: 44px;
+  padding: 8px 10px 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255,255,255,0.025);
+}
+
+.edumon-action-section-heading h3 {
+  margin: 0;
+  color: #dfe8ee;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.edumon-action-collapse {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 7px;
+  background: #222c34;
+  color: #b8c4cc;
+  cursor: pointer;
+}
+
+.edumon-action-collapse:hover {
+  border-color: rgba(255,255,255,0.23);
+  background: #2a3741;
+}
+
+.edumon-action-collapse-caret {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: transform 120ms ease;
+}
+
+.edumon-action-collapse.expanded .edumon-action-collapse-caret {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.edumon-action-section-body {
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.edumon-action-empty {
+  color: #7f8d96;
+  font-size: 0.72rem;
+}
