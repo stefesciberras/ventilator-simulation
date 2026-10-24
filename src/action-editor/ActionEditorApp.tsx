@@ -12,8 +12,8 @@ import {
   saveEdusimAction,
   type EdusimActionDefinition,
   type EdusimActionDraft,
-  type EdusimActionEnvironment,
   type EdusimActionKind,
+  type EdusimActionSetting,
   type EdusimShortPressAction,
 } from '../edumon/actionLibrary'
 import './actionEditor.css'
@@ -26,7 +26,7 @@ const emptyDraft = (): EdusimActionDraft => ({
   long_press_action: null,
   duration_seconds: 0,
   description: '',
-  environments: ['edumon-ana'],
+  setting: 'ana',
   sort_order: 0,
 })
 
@@ -39,7 +39,7 @@ function toDraft(action: EdusimActionDefinition): EdusimActionDraft {
     long_press_action: action.long_press_action,
     duration_seconds: action.duration_seconds,
     description: action.description,
-    environments: [...action.environments],
+    setting: action.setting,
     sort_order: action.sort_order,
   }
 }
@@ -124,16 +124,6 @@ export function ActionEditorApp() {
     setMessage(null); setError(null)
   }
 
-  const toggleEnvironment = (environment: EdusimActionEnvironment) => {
-    setDraft((current) => {
-      const has = current.environments.includes(environment)
-      const environments = has
-        ? current.environments.filter((candidate) => candidate !== environment)
-        : [...current.environments, environment]
-      return { ...current, environments: environments.length ? environments : [environment] }
-    })
-  }
-
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
     const id = draft.id.trim().toLowerCase()
@@ -204,7 +194,7 @@ export function ActionEditorApp() {
                 <h2>{kind === 'drug' ? 'Drugs' : 'Events'}</h2>
                 {actions.filter((action) => action.kind === kind).map((action) => (
                   <button key={action.id} type="button" className={selectedId === action.id ? 'selected' : ''} onClick={() => setSelectedId(action.id)}>
-                    <strong>{action.name}</strong><small>{action.id} · {action.short_press_action}</small>
+                    <strong>{action.name}</strong><small>{action.id} · {action.short_press_action} · {action.setting.toUpperCase()}</small>
                   </button>
                 ))}
               </div>
@@ -221,15 +211,11 @@ export function ActionEditorApp() {
               <label><span>ID</span><input value={draft.id} disabled={Boolean(selected)} onChange={(event) => setDraft({ ...draft, id: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="e.g. propofol" required /></label>
               <label><span>Name</span><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></label>
               <label><span>Type</span><select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as EdusimActionKind })}><option value="drug">Drug</option><option value="event">Event</option></select></label>
+              <label><span>Setting</span><select value={draft.setting} onChange={(event) => setDraft({ ...draft, setting: event.target.value as EdusimActionSetting })}><option value="ana">Ana</option><option value="itu">ITU</option><option value="all">All</option></select></label>
               <label><span>Short press</span><select value={draft.short_press_action} onChange={(event) => setDraft({ ...draft, short_press_action: event.target.value as EdusimShortPressAction })}><option value="momentary">Momentary</option><option value="toggle">Toggle</option></select></label>
               <label><span>Long press</span><input value="Not configured yet" disabled /></label>
               <label><span>Duration of action</span><div className="action-editor-number"><input type="number" min="0" step="0.1" value={draft.duration_seconds} onChange={(event) => setDraft({ ...draft, duration_seconds: Math.max(0, Number(event.target.value) || 0) })} /><small>seconds</small></div></label>
               <label><span>Order</span><input type="number" step="1" value={draft.sort_order} onChange={(event) => setDraft({ ...draft, sort_order: Number(event.target.value) || 0 })} /></label>
-              <fieldset>
-                <legend>Available in</legend>
-                <label className="check"><input type="checkbox" checked={draft.environments.includes('edumon-ana')} onChange={() => toggleEnvironment('edumon-ana')} /><span>EDUMON-Ana</span></label>
-                <label className="check"><input type="checkbox" checked={draft.environments.includes('edumon-icu')} onChange={() => toggleEnvironment('edumon-icu')} /><span>EDUMON-ICU</span></label>
-              </fieldset>
             </div>
 
             <label className="action-editor-description"><span>Description</span><textarea rows={5} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Instructor-facing description of the action and intended physiological effect." /></label>
