@@ -71,12 +71,15 @@ export type AnaestheticDepth = 1 | 2 | 3 | 4 | 5
 export interface MonitorAnaestheticPhysiologySettings {
   /** Relative sensitivity to anaesthesia, -1 (less sensitive) to +1 (more sensitive). */
   anaestheticSensitivity: number
+  /** Relative haemodynamic response to a given depth, -1 (blunted) to +1 (exaggerated). */
+  anaestheticResponse: number
   /** Discrete depth state: 1 deepest, 5 lightest / awake. */
   depthOfAnaesthesia: AnaestheticDepth
 }
 
 export const DEFAULT_MONITOR_ANAESTHETIC_PHYSIOLOGY_SETTINGS: MonitorAnaestheticPhysiologySettings = {
   anaestheticSensitivity: 0,
+  anaestheticResponse: 0,
   depthOfAnaesthesia: 5,
 }
 
