@@ -228,26 +228,22 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
 
   const applyValue = (key: VentilatorSettingKey, rawValue: number) => {
     if (disabled) return
-    setVentilator((current) => {
-      const next = { ...current }
-      if (key === 'ieRatio') next.inspiratoryTime = cycleTime(current.rate) / (1 + clamp(rawValue, MIN_IE, MAX_IE))
-      else (next as unknown as Record<VentilatorSettingKey, number>)[key] = rawValue
-      if (key === 'rate' && hasConventionalMandatoryTiming(current.mode)) {
-        const currentRatio = ieRatioFrom(current)
-        next.inspiratoryTime = cycleTime(rawValue) / (1 + currentRatio)
-      }
-      publishRespiratory(next)
-      return next
-    })
+    const next = { ...ventilator }
+    if (key === 'ieRatio') next.inspiratoryTime = cycleTime(ventilator.rate) / (1 + clamp(rawValue, MIN_IE, MAX_IE))
+    else (next as unknown as Record<VentilatorSettingKey, number>)[key] = rawValue
+    if (key === 'rate' && hasConventionalMandatoryTiming(ventilator.mode)) {
+      const currentRatio = ieRatioFrom(ventilator)
+      next.inspiratoryTime = cycleTime(rawValue) / (1 + currentRatio)
+    }
+    setVentilator(next)
+    publishRespiratory(next)
   }
 
   const selectMode = (mode: EdumonVentilatorMode) => {
     if (disabled) return
-    setVentilator((current) => {
-      const next = { ...current, mode }
-      publishRespiratory(next)
-      return next
-    })
+    const next = { ...ventilator, mode }
+    setVentilator(next)
+    publishRespiratory(next)
   }
 
   const monitoring = useMemo(
