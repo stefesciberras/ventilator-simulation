@@ -66,6 +66,20 @@ export const DEFAULT_MONITOR_ANAESTHETIC_GAS_SETTINGS: MonitorAnaestheticGasSett
   fiSevoPercent: 0,
 }
 
+export type AnaestheticDepth = 1 | 2 | 3 | 4 | 5
+
+export interface MonitorAnaestheticPhysiologySettings {
+  /** Relative sensitivity to anaesthesia, -1 (less sensitive) to +1 (more sensitive). */
+  anaestheticSensitivity: number
+  /** Discrete depth state: 1 deepest, 5 lightest / awake. */
+  depthOfAnaesthesia: AnaestheticDepth
+}
+
+export const DEFAULT_MONITOR_ANAESTHETIC_PHYSIOLOGY_SETTINGS: MonitorAnaestheticPhysiologySettings = {
+  anaestheticSensitivity: 0,
+  depthOfAnaesthesia: 5,
+}
+
 export interface MonitorPatientState {
   heartRate: number
   rhythm: CardiacRhythm
@@ -81,6 +95,8 @@ export interface MonitorPatientState {
   respiratory?: Partial<MonitorRespiratorySettings>
   /** Anaesthesia-only volatile-agent controls. Ignored by EDUMON-ICU. */
   anaestheticGases?: Partial<MonitorAnaestheticGasSettings>
+  /** Anaesthesia response state used by volatile agents and future IV/BIS/haemodynamic models. */
+  anaestheticPhysiology?: Partial<MonitorAnaestheticPhysiologySettings>
 }
 
 export interface MonitorSample {
@@ -107,4 +123,5 @@ export const DEFAULT_MONITOR_STATE: MonitorPatientState = {
   diastolicPressure: 68,
   spo2: 98,
   peripheralPerfusion: 1,
+  anaestheticPhysiology: { ...DEFAULT_MONITOR_ANAESTHETIC_PHYSIOLOGY_SETTINGS },
 }
