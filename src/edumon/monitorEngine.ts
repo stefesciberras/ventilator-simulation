@@ -1,4 +1,6 @@
 import { RollingSignalHistory } from '../core/RollingSignalHistory'
+import { setActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
+import { applyEdumonActionPhysiology } from './actionPhysiology'
 import { currentEdumonRespiratorySpO2 } from './respiratoryPhysiology'
 import type { CardiacRhythm, EcgMorphology, MonitorMeasurements, MonitorPatientState, MonitorSample } from './types'
 
@@ -319,6 +321,7 @@ function generateNextSample(runtime: MonitorWaveformRuntime, state: MonitorPatie
 }
 
 export function generateMonitorSamples(state: MonitorPatientState, endTime: number, seconds = 8, sampleRate = 100): MonitorSample[] {
+  setActionRuntimeSimulationTime(endTime)
   const safeSampleRate = Math.max(1, sampleRate)
   const safeWindowSeconds = Math.max(0.1, seconds)
   const runtime = ensureWaveformRuntime(endTime, safeWindowSeconds, safeSampleRate)
@@ -329,7 +332,8 @@ export function generateMonitorSamples(state: MonitorPatientState, endTime: numb
   while (nextTime <= endTime + epsilon) {
     const previousTime = runtime.lastGeneratedTime
     const deltaTime = previousTime == null ? step : Math.max(step, nextTime - previousTime)
-    runtime.history.append(generateNextSample(runtime, state, nextTime, deltaTime))
+    const effectiveState = applyEdumonActionPhysiology(state, nextTime)
+    runtime.history.append(generateNextSample(runtime, effectiveState, nextTime, deltaTime))
     runtime.lastGeneratedTime = nextTime
     nextTime += step
   }
@@ -344,6 +348,9 @@ function average(values: number[]): number | null {
 }
 
 export function measurementsFor(state: MonitorPatientState): MonitorMeasurements {
+  const actionTime = waveformRuntime?.lastGeneratedTime ?? 0
+  setActionRuntimeSimulationTime(actionTime)
+  state = applyEdumonActionPhysiology(state, actionTime)
   if (state.rhythm === 'asystole' || state.rhythm === 'ventricular-fibrillation') return { heartRate: null, systolicPressure: null, diastolicPressure: null, meanPressure: null, spo2: null }
   const runtime = waveformRuntime
   const now = runtime?.lastGeneratedTime ?? 0

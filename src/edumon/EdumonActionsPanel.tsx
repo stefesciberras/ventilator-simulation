@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { getInstructorAccount, subscribeToInstructorAccount } from '../teaching/account/InstructorAccountService'
+import { activateAction } from '../edusim/actions/ActionRuntime'
 import {
   listEdusimActions,
   type EdusimActionDefinition,
@@ -43,17 +44,17 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     updated_at: '',
   },
   {
-    id: 'atracurium',
+    id: 'relaxant',
     kind: 'drug',
-    name: 'Atracurium',
+    name: 'Relaxant',
     short_press_action: 'momentary',
     long_press_action: null,
     duration_seconds: 0,
-    description: 'Non-depolarising neuromuscular blocker. The drug acts on neuromuscular block rather than directly suppressing central respiratory drive.',
+    description: 'Generic non-depolarising neuromuscular blocker. Acts on neuromuscular block rather than directly suppressing central respiratory drive.',
     setting: 'ana',
     environments: ['edumon-ana'],
     effects: [
-      { id: 'atracurium-neuromuscular-block', target: 'neuromuscular.block', operation: 'target', value: 1, onsetSeconds: 120, durationSeconds: 1200, recoverySeconds: 600 },
+      { id: 'relaxant-neuromuscular-block', target: 'neuromuscular.block', operation: 'target', value: 1, onsetSeconds: 120, durationSeconds: 1200, recoverySeconds: 600 },
     ],
     sort_order: 30,
     created_at: '',
@@ -142,6 +143,8 @@ export function EdumonActionsPanel() {
   }, [])
 
   const trigger = (definition: EdusimActionDefinition) => {
+    activateAction(definition)
+
     if (definition.short_press_action === 'toggle') {
       setToggleStates((current) => {
         const next = new Set(current)
