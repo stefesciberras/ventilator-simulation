@@ -4,11 +4,22 @@ import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type MonitorPatientState } from '
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
+// Preserve a composed response of 1.0 while progressively compressing larger
+// overlapping/repeated stimuli. The asymptotic ceiling is (1 + shape) / shape.
+const SYMPATHETIC_SATURATION_SHAPE = 1.5
+
+export function saturatingSympatheticResponse(response: number): number {
+  const input = Math.max(0, response)
+  return ((1 + SYMPATHETIC_SATURATION_SHAPE) * input)
+    / (1 + SYMPATHETIC_SATURATION_SHAPE * input)
+}
+
 function sympatheticResponse(state: MonitorPatientState, simulationTime: number): { heartRateOffset: number; mapOffset: number } {
   const stimulus = Math.max(0, resolveNumericActionEffect('stimulus.sympathetic', 0, simulationTime))
   const nociceptiveResponse = Math.max(0, resolveNumericActionEffect('anaesthesia.nociceptiveResponse', 1, simulationTime))
   const depthResponse = anaestheticStimulusResponseScale(effectiveAnaestheticDepth(state, simulationTime))
-  const response = stimulus * nociceptiveResponse * depthResponse
+  const composedResponse = stimulus * nociceptiveResponse * depthResponse
+  const response = saturatingSympatheticResponse(composedResponse)
   return {
     heartRateOffset: 25 * response,
     mapOffset: 30 * response,

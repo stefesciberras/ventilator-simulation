@@ -77,11 +77,19 @@ The initial values are teaching-model parameters, not a claim that one button eq
 
 ### Laryngoscopy, Pain and Surgical stimulus
 
-These Events create `stimulus.sympathetic` with different strengths and durations. Their cardiovascular response is approximately:
+These Events create `stimulus.sympathetic` with different strengths and durations. Their raw composed cardiovascular stimulus is:
 
 `stimulus × nociceptive response × anaesthetic-depth response`
 
-EDUMON physiology then translates that composed sympathetic response into HR and MAP changes.
+That composed value then passes through a **saturating physiological response curve** before EDUMON translates it into HR and MAP change. A composed response of 1.0 keeps the existing approximately +25 bpm HR / +30 mmHg MAP teaching response. Larger overlapping or repeated stimuli still increase the response, but with diminishing returns rather than increasing linearly without limit.
+
+The current saturation curve is normalized so:
+
+- composed response 1.0 → effective response 1.0;
+- composed response 2.0 → effective response about 1.25;
+- very large composed responses approach an effective ceiling of about 1.67.
+
+This saturation is part of **physiology**, not part of the Event definition. Therefore instructors should normally continue to describe how strong and how long the stimulus is, rather than manually compensating Event values for the saturation curve.
 
 ## What instructors can edit without programming
 
@@ -89,7 +97,7 @@ You can usually edit an existing Drug or Event in `/actions` when changing its n
 
 ## When programming is required
 
-Programming is required for a new target, new physiological state, new combination rule, new operation meaning, a device/monitor that does not yet consume the physiology, or new scenario/session/debrief behaviour.
+Programming is required for a new target, new physiological state, new combination rule, new saturation/transfer function, new operation meaning, a device/monitor that does not yet consume the physiology, or new scenario/session/debrief behaviour.
 
 Do not work around a missing physiological concept by making a button directly change displayed monitor values.
 
@@ -99,7 +107,7 @@ Do not work around a missing physiological concept by making a button directly c
 - `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, stacking and resolution.
 - `src/edumon/actionLibrary.ts` — persistence/shared action library.
 - `src/action-editor/ActionEditorApp.tsx` — instructor editor.
-- `src/edumon/actionPhysiology.ts` — EDUMON interpretation of generic effects.
+- `src/edumon/actionPhysiology.ts` — EDUMON interpretation of generic effects, including sympathetic-response saturation.
 - `src/edumon/anaestheticPhysiology.ts` — depth/sensitivity/response and action-driven effective depth.
 - `src/edumon/respiratoryPhysiology.ts` — respiratory/gas-exchange interpretation.
 - `src/edumon/EdumonBisTrend.tsx` — BIS derived from effective depth.
@@ -108,4 +116,4 @@ Do not work around a missing physiological concept by making a button directly c
 
 ## Simulation-design caution
 
-EDUMON is an educational simulator. Effect values are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.
+EDUMON is an educational simulator. Effect values and response curves are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.
