@@ -1,6 +1,6 @@
 # EDUMON actions and effects — instructor guide
 
-> Maintenance contract: keep this guide updated whenever the action/effect vocabulary, action editor, runtime behaviour, physiological interpretation, seeded Drugs/Events, or timing semantics change.
+> Maintenance contract: keep this guide updated whenever the action/effect vocabulary, action editor, runtime behaviour, physiological interpretation, seeded Drugs/Events, drug grouping, dose controls, or timing semantics change.
 
 This guide is for instructors and simulation faculty who want to understand or edit EDUMON Drugs and Events without needing to understand the source code.
 
@@ -12,13 +12,22 @@ A Drug or Event button should not directly change the displayed heart rate, bloo
 
 This allows effects to combine. For example, Surgery creates a sympathetic stimulus. Fentanyl or Remifentanil reduces nociceptive response. Anaesthetic depth from volatile anaesthesia, Propofol bolus or TIVA reduces the cardiovascular response to that stimulus. The final HR and BP response is calculated from all of those states rather than being hard-coded into the Surgery button.
 
+## Drug classes in the monitor
+
+The Drugs section is currently subdivided into:
+
+- **Anaesthesia** — Propofol, Fentanyl, Remifentanil infusion, Relaxant and TIVA (Propofol TCI).
+- **Cardiovascular** — Atropine, Ephedrine, Phenylephrine and Noradrenaline infusion.
+
+The subdivision is presentation/taxonomy only. The individual Drug definitions remain declarative ActionDefinitions and physiology still interprets their effects.
+
 ## Where instructors edit actions
 
 Permanent instructors can use the **Edit action library** control and the `/actions` page. The shared definitions are stored in Supabase in `public.edusim_action_definitions`. EDUMON also contains local fallback definitions so the simulator remains usable if the shared library cannot be loaded.
 
 ## Action fields
 
-Each action has Kind, Name, Short press action, Setting, Description, Effects and Sort order. Authoritative settings are `ana`, `itu` and `all`.
+Each action has Kind, Name, Short press action, Long press action, Setting, Description, Effects and Sort order. Authoritative settings are `ana`, `itu` and `all`.
 
 There are two important short-press behaviours:
 
@@ -26,6 +35,22 @@ There are two important short-press behaviours:
 - **toggle** — first press starts an ongoing effect, second press stops it.
 
 Toggle actions are used for infusions and sustained events. They ramp to full effect over **Onset**, stay active indefinitely while the toggle is on, and after switch-off ramp back toward baseline over **Recovery**. For a toggle action, `durationSeconds` does not determine how long the effect stays on.
+
+## Infusion dose-level long press
+
+An infusion can set `long_press_action = dose-levels`.
+
+A normal short press still starts/stops the infusion. A long press opens a compact three-step selector:
+
+- **Low** = 0.65 × the stored/base effect intensity;
+- **Medium** = 1.0 × and is the default;
+- **High** = 1.35 ×.
+
+The selected level is shown on the infusion button as **L / M / H**. If the infusion is already running, choosing another level changes the active infusion intensity without switching it off.
+
+For additive effects such as MAP +20 mmHg, intensity scales the offset directly. For multiplier effects such as respiratory drive ×0.65, intensity scales the distance from the neutral multiplier 1.0. This is important: a higher dose must strengthen a suppressive multiplier, not accidentally reverse it.
+
+The current dose steps are educational intensity levels rather than clinical dose units. They do not imply a specific µg/kg/min, ng/ml effect-site target, syringe concentration or pump algorithm.
 
 ## Effect fields
 
@@ -76,19 +101,11 @@ Repeated momentary administrations create separate active instances. Offsets can
 
 ### Propofol bolus
 
-Propofol is a generic momentary bolus with three declarative effects:
-
-- increases `anaesthesia.hypnoticEffect`;
-- reduces `respiration.drive`;
-- lowers `haemodynamics.meanArterialPressure`.
-
-The hypnotic component deepens the **effective anaesthetic depth** used by BIS and stimulus-response attenuation.
+Propofol is a generic momentary bolus with declarative hypnotic, respiratory-drive and MAP effects. The hypnotic component deepens the **effective anaesthetic depth** used by BIS and stimulus-response attenuation.
 
 ### TIVA (Propofol TCI)
 
-TIVA is a **toggle** action representing a Propofol TCI-style infusion. Switching it on creates a sustained hypnotic effect, respiratory-drive depression and MAP reduction; switching it off starts the configured recovery ramps.
-
-The current implementation is deliberately a teaching abstraction. It represents the physiological result of a maintained TCI rather than modelling a specific pump algorithm, target plasma concentration, target effect-site concentration or named pharmacokinetic model. A future TCI module can replace this surrogate without changing the action/physiology separation.
+TIVA is a **toggle** action representing a Propofol TCI-style infusion and supports the Low/Medium/High long-press selector. It is deliberately a teaching abstraction of maintained physiological effect rather than a named PK/PD pump model.
 
 ### Fentanyl
 
@@ -96,13 +113,27 @@ Fentanyl is a momentary opioid administration. It modestly lowers HR, reduces re
 
 ### Remifentanil infusion
 
-Remifentanil is a **toggle** infusion. While running it strongly attenuates `anaesthesia.nociceptiveResponse`, depresses spontaneous respiratory drive and modestly lowers HR. Because its effects are declarative, Surgery and Laryngoscopy automatically become less haemodynamically stimulating while the infusion is active.
-
-Its onset/recovery parameters are educational approximations rather than a complete pharmacokinetic model.
+Remifentanil is a **toggle** infusion with Low/Medium/High intensity selection. While running it attenuates `anaesthesia.nociceptiveResponse`, depresses spontaneous respiratory drive and modestly lowers HR.
 
 ### Relaxant
 
-Relaxant increases `neuromuscular.block`. EDUMON interprets this as reduced respiratory muscle function. It does not directly suppress central respiratory drive, and mandatory ventilation is not disabled simply because the patient is paralysed.
+Relaxant increases `neuromuscular.block`. EDUMON interprets this as reduced respiratory muscle function. It does not directly suppress central respiratory drive.
+
+### Atropine
+
+Atropine is a momentary Cardiovascular action with a predominantly positive HR offset in the current teaching model.
+
+### Ephedrine
+
+Ephedrine is a momentary Cardiovascular vasopressor action with positive HR and MAP offsets.
+
+### Phenylephrine
+
+Phenylephrine is a momentary Cardiovascular vasopressor action with a positive MAP offset and modest negative HR offset representing reflex bradycardia.
+
+### Noradrenaline infusion
+
+Noradrenaline is a **toggle** Cardiovascular infusion with Low/Medium/High intensity selection. The base/Medium action raises MAP and applies a small negative HR offset. It remains active until switched off and then follows its configured recovery ramp.
 
 ### Laryngoscopy and Pain
 
@@ -110,47 +141,37 @@ These are momentary Events. They create `stimulus.sympathetic` for a defined per
 
 ### Surgery
 
-Surgery is a **toggle Event** representing sustained operative nociceptive stimulation. Turn it on at the start of surgery and turn it off when surgery finishes. While on, it continuously contributes `stimulus.sympathetic`; after it is switched off, the stimulus decays over its recovery period.
+Surgery is a **toggle Event** representing sustained operative nociceptive stimulation. Turn it on at the start of surgery and turn it off when surgery finishes.
 
 The raw composed cardiovascular stimulus is:
 
 `stimulus × nociceptive response × anaesthetic-depth response`
 
-That composed value then passes through a **saturating physiological response curve** before EDUMON translates it into HR and MAP change. A composed response of 1.0 keeps the existing approximately +25 bpm HR / +30 mmHg MAP teaching response. Larger overlapping or repeated stimuli still increase the response, but with diminishing returns rather than increasing linearly without limit.
-
-The current saturation curve is normalized so:
-
-- composed response 1.0 → effective response 1.0;
-- composed response 2.0 → effective response about 1.25;
-- very large composed responses approach an effective ceiling of about 1.67.
-
-This saturation is part of **physiology**, not part of the Event definition.
+That value passes through the shared saturating physiological response curve before EDUMON translates it into HR and MAP change.
 
 ## What instructors can edit without programming
 
 You can usually edit an existing Drug or Event in `/actions` when changing its name/description, ordering, Ana/ICU availability, magnitude, timing, momentary/toggle behaviour, or an existing validated target/operation.
 
-When changing an action from momentary to toggle, remember that Duration no longer determines the on-time; the instructor controls the duration by switching the action off.
+The current monitor drug-class grouping and `dose-levels` long-press control are application features. Adding a genuinely new drug class or a different long-press interaction currently requires code changes.
 
 ## When programming is required
 
-Programming is required for a new target, new physiological state, new combination rule, new saturation/transfer function, new operation meaning, a device/monitor that does not yet consume the physiology, or new scenario/session/debrief behaviour.
+Programming is required for a new target, new physiological state, new combination rule, new saturation/transfer function, new operation meaning, new drug class, new long-press interaction, a device/monitor that does not yet consume the physiology, or new scenario/session/debrief behaviour.
 
 Do not work around a missing physiological concept by making a button directly change displayed monitor values.
 
 ## Architecture reference for maintainers
 
 - `src/edusim/actions/ActionEffect.ts` — validated targets and operations.
-- `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, momentary timing, sustained toggle state, recovery and stacking.
+- `src/edusim/actions/ActionRuntime.ts` — simulation-time ActiveEffects, sustained toggle state, adjustable intensity, recovery and stacking.
 - `src/edumon/actionLibrary.ts` — persistence/shared action library.
 - `src/action-editor/ActionEditorApp.tsx` — instructor editor.
-- `src/edumon/actionPhysiology.ts` — EDUMON interpretation of generic effects, including sympathetic-response saturation.
-- `src/edumon/anaestheticPhysiology.ts` — depth/sensitivity/response and action-driven effective depth.
-- `src/edumon/respiratoryPhysiology.ts` — respiratory/gas-exchange interpretation.
-- `src/edumon/EdumonBisTrend.tsx` — BIS derived from effective depth.
-- `src/edumon/EdumonActionsPanel.tsx` — buttons/fallback definitions; activates actions but does not own physiology.
+- `src/edumon/actionPhysiology.ts` — EDUMON interpretation of generic effects.
+- `src/edumon/anaestheticPhysiology.ts` — action-driven effective anaesthetic depth.
+- `src/edumon/EdumonActionsPanel.tsx` — drug classes, long-press dose selector, buttons and fallback definitions; it activates actions but does not own physiology.
 - `supabase/migrations/` — persistent seeded definitions and schema/data migrations.
 
 ## Simulation-design caution
 
-EDUMON is an educational simulator. Effect values, infusion surrogates and response curves are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.
+EDUMON is an educational simulator. Effect values, infusion intensity levels and response curves are configurable teaching approximations. Test isolated effects and combinations before relying on a new definition in teaching.

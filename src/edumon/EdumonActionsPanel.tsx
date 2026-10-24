@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { getInstructorAccount, subscribeToInstructorAccount } from '../teaching/account/InstructorAccountService'
-import { activateAction } from '../edusim/actions/ActionRuntime'
+import { activateAction, getActionRuntimeSimulationTime, setActionIntensity } from '../edusim/actions/ActionRuntime'
 import {
   listEdusimActions,
   type EdusimActionDefinition,
@@ -9,6 +9,16 @@ import {
 import './edumon-actions.css'
 
 export type EdumonActionSectionId = 'drugs' | 'events'
+type InfusionDoseLevel = 'low' | 'medium' | 'high'
+type DrugClass = 'anaesthesia' | 'cardiovascular'
+
+const DOSE_STEPS: Record<InfusionDoseLevel, { label: string; scale: number; bars: number }> = {
+  low: { label: 'Low', scale: 0.65, bars: 1 },
+  medium: { label: 'Medium', scale: 1, bars: 2 },
+  high: { label: 'High', scale: 1.35, bars: 3 },
+}
+
+const CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline'])
 
 interface EdumonActionSectionProps {
   id: EdumonActionSectionId
@@ -19,7 +29,11 @@ interface EdumonActionSectionProps {
 interface EdumonActionButtonProps {
   definition: EdusimActionDefinition
   active: boolean
+  doseLevel: InfusionDoseLevel
+  doseMenuOpen: boolean
   onSelect: (definition: EdusimActionDefinition) => void
+  onLongPress: (definition: EdusimActionDefinition) => void
+  onDoseSelect: (definition: EdusimActionDefinition, level: InfusionDoseLevel) => void
 }
 
 const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
@@ -44,8 +58,8 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     ], sort_order: 20, created_at: '', updated_at: '',
   },
   {
-    id: 'remifentanil', kind: 'drug', name: 'Remifentanil infusion', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0,
-    description: 'Toggle Remifentanil infusion with rapid onset and offset: attenuates nociceptive response, depresses spontaneous respiratory drive and modestly lowers heart rate.',
+    id: 'remifentanil', kind: 'drug', name: 'Remifentanil infusion', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0,
+    description: 'Toggle Remifentanil infusion with rapid onset and offset. Long press selects low, medium or high infusion intensity.',
     setting: 'ana', environments: ['edumon-ana'],
     effects: [
       { id: 'remifentanil-nociceptive-response', target: 'anaesthesia.nociceptiveResponse', operation: 'multiplier', value: 0.35, onsetSeconds: 45, durationSeconds: 0, recoverySeconds: 90 },
@@ -61,14 +75,48 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     sort_order: 40, created_at: '', updated_at: '',
   },
   {
-    id: 'tiva', kind: 'drug', name: 'TIVA (Propofol TCI)', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0,
-    description: 'Toggle Propofol TCI-style infusion. Uses a sustained hypnotic-effect surrogate rather than modelling a specific pump or plasma/effect-site concentration.',
+    id: 'tiva', kind: 'drug', name: 'TIVA (Propofol TCI)', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0,
+    description: 'Toggle Propofol TCI-style infusion. Long press selects low, medium or high target intensity.',
     setting: 'ana', environments: ['edumon-ana'],
     effects: [
       { id: 'tiva-hypnotic-effect', target: 'anaesthesia.hypnoticEffect', operation: 'offset', value: 0.85, onsetSeconds: 60, durationSeconds: 0, recoverySeconds: 300 },
       { id: 'tiva-respiratory-drive', target: 'respiration.drive', operation: 'multiplier', value: 0.55, onsetSeconds: 60, durationSeconds: 0, recoverySeconds: 240 },
       { id: 'tiva-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -12, onsetSeconds: 60, durationSeconds: 0, recoverySeconds: 240 },
     ], sort_order: 50, created_at: '', updated_at: '',
+  },
+  {
+    id: 'atropine', kind: 'drug', name: 'Atropine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0,
+    description: 'Cardiovascular rescue bolus with a predominantly chronotropic teaching-model effect.',
+    setting: 'ana', environments: ['edumon-ana'],
+    effects: [{ id: 'atropine-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 25, onsetSeconds: 20, durationSeconds: 300, recoverySeconds: 300 }],
+    sort_order: 110, created_at: '', updated_at: '',
+  },
+  {
+    id: 'ephedrine', kind: 'drug', name: 'Ephedrine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0,
+    description: 'Cardiovascular vasopressor bolus with mixed heart-rate and arterial-pressure effects.',
+    setting: 'ana', environments: ['edumon-ana'],
+    effects: [
+      { id: 'ephedrine-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 12, onsetSeconds: 15, durationSeconds: 240, recoverySeconds: 240 },
+      { id: 'ephedrine-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 15, onsetSeconds: 15, durationSeconds: 240, recoverySeconds: 240 },
+    ], sort_order: 120, created_at: '', updated_at: '',
+  },
+  {
+    id: 'phenylephrine', kind: 'drug', name: 'Phenylephrine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0,
+    description: 'Cardiovascular vasopressor bolus: raises arterial pressure with a modest reflex heart-rate reduction.',
+    setting: 'ana', environments: ['edumon-ana'],
+    effects: [
+      { id: 'phenylephrine-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 25, onsetSeconds: 15, durationSeconds: 180, recoverySeconds: 180 },
+      { id: 'phenylephrine-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -8, onsetSeconds: 20, durationSeconds: 180, recoverySeconds: 180 },
+    ], sort_order: 130, created_at: '', updated_at: '',
+  },
+  {
+    id: 'noradrenaline', kind: 'drug', name: 'Noradrenaline infusion', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0,
+    description: 'Toggle noradrenaline vasopressor infusion. Long press selects low, medium or high infusion intensity.',
+    setting: 'ana', environments: ['edumon-ana'],
+    effects: [
+      { id: 'noradrenaline-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 20, onsetSeconds: 30, durationSeconds: 0, recoverySeconds: 60 },
+      { id: 'noradrenaline-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -3, onsetSeconds: 30, durationSeconds: 0, recoverySeconds: 60 },
+    ], sort_order: 140, created_at: '', updated_at: '',
   },
   { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
   { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 20, created_at: '', updated_at: '' },
@@ -97,6 +145,10 @@ function currentEnvironment(): EdusimActionEnvironment {
   return window.location.pathname.startsWith('/edumon/icu') ? 'edumon-icu' : 'edumon-ana'
 }
 
+function drugClass(definition: EdusimActionDefinition): DrugClass {
+  return CARDIOVASCULAR_DRUG_IDS.has(definition.id) ? 'cardiovascular' : 'anaesthesia'
+}
+
 function EdumonActionSection({ id, title, children }: EdumonActionSectionProps) {
   const [collapsed, setCollapsed] = useState(true)
 
@@ -120,23 +172,80 @@ function EdumonActionSection({ id, title, children }: EdumonActionSectionProps) 
   )
 }
 
-function EdumonActionButton({ definition, active, onSelect }: EdumonActionButtonProps) {
+function EdumonActionButton({ definition, active, doseLevel, doseMenuOpen, onSelect, onLongPress, onDoseSelect }: EdumonActionButtonProps) {
+  const longPressTimer = useRef<number | null>(null)
+  const suppressClick = useRef(false)
+  const hasDoseMenu = definition.long_press_action === 'dose-levels'
+
+  const clearLongPress = () => {
+    if (longPressTimer.current != null) window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = null
+  }
+
+  const pointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!hasDoseMenu || event.button !== 0) return
+    suppressClick.current = false
+    clearLongPress()
+    longPressTimer.current = window.setTimeout(() => {
+      suppressClick.current = true
+      onLongPress(definition)
+    }, 550)
+  }
+
+  const click = () => {
+    clearLongPress()
+    if (suppressClick.current) {
+      suppressClick.current = false
+      return
+    }
+    onSelect(definition)
+  }
+
   const detail = [
     definition.description,
     definition.duration_seconds > 0 ? `Duration ${definition.duration_seconds}s` : '',
-    definition.long_press_action ? `Long press: ${definition.long_press_action}` : '',
+    hasDoseMenu ? 'Long press: infusion level' : (definition.long_press_action ? `Long press: ${definition.long_press_action}` : ''),
   ].filter(Boolean).join(' · ')
 
   return (
-    <button
-      type="button"
-      className={`edumon-action-button ${definition.short_press_action} ${active ? 'active' : ''}`.trim()}
-      aria-pressed={definition.short_press_action === 'toggle' ? active : undefined}
-      onClick={() => onSelect(definition)}
-      title={detail || undefined}
-    >
-      {definition.name}
-    </button>
+    <div className="edumon-action-button-wrap">
+      <button
+        type="button"
+        className={`edumon-action-button ${definition.short_press_action} ${active ? 'active' : ''}`.trim()}
+        aria-pressed={definition.short_press_action === 'toggle' ? active : undefined}
+        onPointerDown={pointerDown}
+        onPointerUp={clearLongPress}
+        onPointerCancel={clearLongPress}
+        onPointerLeave={clearLongPress}
+        onClick={click}
+        title={detail || undefined}
+      >
+        <span>{definition.name}</span>
+        {hasDoseMenu && <small className="edumon-action-dose-badge">{doseLevel === 'low' ? 'L' : doseLevel === 'high' ? 'H' : 'M'}</small>}
+      </button>
+      {doseMenuOpen && (
+        <div className="edumon-dose-menu" role="menu" aria-label={`${definition.name} infusion level`}>
+          {(Object.keys(DOSE_STEPS) as InfusionDoseLevel[]).map((level) => {
+            const step = DOSE_STEPS[level]
+            return (
+              <button
+                key={level}
+                type="button"
+                className={doseLevel === level ? 'selected' : ''}
+                onClick={() => onDoseSelect(definition, level)}
+                role="menuitemradio"
+                aria-checked={doseLevel === level}
+              >
+                <span className="edumon-dose-bars" aria-hidden="true">
+                  {[1, 2, 3].map((bar) => <i key={bar} className={bar <= step.bars ? 'on' : ''} />)}
+                </span>
+                <span>{step.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -146,6 +255,8 @@ export function EdumonActionsPanel() {
   const [definitions, setDefinitions] = useState<EdusimActionDefinition[]>(fallback)
   const [toggleStates, setToggleStates] = useState<Set<string>>(new Set())
   const [flashing, setFlashing] = useState<Set<string>>(new Set())
+  const [doseLevels, setDoseLevels] = useState<Map<string, InfusionDoseLevel>>(new Map())
+  const [doseMenuActionId, setDoseMenuActionId] = useState<string | null>(null)
   const [canEdit, setCanEdit] = useState(false)
   const timersRef = useRef<Map<string, number>>(new Map())
 
@@ -169,8 +280,12 @@ export function EdumonActionsPanel() {
     timersRef.current.clear()
   }, [])
 
+  const currentDoseLevel = (definition: EdusimActionDefinition): InfusionDoseLevel => doseLevels.get(definition.id) ?? 'medium'
+
   const trigger = (definition: EdusimActionDefinition) => {
-    activateAction(definition)
+    const dose = DOSE_STEPS[currentDoseLevel(definition)].scale
+    activateAction(definition, getActionRuntimeSimulationTime(), definition.long_press_action === 'dose-levels' ? dose : 1)
+    setDoseMenuActionId(null)
 
     if (definition.short_press_action === 'toggle') {
       setToggleStates((current) => {
@@ -196,20 +311,48 @@ export function EdumonActionsPanel() {
     timersRef.current.set(definition.id, timer)
   }
 
+  const selectDose = (definition: EdusimActionDefinition, level: InfusionDoseLevel) => {
+    setDoseLevels((current) => {
+      const next = new Map(current)
+      next.set(definition.id, level)
+      return next
+    })
+    if (toggleStates.has(definition.id)) setActionIntensity(definition.id, DOSE_STEPS[level].scale)
+    setDoseMenuActionId(null)
+  }
+
   const isActive = (definition: EdusimActionDefinition) => definition.short_press_action === 'toggle'
     ? toggleStates.has(definition.id)
     : flashing.has(definition.id)
 
   const drugs = definitions.filter((definition) => definition.kind === 'drug')
+  const anaesthesiaDrugs = drugs.filter((definition) => drugClass(definition) === 'anaesthesia')
+  const cardiovascularDrugs = drugs.filter((definition) => drugClass(definition) === 'cardiovascular')
   const events = definitions.filter((definition) => definition.kind === 'event')
 
   const renderGroup = (items: EdusimActionDefinition[], label: string) => items.length ? (
     <div className="edumon-action-grid" role="group" aria-label={label}>
       {items.map((definition) => (
-        <EdumonActionButton key={definition.id} definition={definition} active={isActive(definition)} onSelect={trigger} />
+        <EdumonActionButton
+          key={definition.id}
+          definition={definition}
+          active={isActive(definition)}
+          doseLevel={currentDoseLevel(definition)}
+          doseMenuOpen={doseMenuActionId === definition.id}
+          onSelect={trigger}
+          onLongPress={(action) => setDoseMenuActionId(action.id)}
+          onDoseSelect={selectDose}
+        />
       ))}
     </div>
-  ) : <div className="edumon-action-empty">No actions are currently available for this monitor.</div>
+  ) : <div className="edumon-action-empty">No actions are currently available for this group.</div>
+
+  const renderDrugClass = (title: string, items: EdusimActionDefinition[]) => (
+    <section className="edumon-drug-class" aria-label={`${title} drugs`}>
+      <h4>{title}</h4>
+      {renderGroup(items, `${title} drugs`)}
+    </section>
+  )
 
   return (
     <div className="edumon-actions-panel" aria-label="Clinical actions">
@@ -218,7 +361,12 @@ export function EdumonActionsPanel() {
           <button type="button" onClick={() => window.location.assign('/actions')}>Edit action library</button>
         </div>
       )}
-      <EdumonActionSection id="drugs" title="Drugs">{renderGroup(drugs, 'Drug actions')}</EdumonActionSection>
+      <EdumonActionSection id="drugs" title="Drugs">
+        <div className="edumon-drug-classes">
+          {renderDrugClass('Anaesthesia', anaesthesiaDrugs)}
+          {renderDrugClass('Cardiovascular', cardiovascularDrugs)}
+        </div>
+      </EdumonActionSection>
       <EdumonActionSection id="events" title="Events">{renderGroup(events, 'Event actions')}</EdumonActionSection>
     </div>
   )
