@@ -356,7 +356,7 @@ export function measurementsFor(state: MonitorPatientState): MonitorMeasurements
   const now = runtime?.lastGeneratedTime ?? 0
   const beats = runtime?.beatHistory ?? []
   const latestBeat = beats.length ? beats[beats.length - 1] : null
-  const hrBeats = beats.filter((beat) => beat.time >= now - 60)
+  const hrBeats = beats.slice(-5)
   const spo2Beats = beats.filter((beat) => beat.time >= now - 30 && beat.spo2 != null)
   const pressure = effectiveBloodPressure(state)
   const currentSystolic = latestBeat?.systolic ?? pressure.systolic
