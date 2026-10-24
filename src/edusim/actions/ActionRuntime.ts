@@ -1,9 +1,14 @@
-import type { EdusimActionEffect, EdusimActionEffectTarget } from './ActionEffect'
+import {
+  DEFAULT_EDUSIM_ACTION_PRIORITY,
+  type EdusimActionEffect,
+  type EdusimActionEffectTarget,
+} from './ActionEffect'
 
 export interface EdusimActionRuntimeDefinition {
   id: string
   short_press_action: 'momentary' | 'toggle'
   effects: EdusimActionEffect[]
+  priority?: number
 }
 
 export interface ActiveEffect {
@@ -28,6 +33,7 @@ let activeEffects: ActiveEffect[] = []
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 const normaliseIntensity = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 1
 const releaseBehaviour = (active: ActiveEffect) => active.effect.releaseBehaviour ?? 'recover'
+const effectPriority = (effect: EdusimActionEffect) => Number.isFinite(effect.priority) ? Number(effect.priority) : DEFAULT_EDUSIM_ACTION_PRIORITY
 
 function effectLifetime(effect: EdusimActionEffect): number {
   return Math.max(0, effect.onsetSeconds) + Math.max(0, effect.durationSeconds) + Math.max(0, effect.recoverySeconds)
@@ -99,12 +105,13 @@ export function activateAction(
     }
   }
 
+  const actionPriority = Number.isFinite(definition.priority) ? Number(definition.priority) : DEFAULT_EDUSIM_ACTION_PRIORITY
   const created = definition.effects.map((effect) => ({
     instanceId: `${definition.id}:${effect.id}:${++sequence}`,
     actionId: definition.id,
     mode: definition.short_press_action,
     intensity: normaliseIntensity(intensity),
-    effect,
+    effect: { ...effect, priority: Number.isFinite(effect.priority) ? effect.priority : actionPriority },
     startedAtSimulationTime: atSimulationTime,
   }))
   activeEffects = [...activeEffects, ...created]
@@ -125,9 +132,8 @@ export function deactivateAction(actionId: string): void {
 }
 
 /**
- * Instructor ownership of a physiological target wins over active modifiers.
- * Removing only this target leaves the other effects of the same action running.
- * The caller should commit the currently selected physiological value to patient state.
+ * Instructor ownership of a physiological target wins over every action priority.
+ * Removing only this target leaves unrelated effects of the same action running.
  */
 export function supersedeActionTarget(target: EdusimActionEffectTarget): number {
   const before = activeEffects.length
@@ -149,6 +155,31 @@ export function getActionRuntimeSnapshot(atSimulationTime = simulationTime): Act
   return { simulationTime: atSimulationTime, activeEffects: getActiveEffects(atSimulationTime) }
 }
 
+function applyConstraint(value: number, baseValue: number, active: ActiveEffect, weight: number): number {
+  const effect = active.effect
+  const strength = clamp01(weight * normaliseIntensity(active.intensity))
+  if (!effect.constraint || strength <= 0) return value
+
+  switch (effect.constraint) {
+    case 'block-increase': {
+      const excess = Math.max(0, value - baseValue)
+      return value - excess * strength
+    }
+    case 'block-decrease': {
+      const deficit = Math.max(0, baseValue - value)
+      return value + deficit * strength
+    }
+    case 'minimum': {
+      if (value >= effect.value) return value
+      return value + (effect.value - value) * strength
+    }
+    case 'maximum': {
+      if (value <= effect.value) return value
+      return value + (effect.value - value) * strength
+    }
+  }
+}
+
 export function resolveNumericActionEffect(
   target: EdusimActionEffectTarget,
   baseValue: number,
@@ -157,7 +188,14 @@ export function resolveNumericActionEffect(
   let value = baseValue
   const candidates = getActiveEffects(atSimulationTime)
     .filter((active) => active.effect.target === target)
-    .sort((a, b) => a.startedAtSimulationTime - b.startedAtSimulationTime || a.instanceId.localeCompare(b.instanceId))
+    .sort((a, b) => {
+      const priorityDifference = effectPriority(a.effect) - effectPriority(b.effect)
+      if (priorityDifference !== 0) return priorityDifference
+      const aConstraint = a.effect.operation === 'constraint' ? 1 : 0
+      const bConstraint = b.effect.operation === 'constraint' ? 1 : 0
+      if (aConstraint !== bConstraint) return aConstraint - bConstraint
+      return a.startedAtSimulationTime - b.startedAtSimulationTime || a.instanceId.localeCompare(b.instanceId)
+    })
 
   for (const active of candidates) {
     const weight = actionEffectWeight(active, atSimulationTime)
@@ -175,6 +213,9 @@ export function resolveNumericActionEffect(
       case 'target':
       case 'set':
         value += (effect.value - value) * clamp01(weight * intensity)
+        break
+      case 'constraint':
+        value = applyConstraint(value, baseValue, active, weight)
         break
       case 'trigger':
         break
