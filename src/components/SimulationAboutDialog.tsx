@@ -20,7 +20,7 @@ export interface SimulationAboutDialogProps {
   legalContext?: 'simulation' | 'authoring'
 }
 
-const DEFAULT_SIMULATION_DISCLAIMER = 'For education and simulation training only. EDUSIM is not a medical device and is not intended for diagnosis, patient monitoring, treatment, clinical decision-making, or use in the care of real patients. Simulated values, waveforms, physiological responses, drug effects, events, scenarios and other outputs are simplified educational representations and may differ from real patients, devices, drugs and clinical environments. Do not rely on EDUSIM as a substitute for professional judgement, local protocols, manufacturer instructions, or validated clinical equipment.'
+const DEFAULT_SIMULATION_DISCLAIMER = 'For education and simulation training only. EDUSIM is educational simulation software and is not intended for use as a medical device, for diagnosis, patient monitoring, treatment, clinical decision-making, or in the care of real patients. Simulated values, waveforms, physiological responses, drug effects, events, scenarios and other outputs are simplified educational representations and may differ from real patients, devices, drugs and clinical environments. Do not rely on EDUSIM as a substitute for professional judgement, local protocols, manufacturer instructions, or validated clinical equipment.'
 
 const AUTHORING_DISCLAIMER = 'Content created or edited with this tool is educational simulation content. Authors and instructors are responsible for reviewing its clinical accuracy, educational suitability and local applicability before use. User-authored scenarios, actions and other library content must not be relied upon for real-patient clinical decisions or patient care.'
 
