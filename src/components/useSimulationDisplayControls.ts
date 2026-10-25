@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import type { TeachingRole } from '../teaching'
 import { useTeachingDisplaySync } from '../teaching'
+import { recordSessionLogEvent } from '../teaching/session/sessionLog'
 
 const SIMULATOR_LASER_LOCK_ATTRIBUTE = 'data-edusim-simulator-laser-active'
 
@@ -67,18 +68,25 @@ export function useSimulationDisplayControls<TSnapshot>({
     setSimulatorLaserInteractionLock(false)
   }, [])
 
+  const logDisplayAction = useCallback((eventType: string, label: string, details: Record<string, unknown> = {}) => {
+    if (!sessionId || role === 'standalone') return
+    void recordSessionLogEvent({ sessionId, category: 'device', eventType, label, details }).catch(() => undefined)
+  }, [role, sessionId])
+
   const setSharedFrozen = useCallback((active: boolean) => {
     if (role !== 'instructor' || !sessionId) return
     freezeLocal(active)
     displaySync.setFrozen(active)
-  }, [displaySync, freezeLocal, role, sessionId])
+    logDisplayAction(active ? 'display.freeze' : 'display.unfreeze', active ? 'Waveform display frozen' : 'Waveform display unfrozen', { shared: true })
+  }, [displaySync, freezeLocal, logDisplayAction, role, sessionId])
 
   const toggleFreeze = useCallback(() => {
     if (role === 'candidate' && displaySync.state.frozen) return
     const next = !frozen
     freezeLocal(next)
     if (role === 'instructor' && sessionId && displaySync.state.frozen) displaySync.setFrozen(next)
-  }, [displaySync, freezeLocal, frozen, role, sessionId])
+    logDisplayAction(next ? 'display.freeze' : 'display.unfreeze', next ? 'Waveform display frozen' : 'Waveform display unfrozen', { shared: role === 'instructor' && Boolean(sessionId) })
+  }, [displaySync, freezeLocal, frozen, logDisplayAction, role, sessionId])
 
   const toggleLaser = useCallback(() => {
     if (role === 'candidate') return
@@ -93,10 +101,12 @@ export function useSimulationDisplayControls<TSnapshot>({
     if (next && sharedTeachingLaser && !frozen) {
       freezeLocal(true)
       displaySync.setFrozen(true)
+      logDisplayAction('display.freeze', 'Waveform display frozen', { reason: 'laser', shared: true })
     }
     setLaserEnabled(next)
     if (sharedTeachingLaser) displaySync.setLaserEnabled(next)
-  }, [displaySync, freezeLocal, frozen, laserEnabled, role, sessionId, setLaserEnabled])
+    logDisplayAction(next ? 'display.laser_on' : 'display.laser_off', next ? 'Laser pointer enabled' : 'Laser pointer disabled')
+  }, [displaySync, freezeLocal, frozen, laserEnabled, logDisplayAction, role, sessionId, setLaserEnabled])
 
   return {
     sharedState: displaySync.state,
