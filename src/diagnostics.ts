@@ -27,7 +27,7 @@ export async function copyScenarioLogs(context: Record<string, unknown> = {}): P
     schema: 'eduvent-scenario-log-v2',
     loggerVersion: 2,
     capturedAt: new Date().toISOString(),
-    product: { id: 'eduvent', label: 'EDUVENT', appVersion: APP_VERSION },
+    product: { id: 'mv', label: 'LoppjuSIM-MV', appVersion: APP_VERSION },
     context,
     entries,
   }, 'Copy scenario log JSON')
@@ -38,8 +38,8 @@ export async function copyScenarioSnapshot(snapshot: Record<string, unknown>): P
   return copySimulationJson({
     schema: 'eduvent-scenario-diagnostic-v1',
     capturedAt: new Date().toISOString(),
-    product: { id: 'eduvent', label: 'EDUVENT', appVersion: APP_VERSION },
-    purpose: 'Paste this JSON into the EDUVENT development thread for scenario debugging.',
+    product: { id: 'mv', label: 'LoppjuSIM-MV', appVersion: APP_VERSION },
+    purpose: 'Paste this JSON into the LoppjuSIM-MV development thread for scenario debugging.',
     snapshot,
     recentScenarioEvents: entries.slice(-100),
   }, 'Copy scenario diagnostic JSON')
@@ -53,8 +53,8 @@ export async function copyDiagnosticSnapshot(
 ): Promise<boolean> {
   return copySimulationDiagnostic<Sample>({
     schema: 'eduvent-diagnostic-v1',
-    productId: 'eduvent',
-    productLabel: 'EDUVENT',
+    productId: 'mv',
+    productLabel: 'LoppjuSIM-MV',
     appVersion: APP_VERSION,
     kind: 'simulation-snapshot',
     payload: diagnostic,
