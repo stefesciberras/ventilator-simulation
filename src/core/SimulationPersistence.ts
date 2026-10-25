@@ -1,4 +1,4 @@
-import { toLegacyProductId, type SimulationProductId } from './SimulationProductAdapter'
+import { normaliseSimulationProductId, toLegacyProductId, type LegacySimulationProductId, type SimulationProductId } from './SimulationProductAdapter'
 
 export interface SimulationPersistence {
   key: (name: string) => string
@@ -13,7 +13,10 @@ export interface SimulationPersistence {
 
 const isBrowser = () => typeof window !== 'undefined' && Boolean(window.localStorage)
 
-export function createSimulationPersistence(productId: SimulationProductId): SimulationPersistence {
+export function createSimulationPersistence(productAlias: SimulationProductId | LegacySimulationProductId): SimulationPersistence {
+  const productId = normaliseSimulationProductId(productAlias)
+  if (!productId) throw new Error(`Unknown simulation product: ${productAlias}`)
+
   const prefix = `edusim.${productId}.`
   const legacyPrefix = `edusim.${toLegacyProductId(productId)}.`
   const key = (name: string) => `${prefix}${name}`
