@@ -26,6 +26,15 @@ export interface ActiveEffect {
   stoppedAtSimulationTime?: number
 }
 
+export interface ActiveToggleAction {
+  actionId: string
+  actionName?: string
+  actionKind?: 'drug' | 'event'
+  intensity: number
+  startedAtSimulationTime: number
+  effectIds: string[]
+}
+
 export type ActionRuntimeLogType = 'activate' | 'deactivate' | 'intensity' | 'supersede-target' | 'clear'
 
 export interface ActionRuntimeLogEntry {
@@ -45,6 +54,7 @@ export interface ActionRuntimeLogEntry {
 export interface ActionRuntimeSnapshot {
   simulationTime: number
   activeEffects: ActiveEffect[]
+  activeToggleActions: ActiveToggleAction[]
 }
 
 const MAX_ACTION_LOG_ENTRIES = 500
@@ -52,12 +62,23 @@ let simulationTime = 0
 let sequence = 0
 let logSequence = 0
 let activeEffects: ActiveEffect[] = []
+let activeToggleActions: ActiveToggleAction[] = []
 let actionLog: ActionRuntimeLogEntry[] = []
+const runtimeListeners = new Set<() => void>()
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 const normaliseIntensity = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 1
 const releaseBehaviour = (active: ActiveEffect) => active.effect.releaseBehaviour ?? 'recover'
 const effectPriority = (effect: EdusimActionEffect) => Number.isFinite(effect.priority) ? Number(effect.priority) : DEFAULT_EDUSIM_ACTION_PRIORITY
+
+function notifyActionRuntime(): void {
+  for (const listener of runtimeListeners) listener()
+}
+
+export function subscribeToActionRuntime(listener: () => void): () => void {
+  runtimeListeners.add(listener)
+  return () => runtimeListeners.delete(listener)
+}
 
 function appendActionLog(entry: Omit<ActionRuntimeLogEntry, 'sequence'>): void {
   actionLog = [...actionLog, { ...entry, sequence: ++logSequence }].slice(-MAX_ACTION_LOG_ENTRIES)
@@ -116,6 +137,14 @@ export function actionEffectWeight(active: ActiveEffect, atSimulationTime = simu
   return clamp01(1 - (afterOnset - duration) / recovery)
 }
 
+export function getActiveToggleActions(): ActiveToggleAction[] {
+  return activeToggleActions.map((active) => ({ ...active, effectIds: [...active.effectIds] }))
+}
+
+export function isActionToggleRunning(actionId: string): boolean {
+  return activeToggleActions.some((active) => active.actionId === actionId)
+}
+
 export function activateAction(
   definition: EdusimActionRuntimeDefinition,
   atSimulationTime = simulationTime,
@@ -125,20 +154,23 @@ export function activateAction(
   const resolvedIntensity = normaliseIntensity(intensity)
 
   if (definition.short_press_action === 'toggle') {
-    const running = activeEffects.filter((active) => active.actionId === definition.id && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
-    if (running.length > 0) {
-      activeEffects = activeEffects.map((active) => running.includes(active)
+    const runningAction = activeToggleActions.find((active) => active.actionId === definition.id)
+    if (runningAction) {
+      activeToggleActions = activeToggleActions.filter((active) => active.actionId !== definition.id)
+      const runningEffects = activeEffects.filter((active) => active.actionId === definition.id && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
+      activeEffects = activeEffects.map((active) => runningEffects.includes(active)
         ? { ...active, stoppedAtSimulationTime: atSimulationTime }
         : active)
       appendActionLog({
         simulationTime: atSimulationTime,
         type: 'deactivate',
         actionId: definition.id,
-        actionName: definition.name,
-        actionKind: definition.kind,
+        actionName: runningAction.actionName ?? definition.name,
+        actionKind: runningAction.actionKind ?? definition.kind,
         mode: definition.short_press_action,
-        effectIds: running.map((active) => active.effect.id),
+        effectIds: runningAction.effectIds,
       })
+      notifyActionRuntime()
       return []
     }
   }
@@ -155,6 +187,16 @@ export function activateAction(
     startedAtSimulationTime: atSimulationTime,
   }))
   activeEffects = [...activeEffects, ...created]
+  if (definition.short_press_action === 'toggle') {
+    activeToggleActions = [...activeToggleActions, {
+      actionId: definition.id,
+      actionName: definition.name,
+      actionKind: definition.kind,
+      intensity: resolvedIntensity,
+      startedAtSimulationTime: atSimulationTime,
+      effectIds: definition.effects.map((effect) => effect.id),
+    }]
+  }
   appendActionLog({
     simulationTime: atSimulationTime,
     type: 'activate',
@@ -165,13 +207,16 @@ export function activateAction(
     intensity: resolvedIntensity,
     effectIds: definition.effects.map((effect) => effect.id),
   })
+  notifyActionRuntime()
   return created
 }
 
 export function setActionIntensity(actionId: string, intensity: number): void {
   const nextIntensity = normaliseIntensity(intensity)
+  const runningAction = activeToggleActions.find((active) => active.actionId === actionId)
+  if (!runningAction) return
+  activeToggleActions = activeToggleActions.map((active) => active.actionId === actionId ? { ...active, intensity: nextIntensity } : active)
   const running = activeEffects.filter((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
-  if (running.length === 0) return
   activeEffects = activeEffects.map((active) => running.includes(active)
     ? { ...active, intensity: nextIntensity }
     : active)
@@ -179,17 +224,20 @@ export function setActionIntensity(actionId: string, intensity: number): void {
     simulationTime,
     type: 'intensity',
     actionId,
-    actionName: running[0]?.actionName,
-    actionKind: running[0]?.actionKind,
+    actionName: runningAction.actionName,
+    actionKind: runningAction.actionKind,
     mode: 'toggle',
     intensity: nextIntensity,
-    effectIds: running.map((active) => active.effect.id),
+    effectIds: runningAction.effectIds,
   })
+  notifyActionRuntime()
 }
 
 export function deactivateAction(actionId: string): void {
+  const runningAction = activeToggleActions.find((active) => active.actionId === actionId)
+  if (!runningAction) return
+  activeToggleActions = activeToggleActions.filter((active) => active.actionId !== actionId)
   const running = activeEffects.filter((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
-  if (running.length === 0) return
   activeEffects = activeEffects.map((active) => running.includes(active)
     ? { ...active, stoppedAtSimulationTime: simulationTime }
     : active)
@@ -197,11 +245,12 @@ export function deactivateAction(actionId: string): void {
     simulationTime,
     type: 'deactivate',
     actionId,
-    actionName: running[0]?.actionName,
-    actionKind: running[0]?.actionKind,
+    actionName: runningAction.actionName,
+    actionKind: runningAction.actionKind,
     mode: 'toggle',
-    effectIds: running.map((active) => active.effect.id),
+    effectIds: runningAction.effectIds,
   })
+  notifyActionRuntime()
 }
 
 /**
@@ -212,27 +261,38 @@ export function supersedeActionTarget(target: EdusimActionEffectTarget): number 
   const affected = activeEffects.filter((active) => active.effect.target === target)
   if (affected.length === 0) return 0
   activeEffects = activeEffects.filter((active) => active.effect.target !== target)
+
+  const affectedActionIds = [...new Set(affected.map((active) => active.actionId))]
+  activeToggleActions = activeToggleActions.filter((toggle) => {
+    if (!affectedActionIds.includes(toggle.actionId) || toggle.effectIds.length === 0) return true
+    return activeEffects.some((effect) => effect.actionId === toggle.actionId && effect.mode === 'toggle' && effect.stoppedAtSimulationTime == null)
+  })
+
   appendActionLog({
     simulationTime,
     type: 'supersede-target',
     target,
-    affectedActionIds: [...new Set(affected.map((active) => active.actionId))],
+    affectedActionIds,
     effectIds: affected.map((active) => active.effect.id),
   })
+  notifyActionRuntime()
   return affected.length
 }
 
 export function clearActionRuntime(): void {
-  if (activeEffects.length > 0) {
+  const actionIds = [...new Set([...activeEffects.map((active) => active.actionId), ...activeToggleActions.map((active) => active.actionId)])]
+  if (actionIds.length > 0) {
     appendActionLog({
       simulationTime,
       type: 'clear',
-      affectedActionIds: [...new Set(activeEffects.map((active) => active.actionId))],
+      affectedActionIds: actionIds,
       effectIds: activeEffects.map((active) => active.effect.id),
     })
   }
   activeEffects = []
+  activeToggleActions = []
   sequence = 0
+  notifyActionRuntime()
 }
 
 export function clearActionRuntimeLog(): void {
@@ -254,13 +314,18 @@ export function getActionRuntimeLog(): ActionRuntimeLogEntry[] {
 }
 
 export function getActionRuntimeSnapshot(atSimulationTime = simulationTime): ActionRuntimeSnapshot {
-  return { simulationTime: atSimulationTime, activeEffects: getActiveEffects(atSimulationTime) }
+  return {
+    simulationTime: atSimulationTime,
+    activeEffects: getActiveEffects(atSimulationTime),
+    activeToggleActions: getActiveToggleActions(),
+  }
 }
 
 export function getActionRuntimeDiagnostics(atSimulationTime = simulationTime): Record<string, unknown> {
   const effects = getActiveEffects(atSimulationTime)
   return {
     simulationTime: atSimulationTime,
+    activeToggleActions: getActiveToggleActions(),
     activeEffects: effects.map((active) => ({
       ...active,
       currentWeight: actionEffectWeight(active, atSimulationTime),
