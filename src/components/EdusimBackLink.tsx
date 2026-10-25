@@ -3,6 +3,6 @@ interface EdusimBackLinkProps {
   label?: string
 }
 
-export function EdusimBackLink({ className = '', label = 'Return to EDUSIM' }: EdusimBackLinkProps) {
+export function EdusimBackLink({ className = '', label = 'Return to LoppjuSIM' }: EdusimBackLinkProps) {
   return <a href="/" className={`edusim-back-link ${className}`.trim()} aria-label={label} title={label}>‹</a>
 }
