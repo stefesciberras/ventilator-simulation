@@ -9,7 +9,7 @@ export const EDUMON_PHYSIOLOGICAL_BOUNDS = {
   spo2: { min: 0, max: 100 },
   peripheralPerfusion: { min: 0, max: 1 },
   respiratoryRate: { min: 0, max: 80 },
-  tidalVolumeMl: { min: 0, max: 3000 },
+  tidalVolumeMl: { min: 0, max: 1000 },
   expiratoryResistanceCmH2OLs: { min: 0.1, max: 200 },
 } as const
 
