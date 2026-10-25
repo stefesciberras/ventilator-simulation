@@ -5,14 +5,34 @@ import {
   fetchSessionLogEntries,
   fetchStandaloneSessionLogEntries,
   getStandaloneSessionLogRunId,
-  settingChangesLabel,
   subscribeToSessionLogEntries,
   subscribeToStandaloneSessionLogEntries,
   type SessionLogEntry,
+  type SessionLogStateChange,
 } from './session/sessionLog'
 import './TeachingSessionLogPanel.css'
 
 interface TeachingSessionLogPanelProps { productId: string; sessionId: string | null }
+interface DisplayRow { key: string; entry: SessionLogEntry; subject: string; message: string }
+
+const FRIENDLY_SETTING_NAMES: Record<string, string> = {
+  fio2: 'FiO₂',
+  peep: 'PEEP',
+  rate: 'rate',
+  tidalVolume: 'tidal volume',
+  inspiratoryTime: 'inspiratory time',
+  inspiratoryFlow: 'inspiratory flow',
+  pressureControl: 'pressure control',
+  pressureSupport: 'pressure support',
+  mode: 'mode',
+  heartRate: 'heart rate',
+  systolicPressure: 'systolic pressure',
+  diastolicPressure: 'diastolic pressure',
+  spo2: 'SpO₂',
+  temperatureC: 'temperature',
+  simulationPaused: 'simulation pause',
+  simulationSpeed: 'simulation speed',
+}
 
 function safeFilePart(value: string) { return value.replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'edusim' }
 function csvCell(value: unknown): string {
@@ -29,13 +49,60 @@ function displayTime(entry: SessionLogEntry): string {
   const date = new Date(entry.client_occurred_at || entry.created_at)
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
-function displayLabel(entry: SessionLogEntry): string {
-  if (entry.category !== 'settings') return entry.label
-  const before = entry.details?.before
-  const after = entry.details?.after
-  if (before == null || after == null) return entry.label
-  const changes = diffSessionState(before, after)
-  return changes.length ? settingChangesLabel(entry.label.replace(/ changed$/i, ''), changes) : entry.label
+function shortValue(value: unknown): string {
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100)
+  if (typeof value === 'boolean') return value ? 'on' : 'off'
+  if (value == null) return '—'
+  if (typeof value === 'string') return value
+  try { return JSON.stringify(value) } catch { return String(value) }
+}
+function settingName(change: SessionLogStateChange): string {
+  const leaf = change.path.split('.').pop() ?? change.path
+  return FRIENDLY_SETTING_NAMES[leaf] ?? leaf.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
+}
+function subjectFor(entry: SessionLogEntry): string {
+  if (entry.actor_role === 'standalone') return 'Standalone'
+  if (entry.actor_role === 'instructor') return 'All candidates'
+  return entry.actor_name || 'Candidate'
+}
+function actorFor(entry: SessionLogEntry): string {
+  if (entry.actor_role === 'standalone') return 'Standalone'
+  if (entry.actor_role === 'instructor') return 'Instructor'
+  return entry.actor_name || 'Candidate'
+}
+function humanSettingMessage(entry: SessionLogEntry, change: SessionLogStateChange): string {
+  const name = settingName(change)
+  const values = `${shortValue(change.from)} → ${shortValue(change.to)}`
+  return entry.actor_role === 'standalone'
+    ? `${name} ${values}`
+    : `${name} ${values}, changed by ${actorFor(entry)}`
+}
+function humanEventMessage(entry: SessionLogEntry): string {
+  if (entry.actor_role === 'standalone') return entry.label
+  return `${entry.label} by ${actorFor(entry)}`
+}
+function displayRows(entries: SessionLogEntry[]): DisplayRow[] {
+  const rows: DisplayRow[] = []
+  for (const entry of entries) {
+    if (entry.category === 'settings') {
+      const before = entry.details?.before
+      const after = entry.details?.after
+      if (before != null && after != null) {
+        const changes = diffSessionState(before, after)
+        if (changes.length) {
+          changes.forEach((change, index) => rows.push({
+            key: `${entry.id}:setting:${index}`,
+            entry,
+            subject: subjectFor(entry),
+            message: humanSettingMessage(entry, change),
+          }))
+          continue
+        }
+      }
+    }
+    rows.push({ key: `${entry.id}:event`, entry, subject: subjectFor(entry), message: humanEventMessage(entry) })
+  }
+  return rows
 }
 
 export function TeachingSessionLogPanel({ productId, sessionId }: TeachingSessionLogPanelProps) {
@@ -64,13 +131,22 @@ export function TeachingSessionLogPanel({ productId, sessionId }: TeachingSessio
     return () => { active = false; void closeSessionLogChannel(channel) }
   }, [productId, sessionId])
 
+  const rows = useMemo(() => displayRows(entries), [entries])
   const csv = useMemo(() => {
-    const rows = [
-      ['time', 'actor', 'role', 'category', 'event', 'details'],
-      ...entries.map((entry) => [entry.client_occurred_at || entry.created_at, entry.actor_name, entry.actor_role, entry.category, displayLabel(entry), entry.details]),
+    const csvRows = [
+      ['time', 'subject', 'event', 'actor', 'role', 'category', 'details'],
+      ...rows.map((row) => [
+        row.entry.client_occurred_at || row.entry.created_at,
+        row.subject,
+        row.message,
+        actorFor(row.entry),
+        row.entry.actor_role,
+        row.entry.category,
+        row.entry.details,
+      ]),
     ]
-    return `${rows.map((row) => row.map(csvCell).join(',')).join('\n')}\n`
-  }, [entries])
+    return `${csvRows.map((row) => row.map(csvCell).join(',')).join('\n')}\n`
+  }, [rows])
 
   const saveLog = () => {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -97,23 +173,22 @@ export function TeachingSessionLogPanel({ productId, sessionId }: TeachingSessio
         <div className="teaching-session-log-body">
           {loading && entries.length === 0 ? (
             <div className="teaching-session-log-empty">Loading session log…</div>
-          ) : entries.length === 0 ? (
+          ) : rows.length === 0 ? (
             <div className="teaching-session-log-empty">{standalone ? 'Standalone logging is active. Actions will appear here as they occur.' : 'No session log entries yet.'}</div>
           ) : (
             <div className="teaching-session-log-list" role="log" aria-live="polite">
-              {entries.map((entry) => (
-                <div className={`teaching-session-log-entry category-${entry.category}`} key={entry.id}>
-                  <time dateTime={entry.client_occurred_at || entry.created_at}>{displayTime(entry)}</time>
-                  <div className="teaching-session-log-entry-main"><span className="teaching-session-log-actor">{entry.actor_name}</span><strong>{displayLabel(entry)}</strong></div>
-                  <small>{entry.category}</small>
+              {rows.map((row) => (
+                <div className={`teaching-session-log-entry category-${row.entry.category}`} key={row.key}>
+                  <time dateTime={row.entry.client_occurred_at || row.entry.created_at}>{displayTime(row.entry)}</time>
+                  <strong><span className="teaching-session-log-subject">{row.subject}:</span> {row.message}</strong>
                 </div>
               ))}
             </div>
           )}
           {error && <div className="teaching-session-log-error">{error}</div>}
           <div className="teaching-session-log-actions">
-            <button type="button" className="teaching-library-save" onClick={saveLog} disabled={!entries.length}>Save log</button>
-            <small>{entries.length} {entries.length === 1 ? 'entry' : 'entries'} · {sessionId ? `Session ${sessionId.slice(0, 8)}…` : `Standalone ${standaloneRunId?.slice(0, 8)}… · local only`}</small>
+            <button type="button" className="teaching-library-save" onClick={saveLog} disabled={!rows.length}>Save log</button>
+            <small>{rows.length} {rows.length === 1 ? 'entry' : 'entries'} · {sessionId ? `Session ${sessionId.slice(0, 8)}…` : `Standalone ${standaloneRunId?.slice(0, 8)}… · local only`}</small>
           </div>
         </div>
       )}
