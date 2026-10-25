@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { TeachingInstructorWorkspace } from './TeachingWorkspace'
 import { TeachingMediaInstructorPanel } from './TeachingMediaPanel'
+import { TeachingScenarioLogPanel } from './TeachingScenarioLogPanel'
 import type { TeachingHostAdapter, TeachingRole } from './types'
 import { useTeachingPrompts, useTeachingQuestionLibrary } from './useTeachingInteractions'
 import './TeachingLayoutFixes.css'
@@ -80,6 +81,7 @@ export function SharedTeachingTab({
             onReleaseAnswer={prompts.releaseAnswer}
             onSaveLibrary={library.save}
           />
+          <TeachingScenarioLogPanel productId={host.appId} sessionId={sessionId} />
         </>
       )}
       {runtimeHost}
