@@ -193,6 +193,7 @@ function sharedToTrigger(trigger: SharedScenarioAuthoringTrigger): DynamicScenar
   if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct' || trigger.type === 'media-ended' || trigger.type === 'media-acknowledged') return { type: trigger.type }
   if (trigger.type === 'time') return { type: 'time', seconds: trigger.seconds }
   if (trigger.type === 'condition') return { type: 'condition', metric: trigger.metric as DynamicScenarioMetric, operator: trigger.operator, value: trigger.value }
+  if (trigger.type === 'edusim-action') return { type: 'manual' }
   if (trigger.parameter.startsWith('patient.')) return { type: 'patient-change', parameter: trigger.parameter.slice(8) as keyof InstructorScenarioSnapshot['patient'], actor: trigger.actor }
   if (trigger.parameter.startsWith('device.')) return { type: 'device-action', action: trigger.parameter.slice(7) as DynamicScenarioActionId, actor: trigger.actor }
   return { type: 'action', parameter: trigger.parameter.replace(/^ventilator\./, '') as keyof InstructorScenarioSnapshot['ventilator'], actor: trigger.actor }

@@ -24,6 +24,7 @@ export type SharedScenarioAuthoringTrigger =
   | { id: string; type: 'time'; seconds: number }
   | { id: string; type: 'condition'; metric: string; operator: SharedScenarioOperator; value: number }
   | { id: string; type: 'action'; parameter: string; actor: SharedScenarioActor }
+  | { id: string; type: 'edusim-action'; actionId: string; actor: SharedScenarioActor }
   | { id: string; type: 'question-any' }
   | { id: string; type: 'question-correct' }
   | { id: string; type: 'media-ended' }
@@ -75,6 +76,10 @@ export interface SharedScenarioTriggerChoice {
   label: string
 }
 
+export interface SharedScenarioActionChoice extends SharedScenarioTriggerChoice {
+  kind: 'drug' | 'event'
+}
+
 export interface SharedScenarioEditorAdapter<TScenario, TSnapshot> {
   product: ScenarioProductId
   productLabel: string
@@ -91,6 +96,8 @@ export interface SharedScenarioEditorAdapter<TScenario, TSnapshot> {
   transitionVariables?: (snapshot: TSnapshot) => readonly SharedScenarioTriggerChoice[]
   conditionMetrics: readonly SharedScenarioTriggerChoice[]
   actionParameters: readonly SharedScenarioTriggerChoice[]
+  /** Dynamically load the shared Drugs & Events library for products that support EDUSIM actions. */
+  loadEdusimActionChoices?: () => Promise<readonly SharedScenarioActionChoice[]>
 }
 
 export function authoringId(prefix: string) {
