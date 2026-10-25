@@ -5,11 +5,11 @@ import { SharedScenarioEditorFramework } from '../../SharedScenarioEditorFramewo
 import { createEdumonAuthoringAdapter } from './authoringAdapter'
 
 interface EdumonScenarioEditorProps {
-  product: Extract<ScenarioProductId, 'edumon-ana' | 'edumon-icu'>
+  product: Extract<ScenarioProductId, 'anaesth' | 'icu'>
   onStartScenario: (row: ProductScenarioRow<EdumonStoredScenario>) => void
 }
 
 export function EdumonScenarioEditor({ product, onStartScenario }: EdumonScenarioEditorProps) {
-  const label = product === 'edumon-ana' ? 'EDUMON-Ana' : 'EDUMON-ICU'
+  const label = product === 'anaesth' ? 'LoppjuSIM-Anaesth' : 'LoppjuSIM-ICU'
   return <SharedScenarioEditorFramework adapter={createEdumonAuthoringAdapter(product, label)} onStartScenario={onStartScenario} />
 }
