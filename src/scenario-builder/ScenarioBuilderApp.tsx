@@ -8,6 +8,7 @@ import {
   subscribeToInstructorAccount,
   type InstructorPresetRow,
 } from '../instructorAccount'
+import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
 import { createDefaultVentilatorScenario } from './modules/ventilator/defaultScenario'
 import { VentilatorScenarioEditor } from './modules/ventilator/VentilatorScenarioEditor'
 import { EdumonScenarioEditor } from './modules/edumon/EdumonScenarioEditor'
@@ -27,6 +28,7 @@ export function ScenarioBuilderApp() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const launchingScenarioRef = useRef(false)
   const defaultScenario = useMemo(() => createDefaultVentilatorScenario(), [])
   const requestedScenarioId = useMemo(() => new URLSearchParams(window.location.search).get('scenario'), [])
@@ -110,6 +112,15 @@ export function ScenarioBuilderApp() {
 
   return (
     <main className="scenario-builder-app">
+      <SimulationAboutDialog
+        open={aboutOpen}
+        productLabel="EDUSIM"
+        title="Scenario Builder"
+        description="The shared EDUSIM authoring workspace for creating and maintaining educational simulation scenarios."
+        version={SCENARIO_BUILDER_VERSION}
+        onClose={() => setAboutOpen(false)}
+        legalContext="authoring"
+      />
       <header className="scenario-builder-appbar">
         <div>
           <span className="scenario-builder-eyebrow">Simulation authoring workspace</span>
@@ -119,6 +130,7 @@ export function ScenarioBuilderApp() {
         <div className="scenario-builder-appbar-actions">
           {account && <span className="scenario-builder-account">{account.email}</span>}
           {account && <button type="button" onClick={() => void signOut()} disabled={busy}>Sign out</button>}
+          <button type="button" onClick={() => setAboutOpen(true)}>About</button>
           <button type="button" className="scenario-builder-primary" onClick={closeBuilder}>Return to EDUSIM</button>
         </div>
       </header>
