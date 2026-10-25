@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TeachingRole } from './types'
 import { sendTeachingBroadcast, subscribeTeachingBroadcast } from './teachingRealtimeBus'
+import { recordSessionLogEvent } from './session/sessionLog'
 
 const STATE_EVENT = 'teaching-shared-oxygen-flush'
 const REQUEST_EVENT = 'teaching-shared-oxygen-flush-request'
@@ -71,9 +72,22 @@ export function useTeachingSharedOxygenFlush(role: TeachingRole, sessionId: stri
 
   const setActive = useCallback((next: boolean) => {
     if (role !== 'instructor' || !sessionId) return
+    const changed = activeRef.current !== next
     activeRef.current = next
     setActiveState(next)
     broadcastState(next)
+    // Start is logged once by the EDUVENT scenario-action event, covering both
+    // local and shared instructor oxygen flushes. The shared controller owns the
+    // explicit stop event, avoiding a duplicate start row on long press.
+    if (changed && !next) {
+      void recordSessionLogEvent({
+        sessionId,
+        category: 'device',
+        eventType: 'oxygen_flush.stopped',
+        label: 'Oxygen flush stopped',
+        details: { shared: true },
+      }).catch(() => undefined)
+    }
     if (!next) {
       window.setTimeout(() => broadcastState(false), 120)
       window.setTimeout(() => broadcastState(false), 400)

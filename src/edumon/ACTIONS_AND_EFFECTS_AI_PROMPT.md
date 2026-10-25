@@ -21,7 +21,9 @@ A valid action may intentionally have `effects: []`. Do not invent a dummy physi
 ## Core files
 
 - `src/edusim/actions/ActionEffect.ts` — targets/operations, priority, constraints and release behaviour.
-- `src/edusim/actions/ActionRuntime.ts` — active toggle actions, active effects, timing, priority ordering, target supersession, subscriptions and diagnostics.
+- `src/edusim/actions/ActionRuntime.ts` — active toggle actions, active effects, timing, priority ordering, target supersession, subscriptions, diagnostics and Session Log mirroring.
+- `src/teaching/session/sessionLog.ts` — durable teaching Session Log client/realtime service.
+- `src/teaching/TeachingSessionLogPanel.tsx` — instructor Session Log view and CSV export.
 - `src/core/SimulationDiagnostics.ts` — runtime diagnostic-provider registry.
 - `src/teaching/diagnostics/PublishedDiagnostics.ts` — deliberate Supabase publication of diagnostic bundles.
 - `src/edumon/actionPhysiology.ts` — physiology interpretation, shared sympathetic saturation and hard bounds.
@@ -50,6 +52,16 @@ Events → **Monitors** contains:
 All three are **display-only**. Never mutate SBP/DBP, temperature, anaesthetic depth, BIS physiology or any other patient-model field when toggling them. The underlying model continues to evolve while hidden.
 
 Monitor toggle state and activation/deactivation must appear in ActionRuntime diagnostics and published diagnostics even though `activeEffects` is empty.
+
+## Teaching Session Log contract
+
+The user-facing teaching log is named **Session Log** in both EDUVENT and EDUMON. Do not rename the older browser-local diagnostic scenario logger; it is a separate diagnostic facility.
+
+During an active teaching session, ActionRuntime activation/deactivation/intensity interactions for Drugs and Events must be mirrored to the Session Log. This is an observational side effect only: failure to write a Session Log row must never interrupt or modify ActionRuntime physiology.
+
+Shared Session Log storage is `public.edusim_session_log_entries`, with actor identity supplied server-side and chronological identity IDs. Instructor/candidate simulator-state changes are captured by database triggers on the shared session rows, while alarm lifecycle/silence and freeze/display actions are logged at their shared control boundaries. Candidate device actions are captured from candidate action revisions. The instructor panel subscribes to INSERT events and displays all actors in entry order.
+
+Keep RLS strict: instructors may read the full session log, while candidates may append and read only their own entries. Do not trust client-provided actor names, roles or product IDs.
 
 ## Current targets
 
@@ -144,16 +156,17 @@ Definitions live in `public.edusim_action_definitions`. Monitor display controls
 3. Keep display-only actions out of physiological state.
 4. Permit zero-effect momentary and toggle actions; never add dummy effects.
 5. Keep active toggle state independent from active effects.
-6. Preserve runtime subscriptions and diagnostics.
+6. Preserve runtime subscriptions, diagnostics and Session Log mirroring.
 7. Use priority + constraints for competing physiological effects.
 8. Keep manual supersession above action priority.
 9. Keep absolute hard bounds centralized and final.
 10. Preserve the shared sympathetic saturation architecture.
 11. Keep fallback and persisted definitions aligned.
-12. Update regression coverage and both documentation files.
-13. Bump EDUMON version.
-14. Run full CI and merge only when green.
+12. Preserve Session Log RLS and server-derived actor identity.
+13. Update regression coverage and both documentation files.
+14. Bump EDUMON version.
+15. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op under Others; hard bounds still prevent HR 500; the shared sympathetic saturation architecture remains intact; and build/regressions pass.
+Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; Drug/Event interactions are mirrored to Session Log without affecting physiology; candidates cannot spoof Session Log actor identity; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op under Others; hard bounds still prevent HR 500; the shared sympathetic saturation architecture remains intact; and build/regressions pass.

@@ -7,6 +7,7 @@ import {
   type ProductTeachingMemberTelemetry,
   type ProductTeachingSessionRow,
 } from './productSession'
+import { configureSessionLogRuntime } from './sessionLog'
 
 interface UseProductTeachingSessionArgs<TState> {
   productId: string
@@ -74,6 +75,14 @@ export function useProductTeachingSession<TState>({
       },
     },
   })
+
+  useEffect(() => {
+    configureSessionLogRuntime({
+      productId: normalizedProductId,
+      sessionId: core.session?.id ?? null,
+      role: core.role,
+    })
+  }, [normalizedProductId, core.role, core.session?.id])
 
   const stateSignature = useMemo(() => {
     try { return JSON.stringify(state) } catch { return '' }

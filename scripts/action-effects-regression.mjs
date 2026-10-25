@@ -101,7 +101,8 @@ assert(curareCleftMigration.includes("name = 'Curare Cleft'"), 'Curare Cleft ren
 
 assert(panel.includes("const OTHER_DRUG_IDS = new Set(['antibiotics'])"), 'Antibiotics must be classified under Other Drugs')
 assert(panel.includes("id: 'antibiotics', kind: 'drug', name: 'Antibiotics'"), 'Antibiotics fallback Drug must exist')
-assert(panel.includes("effects: [], priority: 30"), 'Antibiotics must remain a no-op action with no dummy effects')
+const antibioticsFallback = panel.match(/\{ id: 'antibiotics',[^\n]+\}/)?.[0] ?? ''
+assert(antibioticsFallback.includes('effects: []') && antibioticsFallback.includes('priority: 30'), 'Antibiotics must remain a no-op action with no dummy effects')
 assert(antibioticsMigration.includes("'antibiotics'"), 'Antibiotics migration must persist the action')
 assert(antibioticsMigration.includes("'[]'::jsonb"), 'Antibiotics migration must persist an empty effects list')
 

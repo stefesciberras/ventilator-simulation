@@ -12,6 +12,7 @@ import { InstructorWorkspace } from '../teaching/instructor/InstructorWorkspace'
 import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
 import { InstructorScenarioLibraryController } from '../teaching/instructor/InstructorScenarioLibraryController'
 import { useEduventInstructorScenarioRuntime, type EduventDynamicScenarioDiagnosticContext } from '../eduvent/useEduventInstructorScenarioRuntime'
+import { recordSessionLogEvent } from '../teaching/session/sessionLog'
 import '../account.css'
 
 export type DynamicScenarioDiagnosticContext = EduventDynamicScenarioDiagnosticContext
@@ -60,15 +61,39 @@ function nextCopyName(baseName: string, presets: InstructorPresetRow[]) {
   return candidate
 }
 
+const INSTRUCTOR_DEVICE_ACTION_LABELS: Partial<Record<DynamicScenarioActionId, string>> = {
+  'oxygen-flush': 'Oxygen flush',
+  nebulisation: 'Nebuliser activated',
+  'inspiratory-hold': 'Inspiratory hold',
+  'expiratory-hold': 'Expiratory hold',
+}
+
 export function InstructorAccountControls({ role, sessionId, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange, scenarioActionEvent = null }: InstructorAccountControlsProps) {
   const accountChangeLocked = role !== 'standalone'
   const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
   const account = accountAuth.account
   const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('eduvent', Boolean(account), EDUVENT_SCENARIO_CODEC)
   const requestedScenarioHandledRef = useRef<string | null>(null)
+  const loggedScenarioActionSequenceRef = useRef<number | null>(null)
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
   void simulationPaused
   void onSimulationPausedChange
+
+  useEffect(() => {
+    if (role !== 'instructor' || !sessionId || !scenarioActionEvent) return
+    if (loggedScenarioActionSequenceRef.current === scenarioActionEvent.sequence) return
+    loggedScenarioActionSequenceRef.current = scenarioActionEvent.sequence
+    if (scenarioActionEvent.action === 'freeze-waveform') return
+    const label = INSTRUCTOR_DEVICE_ACTION_LABELS[scenarioActionEvent.action]
+    if (!label) return
+    void recordSessionLogEvent({
+      sessionId,
+      category: 'device',
+      eventType: 'instructor.device_action',
+      label,
+      details: { action: scenarioActionEvent.action, sequence: scenarioActionEvent.sequence },
+    }).catch(() => undefined)
+  }, [role, scenarioActionEvent, sessionId])
 
   const scenarioRuntime = useEduventInstructorScenarioRuntime({ role, sessionId, currentScenario, onLoadScenario, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onDynamicScenarioStarted, onScenarioDiagnosticChange, scenarioActionEvent })
   const dynamicPresets = useMemo(() => library.items.filter((preset) => preset.scenario.kind === 'dynamic'), [library.items])
