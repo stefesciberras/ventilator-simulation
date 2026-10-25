@@ -1,6 +1,6 @@
 # EDUMON actions/effects — prompt for AI coding agents
 
-> Maintenance contract: update this prompt whenever action/effect vocabulary, runtime semantics, physiology interpretation, persistence, seeded actions, grouping, priority/constraint semantics, physiological hard bounds, timing or relevant file locations change.
+> Maintenance contract: update this prompt whenever action/effect vocabulary, runtime semantics, physiology interpretation, persistence, seeded actions, grouping, priority/constraint semantics, physiological hard bounds, diagnostics, timing or relevant file locations change.
 
 Use this prompt when modifying EDUSIM/EDUMON Drugs, Events or physiological responses.
 
@@ -17,7 +17,8 @@ Manual instructor edits supersede action ownership on that target, but do not by
 ## Core files
 
 - `src/edusim/actions/ActionEffect.ts` — targets/operations, priority, constraints and release behaviour.
-- `src/edusim/actions/ActionRuntime.ts` — timing, priority ordering, constraint resolution, intensity, recover/persist and target supersession.
+- `src/edusim/actions/ActionRuntime.ts` — timing, priority ordering, constraint resolution, intensity, recover/persist, target supersession and bounded action history.
+- `src/core/SimulationDiagnostics.ts` — runtime diagnostic-provider registry used to include Drug/Event state/history in copied diagnostics.
 - `src/edumon/actionPhysiology.ts` — interprets active effects and then calls the hard-bounds layer.
 - `src/edumon/physiologicalBounds.ts` — centralized absolute simulator sanity bounds.
 - `src/edumon/monitorEngine.ts` — rhythm-specific effective-rate constraints and waveform/measurement generation.
@@ -60,7 +61,7 @@ Current invariants:
 - SpO₂ 0–100%
 - peripheral perfusion 0–1
 - RR 0–80/min
-- tidal volume 0–3000 mL
+- tidal volume 0–1000 mL
 - expiratory resistance 0.1–200 cmH₂O/L/s
 - FiO₂ 0.21–1
 - shunt fraction 0–1
@@ -83,6 +84,27 @@ If a new physiological variable can be pushed to impossible values by future com
 
 All three use 10-second onset and 30-second recovery. Hypovolaemia MAP effects remain independent. Manual HR edit supersedes all Beta blocker HR effects. The 50 bpm floor is an action-level teaching constraint; the global 0–240 HR hard bound is an absolute simulator invariant.
 
+## Neuromuscular block and mechanically visible breathing
+
+The current EDUMON respiratory model does not separately represent central neural respiratory rhythm and mechanical respiratory excursions. `neuromuscular.block` must therefore suppress both spontaneous tidal volume and the **mechanically visible** spontaneous respiratory rate. At complete block, spontaneous mechanical ventilation is zero; mandatory ventilator breaths may continue.
+
+The generic `Relaxant` action retains a 120-second onset. Do not make its respiratory effect instantaneous simply to make the UI look responsive. Diagnostics should expose its current effect weight so onset can be verified.
+
+`Curare Cleft` is the display name for compatibility action ID `diaphragm-return`. It represents return of diaphragmatic effort before complete peripheral recovery and currently targets respiratory drive plus `neuromuscular.tofMinimumCount`. Treat this as a teaching approximation until diaphragm-specific neuromuscular transmission is modelled separately.
+
+## Drug/Event diagnostics and action history
+
+`ActionRuntime` keeps a bounded **action history** of the latest 500 interactions. Record:
+- Drug/Event activation;
+- toggle deactivation;
+- running intensity changes;
+- manual `supersedeActionTarget(...)` interventions;
+- runtime clears.
+
+Current active effects in diagnostics should include their current onset/recovery weight. `ActionRuntime` registers a provider with `SimulationDiagnostics`, so every copied simulation diagnostic may include `runtimeDiagnostics.actions` without product-specific duplication.
+
+Do not claim browser-local runtime diagnostics are directly accessible from ChatGPT. Direct chat interrogation requires an explicit persistence/upload channel (for example a Supabase diagnostic inbox) with appropriate ownership/RLS and deliberate user publishing.
+
 ## Timing and release
 
 Momentary: onset -> finite duration -> recovery.
@@ -92,6 +114,8 @@ Toggle: onset -> sustained -> switch-off -> `recover` or `persist` per effect. H
 ## Toggle UI state
 
 `ActionRuntime` is the source of truth for ON/OFF. Do not reintroduce component-local `toggleStates`. Adjustable L/M/H level is derived from runtime intensity for running toggles.
+
+Desktop Drug/Event grids use three columns; mobile/narrow layout remains two columns.
 
 ## Current-value controls
 
@@ -111,7 +135,7 @@ Surgery, Laryngoscopy and Pain create `stimulus.sympathetic`. Opioids change `an
 
 Cardiovascular Events: Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding.
 
-Respiratory Events: Apnoea, Return of diaphragm breathing, Bronchospasm.
+Respiratory Events: Apnoea, Curare Cleft, Bronchospasm.
 
 Anaesthesia events/stimuli include Laryngoscopy, Pain and Surgery.
 
@@ -131,11 +155,12 @@ Anaesthesia events/stimuli include Laryngoscopy, Pain and Surgery.
 8. Preserve the shared sympathetic saturation architecture.
 9. Preserve recover/persist and simulation-time semantics.
 10. Keep fallback and persisted definitions aligned.
-11. Update regression coverage.
-12. Update both documentation files.
-13. Bump EDUMON version.
-14. Run full CI and merge only when green.
+11. Preserve Drug/Event action-history diagnostics when runtime semantics change.
+12. Update regression coverage.
+13. Update both documentation files.
+14. Bump EDUMON version.
+15. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that actions still describe effects; physiology interprets effects; runtime priority semantics remain intact; manual supersession remains target-specific; physiological hard bounds prevent impossible composed values; HR 500 cannot survive model composition; rhythm-specific rate behavior remains separate; Beta blocker remains `-15 + block-increase + minimum 50`; Bronchospasm, Hypovolaemia, Bleeding and Return of diaphragm breathing remain documented; sympathetic saturation remains shared; and build/regressions pass.
+Confirm that actions still describe effects; physiology interprets effects; runtime priority semantics remain intact; manual supersession remains target-specific; physiological hard bounds prevent impossible composed values; HR 500 cannot survive model composition; tidal volume is bounded at 0–1000 mL; rhythm-specific rate behavior remains separate; Beta blocker remains `-15 + block-increase + minimum 50`; Bronchospasm, Hypovolaemia, Bleeding and Curare Cleft remain documented; Relaxant suppresses mechanically visible spontaneous breathing over its 120-second onset; action history is present in copied diagnostics; sympathetic saturation remains shared; and build/regressions pass.
