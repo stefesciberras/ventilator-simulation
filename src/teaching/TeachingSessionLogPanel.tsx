@@ -4,6 +4,7 @@ import {
   diffSessionState,
   fetchSessionLogEntries,
   fetchStandaloneSessionLogEntries,
+  filterSessionStateChanges,
   getStandaloneSessionLogRunId,
   subscribeToSessionLogEntries,
   subscribeToStandaloneSessionLogEntries,
@@ -88,16 +89,15 @@ function displayRows(entries: SessionLogEntry[]): DisplayRow[] {
       const before = entry.details?.before
       const after = entry.details?.after
       if (before != null && after != null) {
-        const changes = diffSessionState(before, after)
-        if (changes.length) {
-          changes.forEach((change, index) => rows.push({
-            key: `${entry.id}:setting:${index}`,
-            entry,
-            subject: subjectFor(entry),
-            message: humanSettingMessage(entry, change),
-          }))
-          continue
-        }
+        const changes = filterSessionStateChanges(before, after, diffSessionState(before, after))
+        if (!changes.length) continue
+        changes.forEach((change, index) => rows.push({
+          key: `${entry.id}:setting:${index}`,
+          entry,
+          subject: subjectFor(entry),
+          message: humanSettingMessage(entry, change),
+        }))
+        continue
       }
     }
     rows.push({ key: `${entry.id}:event`, entry, subject: subjectFor(entry), message: humanEventMessage(entry) })
