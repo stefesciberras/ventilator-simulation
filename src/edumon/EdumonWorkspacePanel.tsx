@@ -250,7 +250,7 @@ export function EdumonWorkspacePanel({
           <label className="edumon-signal-control edumon-signal-capnography"><span>Dead space <b>{Math.round(respiratory.deadSpaceMl)} mL</b></span><input disabled={patientControlsLocked} type="range" min="0" max={Math.max(0, respiratory.tidalVolumeMl)} step="10" value={respiratory.deadSpaceMl} onChange={(event) => updateRespiratory({ deadSpaceMl: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>VCO₂ <b>{Math.round(respiratory.co2ProductionMlMin)} mL/min</b></span><input disabled={patientControlsLocked} type="range" min="50" max="600" step="10" value={respiratory.co2ProductionMlMin} onChange={(event) => updateRespiratory({ co2ProductionMlMin: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>VO₂ <b>{Math.round(respiratory.oxygenConsumptionMlMin)} mL/min</b></span><input disabled={patientControlsLocked} type="range" min="50" max="600" step="10" value={respiratory.oxygenConsumptionMlMin} onChange={(event) => updateRespiratory({ oxygenConsumptionMlMin: Number(event.target.value) })} /></label>
-          {teachingHost.appId === 'edumon-ana' && (
+          {teachingHost.appId === 'anaesth' && (
             <>
               <div className="control-section-title"><h2>Anaesthetic physiology</h2></div>
               <label className="edumon-signal-control edumon-signal-agent">
@@ -283,7 +283,7 @@ export function EdumonWorkspacePanel({
       <EdumonCapnographySurface patientState={patientState} />
       <EdumonTemperatureSurface patientState={patientState} />
       <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} disabled={deviceControlsLocked} />
-      {teachingHost.appId === 'edumon-ana' && (
+      {teachingHost.appId === 'anaesth' && (
         <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={deviceControlsLocked} />
       )}
       <SimulationControlFramework
