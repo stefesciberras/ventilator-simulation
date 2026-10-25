@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { toLegacyProductId, type SimulationProductId } from '../../core/SimulationProductAdapter'
 import { ensureAnonymousSession, supabase } from '../../session/supabase'
 import type {
   SharedTeachingMemberRow,
@@ -18,7 +19,7 @@ export interface ProductTeachingMemberRow<TState = Record<string, unknown>> exte
 }
 
 export interface ProductTeachingCreateInput<TState> {
-  productId: string
+  productId: SimulationProductId
   state: TState
 }
 
@@ -26,13 +27,13 @@ export interface ProductTeachingMemberTelemetry<TState> {
   state: TState
 }
 
-export function createProductTeachingSessionRepository<TState>(productId: string): SharedTeachingSessionRepository<
+export function createProductTeachingSessionRepository<TState>(productId: SimulationProductId): SharedTeachingSessionRepository<
   ProductTeachingSessionRow<TState>,
   ProductTeachingMemberRow<TState>,
   ProductTeachingCreateInput<TState>,
   ProductTeachingMemberTelemetry<TState>
 > {
-  const normalizedProductId = productId.trim().toLowerCase()
+  const storageProductId = toLegacyProductId(productId)
 
   return {
     ensureIdentity: ensureAnonymousSession,
@@ -40,7 +41,7 @@ export function createProductTeachingSessionRepository<TState>(productId: string
     createSession: async (input) => {
       await ensureAnonymousSession()
       const { data, error } = await supabase.rpc('create_edusim_session', {
-        p_product_id: normalizedProductId,
+        p_product_id: storageProductId,
         p_product_state: input.state as unknown as Record<string, unknown>,
       })
       if (error) throw error
@@ -54,7 +55,7 @@ export function createProductTeachingSessionRepository<TState>(productId: string
       const { data, error } = await supabase.rpc('join_edusim_session', {
         p_session_key: sessionKey.trim().toUpperCase(),
         p_display_name: displayName?.trim() || null,
-        p_product_id: normalizedProductId,
+        p_product_id: storageProductId,
       })
       if (error) throw error
       const result = Array.isArray(data) ? data[0] : data
@@ -70,7 +71,7 @@ export function createProductTeachingSessionRepository<TState>(productId: string
         .from('teaching_sessions')
         .select('*')
         .eq('id', sessionId)
-        .eq('product_id', normalizedProductId)
+        .eq('product_id', storageProductId)
         .single()
       if (error) throw error
       return data as ProductTeachingSessionRow<TState>
@@ -81,7 +82,7 @@ export function createProductTeachingSessionRepository<TState>(productId: string
         .from('teaching_sessions')
         .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('id', sessionId)
-        .eq('product_id', normalizedProductId)
+        .eq('product_id', storageProductId)
         .select('*')
         .single()
       if (error) throw error
@@ -91,7 +92,7 @@ export function createProductTeachingSessionRepository<TState>(productId: string
     findActiveInstructorSession: async () => {
       await ensureAnonymousSession()
       const { data, error } = await supabase.rpc('find_active_instructor_session', {
-        p_product_id: normalizedProductId,
+        p_product_id: storageProductId,
       })
       if (error) throw error
       const result = Array.isArray(data) ? data[0] : data
@@ -134,7 +135,7 @@ export function createProductTeachingSessionRepository<TState>(productId: string
     },
 
     subscribeSession: (sessionId, onUpdate, onStatus): RealtimeChannel => supabase
-      .channel(`edusim-${normalizedProductId}-session-${sessionId}`)
+      .channel(`simulation-${productId}-session-${sessionId}`)
       .on(
         'postgres_changes',
         {
@@ -152,7 +153,7 @@ export function createProductTeachingSessionRepository<TState>(productId: string
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`
       return supabase
-        .channel(`edusim-${normalizedProductId}-members-${sessionId}-${instanceId}`)
+        .channel(`simulation-${productId}-members-${sessionId}-${instanceId}`)
         .on(
           'postgres_changes',
           {
