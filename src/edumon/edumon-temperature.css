@@ -38,3 +38,42 @@
   color: #7f9099;
   font-size: .48rem;
 }
+
+/* Temperature is the shared right-edge monitor tile. In Ana, TOF and the gas
+   analyser follow it as one compact group: TEMP → TOF → gases. */
+.edumon-app-shell .simulation-console-footer .edumon-control-strip > .edumon-tof-container {
+  margin-left: 0 !important;
+  order: 91;
+}
+
+.edumon-app-shell .simulation-console-footer .edumon-control-strip > .edumon-ana-gas-footer {
+  order: 92;
+}
+
+@media (max-width: 900px) {
+  .edumon-temperature-container {
+    flex-basis: 73px;
+    min-width: 73px;
+  }
+}
+
+@media (max-width: 680px) {
+  .edumon-temperature-container {
+    flex: 0 0 65px;
+    min-width: 65px;
+    margin-right: 2px;
+    padding: 3px;
+  }
+
+  .edumon-temperature-title {
+    font-size: .45rem;
+  }
+
+  .edumon-temperature-container strong {
+    font-size: .92rem;
+  }
+
+  .edumon-temperature-container small {
+    font-size: .35rem;
+  }
+}
