@@ -114,9 +114,9 @@ export function ScenarioBuilderApp() {
     <main className="scenario-builder-app">
       <SimulationAboutDialog
         open={aboutOpen}
-        productLabel="EDUSIM"
-        title="Scenario Builder"
-        description="The shared EDUSIM authoring workspace for creating and maintaining educational simulation scenarios."
+        productLabel="LoppjuSIM-Studio"
+        title="Simulation Studio"
+        description="The shared LoppjuSIM authoring workspace for creating and maintaining educational simulation scenarios."
         version={SCENARIO_BUILDER_VERSION}
         onClose={() => setAboutOpen(false)}
         legalContext="authoring"
@@ -124,14 +124,14 @@ export function ScenarioBuilderApp() {
       <header className="scenario-builder-appbar">
         <div>
           <span className="scenario-builder-eyebrow">Simulation authoring workspace</span>
-          <h1>Scenario Builder</h1>
-          <small>Builder v{SCENARIO_BUILDER_VERSION} · EDUSIM shared scenario framework</small>
+          <h1>LoppjuSIM-Studio</h1>
+          <small>Studio v{SCENARIO_BUILDER_VERSION} · LoppjuSIM shared scenario framework</small>
         </div>
         <div className="scenario-builder-appbar-actions">
           {account && <span className="scenario-builder-account">{account.email}</span>}
           {account && <button type="button" onClick={() => void signOut()} disabled={busy}>Sign out</button>}
           <button type="button" onClick={() => setAboutOpen(true)}>About</button>
-          <button type="button" className="scenario-builder-primary" onClick={closeBuilder}>Return to EDUSIM</button>
+          <button type="button" className="scenario-builder-primary" onClick={closeBuilder}>Return to LoppjuSIM</button>
         </div>
       </header>
 
@@ -155,7 +155,7 @@ export function ScenarioBuilderApp() {
           <div>
             <span>Instructor cloud</span>
             <h2>Sign in to author scenarios</h2>
-            <p>The builder uses the same instructor account and scenario library as the simulator.</p>
+            <p>LoppjuSIM-Studio uses the same instructor account and scenario library as the simulators.</p>
           </div>
           <form onSubmit={signIn}>
             <label><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
@@ -180,10 +180,12 @@ export function ScenarioBuilderApp() {
           <EdumonScenarioEditor product={moduleId} onStartScenario={startEdumonScenario} />
         </section>
       ) : (
-        <section className="scenario-builder-state">This simulation module is not yet available.</section>
+        <section className="scenario-builder-state">
+          <span>{selectedModule.shortLabel}</span>
+          <h2>{selectedModule.label}</h2>
+          <p>{selectedModule.description}</p>
+        </section>
       )}
     </main>
   )
 }
-
-export default ScenarioBuilderApp
