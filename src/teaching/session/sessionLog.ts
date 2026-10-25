@@ -150,14 +150,43 @@ function isPlainObject(value: unknown): value is Record<string, unknown> { retur
 
 export function diffSessionState(before: unknown, after: unknown, prefix = '', output: SessionLogStateChange[] = []): SessionLogStateChange[] {
   if (Object.is(before, after)) return output
-  if (isPlainObject(before) && isPlainObject(after)) {
-    const keys = new Set([...Object.keys(before), ...Object.keys(after)])
-    for (const key of keys) diffSessionState(before[key], after[key], prefix ? `${prefix}.${key}` : key, output)
+  if (isPlainObject(before) || isPlainObject(after)) {
+    const beforeObject = isPlainObject(before) ? before : {}
+    const afterObject = isPlainObject(after) ? after : {}
+    const keys = new Set([...Object.keys(beforeObject), ...Object.keys(afterObject)])
+    for (const key of keys) diffSessionState(beforeObject[key], afterObject[key], prefix ? `${prefix}.${key}` : key, output)
     return output
   }
   if (Array.isArray(before) && Array.isArray(after) && JSON.stringify(before) === JSON.stringify(after)) return output
   output.push({ path: prefix || 'state', from: before ?? null, to: after ?? null })
   return output
+}
+
+function valueAtPath(value: unknown, segments: string[]): unknown {
+  let current = value
+  for (const segment of segments) {
+    if (!isPlainObject(current)) return undefined
+    current = current[segment]
+  }
+  return current
+}
+
+/**
+ * Remove structural model hydration from user-facing logs. A whole nested model
+ * object can be attached after initial render (for example EDUMON respiratory
+ * state); that is schema/runtime hydration, not a user setting change.
+ */
+export function filterSessionStateChanges(before: unknown, after: unknown, changes: SessionLogStateChange[]): SessionLogStateChange[] {
+  return changes.filter((change) => {
+    const segments = change.path.split('.')
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      const prefix = segments.slice(0, depth)
+      const beforeValue = valueAtPath(before, prefix)
+      const afterValue = valueAtPath(after, prefix)
+      if (beforeValue == null && isPlainObject(afterValue)) return false
+    }
+    return true
+  })
 }
 
 const FRIENDLY_SETTING_NAMES: Record<string, string> = {
