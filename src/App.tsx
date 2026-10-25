@@ -26,7 +26,9 @@ import { useTeachingSession } from './session/useTeachingSession'
 import { recordSessionScenarioAction } from './session/supabase'
 import type { DynamicScenarioActionId, DynamicScenarioStage, DynamicScenarioTransition, InstructorScenarioSnapshot } from './instructorAccount'
 import { calculatePhysiologicalMeasurements } from './physiologyMeasurements'
-import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type ArdsSeverity, type PatientProfileName } from './patientProfiles'
+import { ARDS_PROFILES, ARDS_SEVERITIES, PATIENT_PROFILES, PATIENT_PROFILE_NAMES, patientMatchesProfile, type ArdsSeverity } from './patientProfiles'
+import { MV_PROFILE_KEYS } from './profiles/builtinProfiles'
+import { useProductProfiles } from './profiles/useProductProfiles'
 import { SIMULATION_SPEEDS, type SimulationSpeed } from './simulationSpeed'
 import { APP_VERSION } from './appVersion'
 import { useScreenWakeLock } from './useScreenWakeLock'
@@ -399,6 +401,7 @@ function isHighPressureAlarmActive(samples: Sample[], limit: number): boolean {
 export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const screenWakeLock = useScreenWakeLock()
+  const { rows: savedPatientProfiles } = useProductProfiles<PatientSettings>('mv')
   const [instructorAccountConnected, setInstructorAccountConnected] = useState(false)
   const [ventilator, setVentilator] = useState<VentilatorSettings>(() => loadStoredSettings(VENTILATOR_STORAGE_KEY, initialVentilator))
   const [patient, setPatient] = useState<PatientSettings>(() => {
@@ -412,10 +415,9 @@ export default function App() {
     }
     return safeStored
   })
-  const [selectedPatientProfile, setSelectedPatientProfile] = useState<PatientProfileName | null>(() => {
+  const [selectedPatientProfile, setSelectedPatientProfile] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
-    const stored = eduventPersistence.readString('patient-preset', '', [PATIENT_PROFILE_STORAGE_KEY])
-    return PATIENT_PROFILE_NAMES.includes(stored as PatientProfileName) ? stored as PatientProfileName : null
+    return eduventPersistence.readString('patient-preset', '', [PATIENT_PROFILE_STORAGE_KEY]) || null
   })
   const [ardsSeverity, setArdsSeverity] = useState<ArdsSeverity | 'off'>(() => {
     if (typeof window === 'undefined') return 'off'
@@ -1363,14 +1365,30 @@ export default function App() {
     sharedOxygenFlush.setActive(false)
   }, [oxygenBoost, sharedOxygenFlush.active, sharedOxygenFlush.setActive, teachingSession.role])
 
+  const resolvedArdsProfiles = useMemo(() => ({
+    mild: { ...ARDS_PROFILES.mild, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.ArdsMild)?.values ?? {}) },
+    moderate: { ...ARDS_PROFILES.moderate, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.ArdsModerate)?.values ?? {}) },
+    severe: { ...ARDS_PROFILES.severe, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.ArdsSevere)?.values ?? {}) },
+  }), [savedPatientProfiles])
+  const resolvedPatientProfiles = useMemo(() => ({
+    Normal: { ...PATIENT_PROFILES.Normal, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.Normal)?.values ?? {}) },
+    ARDS: resolvedArdsProfiles.moderate,
+    COPD: { ...PATIENT_PROFILES.COPD, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.COPD)?.values ?? {}) },
+    Asthma: { ...PATIENT_PROFILES.Asthma, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.Asthma)?.values ?? {}) },
+    Paed: { ...PATIENT_PROFILES.Paed, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.Paed)?.values ?? {}) },
+  }), [savedPatientProfiles, resolvedArdsProfiles])
+  const customPatientProfiles = useMemo(() => new Map(savedPatientProfiles.filter((row) => !row.base_key).map((row) => [row.name, row.values])), [savedPatientProfiles])
+
   const oxygenBoostTimer = `0:${String(oxygenBoostSecondsRemaining).padStart(2, '0')}`
   const selectedProfileSettings = selectedPatientProfile === 'ARDS' && ardsSeverity !== 'off'
-    ? ARDS_PROFILES[ardsSeverity]
-    : selectedPatientProfile != null ? PATIENT_PROFILES[selectedPatientProfile] : null
+    ? resolvedArdsProfiles[ardsSeverity]
+    : selectedPatientProfile != null
+      ? (resolvedPatientProfiles[selectedPatientProfile as keyof typeof resolvedPatientProfiles] ?? customPatientProfiles.get(selectedPatientProfile) ?? null)
+      : null
   const selectedPatientProfileModified = selectedProfileSettings != null
     ? !patientMatchesProfile(patient, selectedProfileSettings)
     : false
-  const persistPatientProfile = (profile: PatientProfileName) => {
+  const persistPatientProfile = (profile: string) => {
     setSelectedPatientProfile(profile)
     try { eduventPersistence.writeString('patient-preset', profile) } catch { /* optional UI preference */ }
   }
@@ -1378,7 +1396,7 @@ export default function App() {
     setArdsSeverity(severity)
     try { eduventPersistence.writeString('ards-severity', severity) } catch { /* optional UI preference */ }
   }
-  const applyPatientProfile = (profile: PatientProfileName) => {
+  const applyPatientProfile = (profile: string) => {
     if (profile === 'ARDS') {
       const currentIndex = ARDS_SEVERITIES.indexOf(ardsSeverity as ArdsSeverity)
       const next = currentIndex < 0
@@ -1386,12 +1404,13 @@ export default function App() {
         : ARDS_SEVERITIES[(currentIndex + 1) % ARDS_SEVERITIES.length]
       setArdsSeverityAndPersist(next)
       persistPatientProfile('ARDS')
-      setPatient({ ...ARDS_PROFILES[next] })
+      setPatient({ ...resolvedArdsProfiles[next] })
       return
     }
     setArdsSeverityAndPersist('off')
     persistPatientProfile(profile)
-    setPatient({ ...PATIENT_PROFILES[profile] })
+    const nextProfile = resolvedPatientProfiles[profile as keyof typeof resolvedPatientProfiles] ?? customPatientProfiles.get(profile)
+    if (nextProfile) setPatient({ ...nextProfile })
   }
   const resetVentilator = () => setVentilator({ ...initialVentilator })
   const resetPatientRespiratory = () => setPatient((current) => ({
@@ -1726,7 +1745,7 @@ export default function App() {
           onTabChange={setControlTab}
           ariaLabel="EDUVENT controls"
           className="tabbed-control-panel"
-          profiles={PATIENT_PROFILE_NAMES.map((profile) => {
+          profiles={[...PATIENT_PROFILE_NAMES, ...savedPatientProfiles.filter((row) => !row.base_key).map((row) => row.name)].map((profile) => {
             const selected = selectedPatientProfile === profile
             const stateClass = selected ? (selectedPatientProfileModified ? 'profile-modified' : 'profile-selected') : ''
             return {

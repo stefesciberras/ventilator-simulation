@@ -12,6 +12,7 @@ import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
 import { createDefaultVentilatorScenario } from './modules/ventilator/defaultScenario'
 import { VentilatorScenarioEditor } from './modules/ventilator/VentilatorScenarioEditor'
 import { EdumonScenarioEditor } from './modules/edumon/EdumonScenarioEditor'
+import { ProfileEditor } from './ProfileEditor'
 import type { EdumonStoredScenario } from '../edumon/scenarioTypes'
 import type { ProductScenarioRow } from '../teaching/scenario/productLibrary'
 import { SCENARIO_PRODUCTS, type ScenarioProductId } from '../teaching/scenario/products'
@@ -23,6 +24,7 @@ export function ScenarioBuilderApp() {
   const [account, setAccount] = useState<User | null>(null)
   const [presets, setPresets] = useState<InstructorPresetRow[]>([])
   const [moduleId, setModuleId] = useState(DEFAULT_SCENARIO_MODULE_ID)
+  const [resource, setResource] = useState<'scenarios' | 'profiles'>('scenarios')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [email, setEmail] = useState('')
@@ -116,7 +118,7 @@ export function ScenarioBuilderApp() {
         open={aboutOpen}
         productLabel="LoppjuSIM-Studio"
         title="Simulation Studio"
-        description="The shared LoppjuSIM authoring workspace for creating and maintaining educational simulation scenarios."
+        description="The shared LoppjuSIM authoring workspace for scenarios, patient profiles and simulation actions."
         version={SCENARIO_BUILDER_VERSION}
         onClose={() => setAboutOpen(false)}
         legalContext="authoring"
@@ -148,6 +150,12 @@ export function ScenarioBuilderApp() {
         </div>
       </section>
 
+      <nav className="scenario-builder-resourcebar" aria-label="Studio resources">
+        <button type="button" className={resource === 'scenarios' ? 'selected' : ''} onClick={() => setResource('scenarios')}>Scenarios</button>
+        <button type="button" className={resource === 'profiles' ? 'selected' : ''} onClick={() => setResource('profiles')}>Profiles</button>
+        <button type="button" onClick={() => window.location.assign('/actions')}>Actions</button>
+      </nav>
+
       {loading ? (
         <section className="scenario-builder-state">Loading scenario workspace…</section>
       ) : !account ? (
@@ -163,6 +171,10 @@ export function ScenarioBuilderApp() {
             <button type="submit" className="scenario-builder-primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
           </form>
           {message && <div className="scenario-builder-message">{message}</div>}
+        </section>
+      ) : resource === 'profiles' ? (
+        <section className="scenario-builder-workspace">
+          <ProfileEditor product={moduleId === 'ventilator' ? 'mv' : moduleId === 'anaesth' ? 'anaesth' : 'icu'} />
         </section>
       ) : moduleId === 'ventilator' ? (
         <section className="scenario-builder-workspace">

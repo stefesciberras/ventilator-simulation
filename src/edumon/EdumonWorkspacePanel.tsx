@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type AnaestheticDepth, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
 import { applyAnaestheticDepthEffects, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import { applyEdumonActionPhysiology } from './actionPhysiology'
@@ -14,17 +14,12 @@ import { EdumonVentilatorControl } from './EdumonVentilatorControl'
 import { EdumonActionsPanel } from './EdumonActionsPanel'
 import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
 import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
+import { EDUMON_PATIENT_PROFILES } from './patientProfiles'
+import { EDUMON_PROFILE_KEYS } from '../profiles/builtinProfiles'
+import { useProductProfiles } from '../profiles/useProductProfiles'
 import './edumon-rhythm-control.css'
 
 export type EdumonControlTab = 'actions' | 'patient' | 'physio' | 'teaching'
-export type EdumonPatientProfile = 'Awake' | 'Asleep' | 'Paediatric'
-
-export const EDUMON_PATIENT_PROFILES: Record<EdumonPatientProfile, MonitorPatientState> = {
-  Awake: { heartRate: 78, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 122, diastolicPressure: 68, spo2: 98, peripheralPerfusion: 1, temperatureC: 37 },
-  Asleep: { heartRate: 62, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 105, diastolicPressure: 60, spo2: 99, peripheralPerfusion: 0.9, temperatureC: 37 },
-  Paediatric: { heartRate: 110, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 95, diastolicPressure: 55, spo2: 99, peripheralPerfusion: 1, temperatureC: 37 },
-}
-
 interface EdumonWorkspacePanelProps {
   patientState: MonitorPatientState
   onPatientStateChange: (state: MonitorPatientState) => void
@@ -58,7 +53,18 @@ export function EdumonWorkspacePanel({
   sessionPanel,
 }: EdumonWorkspacePanelProps) {
   const [tab, setTab] = useState<EdumonControlTab>('patient')
-  const [profile, setProfile] = useState<EdumonPatientProfile>('Awake')
+  const [profile, setProfile] = useState<string>('Awake')
+  const profileProduct = teachingHost.appId.toLowerCase().includes('icu') ? 'icu' as const : 'anaesth' as const
+  const { rows: savedProfiles } = useProductProfiles<MonitorPatientState>(profileProduct)
+  const resolvedProfiles = useMemo<Record<string, MonitorPatientState>>(() => {
+    const result: Record<string, MonitorPatientState> = { ...EDUMON_PATIENT_PROFILES }
+    for (const [name, baseKey] of Object.entries(EDUMON_PROFILE_KEYS)) {
+      const override = savedProfiles.find((row) => row.base_key === baseKey)
+      if (override) result[name] = { ...result[name], ...override.values }
+    }
+    for (const row of savedProfiles.filter((candidate) => !candidate.base_key)) result[row.name] = row.values
+    return result
+  }, [savedProfiles])
   const [pressuresCoupled, setPressuresCoupled] = useState(false)
   const [showInvasiveBloodPressure, setShowInvasiveBloodPressure] = useState(true)
   const respiratory: MonitorRespiratorySettings = {
@@ -78,13 +84,15 @@ export function EdumonWorkspacePanel({
     return () => root.removeAttribute('data-edumon-invasive-bp-visible')
   }, [showInvasiveBloodPressure])
 
-  const applyProfile = (nextProfile: EdumonPatientProfile) => {
+  const applyProfile = (nextProfile: string) => {
     if (patientControlsLocked) return
+    const values = resolvedProfiles[nextProfile]
+    if (!values) return
     setProfile(nextProfile)
     supersedeActionTarget('haemodynamics.heartRate')
     supersedeActionTarget('haemodynamics.meanArterialPressure')
     onPatientStateChange({
-      ...EDUMON_PATIENT_PROFILES[nextProfile],
+      ...values,
       respiratory: patientState.respiratory,
       anaestheticGases: patientState.anaestheticGases,
       anaestheticPhysiology: patientState.anaestheticPhysiology,
@@ -180,7 +188,7 @@ export function EdumonWorkspacePanel({
   const morphologySeverity = patientState.morphologySeverity ?? 50
   const temperatureC = patientState.temperatureC ?? 37
 
-  const profiles: Array<SimulationControlProfileDefinition<EdumonPatientProfile>> = (Object.keys(EDUMON_PATIENT_PROFILES) as EdumonPatientProfile[]).map((candidate) => ({
+  const profiles: Array<SimulationControlProfileDefinition<string>> = Object.keys(resolvedProfiles).map((candidate) => ({
     id: candidate,
     label: candidate,
     active: profile === candidate,
