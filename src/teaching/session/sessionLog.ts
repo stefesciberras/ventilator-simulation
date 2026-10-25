@@ -34,12 +34,33 @@ interface RecordSessionLogEventInput {
 interface StandaloneLog { runId: string; nextId: number; entries: SessionLogEntry[] }
 
 const MAX_STANDALONE_LOG_ENTRIES = 2000
+const MAX_MODEL_STATE_SIGNATURES = 50
 const standaloneMemory = new Map<string, StandaloneLog>()
 const standaloneListeners = new Map<string, Set<(entry: SessionLogEntry) => void>>()
+const modelStateSignatures = new Set<string>()
 let runtimeContext: SessionLogRuntimeContext = { productId: null, sessionId: null, role: 'standalone' }
 
 const storageKey = (productId: string) => `edusim.${productId}.standalone-session-log.v1`
 const makeRunId = () => typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+const stateSignature = (state: unknown): string | null => { try { return JSON.stringify(state) } catch { return null } }
+
+export function markSessionLogModelState(state: unknown): void {
+  const signature = stateSignature(state)
+  if (!signature) return
+  modelStateSignatures.add(signature)
+  while (modelStateSignatures.size > MAX_MODEL_STATE_SIGNATURES) {
+    const oldest = modelStateSignatures.values().next().value
+    if (typeof oldest !== 'string') break
+    modelStateSignatures.delete(oldest)
+  }
+}
+
+export function consumeSessionLogModelState(state: unknown): boolean {
+  const signature = stateSignature(state)
+  if (!signature || !modelStateSignatures.has(signature)) return false
+  modelStateSignatures.delete(signature)
+  return true
+}
 
 function inferProductId(): string | null {
   if (runtimeContext.productId) return runtimeContext.productId
@@ -178,6 +199,7 @@ const AUTO_ANAESTHETIC_PATHS = new Set([
   'heartRate',
   'systolicPressure',
   'diastolicPressure',
+  'respiratory.respiratoryRate',
   'respiratory.spontaneousRespiratoryRate',
   'anaestheticPhysiology.depthOfAnaesthesia',
 ])

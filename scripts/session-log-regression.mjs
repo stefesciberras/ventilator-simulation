@@ -38,6 +38,7 @@ assert(panel.includes('changes.forEach((change, index)'), 'setting snapshots mus
 assert(panel.includes('changed by ${actorFor(entry)}'), 'setting rows must identify who made the change')
 assert(panel.includes('row.subject'), 'rendered rows must show a human-readable subject')
 assert(panel.includes('row.message'), 'rendered rows must show a human-readable event sentence')
+assert(panel.includes('return rows.reverse()'), 'both embedded and floating Session Log views must show newest entries first')
 assert(panel.includes("event_type === 'session.log.cleared'"), 'viewer must respect clear-log markers')
 assert(panel.includes('clearStandaloneSessionLog'), 'standalone clear must reset the local log')
 assert(panel.includes("eventType: 'session.log.cleared'"), 'teaching-session clear must add a non-destructive clear marker')
@@ -56,7 +57,10 @@ assert(service.includes('appendStandalone'), 'standalone events must not require
 assert(service.includes('clearStandaloneSessionLog'), 'standalone Session Log must support clear')
 assert(service.includes("change.path === 'anaestheticGases.fiSevoPercent'"), 'generic setting logger must defer Sevo to explicit action logging')
 assert(service.includes('AUTO_ANAESTHETIC_PATHS'), 'automatic anaesthetic physiology changes must be filtered from human Session Log')
+assert(service.includes('markSessionLogModelState'), 'model-generated state must be explicitly markable')
+assert(service.includes('consumeSessionLogModelState'), 'standalone logger must be able to consume model-generated state marks')
 assert(productSession.includes('configureSessionLogRuntime'), 'generic EDUMON sessions must configure Session Log context')
+assert(productSession.includes('consumeSessionLogModelState(after)'), 'standalone state watcher must skip marked model-generated states')
 assert(productSession.includes("eventType: 'standalone.settings.changed'"), 'EDUMON standalone setting changes must be logged')
 
 assert(nibp.includes("eventType: 'nibp.measured'"), 'completed NIBP measurements must be logged')
@@ -66,6 +70,7 @@ assert(anaGas.includes('TOF measured — count ${reading.count}, ratio ${reading
 assert(anaGas.includes("eventType: 'anaesthesia.sevo.set'"), 'Sevo control changes must be explicitly logged')
 assert(anaGas.includes('SEVO_LOG_SETTLE_MS'), 'Sevo logging must debounce slider motion into one settled action')
 assert(anaGas.includes('Sevo set at ${nextPercent.toFixed(1)}%'), 'Sevo log must include selected concentration')
+assert(anaGas.includes('markSessionLogModelState(nextState)'), 'automatic anaesthetic physiology updates must mark their state as model-generated')
 
 assert(actionRuntime.includes('recordSessionLogEvent'), 'Drug/Event runtime must mirror interactions to Session Log')
 assert(actionRuntime.includes("category = entry.actionKind === 'drug' ? 'drug' : 'event'"), 'Drugs and Events must retain separate Session Log categories')
