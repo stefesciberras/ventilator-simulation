@@ -261,7 +261,6 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     return () => cancelAnimationFrame(frame)
   }, [frozen, simulationPaused, simulationSpeed])
 
-
   const effectivePatientState = (() => {
     const scenarioTransition = scenarioTransitionRef.current
     if (scenarioTransition) {
@@ -295,6 +294,14 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const teachingSession = useProductTeachingSession<EdumonTeachingState>({
     productId: teachingHost.appId,
     state: sharedTeachingState,
+    mergeCandidateState: (localState, instructorState) => ({
+      ...instructorState,
+      patient: {
+        ...instructorState.patient,
+        respiratory: localState.patient.respiratory ?? instructorState.patient.respiratory,
+        anaestheticGases: localState.patient.anaestheticGases ?? instructorState.patient.anaestheticGases,
+      },
+    }),
     setState: (next) => {
       setPatientState(next.patient)
       setPatientTransitionSeconds(next.patientTransitionSeconds ?? 0)
@@ -584,7 +591,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         />
 
         )}
-        controls={<EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} controlsLocked={candidateLocked} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+        controls={<EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
 
       {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (
@@ -604,7 +611,6 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           onClose={() => { if (selfDirected.active) selfDirected.clear(); else scenarioRuntime.stop() }}
         />
       )}
-
 
       {selectedAuxiliary && auxiliaryMonitor && (
         <SecondaryMonitorSurface title={selectedAuxiliary.label} onClose={() => setAuxiliaryMonitor(null)}>
