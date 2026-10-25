@@ -10,6 +10,7 @@ export type EdusimActionKind = 'drug' | 'event'
 export type EdusimShortPressAction = 'momentary' | 'toggle'
 export type EdusimActionEnvironment = 'edumon-ana' | 'edumon-icu'
 export type EdusimActionSetting = 'ana' | 'itu' | 'all'
+export type EdusimCandidateActionAccess = 'allowed' | 'instructor-only' | 'scenario'
 
 export interface EdusimActionDefinition {
   id: string
@@ -22,6 +23,7 @@ export interface EdusimActionDefinition {
   setting: EdusimActionSetting
   environments: EdusimActionEnvironment[]
   effects: EdusimActionEffect[]
+  candidate_access?: EdusimCandidateActionAccess
   priority?: number
   sort_order: number
   created_at: string
@@ -29,10 +31,10 @@ export interface EdusimActionDefinition {
 }
 
 export type EdusimActionDraft = Pick<EdusimActionDefinition,
-  'id' | 'kind' | 'name' | 'short_press_action' | 'long_press_action' | 'duration_seconds' | 'description' | 'setting' | 'effects' | 'priority' | 'sort_order'
+  'id' | 'kind' | 'name' | 'short_press_action' | 'long_press_action' | 'duration_seconds' | 'description' | 'setting' | 'effects' | 'candidate_access' | 'priority' | 'sort_order'
 >
 
-const selectColumns = 'id,kind,name,short_press_action,long_press_action,duration_seconds,description,setting,environments,effects,priority,sort_order,created_at,updated_at'
+const selectColumns = 'id,kind,name,short_press_action,long_press_action,duration_seconds,description,setting,environments,effects,candidate_access,priority,sort_order,created_at,updated_at'
 
 function settingToEnvironments(setting: EdusimActionSetting): EdusimActionEnvironment[] {
   if (setting === 'all') return ['edumon-ana', 'edumon-icu']
@@ -43,6 +45,9 @@ function normalise(row: Record<string, unknown>): EdusimActionDefinition {
   const setting: EdusimActionSetting = row.setting === 'itu' || row.setting === 'all' ? row.setting : 'ana'
   const priority = Number(row.priority)
   const id = String(row.id)
+  const candidateAccess: EdusimCandidateActionAccess = row.candidate_access === 'allowed' || row.candidate_access === 'scenario'
+    ? row.candidate_access
+    : 'instructor-only'
   return {
     id,
     kind: row.kind === 'event' ? 'event' : 'drug',
@@ -54,6 +59,7 @@ function normalise(row: Record<string, unknown>): EdusimActionDefinition {
     setting,
     environments: settingToEnvironments(setting),
     effects: normaliseEdusimActionEffects(row.effects),
+    candidate_access: candidateAccess,
     priority: Number.isFinite(priority) ? priority : DEFAULT_EDUSIM_ACTION_PRIORITY,
     sort_order: Number(row.sort_order ?? 0),
     created_at: String(row.created_at ?? ''),
@@ -81,6 +87,7 @@ export async function saveEdusimAction(draft: EdusimActionDraft): Promise<Edusim
     description: draft.description.trim(),
     long_press_action: draft.long_press_action?.trim() || null,
     duration_seconds: Math.max(0, Number(draft.duration_seconds) || 0),
+    candidate_access: draft.candidate_access === 'allowed' || draft.candidate_access === 'scenario' ? draft.candidate_access : 'instructor-only',
     priority: Number.isFinite(Number(draft.priority)) ? Number(draft.priority) : DEFAULT_EDUSIM_ACTION_PRIORITY,
     effects: normaliseEdusimActionEffects(draft.effects),
     environments: settingToEnvironments(draft.setting),
