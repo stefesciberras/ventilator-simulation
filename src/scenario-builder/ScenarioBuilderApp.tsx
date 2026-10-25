@@ -102,7 +102,7 @@ export function ScenarioBuilderApp() {
     window.location.assign(url.toString())
   }
 
-  const startScenario = (preset: InstructorPresetRow) => startProductScenario(preset.product ?? 'eduvent', preset.id)
+  const startScenario = (preset: InstructorPresetRow) => startProductScenario(preset.product ?? 'mv', preset.id)
   const startEdumonScenario = (row: ProductScenarioRow<EdumonStoredScenario>) => startProductScenario(row.product, row.id)
 
   const closeBuilder = () => {
@@ -175,7 +175,7 @@ export function ScenarioBuilderApp() {
             onClose={closeBuilder}
           />
         </section>
-      ) : moduleId === 'edumon-ana' || moduleId === 'edumon-icu' ? (
+      ) : moduleId === 'anaesth' || moduleId === 'icu' ? (
         <section className="scenario-builder-workspace">
           <EdumonScenarioEditor product={moduleId} onStartScenario={startEdumonScenario} />
         </section>
