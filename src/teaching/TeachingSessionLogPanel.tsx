@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   closeSessionLogChannel,
+  diffSessionState,
   fetchSessionLogEntries,
+  settingChangesLabel,
   subscribeToSessionLogEntries,
   type SessionLogEntry,
 } from './session/sessionLog'
@@ -31,6 +33,16 @@ function mergeEntries(current: SessionLogEntry[], incoming: SessionLogEntry[]): 
 function displayTime(entry: SessionLogEntry): string {
   const date = new Date(entry.client_occurred_at || entry.created_at)
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+}
+
+function displayLabel(entry: SessionLogEntry): string {
+  if (entry.category !== 'settings') return entry.label
+  const before = entry.details?.before
+  const after = entry.details?.after
+  if (before == null || after == null) return entry.label
+  const changes = diffSessionState(before, after)
+  if (!changes.length) return entry.label
+  return settingChangesLabel(entry.label.replace(/ changed$/i, ''), changes)
 }
 
 export function TeachingSessionLogPanel({ productId, sessionId }: TeachingSessionLogPanelProps) {
@@ -69,7 +81,7 @@ export function TeachingSessionLogPanel({ productId, sessionId }: TeachingSessio
         entry.actor_name,
         entry.actor_role,
         entry.category,
-        entry.label,
+        displayLabel(entry),
         entry.details,
       ]),
     ]
@@ -118,7 +130,7 @@ export function TeachingSessionLogPanel({ productId, sessionId }: TeachingSessio
                   <time dateTime={entry.client_occurred_at || entry.created_at}>{displayTime(entry)}</time>
                   <div className="teaching-session-log-entry-main">
                     <span className="teaching-session-log-actor">{entry.actor_name}</span>
-                    <strong>{entry.label}</strong>
+                    <strong>{displayLabel(entry)}</strong>
                   </div>
                   <small>{entry.category}</small>
                 </div>
