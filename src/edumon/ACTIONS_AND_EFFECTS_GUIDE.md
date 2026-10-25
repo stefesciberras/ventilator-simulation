@@ -55,6 +55,16 @@ The runtime registers itself with shared `SimulationDiagnostics`, so copied or p
 
 EDUMON also supports deliberate **Publish diagnostics** to the RLS-protected Supabase diagnostic inbox.
 
+## Teaching Session Log
+
+The Teaching tab now uses a shared **Session Log** rather than the former placeholder Scenario Log. This is separate from the browser-local diagnostic scenario logger.
+
+While an instructor/candidate teaching session is active, `ActionRuntime` mirrors user-facing Drug/Event activation, deactivation and intensity changes to the durable Session Log. This is observational only: recording an entry must never alter action timing, effect composition or physiology.
+
+The shared Session Log also receives instructor/candidate setting changes, alarm activation/resolution and alarm-silence actions, freeze/display actions, candidate device actions, session membership events and shared oxygen-flush events. The database assigns a monotonically increasing entry ID so the instructor view can display all participants in one deterministic order; each row also retains its occurrence timestamp and actor identity.
+
+Session Log persistence is in `public.edusim_session_log_entries`, protected by RLS. Instructors can read the complete session; candidates can append entries and can read only their own rows. Supabase Realtime INSERT events keep the Teaching panel live.
+
 ## Priority and constraints
 
 Ordinary actions default to priority **30**. Lower priority resolves first, higher priority later; same-priority ordinary modifiers resolve before `constraint`. Manual instructor intervention sits above the action priority system through `supersedeActionTarget(...)`.
@@ -133,7 +143,9 @@ Permanent instructors edit the shared library via `/actions`. Definitions are st
 ## Architecture reference
 
 - `src/edusim/actions/ActionEffect.ts` — targets, operations, priority, constraints and release vocabulary.
-- `src/edusim/actions/ActionRuntime.ts` — active toggle state, timing, intensity, priority resolution, recover/persist, target supersession, subscriptions and diagnostics.
+- `src/edusim/actions/ActionRuntime.ts` — active toggle state, timing, intensity, priority resolution, recover/persist, target supersession, subscriptions, diagnostics and Drug/Event Session Log mirroring.
+- `src/teaching/session/sessionLog.ts` — shared Session Log persistence/realtime client and state-diff helpers.
+- `src/teaching/TeachingSessionLogPanel.tsx` — chronological instructor Session Log UI and CSV export.
 - `src/core/SimulationDiagnostics.ts` — shared diagnostic provider registry and diagnostic serialization.
 - `src/teaching/diagnostics/PublishedDiagnostics.ts` — deliberate Supabase publication of diagnostic bundles.
 - `src/edumon/actionPhysiology.ts` — EDUMON physiology interpretation and hard bounds.

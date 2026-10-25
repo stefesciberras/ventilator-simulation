@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TeachingRole } from '../teaching/types'
 import { deriveAlarmSessionSemantics, useTeachingAlarmSync, type AlarmPermissionPolicy } from '../teaching/session/useTeachingAlarmSync'
+import { recordSessionLogEvent } from '../teaching/session/sessionLog'
 
 export type SharedAlarmPriority = 'warning' | 'critical'
 export type SharedAlarmDisplayLevel = 'grey' | 'yellow' | 'red' | null
@@ -62,6 +63,7 @@ export function useSharedAlarmController({
   const [localSilenceUntil, setLocalSilenceUntil] = useState<number | null>(null)
   const [lifecycle, setLifecycle] = useState<Record<string, SharedAlarmLifecycleEntry>>({})
   const audioContextRef = useRef<AudioContext | null>(null)
+  const loggedActiveAlarmsRef = useRef<Map<string, string>>(new Map())
   const semantics = deriveAlarmSessionSemantics(role, policy)
   const sessionSync = useTeachingAlarmSync(role, sessionId)
 
@@ -106,6 +108,53 @@ export function useSharedAlarmController({
       return changed ? next : current
     })
   }, [evaluations])
+
+  useEffect(() => {
+    if (!sessionId || role === 'standalone') {
+      loggedActiveAlarmsRef.current = new Map(
+        evaluations.filter((evaluation) => evaluation.visible !== false && evaluation.active).map((evaluation) => [evaluation.key, evaluation.label]),
+      )
+      return
+    }
+
+    const previous = loggedActiveAlarmsRef.current
+    const next = new Map<string, string>()
+    for (const evaluation of evaluations) {
+      if (evaluation.visible === false) continue
+      if (evaluation.active) {
+        next.set(evaluation.key, evaluation.label)
+        if (!previous.has(evaluation.key)) {
+          void recordSessionLogEvent({
+            sessionId,
+            category: 'alarm',
+            eventType: 'alarm.activated',
+            label: `Alarm: ${evaluation.label}`,
+            details: { key: evaluation.key, priority: evaluation.priority ?? 'warning' },
+          }).catch(() => undefined)
+        }
+      } else if (previous.has(evaluation.key)) {
+        void recordSessionLogEvent({
+          sessionId,
+          category: 'alarm',
+          eventType: 'alarm.resolved',
+          label: `Alarm cleared: ${evaluation.label}`,
+          details: { key: evaluation.key, priority: evaluation.priority ?? 'warning' },
+        }).catch(() => undefined)
+      }
+    }
+    for (const [key, label] of previous) {
+      if (!evaluations.some((evaluation) => evaluation.key === key && evaluation.visible !== false)) {
+        void recordSessionLogEvent({
+          sessionId,
+          category: 'alarm',
+          eventType: 'alarm.resolved',
+          label: `Alarm cleared: ${label}`,
+          details: { key },
+        }).catch(() => undefined)
+      }
+    }
+    loggedActiveAlarmsRef.current = next
+  }, [evaluations, role, sessionId])
 
   useEffect(() => {
     setLifecycle((current) => {
@@ -178,16 +227,34 @@ export function useSharedAlarmController({
 
   const silenceFor = useCallback((durationMs: number) => {
     if (semantics.candidateLocked) return
-    const until = Date.now() + Math.max(0, durationMs)
+    const boundedDuration = Math.max(0, durationMs)
+    const until = Date.now() + boundedDuration
     acknowledgeCurrent()
     setLocalSilenceUntil(until)
-    if (role === 'instructor' && sessionId) sessionSync.silenceFor(durationMs)
+    if (role === 'instructor' && sessionId) sessionSync.silenceFor(boundedDuration)
+    if (sessionId) {
+      void recordSessionLogEvent({
+        sessionId,
+        category: 'alarm',
+        eventType: 'alarm.silenced',
+        label: `Alarm silenced for ${Math.round(boundedDuration / 1000)} s`,
+        details: { durationMs: boundedDuration, until: new Date(until).toISOString() },
+      }).catch(() => undefined)
+    }
   }, [acknowledgeCurrent, role, semantics.candidateLocked, sessionId, sessionSync])
 
   const clearSilence = useCallback(() => {
     if (semantics.candidateLocked) return
     setLocalSilenceUntil(null)
     if (role === 'instructor' && sessionId) sessionSync.clearSilence()
+    if (sessionId) {
+      void recordSessionLogEvent({
+        sessionId,
+        category: 'alarm',
+        eventType: 'alarm.silence_cleared',
+        label: 'Alarm silence cleared',
+      }).catch(() => undefined)
+    }
   }, [role, semantics.candidateLocked, sessionId, sessionSync])
 
   const needsAttention = useCallback((...keys: string[]) => keys.some((key) => {

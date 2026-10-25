@@ -1,4 +1,5 @@
 import { registerSimulationDiagnosticProvider } from '../../core/SimulationDiagnostics'
+import { recordSessionLogEvent } from '../../teaching/session/sessionLog'
 import {
   DEFAULT_EDUSIM_ACTION_PRIORITY,
   type EdusimActionEffect,
@@ -82,6 +83,28 @@ export function subscribeToActionRuntime(listener: () => void): () => void {
 
 function appendActionLog(entry: Omit<ActionRuntimeLogEntry, 'sequence'>): void {
   actionLog = [...actionLog, { ...entry, sequence: ++logSequence }].slice(-MAX_ACTION_LOG_ENTRIES)
+
+  if (!entry.actionKind || !entry.actionId || !['activate', 'deactivate', 'intensity'].includes(entry.type)) return
+  const name = entry.actionName ?? entry.actionId
+  const category = entry.actionKind === 'drug' ? 'drug' : 'event'
+  let label: string
+  if (entry.type === 'deactivate') label = `${entry.actionKind === 'drug' ? 'Drug' : 'Event'}: ${name} stopped`
+  else if (entry.type === 'intensity') label = `${entry.actionKind === 'drug' ? 'Drug' : 'Event'}: ${name} intensity changed`
+  else if (entry.actionKind === 'drug') label = entry.mode === 'toggle' ? `Drug: ${name} started` : `Drug: ${name} administered`
+  else label = entry.mode === 'toggle' ? `Event: ${name} started` : `Event: ${name}`
+
+  void recordSessionLogEvent({
+    category,
+    eventType: `action.${entry.actionKind}.${entry.type}`,
+    label,
+    simulationTimeSeconds: entry.simulationTime,
+    details: {
+      actionId: entry.actionId,
+      mode: entry.mode ?? null,
+      intensity: entry.intensity ?? null,
+      effectIds: entry.effectIds ?? [],
+    },
+  }).catch(() => undefined)
 }
 
 function effectLifetime(effect: EdusimActionEffect): number {
