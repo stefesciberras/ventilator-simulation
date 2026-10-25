@@ -20,7 +20,7 @@ export interface EdumonScenarioStageTarget {
 }
 
 export function buildEdumonScenarioStageTarget(
-  product: Exclude<ScenarioProductId, 'eduvent'>,
+  product: Extract<ScenarioProductId, 'anaesth' | 'icu'>,
   current: EdumonScenarioSnapshot,
   desired: EdumonScenarioSnapshot,
   appliedVariableIds?: readonly string[],
