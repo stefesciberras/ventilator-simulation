@@ -93,7 +93,7 @@ Preserve this **shared saturation architecture**. Do not bypass `saturatingSympa
 
 `beta-blocker` is a cardiovascular Drug toggle, priority 70, with HR `offset -15`, `block-increase`, and `minimum 50 bpm`.
 
-`Antibiotics` is an Other Drug momentary no-op action with `effects: []`; it exists for scenario/logging semantics.
+`Antibiotics` is an **Others** Drug momentary no-op action with `effects: []`; it exists for scenario/logging semantics.
 
 `Curare Cleft` is the display name for compatibility action ID `diaphragm-return`.
 
@@ -125,7 +125,7 @@ Anaesthesia Drugs: Propofol, Fentanyl, Remifentanil infusion, Relaxant, Neostigm
 
 Cardiovascular Drugs: Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion, Adrenaline infusion, Beta blocker.
 
-Other Drugs: Antibiotics.
+Others: Antibiotics.
 
 Cardiovascular Events: Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding.
 
@@ -156,4 +156,4 @@ Definitions live in `public.edusim_action_definitions`. Monitor display controls
 
 ## Review checklist
 
-Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op; hard bounds still prevent HR 500; the shared sympathetic saturation architecture remains intact; and build/regressions pass.
+Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op under Others; hard bounds still prevent HR 500; the shared sympathetic saturation architecture remains intact; and build/regressions pass.
