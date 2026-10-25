@@ -15,6 +15,7 @@ import {
   type EdusimActionDraft,
   type EdusimActionKind,
   type EdusimActionSetting,
+  type EdusimCandidateActionAccess,
   type EdusimShortPressAction,
 } from '../edumon/actionLibrary'
 import {
@@ -39,6 +40,7 @@ const emptyDraft = (): EdusimActionDraft => ({
   description: '',
   setting: 'ana',
   effects: [],
+  candidate_access: 'allowed',
   priority: DEFAULT_EDUSIM_ACTION_PRIORITY,
   sort_order: 0,
 })
@@ -54,6 +56,7 @@ function toDraft(action: EdusimActionDefinition): EdusimActionDraft {
     description: action.description,
     setting: action.setting,
     effects: action.effects.map((effect) => ({ ...effect })),
+    candidate_access: action.candidate_access ?? 'instructor-only',
     priority: action.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY,
     sort_order: action.sort_order,
   }
@@ -163,7 +166,12 @@ export function ActionEditorApp() {
 
   const beginNew = (kind: EdusimActionKind = 'drug') => {
     setSelectedId(null)
-    setDraft({ ...emptyDraft(), kind, sort_order: actions.filter((action) => action.kind === kind).length * 10 + 10 })
+    setDraft({
+      ...emptyDraft(),
+      kind,
+      candidate_access: kind === 'drug' ? 'allowed' : 'instructor-only',
+      sort_order: actions.filter((action) => action.kind === kind).length * 10 + 10,
+    })
     setMessage(null); setError(null)
   }
 
@@ -276,7 +284,7 @@ export function ActionEditorApp() {
                 <h2>{kind === 'drug' ? 'Drugs' : 'Events'}</h2>
                 {actions.filter((action) => action.kind === kind).map((action) => (
                   <button key={action.id} type="button" className={selectedId === action.id ? 'selected' : ''} onClick={() => setSelectedId(action.id)}>
-                    <strong>{action.name}</strong><small>{action.id} · {action.short_press_action} · {action.setting.toUpperCase()} · P{action.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY}</small>
+                    <strong>{action.name}</strong><small>{action.id} · {action.short_press_action} · {action.setting.toUpperCase()} · {action.candidate_access ?? 'instructor-only'} · P{action.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY}</small>
                   </button>
                 ))}
               </div>
@@ -292,8 +300,9 @@ export function ActionEditorApp() {
             <div className="action-editor-grid">
               <label><span>ID</span><input value={draft.id} disabled={Boolean(selected)} onChange={(event) => setDraft({ ...draft, id: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="e.g. propofol" required /></label>
               <label><span>Name</span><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></label>
-              <label><span>Type</span><select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as EdusimActionKind })}><option value="drug">Drug</option><option value="event">Event</option></select></label>
+              <label><span>Type</span><select value={draft.kind} onChange={(event) => { const kind = event.target.value as EdusimActionKind; setDraft({ ...draft, kind, candidate_access: kind === 'drug' ? 'allowed' : 'instructor-only' }) }}><option value="drug">Drug</option><option value="event">Event</option></select></label>
               <label><span>Setting</span><select value={draft.setting} onChange={(event) => setDraft({ ...draft, setting: event.target.value as EdusimActionSetting })}><option value="ana">Anaesthesia</option><option value="itu">ITU</option><option value="all">All</option></select></label>
+              <label><span>Candidate access</span><select value={draft.candidate_access ?? 'instructor-only'} onChange={(event) => setDraft({ ...draft, candidate_access: event.target.value as EdusimCandidateActionAccess })}><option value="allowed">Allowed</option><option value="instructor-only">Instructor only</option><option value="scenario">Scenario controlled</option></select></label>
               <label><span>Short press</span><select value={draft.short_press_action} onChange={(event) => setDraft({ ...draft, short_press_action: event.target.value as EdusimShortPressAction })}><option value="momentary">Momentary</option><option value="toggle">Toggle</option></select></label>
               <label><span>Long press</span><input value="Not configured yet" disabled /></label>
               <label><span>Duration of action</span><div className="action-editor-number"><input type="number" min="0" step="0.1" value={draft.duration_seconds} onChange={(event) => setDraft({ ...draft, duration_seconds: Math.max(0, Number(event.target.value) || 0) })} /><small>seconds</small></div></label>
