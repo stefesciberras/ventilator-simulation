@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { getInstructorAccount, subscribeToInstructorAccount } from '../teaching/account/InstructorAccountService'
-import { activateAction, getActiveEffects, getActionRuntimeSimulationTime, setActionIntensity } from '../edusim/actions/ActionRuntime'
+import { activateAction, getActiveEffects, getActionRuntimeSimulationTime, isActionToggleRunning, setActionIntensity, subscribeToActionRuntime } from '../edusim/actions/ActionRuntime'
 import { listEdusimActions, type EdusimActionDefinition, type EdusimActionEnvironment } from './actionLibrary'
 import './edumon-actions.css'
 
 export type EdumonActionSectionId = 'drugs' | 'events'
 type ActionLevel = 'low' | 'medium' | 'high'
 type DrugClass = 'anaesthesia' | 'cardiovascular' | 'other'
-type EventClass = 'anaesthesia' | 'cardiovascular' | 'respiratory'
+type EventClass = 'anaesthesia' | 'cardiovascular' | 'respiratory' | 'monitors'
 
 const LEVEL_STEPS: Record<ActionLevel, { label: string; scale: number; bars: number }> = {
   low: { label: 'Low', scale: 0.65, bars: 1 },
@@ -15,15 +15,13 @@ const LEVEL_STEPS: Record<ActionLevel, { label: string; scale: number; bars: num
   high: { label: 'High', scale: 1.35, bars: 3 },
 }
 
-// Retain the instructor's chosen level across ACTIONS panel remounts. Running toggle
-// truth still comes from ActionRuntime; this map only remembers the next selected level
-// when an adjustable action is not currently running.
 const ACTION_LEVEL_SELECTIONS = new Map<string, ActionLevel>()
 
 const CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline', 'adrenaline', 'beta-blocker'])
 const OTHER_DRUG_IDS = new Set(['antibiotics'])
 const CARDIOVASCULAR_EVENT_IDS = new Set(['hypertension', 'hypotension', 'tachycardia', 'bradycardia', 'hypovolaemia', 'bleeding'])
 const RESPIRATORY_EVENT_IDS = new Set(['apnoea', 'diaphragm-return', 'bronchospasm'])
+const MONITOR_EVENT_IDS = new Set(['monitor-inv-bp', 'monitor-bis', 'monitor-temp'])
 
 const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
   { id: 'propofol', kind: 'drug', name: 'Propofol', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Generic Propofol bolus: increases hypnotic effect, depresses spontaneous respiratory drive and lowers mean arterial pressure.', setting: 'ana', environments: ['edumon-ana'], effects: [
@@ -94,11 +92,15 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
   ], sort_order: 160, created_at: '', updated_at: '' },
 
   { id: 'apnoea', kind: 'event', name: 'Apnoea', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle absent spontaneous respiratory drive.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'apnoea-respiratory-drive', target: 'respiration.drive', operation: 'set', value: 0, onsetSeconds: 2, durationSeconds: 0, recoverySeconds: 5 }], sort_order: 210, created_at: '', updated_at: '' },
-  { id: 'diaphragm-return', kind: 'event', name: 'Return of diaphragm breathing', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Return of spontaneous diaphragmatic effort after reversal; also guarantees at least one TOF response.', setting: 'ana', environments: ['edumon-ana'], effects: [
+  { id: 'diaphragm-return', kind: 'event', name: 'Curare Cleft', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Return of spontaneous diaphragmatic effort after reversal; also guarantees at least one TOF response.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'diaphragm-return-drive', target: 'respiration.drive', operation: 'target', value: 1, onsetSeconds: 10, durationSeconds: 900, recoverySeconds: 60 },
     { id: 'diaphragm-return-tof', target: 'neuromuscular.tofMinimumCount', operation: 'target', value: 1, onsetSeconds: 5, durationSeconds: 900, recoverySeconds: 60 },
   ], sort_order: 220, created_at: '', updated_at: '' },
   { id: 'bronchospasm', kind: 'event', name: 'Bronchospasm', short_press_action: 'toggle', long_press_action: 'severity-levels', duration_seconds: 0, description: 'Toggle bronchospasm. Long press selects low, medium or high severity.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'bronchospasm-airway-obstruction', target: 'respiration.airwayObstruction', operation: 'offset', value: 0.55, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 45 }], sort_order: 230, created_at: '', updated_at: '' },
+
+  { id: 'monitor-inv-bp', kind: 'event', name: 'Inv BP', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for invasive arterial blood pressure waveform and values. Does not alter physiology.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], priority: 30, sort_order: 310, created_at: '', updated_at: '' },
+  { id: 'monitor-bis', kind: 'event', name: 'BIS', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for BIS monitoring. Does not alter anaesthetic modelling.', setting: 'ana', environments: ['edumon-ana'], effects: [], priority: 30, sort_order: 320, created_at: '', updated_at: '' },
+  { id: 'monitor-temp', kind: 'event', name: 'Temp', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for temperature monitoring. Does not alter patient temperature modelling.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], priority: 30, sort_order: 330, created_at: '', updated_at: '' },
 ]
 
 function currentEnvironment(): EdusimActionEnvironment {
@@ -113,6 +115,7 @@ function drugClass(definition: EdusimActionDefinition): DrugClass {
 function eventClass(definition: EdusimActionDefinition): EventClass {
   if (CARDIOVASCULAR_EVENT_IDS.has(definition.id)) return 'cardiovascular'
   if (RESPIRATORY_EVENT_IDS.has(definition.id)) return 'respiratory'
+  if (MONITOR_EVENT_IDS.has(definition.id)) return 'monitors'
   return 'anaesthesia'
 }
 
@@ -211,12 +214,13 @@ export function EdumonActionsPanel() {
     return () => { active = false; unsubscribe() }
   }, [])
 
+  useEffect(() => subscribeToActionRuntime(() => setRuntimeRevision((value) => value + 1)), [])
   useEffect(() => () => { for (const timer of timersRef.current.values()) window.clearTimeout(timer); timersRef.current.clear() }, [])
 
   const runningToggleEffects = (actionId: string) => getActiveEffects(getActionRuntimeSimulationTime())
     .filter((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
 
-  const isRunningToggle = (actionId: string) => runningToggleEffects(actionId).length > 0
+  const isRunningToggle = (actionId: string) => isActionToggleRunning(actionId)
 
   const currentLevel = (definition: EdusimActionDefinition): ActionLevel => {
     const running = runningToggleEffects(definition.id)[0]
@@ -227,7 +231,6 @@ export function EdumonActionsPanel() {
   const trigger = (definition: EdusimActionDefinition) => {
     const intensity = LEVEL_STEPS[currentLevel(definition)].scale
     activateAction(definition, getActionRuntimeSimulationTime(), supportsLevel(definition) ? intensity : 1)
-    setRuntimeRevision((value) => value + 1)
     setLevelMenuActionId(null)
     if (definition.short_press_action === 'toggle') return
 
@@ -241,7 +244,6 @@ export function EdumonActionsPanel() {
   const selectLevel = (definition: EdusimActionDefinition, level: ActionLevel) => {
     ACTION_LEVEL_SELECTIONS.set(definition.id, level)
     if (isRunningToggle(definition.id)) setActionIntensity(definition.id, LEVEL_STEPS[level].scale)
-    setRuntimeRevision((value) => value + 1)
     setLevelMenuActionId(null)
   }
 
@@ -274,6 +276,7 @@ export function EdumonActionsPanel() {
           {renderClass('Anaesthesia', events.filter((definition) => eventClass(definition) === 'anaesthesia'), 'events')}
           {renderClass('Cardiovascular', events.filter((definition) => eventClass(definition) === 'cardiovascular'), 'events')}
           {renderClass('Respiratory', events.filter((definition) => eventClass(definition) === 'respiratory'), 'events')}
+          {renderClass('Monitors', events.filter((definition) => eventClass(definition) === 'monitors'), 'events')}
         </div>
       </EdumonActionSection>
     </div>

@@ -1,33 +1,55 @@
 # EDUMON actions/effects — prompt for AI coding agents
 
-> Maintenance contract: update this prompt whenever action/effect vocabulary, runtime semantics, physiology interpretation, persistence, seeded actions, grouping, priority/constraint semantics, physiological hard bounds, diagnostics, timing or relevant file locations change.
+> Maintenance contract: update this prompt whenever action/effect vocabulary, runtime semantics, physiology interpretation, persistence, seeded actions, grouping, priority/constraint semantics, physiological hard bounds, diagnostics, timing, display-control semantics or relevant file locations change.
 
-Use this prompt when modifying EDUSIM/EDUMON Drugs, Events or physiological responses.
+Use this prompt when modifying EDUSIM/EDUMON Drugs, Events, monitor controls or physiological responses.
 
 ## Non-negotiable architecture
 
-**Actions describe effects; physiology interprets effects.** Never make a Drug/Event button directly mutate monitor values or waveform pixels.
+**Actions describe effects; physiology interprets effects.** Never make a Drug/Event button directly mutate physiological monitor values or waveform pixels.
 
-Core flow:
+Core physiology flow:
 
 `ActionDefinition -> ActionRuntime/ActiveEffects -> EDUMON physiology -> absolute physiological hard bounds -> rhythm/monitor interpretation`
 
+Display-only monitor Events are separate from physiology. They use ActionRuntime toggle state with `effects: []`; presentation components interpret those toggles without altering patient state.
+
 Manual instructor edits supersede action ownership on that target, but do not bypass absolute hard bounds.
 
-A valid action may intentionally have `effects: []`. Such a no-op action must still be sent through `ActionRuntime` and logged. Do **not** invent a dummy physiological target merely to make a scenario/logging action observable.
+A valid action may intentionally have `effects: []`. Do not invent a dummy physiological target merely to make a scenario/logging/display action observable.
 
 ## Core files
 
 - `src/edusim/actions/ActionEffect.ts` — targets/operations, priority, constraints and release behaviour.
-- `src/edusim/actions/ActionRuntime.ts` — timing, priority ordering, constraint resolution, intensity, recover/persist, target supersession and bounded action history.
-- `src/core/SimulationDiagnostics.ts` — runtime diagnostic-provider registry used to include Drug/Event state/history in copied and published diagnostics.
+- `src/edusim/actions/ActionRuntime.ts` — active toggle actions, active effects, timing, priority ordering, target supersession, subscriptions and diagnostics.
+- `src/core/SimulationDiagnostics.ts` — runtime diagnostic-provider registry.
 - `src/teaching/diagnostics/PublishedDiagnostics.ts` — deliberate Supabase publication of diagnostic bundles.
-- `src/edumon/actionPhysiology.ts` — interprets active effects and then calls the hard-bounds layer.
-- `src/edumon/physiologicalBounds.ts` — centralized absolute simulator sanity bounds.
-- `src/edumon/monitorEngine.ts` — rhythm-specific effective-rate constraints and waveform/measurement generation.
-- `src/edumon/EdumonWorkspacePanel.tsx` — instructor controls and manual target supersession.
-- `src/action-editor/ActionEditorApp.tsx` — persistent action/effect editing.
+- `src/edumon/actionPhysiology.ts` — physiology interpretation, shared sympathetic saturation and hard bounds.
+- `src/edumon/monitorDisplayActions.ts` — display-only monitor toggle IDs and runtime subscription bridge.
+- `src/edumon/EdumonBisTrend.tsx` — BIS display controlled by `monitor-bis`.
+- `src/edumon/EdumonTemperatureSurface.tsx` — Temp display controlled by `monitor-temp`; also mounts the invasive-BP DOM bridge.
 - `src/edumon/EdumonActionsPanel.tsx` — fallback definitions, grouping and runtime-derived toggle state.
+- `src/action-editor/ActionEditorApp.tsx` — persistent action/effect editing.
+
+## Toggle state vs active effects
+
+Do not infer toggle ON/OFF only from `activeEffects`. A toggle may legitimately have zero effects.
+
+`ActionRuntime.activeToggleActions` is the authoritative ON/OFF state. `activeEffects` contains only physiological contributions. `subscribeToActionRuntime(...)` is the cross-component notification mechanism.
+
+For ordinary effect-bearing toggles, `supersedeActionTarget(...)` removes only that target. If all effects belonging to the running toggle have been superseded, its active toggle state must also clear. Zero-effect toggles are unaffected by target supersession.
+
+## Monitor display Events
+
+Events → **Monitors** contains:
+
+- `monitor-inv-bp` / **Inv BP** — toggle; setting `all`; `effects: []`; controls invasive ART waveform and numeric values only.
+- `monitor-bis` / **BIS** — toggle; setting `ana`; `effects: []`; controls BIS trend/value only.
+- `monitor-temp` / **Temp** — toggle; setting `all`; `effects: []`; controls temperature value display only.
+
+All three are **display-only**. Never mutate SBP/DBP, temperature, anaesthetic depth, BIS physiology or any other patient-model field when toggling them. The underlying model continues to evolve while hidden.
+
+Monitor toggle state and activation/deactivation must appear in ActionRuntime diagnostics and published diagnostics even though `activeEffects` is empty.
 
 ## Current targets
 
@@ -43,98 +65,59 @@ A valid action may intentionally have `effects: []`. Such a no-op action must st
 
 Operations: `offset`, `set`, `multiplier`, `target`, `increment`, `constraint`, `trigger`.
 
+Display-only monitor Events intentionally have no target or operation.
+
 ## Priority semantics
 
 Ordinary/default priority is **30**. Lower priority resolves first, higher priority later. Same-priority ordinary modifiers resolve before `constraint`. Per-effect JSON `priority` may override the action default.
 
-Manual instructor target ownership sits above action priority: call `supersedeActionTarget(...)`, commit the selected current value, and leave unrelated targets running. Do not interpret priority as whole-action cancellation.
-
-## Constraint semantics
+Manual instructor target ownership sits above action priority. Do not interpret priority as whole-action cancellation.
 
 Supported constraints: `block-increase`, `block-decrease`, `minimum`, `maximum`.
 
 ## Absolute physiological hard bounds
 
-`applyEdumonPhysiologicalBounds()` is an absolute final sanity layer after action/effect composition. It is **not** an action, alarm range or normal range. Do not move these limits into individual Drug/Event definitions.
+`applyEdumonPhysiologicalBounds()` is an absolute final sanity layer after action/effect composition. It is not an action, alarm range or normal range.
 
-Current invariants:
-- HR 0–240 bpm
-- SBP 20–300 mmHg
-- DBP 10–200 mmHg
-- SpO₂ 0–100%
-- peripheral perfusion 0–1
-- RR 0–80/min
-- tidal volume 0–1000 mL
-- expiratory resistance 0.1–200 cmH₂O/L/s
-- FiO₂ 0.21–1
-- shunt fraction 0–1
-- maxSpO₂ 0–100%
-- dead space 0 to bounded tidal volume
-- SBP above DBP
+Current invariants include HR 0–240 bpm, SBP 20–300 mmHg, DBP 10–200 mmHg, SpO₂ 0–100%, RR 0–80/min and tidal volume 0–1000 mL. These must prevent impossible composed states such as **HR 500**.
 
-These limits must prevent impossible composed state such as **HR 500** even if multiple actions stack. Manual instructor control can supersede all action effects on HR, but the final model still obeys HR 0–240.
+Keep rhythm constraints separate from global hard bounds.
 
-Keep rhythm constraints separate. `monitorEngine.ts` still determines rhythm-appropriate effective rate: VF/asystole 0; SVT/VT have their own ranges; ordinary sinus-family monitoring is more restrictive than the global 240 bpm sanity ceiling.
+## Shared sympathetic saturation architecture
 
-If a new physiological variable can be pushed to impossible values by future composition, add its invariant to the centralized bounds module rather than scattering clamps through UI code.
+Surgery, Laryngoscopy and Pain create `stimulus.sympathetic`. Opioids alter `anaesthesia.nociceptiveResponse`, and effective anaesthetic depth attenuates the response. The composed value **must pass through the shared saturating sympathetic response transfer function** before HR/MAP translation.
 
-## Beta blocker reference implementation
+Preserve this **shared saturation architecture**. Do not bypass `saturatingSympatheticResponse(...)` with direct HR/MAP mutations or unbounded additive sympathetic handling.
 
-`beta-blocker` is a cardiovascular **Drug** toggle, setting `all`, priority **70**, with three HR effects:
-- `offset -15`
-- `constraint: block-increase`
-- `constraint: minimum`, value `50`
+## Reference actions
 
-All three use 10-second onset and 30-second recovery. Hypovolaemia MAP effects remain independent. Manual HR edit supersedes all Beta blocker HR effects. The 50 bpm floor is an action-level teaching constraint; the global 0–240 HR hard bound is an absolute simulator invariant.
+`beta-blocker` is a cardiovascular Drug toggle, priority 70, with HR `offset -15`, `block-increase`, and `minimum 50 bpm`.
 
-## Neuromuscular block and mechanically visible breathing
+`Antibiotics` is an **Others** Drug momentary no-op action with `effects: []`; it exists for scenario/logging semantics.
 
-The current EDUMON respiratory model does not separately represent central neural respiratory rhythm and mechanical respiratory excursions. `neuromuscular.block` must therefore suppress both spontaneous tidal volume and the **mechanically visible** spontaneous respiratory rate. At complete block, spontaneous mechanical ventilation is zero; mandatory ventilator breaths may continue.
+`Curare Cleft` is the display name for compatibility action ID `diaphragm-return`.
 
-The generic `Relaxant` action retains a 120-second onset. Do not make its respiratory effect instantaneous simply to make the UI look responsive. Diagnostics should expose its current effect weight so onset can be verified.
+## Neuromuscular block
 
-`Curare Cleft` is the display name for compatibility action ID `diaphragm-return`. It represents return of diaphragmatic effort before complete peripheral recovery and currently targets respiratory drive plus `neuromuscular.tofMinimumCount`. Treat this as a teaching approximation until diaphragm-specific neuromuscular transmission is modelled separately.
+The current respiratory model uses `neuromuscular.block` to suppress mechanically visible spontaneous RR and tidal volume. At complete block spontaneous mechanical ventilation is zero; mandatory ventilator breaths may continue.
 
 ## Drug/Event diagnostics and action history
 
-`ActionRuntime` keeps a bounded **action history** of the latest 500 interactions. Record:
-- Drug/Event activation;
-- toggle deactivation;
-- running intensity changes;
-- manual `supersedeActionTarget(...)` interventions;
-- runtime clears.
+`ActionRuntime` keeps the latest 500 interactions: activation, toggle deactivation, intensity changes, target supersession and clears. Diagnostics expose `activeToggleActions`, weighted `activeEffects`, and history.
 
-Current active effects in diagnostics should include their current onset/recovery weight. `ActionRuntime` registers a provider with `SimulationDiagnostics`, so every copied or published simulation diagnostic may include `runtimeDiagnostics.actions` without product-specific duplication.
-
-No-op actions with `effects: []` still require an `activate` history entry. `Antibiotics` is the reference example: it changes no physiology but its administration time must be visible in the action log and published diagnostics.
-
-Browser-local runtime diagnostics are not directly accessible from ChatGPT. EDUMON provides an explicit **Publish diagnostics** path to the owner-scoped Supabase diagnostic inbox; only after the instructor deliberately publishes a bundle should connected support/chat tooling query it.
+Copied and deliberately published diagnostics must therefore retain display-only monitor toggle state and its history. The explicit **Publish diagnostics** workflow persists the diagnostic bundle to the owner-scoped Supabase inbox for later interrogation.
 
 ## Timing and release
 
 Momentary: onset -> finite duration -> recovery.
 
-Toggle: onset -> sustained -> switch-off -> `recover` or `persist` per effect. Hypovolaemia and Bleeding currently persist their HR/MAP surrogate consequences. All timing uses simulation time.
+Toggle: onset -> sustained -> switch-off -> `recover` or `persist` per physiological effect. A zero-effect toggle simply remains in `activeToggleActions` until switched off or runtime reset.
 
 ## Toggle UI state
 
-`ActionRuntime` is the source of truth for ON/OFF. Do not reintroduce component-local `toggleStates`. Adjustable L/M/H level is derived from runtime intensity for running toggles.
+`ActionRuntime` is the source of truth. Do not reintroduce component-local toggle state. The ACTIONS panel subscribes to the runtime, so state changes made elsewhere must update it immediately.
 
 Desktop Drug/Event grids use three columns; mobile/narrow layout remains two columns.
-
-## Current-value controls
-
-**Do not reintroduce inverse-baseline fine tuning.** Direct instructor changes supersede the relevant action target rather than back-calculating a hidden baseline.
-
-HR/rhythm supersede `haemodynamics.heartRate`; SBP/DBP supersede `haemodynamics.meanArterialPressure`; current respiratory-rate editing supersedes `respiration.drive`.
-
-## Shared sympathetic saturation architecture
-
-Surgery, Laryngoscopy and Pain create `stimulus.sympathetic`. Opioids change `anaesthesia.nociceptiveResponse`; effective anaesthetic depth attenuates the response. The composed value **must pass through the shared saturating sympathetic response transfer function** before HR/MAP translation. Preserve this saturation architecture; do not bypass it with direct HR/MAP mutations or unbounded additive stimulus handling.
-
-## Adjustable levels
-
-`dose-levels` and `severity-levels`: Low 0.65×, Medium 1.0×, High 1.35×. Changing a running toggle level must not restart onset timing.
 
 ## Current action groups
 
@@ -142,37 +125,35 @@ Anaesthesia Drugs: Propofol, Fentanyl, Remifentanil infusion, Relaxant, Neostigm
 
 Cardiovascular Drugs: Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion, Adrenaline infusion, Beta blocker.
 
-Other Drugs: **Antibiotics**. It is a momentary, setting `all`, no-op action with `effects: []`, used for scenario/logging semantics.
+Others: Antibiotics.
 
 Cardiovascular Events: Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding.
 
 Respiratory Events: Apnoea, Curare Cleft, Bronchospasm.
 
-Anaesthesia events/stimuli include Laryngoscopy, Pain and Surgery.
+Monitor Events: Inv BP, BIS, Temp.
 
 ## Persistence/editor rules
 
-`public.edusim_action_definitions.priority` stores action default priority. Per-effect `priority`, `constraint` and `releaseBehaviour` live in `effects` JSONB. The editor-facing setting label is **Anaesthesia**, stored compatibility key remains `ana` (`ana | itu | all`).
+Definitions live in `public.edusim_action_definitions`. Monitor display controls are stored as normal toggle Events with empty `effects` arrays. The editor-facing setting label is **Anaesthesia**, while the compatibility key remains `ana` (`ana | itu | all`).
 
 ## Change checklist
 
 1. Inspect current implementation.
-2. Keep actions declarative.
-3. Add validated targets/physiology consumers only when needed.
-4. Allow explicit no-op actions for logging/scenario semantics; never add dummy effects.
-5. Use priority + constraints for competing effects.
-6. Keep manual supersession above action priority.
-7. Keep absolute hard bounds centralized and final.
-8. Keep rhythm constraints separate from global sanity bounds.
-9. Preserve the shared sympathetic saturation architecture.
-10. Preserve recover/persist and simulation-time semantics.
+2. Keep physiology actions declarative.
+3. Keep display-only actions out of physiological state.
+4. Permit zero-effect momentary and toggle actions; never add dummy effects.
+5. Keep active toggle state independent from active effects.
+6. Preserve runtime subscriptions and diagnostics.
+7. Use priority + constraints for competing physiological effects.
+8. Keep manual supersession above action priority.
+9. Keep absolute hard bounds centralized and final.
+10. Preserve the shared sympathetic saturation architecture.
 11. Keep fallback and persisted definitions aligned.
-12. Preserve Drug/Event action-history diagnostics when runtime semantics change.
-13. Update regression coverage.
-14. Update both documentation files.
-15. Bump EDUMON version.
-16. Run full CI and merge only when green.
+12. Update regression coverage and both documentation files.
+13. Bump EDUMON version.
+14. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that actions still describe effects; physiology interprets effects; runtime priority semantics remain intact; manual supersession remains target-specific; physiological hard bounds prevent impossible composed values; HR 500 cannot survive model composition; tidal volume is bounded at 0–1000 mL; rhythm-specific rate behavior remains separate; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a no-op Drug in **Others** and is still logged; Bronchospasm, Hypovolaemia, Bleeding and Curare Cleft remain documented; Relaxant suppresses mechanically visible spontaneous breathing over its 120-second onset; action history is present in copied/published diagnostics; sympathetic saturation remains shared; and build/regressions pass.
+Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op under Others; hard bounds still prevent HR 500; the shared sympathetic saturation architecture remains intact; and build/regressions pass.

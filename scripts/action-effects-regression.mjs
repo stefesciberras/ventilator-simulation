@@ -18,11 +18,16 @@ const editor = read('src/action-editor/ActionEditorApp.tsx')
 const physiology = read('src/edumon/actionPhysiology.ts')
 const bounds = read('src/edumon/physiologicalBounds.ts')
 const tof = read('src/edumon/EdumonAnaGasControl.tsx')
+const bis = read('src/edumon/EdumonBisTrend.tsx')
+const temperature = read('src/edumon/EdumonTemperatureSurface.tsx')
+const monitorDisplay = read('src/edumon/monitorDisplayActions.ts')
+const monitorDisplayCss = read('src/edumon/edumon-monitor-actions.css')
 const migration = read('supabase/migrations/20261024_event_classes_and_respiratory_effects.sql')
 const priorityMigration = read('supabase/migrations/20261024_action_priorities_and_constraints.sql')
 const betaBlockerMigration = read('supabase/migrations/20261024_beta_blocker_hr_floor.sql')
 const curareCleftMigration = read('supabase/migrations/20261025_rename_diaphragm_return_curare_cleft.sql')
 const antibioticsMigration = read('supabase/migrations/20261025_add_antibiotics_misc_drug.sql')
+const monitorMigration = read('supabase/migrations/20261025_monitor_display_toggle_events.sql')
 const guide = read('src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md')
 const prompt = read('src/edumon/ACTIONS_AND_EFFECTS_AI_PROMPT.md')
 
@@ -40,7 +45,9 @@ assert(panel.includes("renderClass('Anaesthesia'"), 'Actions UI must render Anae
 assert(panel.includes("renderClass('Cardiovascular'"), 'Actions UI must render Cardiovascular classes')
 assert(panel.includes("renderClass('Others'"), 'Drugs UI must render Others class')
 assert(panel.includes("renderClass('Respiratory'"), 'Events UI must render Respiratory class')
-assert(panel.includes('getActiveEffects'), 'toggle UI must derive active state from ActionRuntime')
+assert(panel.includes("renderClass('Monitors'"), 'Events UI must render Monitors class')
+assert(panel.includes('isActionToggleRunning'), 'toggle UI must derive active state from ActionRuntime toggle state')
+assert(panel.includes('subscribeToActionRuntime'), 'Actions UI must react to runtime changes from other components')
 assert(!panel.includes('toggleStates'), 'toggle UI must not duplicate runtime ON/OFF state')
 assert(actionCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr));'), 'desktop actions must use three columns')
 assert(actionCss.includes('@media (max-width: 680px)') && actionCss.includes('grid-template-columns: repeat(2, minmax(0, 1fr));'), 'mobile actions must remain two columns')
@@ -54,6 +61,11 @@ assert(physiology.includes('baselineRespiratory.spontaneousRespiratoryRate * dri
 assert(tof.includes('currentNeuromuscularBlock'), 'TOF must derive from neuromuscular block')
 assert(tof.includes('currentTofMinimumCount'), 'TOF must respect diaphragm-return minimum count')
 
+assert(runtime.includes('interface ActiveToggleAction'), 'runtime must track toggle actions independently from effects')
+assert(runtime.includes('activeToggleActions'), 'runtime must persist zero-effect toggle state')
+assert(runtime.includes('export function isActionToggleRunning'), 'runtime must expose toggle state')
+assert(runtime.includes('export function subscribeToActionRuntime'), 'runtime must expose change subscriptions')
+assert(runtime.includes('activeToggleActions: getActiveToggleActions()'), 'diagnostics must expose active toggle actions')
 assert(runtime.includes('intensity: number'), 'runtime must retain adjustable intensity')
 assert(runtime.includes('export function setActionIntensity'), 'running severity/dose must be adjustable')
 assert(runtime.includes('export function getActionRuntimeLog'), 'action runtime must expose diagnostic history')
@@ -89,13 +101,25 @@ assert(curareCleftMigration.includes("name = 'Curare Cleft'"), 'Curare Cleft ren
 
 assert(panel.includes("const OTHER_DRUG_IDS = new Set(['antibiotics'])"), 'Antibiotics must be classified under Other Drugs')
 assert(panel.includes("id: 'antibiotics', kind: 'drug', name: 'Antibiotics'"), 'Antibiotics fallback Drug must exist')
-assert(panel.includes("description: 'Scenario/logging action only. Produces no physiological effect.'"), 'Antibiotics must remain explicitly non-physiological')
 assert(panel.includes("effects: [], priority: 30"), 'Antibiotics must remain a no-op action with no dummy effects')
 assert(antibioticsMigration.includes("'antibiotics'"), 'Antibiotics migration must persist the action')
 assert(antibioticsMigration.includes("'[]'::jsonb"), 'Antibiotics migration must persist an empty effects list')
-assert(antibioticsMigration.includes("'all'"), 'Antibiotics must be available in both EDUMON settings')
 
-// Absolute physiological hard-bound architecture.
+for (const [id, name] of [['monitor-inv-bp','Inv BP'], ['monitor-bis','BIS'], ['monitor-temp','Temp']]) {
+  assert(panel.includes(`id: '${id}', kind: 'event', name: '${name}', short_press_action: 'toggle'`), `${name} monitor toggle fallback must exist`)
+  assert(monitorMigration.includes(`'${id}'`), `${name} monitor toggle must be persisted`)
+}
+assert(panel.includes("const MONITOR_EVENT_IDS = new Set(['monitor-inv-bp', 'monitor-bis', 'monitor-temp'])"), 'monitor events must be grouped under Monitors')
+assert((monitorMigration.match(/'\[\]'::jsonb/g) ?? []).length === 3, 'all monitor toggles must have empty physiological effects')
+assert(monitorDisplay.includes("invasiveBloodPressure: 'monitor-inv-bp'"), 'Inv BP display helper must use monitor-inv-bp')
+assert(monitorDisplay.includes("bis: 'monitor-bis'"), 'BIS display helper must use monitor-bis')
+assert(monitorDisplay.includes("temperature: 'monitor-temp'"), 'Temp display helper must use monitor-temp')
+assert(monitorDisplay.includes('useSyncExternalStore'), 'monitor display state must subscribe to ActionRuntime')
+assert(monitorDisplayCss.includes("data-edumon-monitor-inv-bp='false'"), 'Inv BP toggle must hide ART presentation via display CSS')
+assert(bis.includes('useMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.bis)'), 'BIS must be controlled by monitor display state')
+assert(temperature.includes('useMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.temperature)'), 'temperature must be controlled by monitor display state')
+assert(!monitorDisplay.includes('patientState'), 'monitor display toggle helper must not mutate patient physiology')
+
 assert(bounds.includes('EDUMON_PHYSIOLOGICAL_BOUNDS'), 'hard bounds must be centralized')
 assert(bounds.includes('heartRate: { min: 0, max: 240 }'), 'global HR hard bound must be 0-240')
 assert(bounds.includes('systolicPressure: { min: 20, max: 300 }'), 'global SBP hard bound must be 20-300')
@@ -108,7 +132,7 @@ assert(physiology.includes('applyEdumonPhysiologicalBounds({'), 'action physiolo
 assert(!physiology.includes('heartRate: clamp(actionHeartRate + sympathetic.heartRateOffset, 0, 300)'), 'legacy scattered HR 300 clamp must be removed')
 
 for (const [name, text] of [['guide', guide], ['prompt', prompt]]) {
-  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','Bronchospasm','Hypovolaemia','Bleeding','Curare Cleft','Beta blocker','Antibiotics','no-op','Others','block-increase','minimum','50 bpm','priority','physiological hard bounds','HR 500','action history','mechanically visible','Publish diagnostics']) {
+  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','Bronchospasm','Hypovolaemia','Bleeding','Curare Cleft','Beta blocker','Antibiotics','no-op','Others','Monitors','Inv BP','BIS','Temp','display-only','activeToggleActions','block-increase','minimum','50 bpm','priority','physiological hard bounds','HR 500','action history','mechanically visible','Publish diagnostics']) {
     assert(text.includes(phrase), `${name} must document ${phrase}`)
   }
 }

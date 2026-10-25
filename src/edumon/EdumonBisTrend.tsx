@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
 import { effectiveAnaestheticDepth } from './anaestheticPhysiology'
 import type { AnaestheticDepth, MonitorPatientState } from './types'
+import { EDUMON_MONITOR_DISPLAY_ACTION_IDS, useMonitorDisplayEnabled } from './monitorDisplayActions'
 import './edumon-bis.css'
 
 type BisPoint = {
@@ -112,6 +113,7 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
   const [measurementHost, setMeasurementHost] = useState<HTMLElement | null>(null)
   const [bis, setBis] = useState(100)
   const [points, setPoints] = useState<BisPoint[]>([{ time: 0, value: 100 }])
+  const bisEnabled = useMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.bis)
 
   patientRef.current = patientState
 
@@ -131,14 +133,14 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
   }, [])
 
   useEffect(() => {
-    if (!waveformHost || !measurementHost) return
+    if (!bisEnabled || !waveformHost || !measurementHost) return
     waveformHost.classList.add('edumon-has-bis')
     measurementHost.classList.add('edumon-has-bis')
     return () => {
       waveformHost.classList.remove('edumon-has-bis')
       measurementHost.classList.remove('edumon-has-bis')
     }
-  }, [waveformHost, measurementHost])
+  }, [bisEnabled, waveformHost, measurementHost])
 
   useEffect(() => {
     let frame = 0
@@ -184,7 +186,7 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  const trace = waveformHost ? createPortal(
+  const trace = bisEnabled && waveformHost ? createPortal(
     <div className="edumon-trace edumon-trace-bis waveform-card">
       <div className="edumon-trace-label waveform-label"><strong>BIS</strong><span>trend · 60 s</span></div>
       <BisTrendCanvas points={points} />
@@ -193,7 +195,7 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
     waveformHost,
   ) : null
 
-  const measurement = measurementHost ? createPortal(
+  const measurement = bisEnabled && measurementHost ? createPortal(
     <div className="edumon-value-panel edumon-value-bis metric">
       <span className="edumon-value-label">BIS</span>
       <strong className="edumon-value-main">{bis}</strong>
