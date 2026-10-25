@@ -12,6 +12,7 @@ interface UseProductTeachingSessionArgs<TState> {
   productId: string
   state: TState
   setState: (state: TState) => void
+  mergeCandidateState?: (localState: TState, instructorState: TState) => TState
   instructorBroadcastDebounceMs?: number
 }
 
@@ -27,6 +28,7 @@ export function useProductTeachingSession<TState>({
   productId,
   state,
   setState,
+  mergeCandidateState,
   instructorBroadcastDebounceMs = 120,
 }: UseProductTeachingSessionArgs<TState>) {
   const normalizedProductId = productId.trim().toLowerCase()
@@ -51,8 +53,11 @@ export function useProductTeachingSession<TState>({
     host: {
       onSessionRow: (row, nextRole, source, force) => {
         if (nextRole === 'candidate') {
-          stateRef.current = row.product_state
-          setState(row.product_state)
+          const nextState = mergeCandidateState
+            ? mergeCandidateState(stateRef.current, row.product_state)
+            : row.product_state
+          stateRef.current = nextState
+          setState(nextState)
           return
         }
         if (nextRole === 'instructor' && force && source === 'resume') {
