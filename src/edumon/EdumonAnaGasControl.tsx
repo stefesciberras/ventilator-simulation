@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
-import { recordSessionLogEvent } from '../teaching/session/sessionLog'
+import { markSessionLogModelState, recordSessionLogEvent } from '../teaching/session/sessionLog'
 import { latestEdumonRespiratoryOutput, resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
 import { applyAnaestheticDepthEffects, depthFromMac, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import { currentNeuromuscularBlock, currentTofMinimumCount } from './actionPhysiology'
@@ -124,6 +124,7 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
           lastAutoDepthRef.current = nextDepth
           if (physiology.depthOfAnaesthesia !== nextDepth) {
             const nextState = applyAnaestheticDepthEffects(current, nextDepth, physiology.anaestheticResponse)
+            markSessionLogModelState(nextState)
             patientRef.current = nextState
             onPatientStateChange(nextState)
           }
