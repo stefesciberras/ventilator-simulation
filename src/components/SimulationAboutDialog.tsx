@@ -6,7 +6,7 @@ export interface SimulationAboutDialogProps {
   productLabel: string
   title: string
   description: string
-  version: string
+  version?: string
   onClose: () => void
   diagnostics?: SimulationDiagnosticAction[]
   wakeLock?: {
@@ -17,9 +17,26 @@ export interface SimulationAboutDialogProps {
   }
   extraContent?: ReactNode
   disclaimer?: string
+  legalContext?: 'simulation' | 'authoring'
 }
 
-export function SimulationAboutDialog({ open, productLabel, title, description, version, onClose, diagnostics = [], wakeLock, extraContent, disclaimer = 'Educational simulation only — not a medical device and not for clinical decision-making.' }: SimulationAboutDialogProps) {
+const DEFAULT_SIMULATION_DISCLAIMER = 'For education and simulation training only. EDUSIM is not a medical device and is not intended for diagnosis, patient monitoring, treatment, clinical decision-making, or use in the care of real patients. Simulated values, waveforms, physiological responses, drug effects, events, scenarios and other outputs are simplified educational representations and may differ from real patients, devices, drugs and clinical environments. Do not rely on EDUSIM as a substitute for professional judgement, local protocols, manufacturer instructions, or validated clinical equipment.'
+
+const AUTHORING_DISCLAIMER = 'Content created or edited with this tool is educational simulation content. Authors and instructors are responsible for reviewing its clinical accuracy, educational suitability and local applicability before use. User-authored scenarios, actions and other library content must not be relied upon for real-patient clinical decisions or patient care.'
+
+export function SimulationAboutDialog({
+  open,
+  productLabel,
+  title,
+  description,
+  version,
+  onClose,
+  diagnostics = [],
+  wakeLock,
+  extraContent,
+  disclaimer = DEFAULT_SIMULATION_DISCLAIMER,
+  legalContext = 'simulation',
+}: SimulationAboutDialogProps) {
   if (!open) return null
   return (
     <div className="about-backdrop" onMouseDown={onClose}>
@@ -29,7 +46,7 @@ export function SimulationAboutDialog({ open, productLabel, title, description, 
           <button type="button" onClick={onClose} aria-label="Close About">×</button>
         </div>
         <p>{description}</p>
-        <div className="about-version-row"><span>Version</span><strong>v{version}</strong></div>
+        {version && <div className="about-version-row"><span>Version</span><strong>v{version}</strong></div>}
         {wakeLock && (
           <label className="about-wake-row">
             <span><strong>Keep screen awake</strong><small>{wakeLock.supported ? (wakeLock.active ? 'Active' : 'Enabled when the browser permits it') : 'Not supported by this browser'}</small></span>
@@ -45,7 +62,12 @@ export function SimulationAboutDialog({ open, productLabel, title, description, 
           </div>
         )}
         {extraContent}
-        <p className="about-disclaimer">{disclaimer}</p>
+        <div className="about-legal" aria-label="Legal and safety information">
+          <span className="about-section-label">Important safety information</span>
+          <p className="about-disclaimer">{disclaimer}</p>
+          {legalContext === 'authoring' && <p className="about-disclaimer">{AUTHORING_DISCLAIMER}</p>}
+          <p className="about-copyright">© 2026 Stephen Sciberras. EDUSIM. All rights reserved.</p>
+        </div>
       </section>
     </div>
   )
