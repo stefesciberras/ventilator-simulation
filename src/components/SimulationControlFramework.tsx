@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 export interface SimulationControlTabDefinition<TTab extends string> {
   id: TTab
@@ -48,6 +48,14 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
 }: SimulationControlFrameworkProps<TTab, TProfile>) {
   const selected = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]
   const isEdumonControlRow = tabsClassName.split(/\s+/).includes('edumon-control-tabs')
+  const edumonTabRowStyle: CSSProperties | undefined = isEdumonControlRow
+    ? {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, minmax(0, 1fr)) auto',
+        gridAutoFlow: 'column',
+        alignItems: 'stretch',
+      }
+    : undefined
   const openEdumonLogs = () => {
     document.querySelector<HTMLButtonElement>('.teaching-session-log-profile-button')?.click()
   }
@@ -70,7 +78,7 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
             ))}
           </div>
         )}
-        <nav className={`control-tabs edusim-control-tabs ${tabsClassName}`.trim()} role="tablist" aria-label="Simulator controls">
+        <nav className={`control-tabs edusim-control-tabs ${tabsClassName}`.trim()} role="tablist" aria-label="Simulator controls" style={edumonTabRowStyle}>
           {tabs.map((tab) => (
             <button
               key={tab.id}
