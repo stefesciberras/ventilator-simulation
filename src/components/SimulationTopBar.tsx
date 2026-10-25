@@ -44,6 +44,11 @@ interface SimulationTopBarProps {
 }
 
 const DEFAULT_SPEED_OPTIONS: readonly SharedSimulationSpeed[] = [0.5, 1, 2, 4]
+const PUBLIC_PRODUCT_LABELS: Record<string, string> = {
+  EDUVENT: 'LoppjuSIM-MV',
+  'EDUMON-Ana': 'LoppjuSIM-Anaesth',
+  'EDUMON-ICU': 'LoppjuSIM-ICU',
+}
 
 export function SimulationTopBar({
   brandKicker,
@@ -71,12 +76,13 @@ export function SimulationTopBar({
     ? (simulationPaused ? 'Simulation paused by instructor' : 'Simulation pause controlled by instructor')
     : localPauseLabel
   const speedLabel = controlsControlledByInstructor ? 'Simulation speed controlled by instructor' : 'Simulation speed'
+  const publicBrandKicker = PUBLIC_PRODUCT_LABELS[brandKicker] ?? brandKicker
 
   return (
     <header className={`topbar simulation-topbar ${className}`.trim()}>
       <div className={`brand-block ${brandClassName}`.trim()}>
         {brandLeading ?? <EdusimBackLink />}
-        <div><span className="brand-kicker">{brandKicker}</span><h1>{title}</h1></div>
+        <div><span className="brand-kicker">{publicBrandKicker}</span><h1>{title}</h1></div>
       </div>
 
       <div className="top-simulation-controls">
