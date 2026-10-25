@@ -22,7 +22,7 @@ const scenarioCapabilities = (productId: SimulationProductId) => ({
 export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapter> = {
   eduvent: defineSimulationProduct({
     id: 'eduvent',
-    family: 'LoppjuSIM',
+    family: 'EDUVENT',
     label: 'LoppjuSIM-MV',
     route: '/eduvent',
     teachingEnvironment: 'mechanical-ventilation',
@@ -49,7 +49,7 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
   }),
   'edumon-ana': defineSimulationProduct({
     id: 'edumon-ana',
-    family: 'LoppjuSIM',
+    family: 'EDUMON',
     label: 'LoppjuSIM-Anaesth',
     route: '/edumon/ana',
     teachingEnvironment: 'anaesthesia',
@@ -76,7 +76,7 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
   }),
   'edumon-icu': defineSimulationProduct({
     id: 'edumon-icu',
-    family: 'LoppjuSIM',
+    family: 'EDUMON',
     label: 'LoppjuSIM-ICU',
     route: '/edumon/icu',
     teachingEnvironment: 'itu',
