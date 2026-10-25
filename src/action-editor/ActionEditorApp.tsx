@@ -242,23 +242,23 @@ export function ActionEditorApp() {
     <main className="action-editor-app">
       <SimulationAboutDialog
         open={aboutOpen}
-        productLabel="EDUSIM"
+        productLabel="LoppjuSIM"
         title="Drug & Event Library Editor"
-        description="The shared EDUSIM authoring tool for maintaining drug, event and declarative-effect definitions used in educational simulation."
+        description="The shared LoppjuSIM authoring tool for maintaining drug, event and declarative-effect definitions used in educational simulation."
         onClose={() => setAboutOpen(false)}
         legalContext="authoring"
       />
       <header className="action-editor-appbar">
         <div>
-          <span>EDUSIM shared authoring</span>
+          <span>LoppjuSIM shared authoring</span>
           <h1>Drug & Event Editor</h1>
-          <small>Shared action definitions for EDUMON-Ana and EDUMON-ICU</small>
+          <small>Shared action definitions for LoppjuSIM-Anaesth and LoppjuSIM-ICU</small>
         </div>
         <div className="action-editor-appbar-actions">
           {account && <span>{account.email}</span>}
           {account && <button type="button" onClick={() => void signOut()} disabled={busy}>Sign out</button>}
           <button type="button" onClick={() => setAboutOpen(true)}>About</button>
-          <button type="button" className="primary" onClick={close}>Return to EDUMON</button>
+          <button type="button" className="primary" onClick={close}>Return to LoppjuSIM-Anaesth</button>
         </div>
       </header>
 
