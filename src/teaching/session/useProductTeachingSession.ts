@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { SimulationProductId } from '../../core/SimulationProductAdapter'
+import { toLegacyProductId, type SimulationProductId } from '../../core/SimulationProductAdapter'
 import { useSharedTeachingSession } from './useSharedTeachingSession'
 import {
   createProductTeachingSessionRepository,
@@ -43,7 +43,9 @@ export function useProductTeachingSession<TState>({
     ProductTeachingCreateInput<TState>,
     ProductTeachingMemberTelemetry<TState>
   >({
-    storageNamespace: `simulation.${productId}`,
+    // Session recovery keys are an external local-storage compatibility boundary.
+    // Keep their historical namespace while application/domain IDs remain neutral.
+    storageNamespace: `edusim.${toLegacyProductId(productId)}`,
     repository,
     getMemberTelemetry: () => ({ state: stateRef.current }),
     host: {
