@@ -35,6 +35,7 @@ import { getSimulationProduct } from '../core/products'
 import { autoscaleWaveformSamples, type WaveformAutoscaleOptions } from '../core/WaveformAutoscale'
 import type { EdumonTeachingState } from './teachingState'
 import { getActionRuntimeLog, subscribeToActionRuntime } from '../edusim/actions/ActionRuntime'
+import { buildEdumonScenarioStageTarget, type EdumonTransitionPatientKey } from './scenarioRegistry'
 import './edumon.css'
 import './edumon-console-parity.css'
 
@@ -230,7 +231,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const scenarioActionBaselineRef = useRef<Record<string, number>>({})
   const simulationPausedRef = useRef(false)
   const simulationSpeedRef = useRef<EdumonSimulationSpeed>(1)
-  const scenarioTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; defaultPolicy: TeachingScenarioTransition; overrides: Record<string, TeachingScenarioTransition> } | null>(null)
+  const scenarioTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; defaultPolicy: TeachingScenarioTransition; overrides: Record<string, TeachingScenarioTransition>; keys: EdumonTransitionPatientKey[] } | null>(null)
   const [elapsed, setElapsed] = useState(TRACE_WINDOW_SECONDS)
   const [simulationPaused, setSimulationPaused] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState<EdumonSimulationSpeed>(1)
@@ -276,7 +277,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const effectivePatientState = (() => {
     const scenarioTransition = scenarioTransitionRef.current
     if (scenarioTransition) {
-      const keys: Array<keyof Pick<MonitorPatientState, 'heartRate' | 'systolicPressure' | 'diastolicPressure' | 'spo2' | 'peripheralPerfusion'>> = ['heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion']
+      const keys = scenarioTransition.keys
       const next: MonitorPatientState = { ...scenarioTransition.to, rhythm: scenarioTransition.to.rhythm }
       let running = false
       for (const key of keys) {
@@ -354,20 +355,21 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRuntimeAdapter((snapshot, stageContext) => {
     const stage = stageContext.stage
-    const applied = stage.appliedVariableIds ? new Set(stage.appliedVariableIds) : null
-    const applies = (id: string) => !applied || applied.has(id)
-    const targetPatient: MonitorPatientState = { ...effectivePatientRef.current }
-    if (applies('rhythm')) targetPatient.rhythm = snapshot.patient.rhythm
-    if (applies('heartRate')) targetPatient.heartRate = snapshot.patient.heartRate
-    if (applies('systolicPressure')) targetPatient.systolicPressure = snapshot.patient.systolicPressure
-    if (applies('diastolicPressure')) targetPatient.diastolicPressure = snapshot.patient.diastolicPressure
-    if (applies('spo2')) targetPatient.spo2 = snapshot.patient.spo2
-    if (applies('peripheralPerfusion')) targetPatient.peripheralPerfusion = snapshot.patient.peripheralPerfusion
+    const target = buildEdumonScenarioStageTarget(
+      module.id === 'icu' ? 'icu' : 'anaesth',
+      {
+        patient: { ...effectivePatientRef.current },
+        simulationPaused: simulationPausedRef.current,
+        simulationSpeed: simulationSpeedRef.current,
+      },
+      snapshot,
+      stage.appliedVariableIds,
+    )
+    const targetPatient = target.patient
     scenarioPatientBaselineRef.current = { ...targetPatient }
     const transition = stage.transition ?? { mode: 'immediate' as const }
     const overrides = stage.transitionOverrides ?? {}
-    const hasLinear = ['heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion'].some((key) => {
-      if (!applies(key)) return false
+    const hasLinear = target.transitionPatientKeys.some((key) => {
       const policy = overrides[key] ?? transition
       return policy.mode === 'linear' && policy.durationSeconds > 0
     })
@@ -379,15 +381,16 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         start: stageContext.stageStartedSimulationTime,
         defaultPolicy: transition,
         overrides,
+        keys: target.transitionPatientKeys,
       }
     } else {
       scenarioTransitionRef.current = null
       effectivePatientRef.current = { ...targetPatient }
     }
     setPatientState(targetPatient)
-    setSimulationPaused(applies('simulationPaused') ? snapshot.simulationPaused : simulationPausedRef.current)
-    setSimulationSpeed(applies('simulationSpeed') ? snapshot.simulationSpeed : simulationSpeedRef.current)
-  }), [])
+    setSimulationPaused(target.simulationPaused)
+    setSimulationSpeed(target.simulationSpeed)
+  }), [module.id])
   const scenarioRuntime = useTeachingScenarioRuntime(edumonScenarioAdapter)
   const edumonAlarmEvaluations = useMemo(() => evaluateEdumonAlarms(effectivePatientState, measurements.meanPressure, alarmLimits), [effectivePatientState, measurements.meanPressure, alarmLimits])
   const alarmController = useSharedAlarmController({
