@@ -107,6 +107,8 @@ export interface MonitorPatientState {
   diastolicPressure: number
   spo2: number
   peripheralPerfusion: number
+  /** Core temperature in degrees Celsius. Older scenarios/session payloads default to 37.0 °C. */
+  temperatureC?: number
   /** Product-neutral respiratory/metabolic inputs for the shared EDUSIM gas-exchange engine. */
   respiratory?: Partial<MonitorRespiratorySettings>
   /** Anaesthesia-only volatile-agent controls. Ignored by EDUMON-ICU. */
@@ -139,5 +141,6 @@ export const DEFAULT_MONITOR_STATE: MonitorPatientState = {
   diastolicPressure: 68,
   spo2: 98,
   peripheralPerfusion: 1,
+  temperatureC: 37,
   anaestheticPhysiology: { ...DEFAULT_MONITOR_ANAESTHETIC_PHYSIOLOGY_SETTINGS },
 }
