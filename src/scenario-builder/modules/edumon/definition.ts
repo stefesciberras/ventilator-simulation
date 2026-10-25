@@ -68,15 +68,15 @@ export function getEdumonScenarioModule(product: 'anaesth' | 'icu') {
   return product === 'icu' ? ICU_SCENARIO_MODULE : ANAESTH_SCENARIO_MODULE
 }
 
-export function writableScenarioVariables(module: ScenarioModuleDefinition) {
+export function writableScenarioVariables<TPreset>(module: ScenarioModuleDefinition<TPreset>) {
   return module.variables.filter((variable) => variable.role === 'setting' && variable.writable && variable.snapshotPath)
 }
 
-export function transitionScenarioVariables(module: ScenarioModuleDefinition) {
+export function transitionScenarioVariables<TPreset>(module: ScenarioModuleDefinition<TPreset>) {
   return writableScenarioVariables(module).filter((variable) => variable.type === 'number' && variable.transitionable)
 }
 
-export function scenarioTriggerVariables(module: ScenarioModuleDefinition, kind: ScenarioTriggerSourceDefinition['kind']) {
+export function scenarioTriggerVariables<TPreset>(module: ScenarioModuleDefinition<TPreset>, kind: ScenarioTriggerSourceDefinition['kind']) {
   return module.triggerSources
     .filter((source) => source.kind === kind)
     .map((source) => module.variables.find((variable) => variable.id === source.variableId))
