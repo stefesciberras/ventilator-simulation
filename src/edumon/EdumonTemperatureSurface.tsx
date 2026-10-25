@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { MonitorPatientState } from './types'
+import {
+  EDUMON_MONITOR_DISPLAY_ACTION_IDS,
+  useEdumonMonitorDisplayDomBridge,
+  useMonitorDisplayEnabled,
+} from './monitorDisplayActions'
 import './edumon-temperature.css'
 
 const DEFAULT_TEMPERATURE_C = 37
@@ -17,6 +22,8 @@ function findVisibleFooterHost(): HTMLElement | null {
 export function EdumonTemperatureSurface({ patientState }: { patientState: MonitorPatientState }) {
   const [footerHost, setFooterHost] = useState<HTMLElement | null>(null)
   const temperature = patientState.temperatureC ?? DEFAULT_TEMPERATURE_C
+  const temperatureEnabled = useMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.temperature)
+  useEdumonMonitorDisplayDomBridge()
 
   useEffect(() => {
     const findHost = () => setFooterHost(findVisibleFooterHost())
@@ -30,7 +37,7 @@ export function EdumonTemperatureSurface({ patientState }: { patientState: Monit
     }
   }, [])
 
-  if (!footerHost) return null
+  if (!footerHost || !temperatureEnabled) return null
 
   return createPortal(
     <div className="edumon-temperature-container" aria-label={`Temperature ${temperature.toFixed(1)} degrees Celsius`}>
