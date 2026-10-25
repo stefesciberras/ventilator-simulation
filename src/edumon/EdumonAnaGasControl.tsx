@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
+import { recordSessionLogEvent } from '../teaching/session/sessionLog'
 import { latestEdumonRespiratoryOutput, resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
 import { applyAnaestheticDepthEffects, depthFromMac, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import { currentNeuromuscularBlock, currentTofMinimumCount } from './actionPhysiology'
@@ -22,6 +23,7 @@ interface EdumonAnaGasControlProps {
 }
 
 const SLIDER_SETTLE_MS = 5200
+const SEVO_LOG_SETTLE_MS = 450
 const SEVO_MAC_PERCENT = 2.0
 const TOF_MEASUREMENT_MS = 1800
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
@@ -59,6 +61,7 @@ function tofFromBlock(block: number, minimumCount: number): Pick<TofReading, 'co
 export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideControlsLocked = false }: EdumonAnaGasControlProps) {
   const patientRef = useRef(patientState)
   const settleTimerRef = useRef<number | null>(null)
+  const sevoLogTimerRef = useRef<number | null>(null)
   const tofTimerRef = useRef<number | null>(null)
   const etSevoRef = useRef(0)
   const lastAutoDepthRef = useRef<AnaestheticDepth | null>(null)
@@ -134,6 +137,7 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
 
   useEffect(() => () => {
     if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
+    if (sevoLogTimerRef.current != null) window.clearTimeout(sevoLogTimerRef.current)
     if (tofTimerRef.current != null) window.clearTimeout(tofTimerRef.current)
   }, [])
 
@@ -145,10 +149,21 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
   const selectFiSevo = () => { setFiSevoActive((current) => !current); armSettleTimer() }
 
   const updateFiSevo = (percent: number) => {
+    const nextPercent = clamp(percent, 0, 8)
     const current = patientRef.current
-    const nextState = { ...current, anaestheticGases: { ...resolvedAnaestheticGases(current), fiSevoPercent: clamp(percent, 0, 8) } }
+    const nextState = { ...current, anaestheticGases: { ...resolvedAnaestheticGases(current), fiSevoPercent: nextPercent } }
     patientRef.current = nextState
     onPatientStateChange(nextState)
+    if (sevoLogTimerRef.current != null) window.clearTimeout(sevoLogTimerRef.current)
+    sevoLogTimerRef.current = window.setTimeout(() => {
+      sevoLogTimerRef.current = null
+      void recordSessionLogEvent({
+        category: 'device',
+        eventType: 'anaesthesia.sevo.set',
+        label: `Sevo set at ${nextPercent.toFixed(1)}%`,
+        details: { fiSevoPercent: nextPercent },
+      }).catch(() => undefined)
+    }, SEVO_LOG_SETTLE_MS)
     armSettleTimer()
   }
 
@@ -170,6 +185,13 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
       const reading = tofFromBlock(currentNeuromuscularBlock(simulationTime), currentTofMinimumCount(simulationTime))
       setTofReading({ ...reading, measuredAt: Date.now() })
       setTofMeasuring(false)
+      void recordSessionLogEvent({
+        category: 'device',
+        eventType: 'tof.measured',
+        label: `TOF measured — count ${reading.count}, ratio ${reading.ratio.toFixed(1)}`,
+        details: { count: reading.count, ratio: reading.ratio },
+        simulationTimeSeconds: simulationTime,
+      }).catch(() => undefined)
     }, TOF_MEASUREMENT_MS)
   }
 
