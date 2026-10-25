@@ -24,7 +24,7 @@ A valid action may intentionally have `effects: []`. Do not invent a dummy physi
 - `src/edusim/actions/ActionRuntime.ts` — active toggle actions, active effects, timing, priority ordering, target supersession, subscriptions and diagnostics.
 - `src/core/SimulationDiagnostics.ts` — runtime diagnostic-provider registry.
 - `src/teaching/diagnostics/PublishedDiagnostics.ts` — deliberate Supabase publication of diagnostic bundles.
-- `src/edumon/actionPhysiology.ts` — physiology interpretation and hard bounds.
+- `src/edumon/actionPhysiology.ts` — physiology interpretation, shared sympathetic saturation and hard bounds.
 - `src/edumon/monitorDisplayActions.ts` — display-only monitor toggle IDs and runtime subscription bridge.
 - `src/edumon/EdumonBisTrend.tsx` — BIS display controlled by `monitor-bis`.
 - `src/edumon/EdumonTemperatureSurface.tsx` — Temp display controlled by `monitor-temp`; also mounts the invasive-BP DOM bridge.
@@ -47,7 +47,7 @@ Events → **Monitors** contains:
 - `monitor-bis` / **BIS** — toggle; setting `ana`; `effects: []`; controls BIS trend/value only.
 - `monitor-temp` / **Temp** — toggle; setting `all`; `effects: []`; controls temperature value display only.
 
-All three are **presentation-only**. Never mutate SBP/DBP, temperature, anaesthetic depth, BIS physiology or any other patient-model field when toggling them. The underlying model continues to evolve while hidden.
+All three are **display-only**. Never mutate SBP/DBP, temperature, anaesthetic depth, BIS physiology or any other patient-model field when toggling them. The underlying model continues to evolve while hidden.
 
 Monitor toggle state and activation/deactivation must appear in ActionRuntime diagnostics and published diagnostics even though `activeEffects` is empty.
 
@@ -83,6 +83,12 @@ Current invariants include HR 0–240 bpm, SBP 20–300 mmHg, DBP 10–200 mmHg,
 
 Keep rhythm constraints separate from global hard bounds.
 
+## Shared sympathetic saturation architecture
+
+Surgery, Laryngoscopy and Pain create `stimulus.sympathetic`. Opioids alter `anaesthesia.nociceptiveResponse`, and effective anaesthetic depth attenuates the response. The composed value **must pass through the shared saturating sympathetic response transfer function** before HR/MAP translation.
+
+Preserve this **shared saturation architecture**. Do not bypass `saturatingSympatheticResponse(...)` with direct HR/MAP mutations or unbounded additive sympathetic handling.
+
 ## Reference actions
 
 `beta-blocker` is a cardiovascular Drug toggle, priority 70, with HR `offset -15`, `block-increase`, and `minimum 50 bpm`.
@@ -99,7 +105,7 @@ The current respiratory model uses `neuromuscular.block` to suppress mechanicall
 
 `ActionRuntime` keeps the latest 500 interactions: activation, toggle deactivation, intensity changes, target supersession and clears. Diagnostics expose `activeToggleActions`, weighted `activeEffects`, and history.
 
-Copied and deliberately published diagnostics must therefore retain display-only monitor toggle state and its history.
+Copied and deliberately published diagnostics must therefore retain display-only monitor toggle state and its history. The explicit **Publish diagnostics** workflow persists the diagnostic bundle to the owner-scoped Supabase inbox for later interrogation.
 
 ## Timing and release
 
@@ -142,11 +148,12 @@ Definitions live in `public.edusim_action_definitions`. Monitor display controls
 7. Use priority + constraints for competing physiological effects.
 8. Keep manual supersession above action priority.
 9. Keep absolute hard bounds centralized and final.
-10. Keep fallback and persisted definitions aligned.
-11. Update regression coverage and both documentation files.
-12. Bump EDUMON version.
-13. Run full CI and merge only when green.
+10. Preserve the shared sympathetic saturation architecture.
+11. Keep fallback and persisted definitions aligned.
+12. Update regression coverage and both documentation files.
+13. Bump EDUMON version.
+14. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op; hard bounds still prevent HR 500; and build/regressions pass.
+Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op; hard bounds still prevent HR 500; the shared sympathetic saturation architecture remains intact; and build/regressions pass.
