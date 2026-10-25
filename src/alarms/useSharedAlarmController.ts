@@ -12,9 +12,7 @@ export interface SharedAlarmEvaluation {
   label: string
   active: boolean
   priority?: SharedAlarmPriority
-  /** Critical alarms normally escalate after the controller delay. */
   immediateCritical?: boolean
-  /** Hidden evaluations are removed from the current annunciation episode. */
   visible?: boolean
 }
 
@@ -42,11 +40,6 @@ function formatRemaining(seconds: number) {
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-/**
- * Product-neutral alarm lifecycle for EDUSIM. Products supply only evaluated
- * alarm conditions; this hook owns annunciation lifecycle, acknowledgement,
- * silence timing, audible priority and teaching-session synchronization.
- */
 export function useSharedAlarmController({
   role,
   sessionId,
@@ -78,20 +71,12 @@ export function useSharedAlarmController({
       let changed = false
       const next = { ...current }
       const currentKeys = new Set(evaluations.map((evaluation) => evaluation.key))
-
       for (const key of Object.keys(next)) {
-        if (!currentKeys.has(key)) {
-          delete next[key]
-          changed = true
-        }
+        if (!currentKeys.has(key)) { delete next[key]; changed = true }
       }
-
       for (const evaluation of evaluations) {
         if (evaluation.visible === false) {
-          if (next[evaluation.key]) {
-            delete next[evaluation.key]
-            changed = true
-          }
+          if (next[evaluation.key]) { delete next[evaluation.key]; changed = true }
           continue
         }
         const entry = current[evaluation.key] ?? { activeSince: null, resolvedAt: null, acknowledged: false }
@@ -110,7 +95,7 @@ export function useSharedAlarmController({
   }, [evaluations])
 
   useEffect(() => {
-    if (!sessionId || role === 'standalone') {
+    if (role !== 'standalone' && !sessionId) {
       loggedActiveAlarmsRef.current = new Map(
         evaluations.filter((evaluation) => evaluation.visible !== false && evaluation.active).map((evaluation) => [evaluation.key, evaluation.label]),
       )
@@ -125,7 +110,7 @@ export function useSharedAlarmController({
         next.set(evaluation.key, evaluation.label)
         if (!previous.has(evaluation.key)) {
           void recordSessionLogEvent({
-            sessionId,
+            sessionId: sessionId ?? undefined,
             category: 'alarm',
             eventType: 'alarm.activated',
             label: `Alarm: ${evaluation.label}`,
@@ -134,7 +119,7 @@ export function useSharedAlarmController({
         }
       } else if (previous.has(evaluation.key)) {
         void recordSessionLogEvent({
-          sessionId,
+          sessionId: sessionId ?? undefined,
           category: 'alarm',
           eventType: 'alarm.resolved',
           label: `Alarm cleared: ${evaluation.label}`,
@@ -145,7 +130,7 @@ export function useSharedAlarmController({
     for (const [key, label] of previous) {
       if (!evaluations.some((evaluation) => evaluation.key === key && evaluation.visible !== false)) {
         void recordSessionLogEvent({
-          sessionId,
+          sessionId: sessionId ?? undefined,
           category: 'alarm',
           eventType: 'alarm.resolved',
           label: `Alarm cleared: ${label}`,
@@ -161,10 +146,7 @@ export function useSharedAlarmController({
       let changed = false
       const next = { ...current }
       for (const [key, entry] of Object.entries(current)) {
-        if (entry.resolvedAt != null && clock - entry.resolvedAt >= retainedMs) {
-          delete next[key]
-          changed = true
-        }
+        if (entry.resolvedAt != null && clock - entry.resolvedAt >= retainedMs) { delete next[key]; changed = true }
       }
       return changed ? next : current
     })
@@ -172,12 +154,8 @@ export function useSharedAlarmController({
 
   const evaluationByKey = useMemo(() => new Map(evaluations.map((evaluation) => [evaluation.key, evaluation])), [evaluations])
   const activeKeys = useMemo(() => evaluations.filter((evaluation) => evaluation.visible !== false && evaluation.active).map((evaluation) => evaluation.key), [evaluations])
-  const resolvedYellowKeys = useMemo(() => Object.entries(lifecycle)
-    .filter(([key, entry]) => evaluationByKey.get(key)?.visible !== false && entry.resolvedAt != null && clock - entry.resolvedAt < resolvedWarningMs)
-    .map(([key]) => key), [clock, evaluationByKey, lifecycle, resolvedWarningMs])
-  const greyKeys = useMemo(() => Object.entries(lifecycle)
-    .filter(([key, entry]) => evaluationByKey.get(key)?.visible !== false && entry.resolvedAt != null && clock - entry.resolvedAt >= resolvedWarningMs && clock - entry.resolvedAt < retainedMs && !entry.acknowledged)
-    .map(([key]) => key), [clock, evaluationByKey, lifecycle, resolvedWarningMs, retainedMs])
+  const resolvedYellowKeys = useMemo(() => Object.entries(lifecycle).filter(([key, entry]) => evaluationByKey.get(key)?.visible !== false && entry.resolvedAt != null && clock - entry.resolvedAt < resolvedWarningMs).map(([key]) => key), [clock, evaluationByKey, lifecycle, resolvedWarningMs])
+  const greyKeys = useMemo(() => Object.entries(lifecycle).filter(([key, entry]) => evaluationByKey.get(key)?.visible !== false && entry.resolvedAt != null && clock - entry.resolvedAt >= resolvedWarningMs && clock - entry.resolvedAt < retainedMs && !entry.acknowledged).map(([key]) => key), [clock, evaluationByKey, lifecycle, resolvedWarningMs, retainedMs])
 
   const criticalEscalated = evaluations.some((evaluation) => {
     if (!evaluation.active || evaluation.visible === false || evaluation.priority !== 'critical') return false
@@ -186,9 +164,7 @@ export function useSharedAlarmController({
     return Boolean(entry?.activeSince != null && clock - entry.activeSince >= criticalEscalationMs)
   })
 
-  const audibleLevel: SharedAlarmAudibleLevel = activeKeys.length || resolvedYellowKeys.length
-    ? (criticalEscalated ? 'red' : 'yellow')
-    : null
+  const audibleLevel: SharedAlarmAudibleLevel = activeKeys.length || resolvedYellowKeys.length ? (criticalEscalated ? 'red' : 'yellow') : null
   const level: SharedAlarmDisplayLevel = audibleLevel ?? (greyKeys.length ? 'grey' : null)
   const visibleKeys = useMemo(() => new Set([...activeKeys, ...resolvedYellowKeys, ...greyKeys]), [activeKeys, greyKeys, resolvedYellowKeys])
   const labels = evaluations.filter((evaluation) => visibleKeys.has(evaluation.key)).map((evaluation) => evaluation.label)
@@ -213,13 +189,8 @@ export function useSharedAlarmController({
       let changed = false
       for (const [key, entry] of Object.entries(current)) {
         const evaluation = evaluationByKey.get(key)
-        if (entry.resolvedAt != null) {
-          delete next[key]
-          changed = true
-        } else if (evaluation?.active && !entry.acknowledged) {
-          next[key] = { ...entry, acknowledged: true }
-          changed = true
-        }
+        if (entry.resolvedAt != null) { delete next[key]; changed = true }
+        else if (evaluation?.active && !entry.acknowledged) { next[key] = { ...entry, acknowledged: true }; changed = true }
       }
       return changed ? next : current
     })
@@ -232,29 +203,25 @@ export function useSharedAlarmController({
     acknowledgeCurrent()
     setLocalSilenceUntil(until)
     if (role === 'instructor' && sessionId) sessionSync.silenceFor(boundedDuration)
-    if (sessionId) {
-      void recordSessionLogEvent({
-        sessionId,
-        category: 'alarm',
-        eventType: 'alarm.silenced',
-        label: `Alarm silenced for ${Math.round(boundedDuration / 1000)} s`,
-        details: { durationMs: boundedDuration, until: new Date(until).toISOString() },
-      }).catch(() => undefined)
-    }
+    void recordSessionLogEvent({
+      sessionId: sessionId ?? undefined,
+      category: 'alarm',
+      eventType: 'alarm.silenced',
+      label: `Alarm silenced for ${Math.round(boundedDuration / 1000)} s`,
+      details: { durationMs: boundedDuration, until: new Date(until).toISOString() },
+    }).catch(() => undefined)
   }, [acknowledgeCurrent, role, semantics.candidateLocked, sessionId, sessionSync])
 
   const clearSilence = useCallback(() => {
     if (semantics.candidateLocked) return
     setLocalSilenceUntil(null)
     if (role === 'instructor' && sessionId) sessionSync.clearSilence()
-    if (sessionId) {
-      void recordSessionLogEvent({
-        sessionId,
-        category: 'alarm',
-        eventType: 'alarm.silence_cleared',
-        label: 'Alarm silence cleared',
-      }).catch(() => undefined)
-    }
+    void recordSessionLogEvent({
+      sessionId: sessionId ?? undefined,
+      category: 'alarm',
+      eventType: 'alarm.silence_cleared',
+      label: 'Alarm silence cleared',
+    }).catch(() => undefined)
   }, [role, semantics.candidateLocked, sessionId, sessionSync])
 
   const needsAttention = useCallback((...keys: string[]) => keys.some((key) => {
@@ -285,9 +252,7 @@ export function useSharedAlarmController({
         gain.connect(context.destination)
         oscillator.start()
         oscillator.stop(context.currentTime + 0.13)
-      } catch {
-        // Browser audio can remain blocked until a user gesture.
-      }
+      } catch { /* Browser audio can remain blocked until a user gesture. */ }
     }
     beep()
     const timer = window.setInterval(beep, audibleLevel === 'red' ? 700 : 1300)
