@@ -120,9 +120,14 @@ export function TeachingSessionLogPanel({ productId, sessionId, role }: Teaching
   }
   const endDrag = (event: React.PointerEvent<HTMLDivElement>) => { if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null; if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture?.(event.pointerId) }
 
-  const actions = <div className="teaching-session-log-action-buttons">
+  const panelActions = <div className="teaching-session-log-action-buttons">
     <button type="button" className="teaching-library-save" onClick={saveLog} disabled={!rows.length}>Save log</button>
     <button type="button" className="teaching-library-save" onClick={() => { setPosition({ x: 0, y: 0 }); setViewerOpen(true) }}>Open viewer</button>
+    {canClear && <button type="button" className="teaching-library-save teaching-session-log-clear" onClick={() => void clearLog()} disabled={!rows.length}>Clear log</button>}
+  </div>
+
+  const viewerActions = <div className="teaching-session-log-action-buttons">
+    <button type="button" className="teaching-library-save" onClick={saveLog} disabled={!rows.length}>Save log</button>
     {canClear && <button type="button" className="teaching-library-save teaching-session-log-clear" onClick={() => void clearLog()} disabled={!rows.length}>Clear log</button>}
   </div>
 
@@ -132,14 +137,14 @@ export function TeachingSessionLogPanel({ productId, sessionId, role }: Teaching
       {!collapsed && <div className="teaching-session-log-body">
         {loading && entries.length === 0 ? <div className="teaching-session-log-empty">Loading session log…</div> : rows.length === 0 ? <div className="teaching-session-log-empty">{standalone ? 'Standalone logging is active. Actions will appear here as they occur.' : 'No session log entries yet.'}</div> : <LogRows rows={rows} />}
         {error && <div className="teaching-session-log-error">{error}</div>}
-        <div className="teaching-session-log-actions">{actions}<small>{rows.length} {rows.length === 1 ? 'entry' : 'entries'} · {sessionId ? `Session ${sessionId.slice(0, 8)}…` : `Standalone ${standaloneRunId?.slice(0, 8)}… · local only`}</small></div>
+        <div className="teaching-session-log-actions">{panelActions}<small>{rows.length} {rows.length === 1 ? 'entry' : 'entries'} · {sessionId ? `Session ${sessionId.slice(0, 8)}…` : `Standalone ${standaloneRunId?.slice(0, 8)}… · local only`}</small></div>
       </div>}
     </section>
     {viewerOpen && createPortal(<div className="teaching-session-log-viewer-overlay" role="presentation">
       <section className="teaching-session-log-viewer" role="dialog" aria-modal="false" aria-label="Session Log viewer" style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
         <div className="teaching-session-log-viewer-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title="Drag to move on wide screens"><div><span>Teaching</span><strong>Session Log</strong></div><button type="button" onClick={() => setViewerOpen(false)}>Close</button></div>
         <div className="teaching-session-log-viewer-stage">{rows.length ? <LogRows rows={rows} viewer /> : <div className="teaching-session-log-empty">No session log entries yet.</div>}</div>
-        <div className="teaching-session-log-viewer-footer">{actions}<small>{rows.length} {rows.length === 1 ? 'entry' : 'entries'}</small></div>
+        <div className="teaching-session-log-viewer-footer">{viewerActions}<small>{rows.length} {rows.length === 1 ? 'entry' : 'entries'}</small></div>
       </section>
     </div>, document.body)}
   </>
