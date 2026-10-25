@@ -8,6 +8,7 @@ import { EdumonApp } from './edumon/EdumonApp'
 import { installTabletResponsiveMode } from './tabletResponsiveRuntime'
 import { installSelfDirectedScenarioPanelDrag } from './selfDirectedScenarioPanel'
 import { installCollapsibleHeaderRuntime } from './components/collapsibleHeaderRuntime'
+import { installActionLevelIndicatorRuntime } from './edumon/actionLevelIndicatorRuntime'
 import { SharedAlarmMetricHighlight } from './components/SharedAlarmMetricHighlight'
 import { EDUMON_ALARM_METRIC_HIGHLIGHTS } from './edumon/alarmMetricHighlights'
 import './styles.css'
@@ -19,6 +20,8 @@ import './tablet-responsive.css'
 import './tablet-runtime.css'
 import './selfDirectedScenarioPanel.css'
 import './edumon/mobile-display-fixes.css'
+import './edumon/action-level-indicator.css'
+import './edumon/footer-alignment.css'
 import './components/SharedAlarmMetricHighlight.css'
 import './components/collapsibleHeaderRuntime.css'
 import './scenario-builder/scenarioNavigation.css'
@@ -33,6 +36,7 @@ const isActionEditorRoute = pathname === '/actions' || pathname.startsWith('/act
 if (isEduventRoute || isEdumonRoute) {
   installTabletResponsiveMode()
   installCollapsibleHeaderRuntime()
+  if (isEdumonRoute) installActionLevelIndicatorRuntime()
   if (isEduventRoute) installSelfDirectedScenarioPanelDrag()
 }
 
