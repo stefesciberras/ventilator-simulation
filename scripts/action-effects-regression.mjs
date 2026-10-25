@@ -22,6 +22,7 @@ const migration = read('supabase/migrations/20261024_event_classes_and_respirato
 const priorityMigration = read('supabase/migrations/20261024_action_priorities_and_constraints.sql')
 const betaBlockerMigration = read('supabase/migrations/20261024_beta_blocker_hr_floor.sql')
 const curareCleftMigration = read('supabase/migrations/20261025_rename_diaphragm_return_curare_cleft.sql')
+const antibioticsMigration = read('supabase/migrations/20261025_add_antibiotics_misc_drug.sql')
 const guide = read('src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md')
 const prompt = read('src/edumon/ACTIONS_AND_EFFECTS_AI_PROMPT.md')
 
@@ -37,6 +38,7 @@ for (const id of ['hypertension','hypotension','tachycardia','bradycardia','hypo
 assert(panel.includes("long_press_action: 'severity-levels'"), 'severity-adjustable events must use severity-levels')
 assert(panel.includes("renderClass('Anaesthesia'"), 'Actions UI must render Anaesthesia classes')
 assert(panel.includes("renderClass('Cardiovascular'"), 'Actions UI must render Cardiovascular classes')
+assert(panel.includes("renderClass('Others'"), 'Drugs UI must render Others class')
 assert(panel.includes("renderClass('Respiratory'"), 'Events UI must render Respiratory class')
 assert(panel.includes('getActiveEffects'), 'toggle UI must derive active state from ActionRuntime')
 assert(!panel.includes('toggleStates'), 'toggle UI must not duplicate runtime ON/OFF state')
@@ -56,6 +58,7 @@ assert(runtime.includes('intensity: number'), 'runtime must retain adjustable in
 assert(runtime.includes('export function setActionIntensity'), 'running severity/dose must be adjustable')
 assert(runtime.includes('export function getActionRuntimeLog'), 'action runtime must expose diagnostic history')
 assert(runtime.includes("type: 'activate'"), 'action activation must be logged')
+assert(runtime.includes("effectIds: definition.effects.map((effect) => effect.id)"), 'no-op actions must still log activation with an empty effect list')
 assert(runtime.includes("type: 'deactivate'"), 'action deactivation must be logged')
 assert(runtime.includes("type: 'supersede-target'"), 'manual target supersession must be logged')
 assert(runtime.includes("registerSimulationDiagnosticProvider('actions'"), 'action runtime must register itself with shared diagnostics')
@@ -84,6 +87,14 @@ assert(betaBlockerMigration.includes('"constraint":"minimum"'), 'Beta blocker mi
 assert(betaBlockerMigration.includes('"value":50'), 'Beta blocker migration must persist 50 bpm floor')
 assert(curareCleftMigration.includes("name = 'Curare Cleft'"), 'Curare Cleft rename must be reproducible')
 
+assert(panel.includes("const OTHER_DRUG_IDS = new Set(['antibiotics'])"), 'Antibiotics must be classified under Other Drugs')
+assert(panel.includes("id: 'antibiotics', kind: 'drug', name: 'Antibiotics'"), 'Antibiotics fallback Drug must exist')
+assert(panel.includes("description: 'Scenario/logging action only. Produces no physiological effect.'"), 'Antibiotics must remain explicitly non-physiological')
+assert(panel.includes("effects: [], priority: 30"), 'Antibiotics must remain a no-op action with no dummy effects')
+assert(antibioticsMigration.includes("'antibiotics'"), 'Antibiotics migration must persist the action')
+assert(antibioticsMigration.includes("'[]'::jsonb"), 'Antibiotics migration must persist an empty effects list')
+assert(antibioticsMigration.includes("'all'"), 'Antibiotics must be available in both EDUMON settings')
+
 // Absolute physiological hard-bound architecture.
 assert(bounds.includes('EDUMON_PHYSIOLOGICAL_BOUNDS'), 'hard bounds must be centralized')
 assert(bounds.includes('heartRate: { min: 0, max: 240 }'), 'global HR hard bound must be 0-240')
@@ -97,7 +108,7 @@ assert(physiology.includes('applyEdumonPhysiologicalBounds({'), 'action physiolo
 assert(!physiology.includes('heartRate: clamp(actionHeartRate + sympathetic.heartRateOffset, 0, 300)'), 'legacy scattered HR 300 clamp must be removed')
 
 for (const [name, text] of [['guide', guide], ['prompt', prompt]]) {
-  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','Bronchospasm','Hypovolaemia','Bleeding','Curare Cleft','Beta blocker','block-increase','minimum','50 bpm','priority','physiological hard bounds','HR 500','action history','mechanically visible']) {
+  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','Bronchospasm','Hypovolaemia','Bleeding','Curare Cleft','Beta blocker','Antibiotics','no-op','Others','block-increase','minimum','50 bpm','priority','physiological hard bounds','HR 500','action history','mechanically visible','Publish diagnostics']) {
     assert(text.includes(phrase), `${name} must document ${phrase}`)
   }
 }

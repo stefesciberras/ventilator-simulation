@@ -6,7 +6,7 @@ import './edumon-actions.css'
 
 export type EdumonActionSectionId = 'drugs' | 'events'
 type ActionLevel = 'low' | 'medium' | 'high'
-type DrugClass = 'anaesthesia' | 'cardiovascular'
+type DrugClass = 'anaesthesia' | 'cardiovascular' | 'other'
 type EventClass = 'anaesthesia' | 'cardiovascular' | 'respiratory'
 
 const LEVEL_STEPS: Record<ActionLevel, { label: string; scale: number; bars: number }> = {
@@ -21,6 +21,7 @@ const LEVEL_STEPS: Record<ActionLevel, { label: string; scale: number; bars: num
 const ACTION_LEVEL_SELECTIONS = new Map<string, ActionLevel>()
 
 const CARDIOVASCULAR_DRUG_IDS = new Set(['atropine', 'ephedrine', 'phenylephrine', 'noradrenaline', 'adrenaline', 'beta-blocker'])
+const OTHER_DRUG_IDS = new Set(['antibiotics'])
 const CARDIOVASCULAR_EVENT_IDS = new Set(['hypertension', 'hypotension', 'tachycardia', 'bradycardia', 'hypovolaemia', 'bleeding'])
 const RESPIRATORY_EVENT_IDS = new Set(['apnoea', 'diaphragm-return', 'bronchospasm'])
 
@@ -70,6 +71,7 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     { id: 'beta-blocker-positive-chronotropy', target: 'haemodynamics.heartRate', operation: 'constraint', constraint: 'block-increase', value: 0, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
     { id: 'beta-blocker-heart-rate-floor', target: 'haemodynamics.heartRate', operation: 'constraint', constraint: 'minimum', value: 50, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
   ], priority: 70, sort_order: 160, created_at: '', updated_at: '' },
+  { id: 'antibiotics', kind: 'drug', name: 'Antibiotics', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Scenario/logging action only. Produces no physiological effect.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], priority: 30, sort_order: 310, created_at: '', updated_at: '' },
 
   { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
   { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 20, created_at: '', updated_at: '' },
@@ -104,6 +106,7 @@ function currentEnvironment(): EdusimActionEnvironment {
 }
 
 function drugClass(definition: EdusimActionDefinition): DrugClass {
+  if (OTHER_DRUG_IDS.has(definition.id)) return 'other'
   return CARDIOVASCULAR_DRUG_IDS.has(definition.id) ? 'cardiovascular' : 'anaesthesia'
 }
 
@@ -263,6 +266,7 @@ export function EdumonActionsPanel() {
         <div className="edumon-drug-classes">
           {renderClass('Anaesthesia', drugs.filter((definition) => drugClass(definition) === 'anaesthesia'), 'drugs')}
           {renderClass('Cardiovascular', drugs.filter((definition) => drugClass(definition) === 'cardiovascular'), 'drugs')}
+          {renderClass('Others', drugs.filter((definition) => drugClass(definition) === 'other'), 'drugs')}
         </div>
       </EdumonActionSection>
       <EdumonActionSection id="events" title="Events">

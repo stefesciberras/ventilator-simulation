@@ -11,6 +11,9 @@
 ### Drugs
 - **Anaesthesia** — Propofol, Fentanyl, Remifentanil infusion, Relaxant, Neostigmine, Sugammadex, TIVA.
 - **Cardiovascular** — Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion, Adrenaline infusion, Beta blocker.
+- **Others** — Antibiotics and future miscellaneous drugs used primarily for scenario actions/logging.
+
+`Antibiotics` is deliberately a **no-op Drug**: it has `effects: []`, so it produces no physiological change. Pressing it still goes through `ActionRuntime` and records an activation entry with simulation time, action ID/name and kind. This makes it useful for scenario workflows and diagnostics without inventing a dummy physiological effect.
 
 ### Events
 - **Anaesthesia** — Induction, Maintenance, Awakening, Laryngoscopy, Pain, Surgery.
@@ -23,15 +26,17 @@
 
 Momentary actions have onset, duration and recovery. Toggle actions remain active until switched off and then follow `recover` or `persist`. All timing uses simulation time. `ActionRuntime` is the source of truth for toggle state and active L/M/H intensity.
 
+A momentary action may legitimately have no effects. `ActionRuntime` must still log its activation; do not add fake effects solely to make a scenario/logging action observable.
+
 The desktop ACTIONS layout uses three columns; narrow/mobile layout remains two columns.
 
 ## Drug/Event action history in diagnostics
 
 `ActionRuntime` retains a bounded **action history** of the latest 500 interactions. It records Drug/Event activation, toggle deactivation, intensity changes, manual target supersession and runtime clearing. Active effects also expose their current onset/recovery weight.
 
-The runtime registers itself with shared `SimulationDiagnostics`, so copied EDUSIM diagnostics automatically include `runtimeDiagnostics.actions` containing current active effects and action history. This makes sequences such as Relaxant activation, its current neuromuscular-block weight and later instructor supersession visible in diagnostic JSON without adding product-specific diagnostic code.
+The runtime registers itself with shared `SimulationDiagnostics`, so copied or published EDUSIM diagnostics automatically include `runtimeDiagnostics.actions` containing current active effects and action history. This makes sequences such as Relaxant activation, Antibiotics administration, current neuromuscular-block weight and later instructor supersession visible without adding product-specific diagnostic code.
 
-This history currently lives in the loaded simulator. Direct interrogation from ChatGPT requires a deliberate persistence/upload channel; browser-local runtime state is not remotely readable by ChatGPT.
+EDUMON also supports deliberate **Publish diagnostics** to the RLS-protected Supabase diagnostic inbox. Published bundles can then be queried from a connected support/chat workflow; browser-local runtime state itself remains inaccessible until the instructor explicitly publishes it.
 
 ## Priority and constraints
 
@@ -111,6 +116,7 @@ Permanent instructors edit the shared library via `/actions`. Definitions are st
 - `src/edusim/actions/ActionEffect.ts` — targets, operations, priority, constraints and release vocabulary.
 - `src/edusim/actions/ActionRuntime.ts` — timing, intensity, priority resolution, constraints, recover/persist, target supersession and bounded action-history diagnostics.
 - `src/core/SimulationDiagnostics.ts` — shared diagnostic provider registry and diagnostic serialization.
+- `src/teaching/diagnostics/PublishedDiagnostics.ts` — deliberate Supabase publication of diagnostic bundles.
 - `src/edumon/actionPhysiology.ts` — EDUMON interpretation and final call into hard bounds.
 - `src/edumon/physiologicalBounds.ts` — centralized absolute physiological sanity bounds.
 - `src/edumon/monitorEngine.ts` — rhythm-specific constraints, measurements and waveforms.
