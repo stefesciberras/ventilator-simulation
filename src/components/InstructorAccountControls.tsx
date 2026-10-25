@@ -72,7 +72,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const accountChangeLocked = role !== 'standalone'
   const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
   const account = accountAuth.account
-  const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('eduvent', Boolean(account), EDUVENT_SCENARIO_CODEC)
+  const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('mv', Boolean(account), EDUVENT_SCENARIO_CODEC)
   const requestedScenarioHandledRef = useRef<string | null>(null)
   const loggedScenarioActionSequenceRef = useRef<number | null>(null)
   const standaloneScenarioRef = useRef(currentScenario)
@@ -82,7 +82,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   void onSimulationPausedChange
 
   useEffect(() => {
-    configureSessionLogRuntime({ productId: 'eduvent', sessionId, role })
+    configureSessionLogRuntime({ productId: 'mv', sessionId, role })
     if (role === 'standalone') {
       standaloneScenarioRef.current = currentScenario
       standalonePauseRef.current = simulationPaused
@@ -206,8 +206,8 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     onDuplicate={(item) => duplicate(item as InstructorPresetRow)}
     onDelete={(item) => remove(item as InstructorPresetRow)}
     onSignIn={() => accountAuth.setOpen(true)}
-    builderHref="/scenarios?product=eduvent"
-    productLabel="EDUVENT"
+    builderHref="/scenarios?product=mv"
+    productLabel="LoppjuSIM-MV"
   />
 
   const runtimeError = scenarioRuntime.selfDirectedError && runtimeHost
@@ -217,7 +217,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   return <InstructorWorkspace
     accountAction={<InstructorAccountButton auth={accountAuth} />}
     scenarioAction={scenarioAction}
-    settingsAction={<InstructorSettingsController productLabel="EDUVENT" version={APP_VERSION} role={role} auth={accountAuth} />}
+    settingsAction={<InstructorSettingsController productLabel="LoppjuSIM-MV" version={APP_VERSION} role={role} auth={accountAuth} />}
     runtime={<>{scenarioRuntime.runtimeNode}{runtimeError}</>}
     dialogs={<InstructorAccountDialog auth={accountAuth} locked={accountChangeLocked} />}
   />
