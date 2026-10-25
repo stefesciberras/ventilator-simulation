@@ -55,15 +55,19 @@ The runtime registers itself with shared `SimulationDiagnostics`, so copied or p
 
 EDUMON also supports deliberate **Publish diagnostics** to the RLS-protected Supabase diagnostic inbox.
 
-## Teaching Session Log
+## Teaching and standalone Session Log
 
-The Teaching tab now uses a shared **Session Log** rather than the former placeholder Scenario Log. This is separate from the browser-local diagnostic scenario logger.
+The Teaching tab uses a shared **Session Log** rather than the former placeholder Scenario Log. This is separate from the browser-local diagnostic scenario logger.
 
 While an instructor/candidate teaching session is active, `ActionRuntime` mirrors user-facing Drug/Event activation, deactivation and intensity changes to the durable Session Log. This is observational only: recording an entry must never alter action timing, effect composition or physiology.
 
 The shared Session Log also receives instructor/candidate setting changes, alarm activation/resolution and alarm-silence actions, freeze/display actions, candidate device actions, session membership events and shared oxygen-flush events. The database assigns a monotonically increasing entry ID so the instructor view can display all participants in one deterministic order; each row also retains its occurrence timestamp and actor identity.
 
-Session Log persistence is in `public.edusim_session_log_entries`, protected by RLS. Instructors can read the complete session; candidates can append entries and can read only their own rows. Supabase Realtime INSERT events keep the Teaching panel live.
+Teaching-session persistence is in `public.edusim_session_log_entries`, protected by RLS. Instructors can read the complete session; candidates can append entries and can read only their own rows. Supabase Realtime INSERT events keep the Teaching panel live.
+
+In **standalone** mode the same Session Log vocabulary is used, but entries are **local only**. No teaching session or Supabase row is created automatically. A per-product standalone run is stored in browser `sessionStorage`, is bounded to the latest 2,000 entries, survives a refresh in the same tab/session, updates the same Session Log panel live, and can be exported to CSV. Standalone rows use actor role `standalone` and a local run ID. A future explicit publish/save workflow may upload such a log, but normal standalone use must never upload it implicitly.
+
+Standalone logging covers Drug/Event actions, model/settings changes, alarms and alarm silence, freeze/laser, oxygen flush, nebuliser, and ventilator hold/device actions. EDUVENT derives its local settings history from the current scenario snapshot; EDUMON derives it from the product state. Teaching-session logging remains database-authoritative so synchronized instructor state is not misattributed to candidates.
 
 ## Priority and constraints
 
@@ -144,8 +148,8 @@ Permanent instructors edit the shared library via `/actions`. Definitions are st
 
 - `src/edusim/actions/ActionEffect.ts` — targets, operations, priority, constraints and release vocabulary.
 - `src/edusim/actions/ActionRuntime.ts` — active toggle state, timing, intensity, priority resolution, recover/persist, target supersession, subscriptions, diagnostics and Drug/Event Session Log mirroring.
-- `src/teaching/session/sessionLog.ts` — shared Session Log persistence/realtime client and state-diff helpers.
-- `src/teaching/TeachingSessionLogPanel.tsx` — chronological instructor Session Log UI and CSV export.
+- `src/teaching/session/sessionLog.ts` — shared cloud Session Log client plus browser-local standalone `sessionStorage` runtime and state-diff helpers.
+- `src/teaching/TeachingSessionLogPanel.tsx` — chronological Session Log UI and CSV export for teaching sessions and standalone runs.
 - `src/core/SimulationDiagnostics.ts` — shared diagnostic provider registry and diagnostic serialization.
 - `src/teaching/diagnostics/PublishedDiagnostics.ts` — deliberate Supabase publication of diagnostic bundles.
 - `src/edumon/actionPhysiology.ts` — EDUMON physiology interpretation and hard bounds.

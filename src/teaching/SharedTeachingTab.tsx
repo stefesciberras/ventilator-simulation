@@ -26,11 +26,6 @@ interface SharedTeachingTabProps {
   footer?: ReactNode
 }
 
-/**
- * Product-neutral Teaching tab composition shared by all EDUSIM simulators.
- * Product-specific session policy controls and scenario runtime UI are supplied
- * as slots, while the overall order and account-gating behaviour stay identical.
- */
 export function SharedTeachingTab({
   role,
   instructorAuthenticated,
@@ -81,9 +76,9 @@ export function SharedTeachingTab({
             onReleaseAnswer={prompts.releaseAnswer}
             onSaveLibrary={library.save}
           />
-          <TeachingSessionLogPanel productId={host.appId} sessionId={sessionId} />
         </>
       )}
+      <TeachingSessionLogPanel productId={host.appId} sessionId={sessionId} />
       {runtimeHost}
       {liveRoom}
       {footer}

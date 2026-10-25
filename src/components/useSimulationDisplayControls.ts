@@ -24,13 +24,6 @@ interface UseSimulationDisplayControlsOptions<TSnapshot> {
   onFreezeActivated?: () => void
 }
 
-/**
- * Product-neutral freeze/laser authority for simulator displays.
- *
- * Products own the shape/rendering of a frozen snapshot. Core owns local vs
- * instructor-shared authority, candidate locking, teaching-session laser freeze
- * behaviour, and synchronization over the EDUSIM teaching display bus.
- */
 export function useSimulationDisplayControls<TSnapshot>({
   role,
   sessionId,
@@ -69,8 +62,8 @@ export function useSimulationDisplayControls<TSnapshot>({
   }, [])
 
   const logDisplayAction = useCallback((eventType: string, label: string, details: Record<string, unknown> = {}) => {
-    if (!sessionId || role === 'standalone') return
-    void recordSessionLogEvent({ sessionId, category: 'device', eventType, label, details }).catch(() => undefined)
+    if (role === 'candidate' && !sessionId) return
+    void recordSessionLogEvent({ sessionId: sessionId ?? undefined, category: 'device', eventType, label, details }).catch(() => undefined)
   }, [role, sessionId])
 
   const setSharedFrozen = useCallback((active: boolean) => {
@@ -92,10 +85,6 @@ export function useSimulationDisplayControls<TSnapshot>({
     if (role === 'candidate') return
     const next = !laserEnabled
     const sharedTeachingLaser = role === 'instructor' && Boolean(sessionId)
-
-    // Claim or release the interaction lock synchronously with the button action.
-    // Do not wait for React to render the active laser layer before mobile swipe
-    // recognition knows that the display belongs to the laser.
     setSimulatorLaserInteractionLock(next)
 
     if (next && sharedTeachingLaser && !frozen) {

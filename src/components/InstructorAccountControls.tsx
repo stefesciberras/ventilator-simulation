@@ -12,7 +12,7 @@ import { InstructorWorkspace } from '../teaching/instructor/InstructorWorkspace'
 import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
 import { InstructorScenarioLibraryController } from '../teaching/instructor/InstructorScenarioLibraryController'
 import { useEduventInstructorScenarioRuntime, type EduventDynamicScenarioDiagnosticContext } from '../eduvent/useEduventInstructorScenarioRuntime'
-import { recordSessionLogEvent } from '../teaching/session/sessionLog'
+import { configureSessionLogRuntime, diffSessionState, recordSessionLogEvent, settingChangesLabel } from '../teaching/session/sessionLog'
 import '../account.css'
 
 export type DynamicScenarioDiagnosticContext = EduventDynamicScenarioDiagnosticContext
@@ -75,25 +75,74 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('eduvent', Boolean(account), EDUVENT_SCENARIO_CODEC)
   const requestedScenarioHandledRef = useRef<string | null>(null)
   const loggedScenarioActionSequenceRef = useRef<number | null>(null)
+  const standaloneScenarioRef = useRef(currentScenario)
+  const standalonePauseRef = useRef(simulationPaused)
+  const standaloneSettingsTimerRef = useRef<number | null>(null)
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
-  void simulationPaused
   void onSimulationPausedChange
 
   useEffect(() => {
-    if (role !== 'instructor' || !sessionId || !scenarioActionEvent) return
+    configureSessionLogRuntime({ productId: 'eduvent', sessionId, role })
+    if (role === 'standalone') {
+      standaloneScenarioRef.current = currentScenario
+      standalonePauseRef.current = simulationPaused
+    }
+  }, [role, sessionId])
+
+  useEffect(() => {
+    if ((role !== 'instructor' && role !== 'standalone') || !scenarioActionEvent) return
     if (loggedScenarioActionSequenceRef.current === scenarioActionEvent.sequence) return
     loggedScenarioActionSequenceRef.current = scenarioActionEvent.sequence
     if (scenarioActionEvent.action === 'freeze-waveform') return
     const label = INSTRUCTOR_DEVICE_ACTION_LABELS[scenarioActionEvent.action]
     if (!label) return
     void recordSessionLogEvent({
-      sessionId,
+      sessionId: sessionId ?? undefined,
       category: 'device',
-      eventType: 'instructor.device_action',
+      eventType: `${role}.device_action`,
       label,
       details: { action: scenarioActionEvent.action, sequence: scenarioActionEvent.sequence },
     }).catch(() => undefined)
   }, [role, scenarioActionEvent, sessionId])
+
+  const standaloneScenarioSignature = useMemo(() => {
+    try { return JSON.stringify(currentScenario) } catch { return '' }
+  }, [currentScenario])
+
+  useEffect(() => {
+    if (standaloneSettingsTimerRef.current != null) window.clearTimeout(standaloneSettingsTimerRef.current)
+    if (role !== 'standalone') {
+      standaloneScenarioRef.current = currentScenario
+      return
+    }
+    standaloneSettingsTimerRef.current = window.setTimeout(() => {
+      const before = standaloneScenarioRef.current
+      const after = currentScenario
+      const changes = diffSessionState(before, after)
+      standaloneScenarioRef.current = after
+      if (!changes.length) return
+      void recordSessionLogEvent({
+        category: 'settings',
+        eventType: 'standalone.settings.changed',
+        label: settingChangesLabel('Settings changed', changes),
+        details: { before, after, changes },
+      }).catch(() => undefined)
+    }, 300)
+    return () => { if (standaloneSettingsTimerRef.current != null) window.clearTimeout(standaloneSettingsTimerRef.current) }
+  }, [role, currentScenario, standaloneScenarioSignature])
+
+  useEffect(() => {
+    if (role !== 'standalone') { standalonePauseRef.current = simulationPaused; return }
+    if (standalonePauseRef.current === simulationPaused) return
+    const previous = standalonePauseRef.current
+    standalonePauseRef.current = simulationPaused
+    void recordSessionLogEvent({
+      category: 'settings',
+      eventType: 'standalone.simulation_pause.changed',
+      label: simulationPaused ? 'Simulation paused' : 'Simulation resumed',
+      details: { from: previous, to: simulationPaused },
+    }).catch(() => undefined)
+  }, [role, simulationPaused])
 
   const scenarioRuntime = useEduventInstructorScenarioRuntime({ role, sessionId, currentScenario, onLoadScenario, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onDynamicScenarioStarted, onScenarioDiagnosticChange, scenarioActionEvent })
   const dynamicPresets = useMemo(() => library.items.filter((preset) => preset.scenario.kind === 'dynamic'), [library.items])

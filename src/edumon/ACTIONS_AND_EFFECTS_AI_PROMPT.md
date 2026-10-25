@@ -22,8 +22,8 @@ A valid action may intentionally have `effects: []`. Do not invent a dummy physi
 
 - `src/edusim/actions/ActionEffect.ts` — targets/operations, priority, constraints and release behaviour.
 - `src/edusim/actions/ActionRuntime.ts` — active toggle actions, active effects, timing, priority ordering, target supersession, subscriptions, diagnostics and Session Log mirroring.
-- `src/teaching/session/sessionLog.ts` — durable teaching Session Log client/realtime service.
-- `src/teaching/TeachingSessionLogPanel.tsx` — instructor Session Log view and CSV export.
+- `src/teaching/session/sessionLog.ts` — durable teaching-session client plus browser-local standalone `sessionStorage` runtime.
+- `src/teaching/TeachingSessionLogPanel.tsx` — shared Session Log view and CSV export for cloud sessions and standalone runs.
 - `src/core/SimulationDiagnostics.ts` — runtime diagnostic-provider registry.
 - `src/teaching/diagnostics/PublishedDiagnostics.ts` — deliberate Supabase publication of diagnostic bundles.
 - `src/edumon/actionPhysiology.ts` — physiology interpretation, shared sympathetic saturation and hard bounds.
@@ -53,15 +53,19 @@ All three are **display-only**. Never mutate SBP/DBP, temperature, anaesthetic d
 
 Monitor toggle state and activation/deactivation must appear in ActionRuntime diagnostics and published diagnostics even though `activeEffects` is empty.
 
-## Teaching Session Log contract
+## Teaching and standalone Session Log contract
 
-The user-facing teaching log is named **Session Log** in both EDUVENT and EDUMON. Do not rename the older browser-local diagnostic scenario logger; it is a separate diagnostic facility.
+The user-facing log is named **Session Log** in both EDUVENT and EDUMON. Do not rename the older browser-local diagnostic scenario logger; it is a separate diagnostic facility.
 
 During an active teaching session, ActionRuntime activation/deactivation/intensity interactions for Drugs and Events must be mirrored to the Session Log. This is an observational side effect only: failure to write a Session Log row must never interrupt or modify ActionRuntime physiology.
 
-Shared Session Log storage is `public.edusim_session_log_entries`, with actor identity supplied server-side and chronological identity IDs. Instructor/candidate simulator-state changes are captured by database triggers on the shared session rows, while alarm lifecycle/silence and freeze/display actions are logged at their shared control boundaries. Candidate device actions are captured from candidate action revisions. The instructor panel subscribes to INSERT events and displays all actors in entry order.
+Shared teaching-session storage is `public.edusim_session_log_entries`, with actor identity supplied server-side and chronological identity IDs. Instructor/candidate simulator-state changes are captured by database triggers on the shared session rows, while alarm lifecycle/silence and freeze/display actions are logged at their shared control boundaries. Candidate device actions are captured from candidate action revisions. The instructor panel subscribes to INSERT events and displays all actors in entry order.
 
-Keep RLS strict: instructors may read the full session log, while candidates may append and read only their own entries. Do not trust client-provided actor names, roles or product IDs.
+Keep teaching-session RLS strict: instructors may read the full session log, while candidates may append and read only their own entries. Do not trust client-provided actor names, roles or product IDs.
+
+In **standalone** mode, use the same Session Log event vocabulary but keep the log **local only**. Do not create a teaching session and do not write standalone events to Supabase automatically. `sessionLog.ts` stores one per-product local run in browser `sessionStorage`, bounded to 2,000 entries, with actor role `standalone`. The same panel subscribes to the local runtime and exports CSV. Refreshing the same tab/session may retain the run; a future explicit publish/save operation may upload it, but implicit upload is forbidden.
+
+Standalone coverage should match normal simulator use: Drug/Event actions, settings/model changes, alarms and silence, freeze/laser, oxygen flush, nebuliser, and ventilator hold/device actions. EDUVENT local settings are observed from its current scenario snapshot; EDUMON local settings are observed from the product state. Do not reuse cloud database triggers for standalone operation.
 
 ## Current targets
 
@@ -162,11 +166,11 @@ Definitions live in `public.edusim_action_definitions`. Monitor display controls
 9. Keep absolute hard bounds centralized and final.
 10. Preserve the shared sympathetic saturation architecture.
 11. Keep fallback and persisted definitions aligned.
-12. Preserve Session Log RLS and server-derived actor identity.
+12. Preserve teaching Session Log RLS/server-derived identity and standalone local-only storage.
 13. Update regression coverage and both documentation files.
 14. Bump EDUMON version.
 15. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; Drug/Event interactions are mirrored to Session Log without affecting physiology; candidates cannot spoof Session Log actor identity; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op under Others; hard bounds still prevent HR 500; the shared sympathetic saturation architecture remains intact; and build/regressions pass.
+Confirm that monitor Events are display-only; Inv BP never changes blood pressure, BIS never changes anaesthetic depth, Temp never changes temperature; zero-effect toggles remain active and can be switched off; monitor state is present in diagnostics; Drug/Event interactions are mirrored to Session Log without affecting physiology; candidates cannot spoof teaching-session actor identity; standalone Session Log uses `sessionStorage` and remains local only; effect-bearing toggles still clear when all targets are superseded; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a logged no-op under Others; hard bounds still prevent HR 500; the shared sympathetic saturation architecture remains intact; and build/regressions pass.

@@ -7,7 +7,7 @@ import {
   type ProductTeachingMemberTelemetry,
   type ProductTeachingSessionRow,
 } from './productSession'
-import { configureSessionLogRuntime } from './sessionLog'
+import { configureSessionLogRuntime, diffSessionState, recordSessionLogEvent, settingChangesLabel } from './sessionLog'
 
 interface UseProductTeachingSessionArgs<TState> {
   productId: string
@@ -17,14 +17,6 @@ interface UseProductTeachingSessionArgs<TState> {
   instructorBroadcastDebounceMs?: number
 }
 
-/**
- * Generic EDUSIM live-session adapter for products that can represent their
- * synchronized simulator state as one JSON-serialisable object.
- *
- * EDUVENT retains its richer transport adapter for now, but both products use
- * the same useSharedTeachingSession lifecycle underneath. EDUMON uses this
- * adapter directly.
- */
 export function useProductTeachingSession<TState>({
   productId,
   state,
@@ -40,6 +32,8 @@ export function useProductTeachingSession<TState>({
   const stateRef = useRef(state)
   const suppressInstructorBroadcastRef = useRef(false)
   const candidateStateInitialisedRef = useRef(false)
+  const standaloneStateRef = useRef(state)
+  const standaloneLogTimerRef = useRef<number | null>(null)
 
   useEffect(() => { stateRef.current = state }, [state])
 
@@ -72,6 +66,7 @@ export function useProductTeachingSession<TState>({
       },
       onSessionCleared: () => {
         candidateStateInitialisedRef.current = false
+        standaloneStateRef.current = stateRef.current
       },
     },
   })
@@ -82,6 +77,7 @@ export function useProductTeachingSession<TState>({
       sessionId: core.session?.id ?? null,
       role: core.role,
     })
+    if (core.role === 'standalone') standaloneStateRef.current = stateRef.current
   }, [normalizedProductId, core.role, core.session?.id])
 
   const stateSignature = useMemo(() => {
@@ -103,6 +99,30 @@ export function useProductTeachingSession<TState>({
     }, Math.max(0, instructorBroadcastDebounceMs))
     return () => window.clearTimeout(timer)
   }, [core.role, core.session?.id, core.session?.product_state_revision, stateSignature, sessionStateSignature, instructorBroadcastDebounceMs])
+
+  useEffect(() => {
+    if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current)
+    if (core.role !== 'standalone') {
+      standaloneStateRef.current = state
+      return
+    }
+    standaloneLogTimerRef.current = window.setTimeout(() => {
+      const before = standaloneStateRef.current
+      const after = stateRef.current
+      const changes = diffSessionState(before, after)
+      standaloneStateRef.current = after
+      if (!changes.length) return
+      void recordSessionLogEvent({
+        category: 'settings',
+        eventType: 'standalone.settings.changed',
+        label: settingChangesLabel('Settings changed', changes),
+        details: { before, after, changes },
+      }).catch(() => undefined)
+    }, 300)
+    return () => {
+      if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current)
+    }
+  }, [core.role, state, stateSignature])
 
   const startInstructor = () => core.startInstructor({
     productId: normalizedProductId,
