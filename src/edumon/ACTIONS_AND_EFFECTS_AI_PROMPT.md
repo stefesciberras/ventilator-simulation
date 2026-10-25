@@ -16,7 +16,7 @@ Manual instructor edits supersede action ownership on that target, but do not by
 
 ## Core files
 
-- `src/edusim/actions/ActionEffect.ts` — validated targets/operations, priority, constraints and release behaviour.
+- `src/edusim/actions/ActionEffect.ts` — targets/operations, priority, constraints and release behaviour.
 - `src/edusim/actions/ActionRuntime.ts` — timing, priority ordering, constraint resolution, intensity, recover/persist and target supersession.
 - `src/edumon/actionPhysiology.ts` — interprets active effects and then calls the hard-bounds layer.
 - `src/edumon/physiologicalBounds.ts` — centralized absolute simulator sanity bounds.
@@ -43,19 +43,11 @@ Operations: `offset`, `set`, `multiplier`, `target`, `increment`, `constraint`, 
 
 Ordinary/default priority is **30**. Lower priority resolves first, higher priority later. Same-priority ordinary modifiers resolve before `constraint`. Per-effect JSON `priority` may override the action default.
 
-Manual instructor target ownership sits above action priority: call `supersedeActionTarget(...)`, commit the selected current value, and leave unrelated targets running.
-
-Do not interpret priority as whole-action cancellation.
+Manual instructor target ownership sits above action priority: call `supersedeActionTarget(...)`, commit the selected current value, and leave unrelated targets running. Do not interpret priority as whole-action cancellation.
 
 ## Constraint semantics
 
-Supported constraints:
-- `block-increase`
-- `block-decrease`
-- `minimum`
-- `maximum`
-
-Use these for dominant target-specific physiology rather than arbitrary opposite offsets.
+Supported constraints: `block-increase`, `block-decrease`, `minimum`, `maximum`.
 
 ## Absolute physiological hard bounds
 
@@ -74,13 +66,13 @@ Current invariants:
 - shunt fraction 0–1
 - maxSpO₂ 0–100%
 - dead space 0 to bounded tidal volume
-- SBP must remain above DBP
+- SBP above DBP
 
-These limits must prevent impossible composed state such as HR 500 even if multiple actions stack. Manual instructor control may supersede all action effects on HR, but the final model still must obey HR 0–240.
+These limits must prevent impossible composed state such as **HR 500** even if multiple actions stack. Manual instructor control can supersede all action effects on HR, but the final model still obeys HR 0–240.
 
 Keep rhythm constraints separate. `monitorEngine.ts` still determines rhythm-appropriate effective rate: VF/asystole 0; SVT/VT have their own ranges; ordinary sinus-family monitoring is more restrictive than the global 240 bpm sanity ceiling.
 
-If a new physiological variable is introduced and action stacking can drive it to impossible values, add its absolute invariant here rather than scattering clamps throughout UI components.
+If a new physiological variable can be pushed to impossible values by future composition, add its invariant to the centralized bounds module rather than scattering clamps through UI code.
 
 ## Beta blocker reference implementation
 
@@ -89,15 +81,13 @@ If a new physiological variable is introduced and action stacking can drive it t
 - `constraint: block-increase`
 - `constraint: minimum`, value `50`
 
-All three use 10-second onset and 30-second recovery. Hypovolaemia MAP effects remain independent. Manual HR edit supersedes all Beta blocker HR effects. The 50 bpm floor is an action-level teaching constraint, whereas the global 0–240 HR hard bound is an absolute simulator invariant.
+All three use 10-second onset and 30-second recovery. Hypovolaemia MAP effects remain independent. Manual HR edit supersedes all Beta blocker HR effects. The 50 bpm floor is an action-level teaching constraint; the global 0–240 HR hard bound is an absolute simulator invariant.
 
 ## Timing and release
 
 Momentary: onset -> finite duration -> recovery.
 
-Toggle: onset -> sustained -> switch-off -> `recover` or `persist` per effect.
-
-Hypovolaemia and Bleeding currently persist their HR/MAP surrogate consequences. All timing uses simulation time.
+Toggle: onset -> sustained -> switch-off -> `recover` or `persist` per effect. Hypovolaemia and Bleeding currently persist their HR/MAP surrogate consequences. All timing uses simulation time.
 
 ## Toggle UI state
 
@@ -109,17 +99,21 @@ Hypovolaemia and Bleeding currently persist their HR/MAP surrogate consequences.
 
 HR/rhythm supersede `haemodynamics.heartRate`; SBP/DBP supersede `haemodynamics.meanArterialPressure`; current respiratory-rate editing supersedes `respiration.drive`.
 
+## Shared sympathetic saturation architecture
+
+Surgery, Laryngoscopy and Pain create `stimulus.sympathetic`. Opioids change `anaesthesia.nociceptiveResponse`; effective anaesthetic depth attenuates the response. The composed value **must pass through the shared saturating sympathetic response transfer function** before HR/MAP translation. Preserve this saturation architecture; do not bypass it with direct HR/MAP mutations or unbounded additive stimulus handling.
+
 ## Adjustable levels
 
 `dose-levels` and `severity-levels`: Low 0.65×, Medium 1.0×, High 1.35×. Changing a running toggle level must not restart onset timing.
 
-## Key current actions
+## Current action groups
 
 Cardiovascular Events: Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding.
 
 Respiratory Events: Apnoea, Return of diaphragm breathing, Bronchospasm.
 
-Anaesthesia stimulus/events include Laryngoscopy, Pain and Surgery. Propofol/TIVA use hypnotic effect; opioids alter nociceptive response; Relaxant/reversal agents use neuromuscular block.
+Anaesthesia events/stimuli include Laryngoscopy, Pain and Surgery.
 
 ## Persistence/editor rules
 
@@ -134,13 +128,14 @@ Anaesthesia stimulus/events include Laryngoscopy, Pain and Surgery. Propofol/TIV
 5. Keep manual supersession above action priority.
 6. Keep absolute hard bounds centralized and final.
 7. Keep rhythm constraints separate from global sanity bounds.
-8. Preserve recover/persist and simulation-time semantics.
-9. Keep fallback and persisted definitions aligned.
-10. Update regression coverage.
-11. Update both documentation files.
-12. Bump EDUMON version.
-13. Run full CI and merge only when green.
+8. Preserve the shared sympathetic saturation architecture.
+9. Preserve recover/persist and simulation-time semantics.
+10. Keep fallback and persisted definitions aligned.
+11. Update regression coverage.
+12. Update both documentation files.
+13. Bump EDUMON version.
+14. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that actions still describe effects; physiology interprets effects; runtime priority semantics remain intact; manual supersession remains target-specific; absolute hard bounds prevent impossible composed values; HR 500 cannot survive model composition; rhythm-specific rate behavior remains separate; Beta blocker remains `-15 + block-increase + minimum 50`; Bronchospasm, Hypovolaemia, Bleeding and Return of diaphragm breathing remain documented; and build/regressions pass.
+Confirm that actions still describe effects; physiology interprets effects; runtime priority semantics remain intact; manual supersession remains target-specific; physiological hard bounds prevent impossible composed values; HR 500 cannot survive model composition; rhythm-specific rate behavior remains separate; Beta blocker remains `-15 + block-increase + minimum 50`; Bronchospasm, Hypovolaemia, Bleeding and Return of diaphragm breathing remain documented; sympathetic saturation remains shared; and build/regressions pass.
