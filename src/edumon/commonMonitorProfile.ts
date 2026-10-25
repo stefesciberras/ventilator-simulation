@@ -1,5 +1,5 @@
 export type EdumonCommonWaveformId = 'ecg' | 'arterial-pressure' | 'pleth' | 'capnography'
-export type EdumonCommonMeasurementId = 'heart-rate' | 'arterial-pressure' | 'spo2' | 'nibp' | 'etco2'
+export type EdumonCommonMeasurementId = 'heart-rate' | 'arterial-pressure' | 'spo2' | 'nibp' | 'etco2' | 'temperature'
 
 /**
  * Product-neutral monitor capabilities owned once by EDUMON and consumed by
@@ -17,7 +17,7 @@ export interface EdumonCommonMonitorProfile {
 
 const COMMON_PROFILE = {
   waveforms: ['ecg', 'arterial-pressure', 'pleth', 'capnography'],
-  measurements: ['heart-rate', 'arterial-pressure', 'spo2', 'nibp', 'etco2'],
+  measurements: ['heart-rate', 'arterial-pressure', 'spo2', 'nibp', 'etco2', 'temperature'],
   respiratoryPhysiology: true,
   sharedMonitorEngine: true,
   sharedAlarmController: true,
