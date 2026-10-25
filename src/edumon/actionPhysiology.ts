@@ -1,5 +1,6 @@
 import { resolveNumericActionEffect } from '../edusim/actions/ActionRuntime'
 import { anaestheticStimulusResponseScale, effectiveAnaestheticDepth } from './anaestheticPhysiology'
+import { applyEdumonPhysiologicalBounds } from './physiologicalBounds'
 import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type MonitorPatientState } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -25,8 +26,8 @@ function applyMeanPressureEffect(state: MonitorPatientState, simulationTime: num
   const actionMean = resolveNumericActionEffect('haemodynamics.meanArterialPressure', baselineMean, simulationTime)
   const shift = actionMean + sympatheticMapOffset - baselineMean
   return {
-    systolicPressure: clamp(state.systolicPressure + shift, 20, 260),
-    diastolicPressure: clamp(state.diastolicPressure + shift, 10, 180),
+    systolicPressure: state.systolicPressure + shift,
+    diastolicPressure: state.diastolicPressure + shift,
   }
 }
 
@@ -57,12 +58,12 @@ export function applyEdumonActionPhysiology(state: MonitorPatientState, simulati
   }
 
   const actionHeartRate = resolveNumericActionEffect('haemodynamics.heartRate', state.heartRate, simulationTime)
-  return {
+  return applyEdumonPhysiologicalBounds({
     ...state,
-    heartRate: clamp(actionHeartRate + sympathetic.heartRateOffset, 0, 300),
+    heartRate: actionHeartRate + sympathetic.heartRateOffset,
     ...pressure,
     respiratory,
-  }
+  })
 }
 
 export function currentNeuromuscularBlock(simulationTime: number): number {
