@@ -1,3 +1,5 @@
+import type { SimulationProductId } from '../core/SimulationProductAdapter'
+
 export type TeachingRole = 'standalone' | 'instructor' | 'candidate'
 export type TeachingPromptKind = 'message' | 'mcq' | 'poll'
 
@@ -65,7 +67,7 @@ export interface TeachingLibraryDraft extends TeachingPromptDraft {
 }
 
 export interface TeachingHostAdapter<TContext = Record<string, unknown>> {
-  appId: string
+  appId: SimulationProductId
   appName: string
   defaultModule: string
   libraryEnvironmentId: string
