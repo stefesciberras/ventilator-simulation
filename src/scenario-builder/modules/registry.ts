@@ -2,8 +2,8 @@ import type { InstructorPresetRow } from '../../instructorAccount'
 import type { ScenarioModuleDefinition } from '../model'
 import { VENTILATOR_SCENARIO_MODULE } from './ventilator/definition'
 
-const EDUMON_ANA_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
-  id: 'edumon-ana',
+const ANAESTH_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
+  id: 'anaesth',
   schemaVersion: 1,
   label: 'LoppjuSIM-Anaesth',
   shortLabel: 'Anaesthesia monitor',
@@ -12,11 +12,11 @@ const EDUMON_ANA_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
   variables: [],
   templates: [],
   triggerSources: [],
-  supportsPreset: (preset) => preset.product === 'edumon-ana',
+  supportsPreset: (preset) => preset.product === 'anaesth',
 }
 
-const EDUMON_ICU_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
-  id: 'edumon-icu',
+const ICU_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
+  id: 'icu',
   schemaVersion: 1,
   label: 'LoppjuSIM-ICU',
   shortLabel: 'ICU monitor',
@@ -25,13 +25,13 @@ const EDUMON_ICU_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
   variables: [],
   templates: [],
   triggerSources: [],
-  supportsPreset: (preset) => preset.product === 'edumon-icu',
+  supportsPreset: (preset) => preset.product === 'icu',
 }
 
 export const SCENARIO_MODULES: Array<ScenarioModuleDefinition<InstructorPresetRow>> = [
   VENTILATOR_SCENARIO_MODULE,
-  EDUMON_ANA_MODULE,
-  EDUMON_ICU_MODULE,
+  ANAESTH_MODULE,
+  ICU_MODULE,
 ]
 
 export const DEFAULT_SCENARIO_MODULE_ID = 'ventilator'
