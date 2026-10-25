@@ -5,8 +5,8 @@ import './edumon-temperature.css'
 
 const DEFAULT_TEMPERATURE_C = 37
 
-function findVisibleMeasurementHost(): HTMLElement | null {
-  const hosts = Array.from(document.querySelectorAll<HTMLElement>('.edumon-monitor-body .edumon-measurements'))
+function findVisibleFooterHost(): HTMLElement | null {
+  const hosts = Array.from(document.querySelectorAll<HTMLElement>('.simulation-console-footer .edumon-control-strip'))
   return hosts.find((host) => {
     const rect = host.getBoundingClientRect()
     const style = window.getComputedStyle(host)
@@ -15,11 +15,11 @@ function findVisibleMeasurementHost(): HTMLElement | null {
 }
 
 export function EdumonTemperatureSurface({ patientState }: { patientState: MonitorPatientState }) {
-  const [measurementHost, setMeasurementHost] = useState<HTMLElement | null>(null)
+  const [footerHost, setFooterHost] = useState<HTMLElement | null>(null)
   const temperature = patientState.temperatureC ?? DEFAULT_TEMPERATURE_C
 
   useEffect(() => {
-    const findHost = () => setMeasurementHost(findVisibleMeasurementHost())
+    const findHost = () => setFooterHost(findVisibleFooterHost())
     findHost()
     const observer = new MutationObserver(findHost)
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
@@ -30,14 +30,14 @@ export function EdumonTemperatureSurface({ patientState }: { patientState: Monit
     }
   }, [])
 
-  if (!measurementHost) return null
+  if (!footerHost) return null
 
   return createPortal(
-    <div className="edumon-value-panel edumon-value-temperature metric">
-      <span className="edumon-value-label">TEMP</span>
-      <strong className="edumon-value-main">{temperature.toFixed(1)}</strong>
-      <small className="edumon-value-unit">°C</small>
+    <div className="edumon-temperature-container" aria-label={`Temperature ${temperature.toFixed(1)} degrees Celsius`}>
+      <span className="edumon-temperature-title">TEMP</span>
+      <strong>{temperature.toFixed(1)}</strong>
+      <small>°C</small>
     </div>,
-    measurementHost,
+    footerHost,
   )
 }
