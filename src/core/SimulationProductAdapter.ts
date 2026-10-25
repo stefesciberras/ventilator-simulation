@@ -1,7 +1,33 @@
 import type { ReactNode } from 'react'
 
-export type SimulationProductId = 'eduvent' | 'edumon-ana' | 'edumon-icu'
+export type SimulationProductId = 'mv' | 'anaesth' | 'icu'
+export type LegacySimulationProductId = 'eduvent' | 'edumon-ana' | 'edumon-icu'
+export type SimulationProductFamily = 'ventilation' | 'monitoring'
 export type TeachingEnvironmentId = 'mechanical-ventilation' | 'anaesthesia' | 'itu' | (string & {})
+
+const LEGACY_PRODUCT_IDS: Record<SimulationProductId, LegacySimulationProductId> = {
+  mv: 'eduvent',
+  anaesth: 'edumon-ana',
+  icu: 'edumon-icu',
+}
+
+const PRODUCT_ID_ALIASES: Record<string, SimulationProductId> = {
+  mv: 'mv',
+  anaesth: 'anaesth',
+  icu: 'icu',
+  eduvent: 'mv',
+  'edumon-ana': 'anaesth',
+  'edumon-icu': 'icu',
+}
+
+export function toLegacyProductId(productId: SimulationProductId): LegacySimulationProductId {
+  return LEGACY_PRODUCT_IDS[productId]
+}
+
+export function normaliseSimulationProductId(value: unknown): SimulationProductId | null {
+  if (typeof value !== 'string') return null
+  return PRODUCT_ID_ALIASES[value.trim().toLowerCase()] ?? null
+}
 
 export interface SimulationProductCapabilitySet {
   patientControls: boolean
@@ -77,7 +103,7 @@ export interface SimulationProductScenarioContract {
 
 export interface SimulationProductAdapter<TPatient = unknown, TDevice = unknown, TAlarmLimits = unknown> {
   id: SimulationProductId
-  family: 'EDUVENT' | 'EDUMON'
+  family: SimulationProductFamily
   label: string
   route: string
   teachingEnvironment: TeachingEnvironmentId
@@ -85,9 +111,7 @@ export interface SimulationProductAdapter<TPatient = unknown, TDevice = unknown,
   controlTabs: readonly SimulationProductControlTabDefinition[]
   secondaryDisplays: readonly SimulationProductSecondaryDisplayDefinition[]
   alarmDefinitions: readonly SimulationProductAlarmDefinition[]
-  /** Functional live-session contract consumed by shared EDUSIM session UI. */
   session?: SimulationProductSessionContract
-  /** Product scenario capabilities consumed by builder/runtime surfaces. */
   scenario?: SimulationProductScenarioContract
   defaultPatientState?: TPatient
   defaultDeviceState?: TDevice
