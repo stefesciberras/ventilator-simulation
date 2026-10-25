@@ -1,11 +1,18 @@
 import type { InstructorScenarioSnapshot } from './instructorAccount'
+import { normaliseSimulationProductId, toLegacyProductId } from './core/SimulationProductAdapter'
 import { ensureAnonymousSession, supabase } from './session/supabase'
-import { isScenarioProductId, SCENARIO_PRODUCTS, type ScenarioProductId } from './teaching/scenario/products'
+import { SCENARIO_PRODUCTS, type ScenarioProductId } from './teaching/scenario/products'
 
 export interface SelfDirectedScenarioEnvelope<TScenario = unknown> {
   envelopeVersion: 1
   product: ScenarioProductId
   scenario: TScenario
+}
+
+interface StoredSelfDirectedScenarioEnvelope {
+  envelopeVersion: 1
+  product: string
+  scenario: unknown
 }
 
 export interface SelfDirectedAssignmentCreated {
@@ -29,13 +36,15 @@ function cleanAccessCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
 }
 
-function isEnvelope(value: unknown): value is SelfDirectedScenarioEnvelope<unknown> {
-  if (!value || typeof value !== 'object') return false
+function decodeEnvelope(value: unknown): SelfDirectedScenarioEnvelope<unknown> | null {
+  if (!value || typeof value !== 'object') return null
   const record = value as Record<string, unknown>
-  return isScenarioProductId(record.product) && 'scenario' in record
+  const product = normaliseSimulationProductId(record.product)
+  if (!product || !('scenario' in record)) return null
+  return { envelopeVersion: 1, product, scenario: record.scenario }
 }
 
-export function selfDirectedAssignmentUrl(accessCode: string, product: ScenarioProductId = 'eduvent') {
+export function selfDirectedAssignmentUrl(accessCode: string, product: ScenarioProductId = 'mv') {
   const code = cleanAccessCode(accessCode)
   const route = SCENARIO_PRODUCTS[product].route
   if (typeof window === 'undefined') return `${route}?assignment=${encodeURIComponent(code)}`
@@ -44,17 +53,16 @@ export function selfDirectedAssignmentUrl(accessCode: string, product: ScenarioP
   return url.toString()
 }
 
-/** Self-directed assignments are immutable product envelopes. */
-export function prepareSelfDirectedScenario<TScenario>(product: ScenarioProductId, source: TScenario): SelfDirectedScenarioEnvelope<TScenario> {
-  return JSON.parse(JSON.stringify({ envelopeVersion: 1, product, scenario: source })) as SelfDirectedScenarioEnvelope<TScenario>
+/** Self-directed assignments are immutable product envelopes. Storage retains legacy product values for database compatibility. */
+export function prepareSelfDirectedScenario<TScenario>(product: ScenarioProductId, source: TScenario): StoredSelfDirectedScenarioEnvelope {
+  return JSON.parse(JSON.stringify({ envelopeVersion: 1, product: toLegacyProductId(product), scenario: source })) as StoredSelfDirectedScenarioEnvelope
 }
 
-/** Legacy three-argument calls remain EDUVENT assignments. */
 export async function createSelfDirectedAssignment<TScenario = InstructorScenarioSnapshot>(
   title: string,
   scenario: TScenario,
   expiryDays: number,
-  product: ScenarioProductId = 'eduvent',
+  product: ScenarioProductId = 'mv',
 ): Promise<SelfDirectedAssignmentCreated> {
   const days = Math.max(1, Math.min(365, Math.round(expiryDays)))
   const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
@@ -82,10 +90,10 @@ export async function resolveSelfDirectedAssignmentProduct(accessCode: string): 
   await ensureAnonymousSession()
   const { data, error } = await supabase.rpc('resolve_self_directed_assignment_product', { p_access_code: code })
   if (error) {
-    if (String(error.message ?? '').includes('resolve_self_directed_assignment_product')) return 'eduvent'
+    if (String(error.message ?? '').includes('resolve_self_directed_assignment_product')) return 'mv'
     throw error
   }
-  return isScenarioProductId(data) ? data : 'eduvent'
+  return normaliseSimulationProductId(data) ?? 'mv'
 }
 
 export async function routeToSelfDirectedAssignment(accessCode: string) {
@@ -106,9 +114,7 @@ export async function startSelfDirectedRun<TScenario = InstructorScenarioSnapsho
   if (!result?.run_id || !result?.assignment_id || !result?.scenario) throw new Error('Unable to start this self-directed scenario.')
 
   const stored = result.scenario as unknown
-  const envelope = isEnvelope(stored)
-    ? stored
-    : ({ envelopeVersion: 1, product: 'eduvent', scenario: stored } as SelfDirectedScenarioEnvelope<unknown>)
+  const envelope = decodeEnvelope(stored) ?? { envelopeVersion: 1 as const, product: 'mv' as const, scenario: stored }
 
   return {
     runId: String(result.run_id),
