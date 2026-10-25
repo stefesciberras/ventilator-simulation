@@ -52,7 +52,7 @@ function displayRows(entries: SessionLogEntry[]): DisplayRow[] {
     }
     rows.push({ key: `${entry.id}:event`, entry, subject: subjectFor(entry), message: humanEventMessage(entry) })
   }
-  return rows
+  return rows.reverse()
 }
 
 function LogRows({ rows, viewer = false }: { rows: DisplayRow[]; viewer?: boolean }) {
