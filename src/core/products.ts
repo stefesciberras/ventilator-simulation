@@ -1,6 +1,6 @@
 import { EDUVENT_SESSION_CONTRACT } from '../eduvent/productContract'
 import { EDUMON_SESSION_CONTRACT } from '../edumon/productContract'
-import { defineSimulationProduct, type SimulationProductAdapter, type SimulationProductId } from './SimulationProductAdapter'
+import { defineSimulationProduct, normaliseSimulationProductId, type LegacySimulationProductId, type SimulationProductAdapter, type SimulationProductId } from './SimulationProductAdapter'
 
 const sharedCapabilities = {
   patientControls: true,
@@ -106,6 +106,8 @@ export const SIMULATION_PRODUCTS: Record<SimulationProductId, SimulationProductA
 /** @deprecated Use SIMULATION_PRODUCTS. */
 export const EDUSIM_PRODUCTS = SIMULATION_PRODUCTS
 
-export function getSimulationProduct(productId: SimulationProductId): SimulationProductAdapter {
+export function getSimulationProduct(productAlias: SimulationProductId | LegacySimulationProductId): SimulationProductAdapter {
+  const productId = normaliseSimulationProductId(productAlias)
+  if (!productId) throw new Error(`Unknown simulation product: ${productAlias}`)
   return SIMULATION_PRODUCTS[productId]
 }
