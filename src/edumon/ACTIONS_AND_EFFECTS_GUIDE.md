@@ -1,6 +1,6 @@
 # EDUMON actions and effects — instructor guide
 
-> Maintenance contract: keep this guide updated whenever action/effect vocabulary, runtime behaviour, physiology interpretation, seeded Drugs/Events, grouping, persistence, priority/constraint semantics, physiological hard bounds, timing semantics or relevant file locations change.
+> Maintenance contract: keep this guide updated whenever action/effect vocabulary, runtime behaviour, physiology interpretation, seeded Drugs/Events, grouping, persistence, priority/constraint semantics, physiological hard bounds, diagnostics, timing semantics or relevant file locations change.
 
 ## Central rule
 
@@ -15,11 +15,23 @@
 ### Events
 - **Anaesthesia** — Induction, Maintenance, Awakening, Laryngoscopy, Pain, Surgery.
 - **Cardiovascular** — Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding.
-- **Respiratory** — Apnoea, Return of diaphragm breathing, Bronchospasm.
+- **Respiratory** — Apnoea, Curare Cleft, Bronchospasm.
+
+`Curare Cleft` retains the compatibility ID `diaphragm-return`.
 
 ## Runtime, timing and UI state
 
 Momentary actions have onset, duration and recovery. Toggle actions remain active until switched off and then follow `recover` or `persist`. All timing uses simulation time. `ActionRuntime` is the source of truth for toggle state and active L/M/H intensity.
+
+The desktop ACTIONS layout uses three columns; narrow/mobile layout remains two columns.
+
+## Drug/Event action history in diagnostics
+
+`ActionRuntime` retains a bounded **action history** of the latest 500 interactions. It records Drug/Event activation, toggle deactivation, intensity changes, manual target supersession and runtime clearing. Active effects also expose their current onset/recovery weight.
+
+The runtime registers itself with shared `SimulationDiagnostics`, so copied EDUSIM diagnostics automatically include `runtimeDiagnostics.actions` containing current active effects and action history. This makes sequences such as Relaxant activation, its current neuromuscular-block weight and later instructor supersession visible in diagnostic JSON without adding product-specific diagnostic code.
+
+This history currently lives in the loaded simulator. Direct interrogation from ChatGPT requires a deliberate persistence/upload channel; browser-local runtime state is not remotely readable by ChatGPT.
 
 ## Priority and constraints
 
@@ -39,7 +51,7 @@ After action/effect composition, EDUMON applies **absolute simulator sanity boun
 | SpO₂ | 0–100% |
 | Peripheral perfusion | 0–1 |
 | Respiratory rate | 0–80/min |
-| Tidal volume | 0–3000 mL |
+| Tidal volume | 0–1000 mL |
 | Expiratory resistance | 0.1–200 cmH₂O/L/s |
 | FiO₂ | 0.21–1.0 |
 | Shunt fraction | 0–1 |
@@ -82,7 +94,11 @@ Operations: `offset`, `set`, `multiplier`, `target`, `increment`, `constraint`, 
 
 ## Key physiology notes
 
-Hypovolaemia and Bleeding use persistent HR/MAP surrogate effects. Bronchospasm acts through `respiration.airwayObstruction`. Apnoea acts through respiratory drive. Return of diaphragm breathing targets respiratory drive and `neuromuscular.tofMinimumCount`.
+Hypovolaemia and Bleeding use persistent HR/MAP surrogate effects. Bronchospasm acts through `respiration.airwayObstruction`. Apnoea acts through respiratory drive.
+
+**Neuromuscular block:** the current respiratory model does not separately represent central neural respiratory rhythm and mechanically visible chest/diaphragm excursions. Therefore `neuromuscular.block` progressively suppresses both spontaneous tidal volume and the **mechanically visible** spontaneous respiratory rate. Full block produces no spontaneous mechanical breaths, while mandatory ventilator breaths can continue. Relaxant retains its 120-second onset, so this suppression is progressive rather than immediate.
+
+**Curare Cleft:** the compatibility action `diaphragm-return` represents return of diaphragmatic effort before full peripheral neuromuscular recovery. It targets respiratory drive and `neuromuscular.tofMinimumCount`; this remains a teaching approximation until diaphragm-specific neuromuscular transmission is modelled separately.
 
 Surgery, Laryngoscopy and Pain produce `stimulus.sympathetic`. Opioids alter nociceptive response and anaesthetic depth attenuates the response. The composed sympathetic stimulus passes through the shared **saturating sympathetic response** transfer function before HR/MAP translation; this saturation prevents unbounded sympathetic amplification. Capnography remains derived from mechanics.
 
@@ -93,7 +109,8 @@ Permanent instructors edit the shared library via `/actions`. Definitions are st
 ## Architecture reference
 
 - `src/edusim/actions/ActionEffect.ts` — targets, operations, priority, constraints and release vocabulary.
-- `src/edusim/actions/ActionRuntime.ts` — timing, intensity, priority resolution, constraints, recover/persist and target supersession.
+- `src/edusim/actions/ActionRuntime.ts` — timing, intensity, priority resolution, constraints, recover/persist, target supersession and bounded action-history diagnostics.
+- `src/core/SimulationDiagnostics.ts` — shared diagnostic provider registry and diagnostic serialization.
 - `src/edumon/actionPhysiology.ts` — EDUMON interpretation and final call into hard bounds.
 - `src/edumon/physiologicalBounds.ts` — centralized absolute physiological sanity bounds.
 - `src/edumon/monitorEngine.ts` — rhythm-specific constraints, measurements and waveforms.
