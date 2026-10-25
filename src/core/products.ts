@@ -19,10 +19,10 @@ const scenarioCapabilities = (productId: SimulationProductId) => ({
   supportsQuestionStages: true,
 })
 
-export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapter> = {
-  eduvent: defineSimulationProduct({
-    id: 'eduvent',
-    family: 'EDUVENT',
+export const SIMULATION_PRODUCTS: Record<SimulationProductId, SimulationProductAdapter> = {
+  mv: defineSimulationProduct({
+    id: 'mv',
+    family: 'ventilation',
     label: 'LoppjuSIM-MV',
     route: '/eduvent',
     teachingEnvironment: 'mechanical-ventilation',
@@ -45,11 +45,11 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
       { key: 'apneaTime', label: 'Apnoea time', unit: 's', priority: 'critical' },
     ],
     session: EDUVENT_SESSION_CONTRACT,
-    scenario: scenarioCapabilities('eduvent'),
+    scenario: scenarioCapabilities('mv'),
   }),
-  'edumon-ana': defineSimulationProduct({
-    id: 'edumon-ana',
-    family: 'EDUMON',
+  anaesth: defineSimulationProduct({
+    id: 'anaesth',
+    family: 'monitoring',
     label: 'LoppjuSIM-Anaesth',
     route: '/edumon/ana',
     teachingEnvironment: 'anaesthesia',
@@ -72,11 +72,11 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
       { key: 'spo2', label: 'SpO₂', unit: '%' },
     ],
     session: EDUMON_SESSION_CONTRACT,
-    scenario: scenarioCapabilities('edumon-ana'),
+    scenario: scenarioCapabilities('anaesth'),
   }),
-  'edumon-icu': defineSimulationProduct({
-    id: 'edumon-icu',
-    family: 'EDUMON',
+  icu: defineSimulationProduct({
+    id: 'icu',
+    family: 'monitoring',
     label: 'LoppjuSIM-ICU',
     route: '/edumon/icu',
     teachingEnvironment: 'itu',
@@ -99,10 +99,13 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
       { key: 'spo2', label: 'SpO₂', unit: '%' },
     ],
     session: EDUMON_SESSION_CONTRACT,
-    scenario: scenarioCapabilities('edumon-icu'),
+    scenario: scenarioCapabilities('icu'),
   }),
 }
 
+/** @deprecated Use SIMULATION_PRODUCTS. */
+export const EDUSIM_PRODUCTS = SIMULATION_PRODUCTS
+
 export function getSimulationProduct(productId: SimulationProductId): SimulationProductAdapter {
-  return EDUSIM_PRODUCTS[productId]
+  return SIMULATION_PRODUCTS[productId]
 }
