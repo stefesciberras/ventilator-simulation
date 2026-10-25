@@ -1,3 +1,4 @@
+import { toLegacyProductId } from '../../core/SimulationProductAdapter'
 import { supabase } from '../../session/supabase'
 import { requireInstructorAccount } from '../account/InstructorAccountService'
 import type { ScenarioProductId } from './products'
@@ -18,6 +19,7 @@ export interface ScenarioCodec<TScenario> {
 }
 
 export function createScenarioRepository<TScenario>(product: ScenarioProductId, codec: ScenarioCodec<TScenario> = {}) {
+  const storageProduct = toLegacyProductId(product)
   const encode = codec.encode ?? ((scenario: TScenario) => scenario)
   const decode = codec.decode ?? ((scenario: unknown) => scenario as TScenario)
   const decodeRow = (row: Record<string, unknown>) => ({
@@ -33,7 +35,7 @@ export function createScenarioRepository<TScenario>(product: ScenarioProductId, 
         .from('instructor_presets')
         .select('*')
         .eq('instructor_id', user.id)
-        .eq('product', product)
+        .eq('product', storageProduct)
         .order('updated_at', { ascending: false })
       if (error) throw error
       return ((data ?? []) as Array<Record<string, unknown>>).map(decodeRow)
@@ -45,7 +47,7 @@ export function createScenarioRepository<TScenario>(product: ScenarioProductId, 
       if (!cleanName) throw new Error('Enter a scenario name.')
       const { data, error } = await supabase
         .from('instructor_presets')
-        .insert({ instructor_id: user.id, product, name: cleanName, scenario: encode(scenario), updated_at: new Date().toISOString() })
+        .insert({ instructor_id: user.id, product: storageProduct, name: cleanName, scenario: encode(scenario), updated_at: new Date().toISOString() })
         .select('*')
         .single()
       if (error) {
@@ -69,7 +71,7 @@ export function createScenarioRepository<TScenario>(product: ScenarioProductId, 
         .update(payload)
         .eq('id', id)
         .eq('instructor_id', user.id)
-        .eq('product', product)
+        .eq('product', storageProduct)
         .select('*')
         .single()
       if (error) {
@@ -86,7 +88,7 @@ export function createScenarioRepository<TScenario>(product: ScenarioProductId, 
         .delete()
         .eq('id', id)
         .eq('instructor_id', user.id)
-        .eq('product', product)
+        .eq('product', storageProduct)
       if (error) throw error
     },
   }
