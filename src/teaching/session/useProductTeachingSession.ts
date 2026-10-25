@@ -8,7 +8,7 @@ import {
   type ProductTeachingMemberTelemetry,
   type ProductTeachingSessionRow,
 } from './productSession'
-import { configureSessionLogRuntime, diffSessionState, filterSessionStateChanges, recordSessionLogEvent, settingChangesLabel } from './sessionLog'
+import { configureSessionLogRuntime, consumeSessionLogModelState, diffSessionState, filterSessionStateChanges, recordSessionLogEvent, settingChangesLabel } from './sessionLog'
 
 interface UseProductTeachingSessionArgs<TState> {
   productId: SimulationProductId
@@ -111,8 +111,9 @@ export function useProductTeachingSession<TState>({
     standaloneLogTimerRef.current = window.setTimeout(() => {
       const before = standaloneStateRef.current
       const after = stateRef.current
-      const changes = filterSessionStateChanges(before, after, diffSessionState(before, after))
       standaloneStateRef.current = after
+      if (consumeSessionLogModelState(after)) return
+      const changes = filterSessionStateChanges(before, after, diffSessionState(before, after))
       if (!changes.length) return
       void recordSessionLogEvent({
         category: 'settings',
