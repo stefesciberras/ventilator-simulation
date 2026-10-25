@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import type { SimulationProductId } from '../../core/SimulationProductAdapter'
 import { useSharedTeachingSession } from './useSharedTeachingSession'
 import {
   createProductTeachingSessionRepository,
@@ -10,7 +11,7 @@ import {
 import { configureSessionLogRuntime, diffSessionState, recordSessionLogEvent, settingChangesLabel } from './sessionLog'
 
 interface UseProductTeachingSessionArgs<TState> {
-  productId: string
+  productId: SimulationProductId
   state: TState
   setState: (state: TState) => void
   mergeCandidateState?: (localState: TState, instructorState: TState) => TState
@@ -24,10 +25,9 @@ export function useProductTeachingSession<TState>({
   mergeCandidateState,
   instructorBroadcastDebounceMs = 120,
 }: UseProductTeachingSessionArgs<TState>) {
-  const normalizedProductId = productId.trim().toLowerCase()
   const repository = useMemo(
-    () => createProductTeachingSessionRepository<TState>(normalizedProductId),
-    [normalizedProductId],
+    () => createProductTeachingSessionRepository<TState>(productId),
+    [productId],
   )
   const stateRef = useRef(state)
   const suppressInstructorBroadcastRef = useRef(false)
@@ -43,7 +43,7 @@ export function useProductTeachingSession<TState>({
     ProductTeachingCreateInput<TState>,
     ProductTeachingMemberTelemetry<TState>
   >({
-    storageNamespace: `edusim.${normalizedProductId}`,
+    storageNamespace: `simulation.${productId}`,
     repository,
     getMemberTelemetry: () => ({ state: stateRef.current }),
     host: {
@@ -73,12 +73,12 @@ export function useProductTeachingSession<TState>({
 
   useEffect(() => {
     configureSessionLogRuntime({
-      productId: normalizedProductId,
+      productId,
       sessionId: core.session?.id ?? null,
       role: core.role,
     })
     if (core.role === 'standalone') standaloneStateRef.current = stateRef.current
-  }, [normalizedProductId, core.role, core.session?.id])
+  }, [productId, core.role, core.session?.id])
 
   const stateSignature = useMemo(() => {
     try { return JSON.stringify(state) } catch { return '' }
@@ -125,7 +125,7 @@ export function useProductTeachingSession<TState>({
   }, [core.role, state, stateSignature])
 
   const startInstructor = () => core.startInstructor({
-    productId: normalizedProductId,
+    productId,
     state: stateRef.current,
   })
 
