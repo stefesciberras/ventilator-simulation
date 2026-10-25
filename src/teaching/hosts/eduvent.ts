@@ -1,8 +1,8 @@
 import type { TeachingHostAdapter } from '../types'
 
 export const eduventTeachingHost: TeachingHostAdapter = {
-  appId: 'eduvent',
-  appName: 'EDUVENT',
+  appId: 'mv',
+  appName: 'LoppjuSIM-MV',
   defaultModule: 'Ventilation',
   libraryEnvironmentId: 'mechanical-ventilation',
 }
