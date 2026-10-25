@@ -7,12 +7,7 @@ import {
   type ProductTeachingMemberTelemetry,
   type ProductTeachingSessionRow,
 } from './productSession'
-import {
-  configureSessionLogRuntime,
-  diffSessionState,
-  recordSessionLogEvent,
-  settingChangesLabel,
-} from './sessionLog'
+import { configureSessionLogRuntime } from './sessionLog'
 
 interface UseProductTeachingSessionArgs<TState> {
   productId: string
@@ -42,9 +37,6 @@ export function useProductTeachingSession<TState>({
   )
   const stateRef = useRef(state)
   const suppressInstructorBroadcastRef = useRef(false)
-  const suppressSessionLogRef = useRef(false)
-  const lastLoggedStateRef = useRef(state)
-  const sessionLogTimerRef = useRef<number | null>(null)
 
   useEffect(() => { stateRef.current = state }, [state])
 
@@ -60,23 +52,15 @@ export function useProductTeachingSession<TState>({
     host: {
       onSessionRow: (row, nextRole, source, force) => {
         if (nextRole === 'candidate') {
-          suppressSessionLogRef.current = true
           stateRef.current = row.product_state
-          lastLoggedStateRef.current = row.product_state
           setState(row.product_state)
-          window.setTimeout(() => { suppressSessionLogRef.current = false }, 50)
           return
         }
         if (nextRole === 'instructor' && force && source === 'resume') {
           suppressInstructorBroadcastRef.current = true
-          suppressSessionLogRef.current = true
           stateRef.current = row.product_state
-          lastLoggedStateRef.current = row.product_state
           setState(row.product_state)
-          window.setTimeout(() => {
-            suppressInstructorBroadcastRef.current = false
-            suppressSessionLogRef.current = false
-          }, 50)
+          window.setTimeout(() => { suppressInstructorBroadcastRef.current = false }, 0)
         }
       },
     },
@@ -88,7 +72,6 @@ export function useProductTeachingSession<TState>({
       sessionId: core.session?.id ?? null,
       role: core.role,
     })
-    lastLoggedStateRef.current = stateRef.current
   }, [normalizedProductId, core.role, core.session?.id])
 
   const stateSignature = useMemo(() => {
@@ -110,33 +93,6 @@ export function useProductTeachingSession<TState>({
     }, Math.max(0, instructorBroadcastDebounceMs))
     return () => window.clearTimeout(timer)
   }, [core.role, core.session?.id, core.session?.product_state_revision, stateSignature, sessionStateSignature, instructorBroadcastDebounceMs])
-
-  useEffect(() => {
-    if (sessionLogTimerRef.current != null) window.clearTimeout(sessionLogTimerRef.current)
-    if (core.role === 'standalone' || !core.session?.id || suppressSessionLogRef.current) {
-      lastLoggedStateRef.current = state
-      return
-    }
-
-    sessionLogTimerRef.current = window.setTimeout(() => {
-      if (suppressSessionLogRef.current || !core.session?.id) return
-      const before = lastLoggedStateRef.current
-      const after = stateRef.current
-      const changes = diffSessionState(before, after)
-      lastLoggedStateRef.current = after
-      if (!changes.length) return
-      void recordSessionLogEvent({
-        category: 'settings',
-        eventType: 'simulator.settings.changed',
-        label: settingChangesLabel('Settings changed', changes),
-        details: { changes },
-      })
-    }, 350)
-
-    return () => {
-      if (sessionLogTimerRef.current != null) window.clearTimeout(sessionLogTimerRef.current)
-    }
-  }, [stateSignature, state, core.role, core.session?.id])
 
   const startInstructor = () => core.startInstructor({
     productId: normalizedProductId,
