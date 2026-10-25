@@ -47,6 +47,10 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
   profileClassName = '',
 }: SimulationControlFrameworkProps<TTab, TProfile>) {
   const selected = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]
+  const isEdumonControlRow = tabsClassName.split(/\s+/).includes('edumon-control-tabs')
+  const openEdumonLogs = () => {
+    document.querySelector<HTMLButtonElement>('.teaching-session-log-profile-button')?.click()
+  }
 
   return (
     <aside className={`control-panel edusim-control-framework ${className}`.trim()} aria-label={ariaLabel}>
@@ -78,6 +82,14 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
               onClick={() => onTabChange(tab.id)}
             >{tab.label}</button>
           ))}
+          {isEdumonControlRow && (
+            <button
+              type="button"
+              className="teaching-session-log-tab-button"
+              onClick={openEdumonLogs}
+              aria-label="Open Session Log"
+            >LOGS</button>
+          )}
         </nav>
       </div>
 

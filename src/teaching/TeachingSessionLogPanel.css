@@ -12,10 +12,14 @@
   gap: 12px;
 }
 
+/* EDUMON keeps this hidden launcher mounted so the shared log component retains ownership of the viewer. */
 .teaching-session-log-profile-button {
+  display: none !important;
+}
+
+/* Appended to the EDUMON control-tab row after Teaching; inherits the normal tab-button styling. */
+.edumon-control-tabs .teaching-session-log-tab-button {
   margin-left: auto;
-  min-width: 82px;
-  align-self: stretch;
 }
 
 .teaching-session-log-empty {
