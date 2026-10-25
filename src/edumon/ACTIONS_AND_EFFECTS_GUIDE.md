@@ -19,29 +19,17 @@
 
 ## Runtime, timing and UI state
 
-Momentary actions have onset, finite duration and recovery. Toggle actions remain active until switched off and then follow each effect's `releaseBehaviour` (`recover` or `persist`). All timing uses simulation time.
-
-`ActionRuntime` is the source of truth for toggle state. The ACTIONS panel derives coloured/pressed state and active L/M/H intensity from runtime effects; it must not keep a separate local ON/OFF truth that is lost on remount.
+Momentary actions have onset, duration and recovery. Toggle actions remain active until switched off and then follow `recover` or `persist`. All timing uses simulation time. `ActionRuntime` is the source of truth for toggle state and active L/M/H intensity.
 
 ## Priority and constraints
 
-Ordinary actions default to priority **30**. `public.edusim_action_definitions.priority` stores the action default; an individual effect may override it with its own JSON `priority`.
+Ordinary actions default to priority **30**. Lower priority resolves first, higher priority later; same-priority ordinary modifiers resolve before `constraint`. Manual instructor intervention sits above the action priority system through `supersedeActionTarget(...)`.
 
-Lower priority resolves first. Higher priority resolves later. At equal priority, ordinary numerical modifiers resolve before `constraint`. Manual instructor intervention is outside and above the action priority system: `supersedeActionTarget(...)` removes action ownership of that target and commits the selected patient value.
-
-Constraint types are:
-- `block-increase`
-- `block-decrease`
-- `minimum`
-- `maximum`
-
-Priority is target-specific, not whole-action cancellation.
+Constraints: `block-increase`, `block-decrease`, `minimum`, `maximum`. Priority is target-specific, not whole-action cancellation.
 
 ## Absolute physiological hard bounds
 
-After action/effect composition, EDUMON applies **absolute simulator sanity bounds** in `src/edumon/physiologicalBounds.ts`. These are not normal ranges, alarm limits or action priorities. They exist to prevent impossible internal/modelled values when multiple effects stack.
-
-Current hard bounds are:
+After action/effect composition, EDUMON applies **absolute simulator sanity bounds** in `src/edumon/physiologicalBounds.ts`. These are not normal ranges, alarm limits or action priorities.
 
 | Parameter | Absolute bound |
 |---|---:|
@@ -57,32 +45,26 @@ Current hard bounds are:
 | Shunt fraction | 0–1 |
 | maxSpO₂ | 0–100% |
 
-Dead space is additionally constrained to `0 <= deadSpace <= bounded tidal volume`, and systolic pressure is kept above diastolic pressure.
+Dead space is constrained to `0 <= deadSpace <= bounded tidal volume`, and systolic pressure remains above diastolic pressure. Thus stacked actions cannot leave the modelled patient with impossible values such as **HR 500**.
 
-These bounds are applied **after action physiology**, so stacked actions cannot leave the modelled patient with values such as HR 500. Manual instructor control remains higher than all Drug/Event priorities, but manual control does **not** bypass these absolute simulator invariants. Rhythm-specific rate constraints remain separate in `monitorEngine.ts`: for example VF/asystole produce effective rate 0, SVT/VT have their own rate ranges, and ordinary sinus-family monitoring is more restrictive than the global 240 bpm sanity ceiling.
+Manual instructor control remains higher than all Drug/Event priorities, but it does **not** bypass these absolute simulator invariants. Rhythm-specific rate constraints remain separate in `monitorEngine.ts`; VF/asystole produce effective rate 0 and SVT/VT retain their rhythm-specific ranges.
 
 ## Current-value controls and target ownership
 
-The old inverse-baseline behaviour is removed. When the instructor directly edits a model-driven parameter, EDUMON supersedes action ownership of that target and commits the selected current value. Other targets from the same action continue running.
-
-Examples:
-- HR 78 + Bradycardia → 43; instructor sets HR 50 → HR action effects are superseded and current HR becomes 50.
-- Editing SBP/DBP supersedes `haemodynamics.meanArterialPressure` while preserving unrelated effects.
-- Changing ECG rhythm supersedes action ownership of HR.
-- Direct respiratory-rate editing currently supersedes `respiration.drive`; finer respiratory targets remain future work.
+Inverse-baseline adjustment is removed. Direct instructor editing supersedes action ownership of that target and commits the selected current value while unrelated targets continue. HR/rhythm supersede `haemodynamics.heartRate`; SBP/DBP supersede `haemodynamics.meanArterialPressure`; respiratory-rate editing currently supersedes `respiration.drive`.
 
 ## Beta blocker reference implementation
 
-`Beta blocker` is a cardiovascular **Drug** toggle available in both EDUMON-Ana and EDUMON-ICU, priority **70**, with three HR effects:
-- `offset -15` bpm;
-- `constraint: block-increase`;
-- `constraint: minimum`, value **50 bpm**.
+`Beta blocker` is a cardiovascular **Drug** toggle in Anaesthesia and ICU, priority **70**, with:
+- HR `offset -15` bpm;
+- HR `block-increase`;
+- HR `minimum` **50 bpm**.
 
-All three currently use 10-second onset and 30-second recovery. Thus HR 80 tends toward ~65, HR 55 is limited near 50, and lower-priority tachycardic responses such as Hypovolaemia are suppressed while unrelated MAP effects continue. The 50 bpm floor is a teaching-model effect, not a universal physiological law; higher-priority conduction/rhythm physiology may later override it. Manual HR change supersedes all Beta blocker HR effects.
+At full effect HR 80 tends toward ~65; HR 55 is limited near 50; Hypovolaemia can still lower MAP while its lower-priority tachycardic response is suppressed. The 50 bpm floor is an action-level teaching constraint, not a universal physiological law. Manual HR editing supersedes the Beta blocker HR effects.
 
 ## Long-press levels
 
-`dose-levels` and `severity-levels` use runtime intensity: Low 0.65×, Medium 1.0×, High 1.35×. A running toggle can change level without restarting onset timing.
+`dose-levels` and `severity-levels` use runtime intensity: Low 0.65×, Medium 1.0×, High 1.35×.
 
 ## Current validated effect targets
 
@@ -100,7 +82,9 @@ Operations: `offset`, `set`, `multiplier`, `target`, `increment`, `constraint`, 
 
 ## Key physiology notes
 
-Hypovolaemia and Bleeding use persistent HR/MAP surrogate effects. Bronchospasm acts through `respiration.airwayObstruction` and increases expiratory resistance. Apnoea acts through respiratory drive. Return of diaphragm breathing targets respiratory drive and `neuromuscular.tofMinimumCount`. Surgery/Laryngoscopy/Pain feed `stimulus.sympathetic`; opioids alter nociceptive response; anaesthetic depth attenuates that response. Capnography remains derived from mechanics.
+Hypovolaemia and Bleeding use persistent HR/MAP surrogate effects. Bronchospasm acts through `respiration.airwayObstruction`. Apnoea acts through respiratory drive. Return of diaphragm breathing targets respiratory drive and `neuromuscular.tofMinimumCount`.
+
+Surgery, Laryngoscopy and Pain produce `stimulus.sympathetic`. Opioids alter nociceptive response and anaesthetic depth attenuates the response. The composed sympathetic stimulus passes through the shared **saturating sympathetic response** transfer function before HR/MAP translation; this saturation prevents unbounded sympathetic amplification. Capnography remains derived from mechanics.
 
 ## Editing and persistence
 
@@ -108,15 +92,13 @@ Permanent instructors edit the shared library via `/actions`. Definitions are st
 
 ## Architecture reference
 
-- `src/edusim/actions/ActionEffect.ts` — validated targets/operations, priority, constraints and release vocabulary.
+- `src/edusim/actions/ActionEffect.ts` — targets, operations, priority, constraints and release vocabulary.
 - `src/edusim/actions/ActionRuntime.ts` — timing, intensity, priority resolution, constraints, recover/persist and target supersession.
-- `src/edumon/actionPhysiology.ts` — EDUMON interpretation of active effects and final call into hard bounds.
-- `src/edumon/physiologicalBounds.ts` — centralized absolute EDUMON physiological sanity bounds.
-- `src/edumon/monitorEngine.ts` — rhythm-specific effective-rate constraints, measurements and waveforms.
+- `src/edumon/actionPhysiology.ts` — EDUMON interpretation and final call into hard bounds.
+- `src/edumon/physiologicalBounds.ts` — centralized absolute physiological sanity bounds.
+- `src/edumon/monitorEngine.ts` — rhythm-specific constraints, measurements and waveforms.
 - `src/edumon/EdumonWorkspacePanel.tsx` — instructor controls and manual target supersession.
-- `src/action-editor/ActionEditorApp.tsx` — action/effect editing.
-- `src/edumon/EdumonActionsPanel.tsx` — grouping, fallback definitions and action UI.
 
 ## Simulation-design caution
 
-EDUMON is an educational simulator. Effect magnitudes, priorities, hard bounds, onset/recovery values, dose/severity multipliers and surrogate physiology are configurable teaching approximations, not validated patient-model limits.
+EDUMON is an educational simulator. Effect magnitudes, priorities, hard bounds, timings and surrogate physiology are configurable teaching approximations, not validated patient-model limits.
