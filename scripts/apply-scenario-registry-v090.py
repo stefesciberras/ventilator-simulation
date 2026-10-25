@@ -60,7 +60,7 @@ old = """  const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRunti
 new = """  const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRuntimeAdapter((snapshot, stageContext) => {
     const stage = stageContext.stage
     const target = buildEdumonScenarioStageTarget(
-      scenarioProduct,
+      module.id === 'icu' ? 'icu' : 'anaesth',
       {
         patient: { ...effectivePatientRef.current },
         simulationPaused: simulationPausedRef.current,
@@ -94,7 +94,7 @@ new = """  const edumonScenarioAdapter = useMemo(() => createEdumonScenarioRunti
     setPatientState(targetPatient)
     setSimulationPaused(target.simulationPaused)
     setSimulationSpeed(target.simulationSpeed)
-  }), [scenarioProduct])
+  }), [module.id])
 """
 rep('src/edumon/EdumonApp.tsx', old, new)
 
