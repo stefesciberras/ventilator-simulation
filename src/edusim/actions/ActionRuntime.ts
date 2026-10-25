@@ -1,3 +1,4 @@
+import { registerSimulationDiagnosticProvider } from '../../core/SimulationDiagnostics'
 import {
   DEFAULT_EDUSIM_ACTION_PRIORITY,
   type EdusimActionEffect,
@@ -6,6 +7,8 @@ import {
 
 export interface EdusimActionRuntimeDefinition {
   id: string
+  name?: string
+  kind?: 'drug' | 'event'
   short_press_action: 'momentary' | 'toggle'
   effects: EdusimActionEffect[]
   priority?: number
@@ -14,6 +17,8 @@ export interface EdusimActionRuntimeDefinition {
 export interface ActiveEffect {
   instanceId: string
   actionId: string
+  actionName?: string
+  actionKind?: 'drug' | 'event'
   mode: 'momentary' | 'toggle'
   intensity: number
   effect: EdusimActionEffect
@@ -21,19 +26,42 @@ export interface ActiveEffect {
   stoppedAtSimulationTime?: number
 }
 
+export type ActionRuntimeLogType = 'activate' | 'deactivate' | 'intensity' | 'supersede-target' | 'clear'
+
+export interface ActionRuntimeLogEntry {
+  sequence: number
+  simulationTime: number
+  type: ActionRuntimeLogType
+  actionId?: string
+  actionName?: string
+  actionKind?: 'drug' | 'event'
+  mode?: 'momentary' | 'toggle'
+  intensity?: number
+  target?: EdusimActionEffectTarget
+  effectIds?: string[]
+  affectedActionIds?: string[]
+}
+
 export interface ActionRuntimeSnapshot {
   simulationTime: number
   activeEffects: ActiveEffect[]
 }
 
+const MAX_ACTION_LOG_ENTRIES = 500
 let simulationTime = 0
 let sequence = 0
+let logSequence = 0
 let activeEffects: ActiveEffect[] = []
+let actionLog: ActionRuntimeLogEntry[] = []
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 const normaliseIntensity = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 1
 const releaseBehaviour = (active: ActiveEffect) => active.effect.releaseBehaviour ?? 'recover'
 const effectPriority = (effect: EdusimActionEffect) => Number.isFinite(effect.priority) ? Number(effect.priority) : DEFAULT_EDUSIM_ACTION_PRIORITY
+
+function appendActionLog(entry: Omit<ActionRuntimeLogEntry, 'sequence'>): void {
+  actionLog = [...actionLog, { ...entry, sequence: ++logSequence }].slice(-MAX_ACTION_LOG_ENTRIES)
+}
 
 function effectLifetime(effect: EdusimActionEffect): number {
   return Math.max(0, effect.onsetSeconds) + Math.max(0, effect.durationSeconds) + Math.max(0, effect.recoverySeconds)
@@ -94,6 +122,7 @@ export function activateAction(
   intensity = 1,
 ): ActiveEffect[] {
   setActionRuntimeSimulationTime(atSimulationTime)
+  const resolvedIntensity = normaliseIntensity(intensity)
 
   if (definition.short_press_action === 'toggle') {
     const running = activeEffects.filter((active) => active.actionId === definition.id && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
@@ -101,6 +130,15 @@ export function activateAction(
       activeEffects = activeEffects.map((active) => running.includes(active)
         ? { ...active, stoppedAtSimulationTime: atSimulationTime }
         : active)
+      appendActionLog({
+        simulationTime: atSimulationTime,
+        type: 'deactivate',
+        actionId: definition.id,
+        actionName: definition.name,
+        actionKind: definition.kind,
+        mode: definition.short_press_action,
+        effectIds: running.map((active) => active.effect.id),
+      })
       return []
     }
   }
@@ -109,26 +147,61 @@ export function activateAction(
   const created = definition.effects.map((effect) => ({
     instanceId: `${definition.id}:${effect.id}:${++sequence}`,
     actionId: definition.id,
+    actionName: definition.name,
+    actionKind: definition.kind,
     mode: definition.short_press_action,
-    intensity: normaliseIntensity(intensity),
+    intensity: resolvedIntensity,
     effect: { ...effect, priority: Number.isFinite(effect.priority) ? effect.priority : actionPriority },
     startedAtSimulationTime: atSimulationTime,
   }))
   activeEffects = [...activeEffects, ...created]
+  appendActionLog({
+    simulationTime: atSimulationTime,
+    type: 'activate',
+    actionId: definition.id,
+    actionName: definition.name,
+    actionKind: definition.kind,
+    mode: definition.short_press_action,
+    intensity: resolvedIntensity,
+    effectIds: definition.effects.map((effect) => effect.id),
+  })
   return created
 }
 
 export function setActionIntensity(actionId: string, intensity: number): void {
   const nextIntensity = normaliseIntensity(intensity)
-  activeEffects = activeEffects.map((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null
+  const running = activeEffects.filter((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
+  if (running.length === 0) return
+  activeEffects = activeEffects.map((active) => running.includes(active)
     ? { ...active, intensity: nextIntensity }
     : active)
+  appendActionLog({
+    simulationTime,
+    type: 'intensity',
+    actionId,
+    actionName: running[0]?.actionName,
+    actionKind: running[0]?.actionKind,
+    mode: 'toggle',
+    intensity: nextIntensity,
+    effectIds: running.map((active) => active.effect.id),
+  })
 }
 
 export function deactivateAction(actionId: string): void {
-  activeEffects = activeEffects.map((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null
+  const running = activeEffects.filter((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
+  if (running.length === 0) return
+  activeEffects = activeEffects.map((active) => running.includes(active)
     ? { ...active, stoppedAtSimulationTime: simulationTime }
     : active)
+  appendActionLog({
+    simulationTime,
+    type: 'deactivate',
+    actionId,
+    actionName: running[0]?.actionName,
+    actionKind: running[0]?.actionKind,
+    mode: 'toggle',
+    effectIds: running.map((active) => active.effect.id),
+  })
 }
 
 /**
@@ -136,14 +209,35 @@ export function deactivateAction(actionId: string): void {
  * Removing only this target leaves unrelated effects of the same action running.
  */
 export function supersedeActionTarget(target: EdusimActionEffectTarget): number {
-  const before = activeEffects.length
+  const affected = activeEffects.filter((active) => active.effect.target === target)
+  if (affected.length === 0) return 0
   activeEffects = activeEffects.filter((active) => active.effect.target !== target)
-  return before - activeEffects.length
+  appendActionLog({
+    simulationTime,
+    type: 'supersede-target',
+    target,
+    affectedActionIds: [...new Set(affected.map((active) => active.actionId))],
+    effectIds: affected.map((active) => active.effect.id),
+  })
+  return affected.length
 }
 
 export function clearActionRuntime(): void {
+  if (activeEffects.length > 0) {
+    appendActionLog({
+      simulationTime,
+      type: 'clear',
+      affectedActionIds: [...new Set(activeEffects.map((active) => active.actionId))],
+      effectIds: activeEffects.map((active) => active.effect.id),
+    })
+  }
   activeEffects = []
   sequence = 0
+}
+
+export function clearActionRuntimeLog(): void {
+  actionLog = []
+  logSequence = 0
 }
 
 export function getActiveEffects(atSimulationTime = simulationTime): ActiveEffect[] {
@@ -151,8 +245,28 @@ export function getActiveEffects(atSimulationTime = simulationTime): ActiveEffec
   return [...activeEffects]
 }
 
+export function getActionRuntimeLog(): ActionRuntimeLogEntry[] {
+  return actionLog.map((entry) => ({
+    ...entry,
+    effectIds: entry.effectIds ? [...entry.effectIds] : undefined,
+    affectedActionIds: entry.affectedActionIds ? [...entry.affectedActionIds] : undefined,
+  }))
+}
+
 export function getActionRuntimeSnapshot(atSimulationTime = simulationTime): ActionRuntimeSnapshot {
   return { simulationTime: atSimulationTime, activeEffects: getActiveEffects(atSimulationTime) }
+}
+
+export function getActionRuntimeDiagnostics(atSimulationTime = simulationTime): Record<string, unknown> {
+  const effects = getActiveEffects(atSimulationTime)
+  return {
+    simulationTime: atSimulationTime,
+    activeEffects: effects.map((active) => ({
+      ...active,
+      currentWeight: actionEffectWeight(active, atSimulationTime),
+    })),
+    history: getActionRuntimeLog(),
+  }
 }
 
 function applyConstraint(value: number, baseValue: number, active: ActiveEffect, weight: number): number {
@@ -223,3 +337,5 @@ export function resolveNumericActionEffect(
   }
   return value
 }
+
+registerSimulationDiagnosticProvider('actions', () => getActionRuntimeDiagnostics())

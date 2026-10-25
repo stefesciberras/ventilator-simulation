@@ -1,6 +1,29 @@
 import type { SimulationProductId } from './SimulationProductAdapter'
 
 export type SimulationDiagnosticWaveformSource = 'live' | 'frozen'
+export type SimulationDiagnosticProvider = () => Record<string, unknown>
+
+const diagnosticProviders = new Map<string, SimulationDiagnosticProvider>()
+
+export function registerSimulationDiagnosticProvider(id: string, provider: SimulationDiagnosticProvider): () => void {
+  diagnosticProviders.set(id, provider)
+  return () => {
+    if (diagnosticProviders.get(id) === provider) diagnosticProviders.delete(id)
+  }
+}
+
+function runtimeDiagnostics(): Record<string, unknown> | undefined {
+  if (diagnosticProviders.size === 0) return undefined
+  const entries: Array<[string, Record<string, unknown>]> = []
+  for (const [id, provider] of diagnosticProviders) {
+    try {
+      entries.push([id, provider()])
+    } catch (error) {
+      entries.push([id, { error: error instanceof Error ? error.message : String(error) }])
+    }
+  }
+  return Object.fromEntries(entries)
+}
 
 export interface SimulationDiagnosticProductContext {
   productId: SimulationProductId
@@ -57,6 +80,7 @@ export async function copySimulationJson(
 export function createSimulationDiagnostic<TSample = never>(
   options: SimulationDiagnosticOptions<TSample>,
 ): Record<string, unknown> {
+  const providers = runtimeDiagnostics()
   const diagnostic: Record<string, unknown> = {
     schema: options.schema ?? 'edusim-diagnostic-v1',
     capturedAt: new Date().toISOString(),
@@ -68,6 +92,7 @@ export function createSimulationDiagnostic<TSample = never>(
     kind: options.kind,
     ...(options.purpose ? { purpose: options.purpose } : {}),
     ...options.payload,
+    ...(providers ? { runtimeDiagnostics: providers } : {}),
   }
 
   if (options.waveform) {

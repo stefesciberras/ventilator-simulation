@@ -42,7 +42,11 @@ export function applyEdumonActionPhysiology(state: MonitorPatientState, simulati
   const ventilationMode = baselineRespiratory.ventilatorMode ?? 'MANUAL'
   const effectiveDependsOnSpontaneousDrive = ventilationMode === 'MANUAL' || ventilationMode === 'PSV'
 
-  const spontaneousRespiratoryRate = baselineRespiratory.spontaneousRespiratoryRate * drive
+  // The current EDUMON respiratory model does not yet separate central neural respiratory
+  // rhythm from mechanically visible breaths. Neuromuscular block therefore suppresses
+  // the observed spontaneous breath rate as well as tidal excursion. At complete block,
+  // spontaneous mechanical ventilation becomes zero while mandatory ventilation can continue.
+  const spontaneousRespiratoryRate = baselineRespiratory.spontaneousRespiratoryRate * drive * muscleFraction
   const spontaneousTidalVolumeMl = baselineRespiratory.spontaneousTidalVolumeMl * drive * muscleFraction
   const respiratory = {
     ...baselineRespiratory,
