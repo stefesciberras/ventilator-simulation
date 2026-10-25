@@ -22,8 +22,8 @@ const scenarioCapabilities = (productId: SimulationProductId) => ({
 export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapter> = {
   eduvent: defineSimulationProduct({
     id: 'eduvent',
-    family: 'EDUVENT',
-    label: 'EDUVENT',
+    family: 'LoppjuSIM',
+    label: 'LoppjuSIM-MV',
     route: '/eduvent',
     teachingEnvironment: 'mechanical-ventilation',
     capabilities: { ...sharedCapabilities, deviceControls: true },
@@ -34,7 +34,7 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
       { id: 'teaching', label: 'Teaching' },
     ],
     secondaryDisplays: [
-      { id: 'physiology', label: 'Physiological measurements', eyebrow: 'EDUVENT secondary monitor' },
+      { id: 'physiology', label: 'Physiological measurements', eyebrow: 'LoppjuSIM-MV secondary monitor' },
     ],
     alarmDefinitions: [
       { key: 'pressureLimit', label: 'Pressure limitation', unit: 'cmH₂O', priority: 'critical' },
@@ -49,8 +49,8 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
   }),
   'edumon-ana': defineSimulationProduct({
     id: 'edumon-ana',
-    family: 'EDUMON',
-    label: 'EDUMON-Ana',
+    family: 'LoppjuSIM',
+    label: 'LoppjuSIM-Anaesth',
     route: '/edumon/ana',
     teachingEnvironment: 'anaesthesia',
     capabilities: { ...sharedCapabilities, deviceControls: false },
@@ -76,8 +76,8 @@ export const EDUSIM_PRODUCTS: Record<SimulationProductId, SimulationProductAdapt
   }),
   'edumon-icu': defineSimulationProduct({
     id: 'edumon-icu',
-    family: 'EDUMON',
-    label: 'EDUMON-ICU',
+    family: 'LoppjuSIM',
+    label: 'LoppjuSIM-ICU',
     route: '/edumon/icu',
     teachingEnvironment: 'itu',
     capabilities: { ...sharedCapabilities, deviceControls: false },
