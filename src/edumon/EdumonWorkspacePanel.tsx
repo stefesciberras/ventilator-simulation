@@ -8,6 +8,7 @@ import type { TeachingHostAdapter, TeachingRole } from '../teaching/types'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonNibpControl } from './EdumonNibpControl'
 import { EdumonCapnographySurface } from './EdumonCapnographySurface'
+import { EdumonTemperatureSurface } from './EdumonTemperatureSurface'
 import { EdumonAnaGasControl } from './EdumonAnaGasControl'
 import { EdumonVentilatorControl } from './EdumonVentilatorControl'
 import { EdumonActionsPanel } from './EdumonActionsPanel'
@@ -19,9 +20,9 @@ export type EdumonControlTab = 'actions' | 'patient' | 'physio' | 'teaching'
 export type EdumonPatientProfile = 'Awake' | 'Asleep' | 'Paediatric'
 
 export const EDUMON_PATIENT_PROFILES: Record<EdumonPatientProfile, MonitorPatientState> = {
-  Awake: { heartRate: 78, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 122, diastolicPressure: 68, spo2: 98, peripheralPerfusion: 1 },
-  Asleep: { heartRate: 62, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 105, diastolicPressure: 60, spo2: 99, peripheralPerfusion: 0.9 },
-  Paediatric: { heartRate: 110, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 95, diastolicPressure: 55, spo2: 99, peripheralPerfusion: 1 },
+  Awake: { heartRate: 78, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 122, diastolicPressure: 68, spo2: 98, peripheralPerfusion: 1, temperatureC: 37 },
+  Asleep: { heartRate: 62, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 105, diastolicPressure: 60, spo2: 99, peripheralPerfusion: 0.9, temperatureC: 37 },
+  Paediatric: { heartRate: 110, rhythm: 'sinus', ecgMorphology: 'nil', morphologySeverity: 50, systolicPressure: 95, diastolicPressure: 55, spo2: 99, peripheralPerfusion: 1, temperatureC: 37 },
 }
 
 interface EdumonWorkspacePanelProps {
@@ -175,6 +176,7 @@ export function EdumonWorkspacePanel({
 
   const morphology = patientState.ecgMorphology ?? 'nil'
   const morphologySeverity = patientState.morphologySeverity ?? 50
+  const temperatureC = patientState.temperatureC ?? 37
 
   const profiles: Array<SimulationControlProfileDefinition<EdumonPatientProfile>> = (Object.keys(EDUMON_PATIENT_PROFILES) as EdumonPatientProfile[]).map((candidate) => ({
     id: candidate,
@@ -231,6 +233,7 @@ export function EdumonWorkspacePanel({
           <label className="edumon-signal-control edumon-signal-art"><span>Diastolic pressure <b>{Math.round(modelledPatientState.diastolicPressure)}</b></span><input disabled={controlsLocked} type="range" min="20" max="140" step="1" value={clamp(modelledPatientState.diastolicPressure, 20, 140)} onChange={(event) => updateDiastolicPressure(Number(event.target.value))} /></label>
           <label className="edumon-signal-control edumon-signal-spo2"><span>SpO₂ ceiling <b>{Math.round(patientState.spo2)}%</b></span><input disabled={controlsLocked} type="range" min="50" max="100" step="1" value={patientState.spo2} onChange={(event) => updatePatient({ spo2: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-spo2"><span>Peripheral perfusion <b>{patientState.peripheralPerfusion.toFixed(1)}</b></span><input disabled={controlsLocked} type="range" min="0" max="1" step="0.1" value={patientState.peripheralPerfusion} onChange={(event) => updatePatient({ peripheralPerfusion: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-temperature"><span>Temperature <b>{temperatureC.toFixed(1)} °C</b></span><input disabled={controlsLocked} type="range" min="30" max="42" step="0.1" value={temperatureC} onChange={(event) => updatePatient({ temperatureC: Number(event.target.value) })} /></label>
         </section>
       ),
     },
@@ -276,6 +279,7 @@ export function EdumonWorkspacePanel({
     <>
       <EdumonNibpControl patientState={patientState} />
       <EdumonCapnographySurface patientState={patientState} />
+      <EdumonTemperatureSurface patientState={patientState} />
       <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} disabled={controlsLocked} />
       {teachingHost.appId === 'edumon-ana' && (
         <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={controlsLocked} />
