@@ -19,6 +19,8 @@ import {
   writeScenarioSnapshotValue,
 } from './definition'
 
+type EdumonScenarioProduct = Extract<ScenarioProductId, 'anaesth' | 'icu'>
+
 function displayValue(variable: ScenarioVariableDefinition, value: unknown) {
   if (variable.type === 'select') return variable.options?.find((option) => option.value === String(value))?.label ?? String(value ?? '')
   if (variable.type === 'boolean') return value ? 'On' : 'Off'
@@ -58,7 +60,7 @@ function RegistryVariableControl({
   </div>
 }
 
-function SnapshotEditor({ product, snapshot, onChange, appliedVariableIds, onAppliedVariableIdsChange }: { product: Exclude<ScenarioProductId, 'eduvent'>; snapshot: EdumonScenarioSnapshot; onChange: (snapshot: EdumonScenarioSnapshot) => void; appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void }) {
+function SnapshotEditor({ product, snapshot, onChange, appliedVariableIds, onAppliedVariableIdsChange }: { product: EdumonScenarioProduct; snapshot: EdumonScenarioSnapshot; onChange: (snapshot: EdumonScenarioSnapshot) => void; appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void }) {
   const module = getEdumonScenarioModule(product)
   const editable = writableScenarioVariables(module)
   const selected = new Set(appliedVariableIds ?? editable.map((variable) => variable.id))
@@ -96,7 +98,7 @@ function contentKind(content: TeachingScenarioStageContent | undefined) {
   return content?.kind ?? 'state'
 }
 
-export function createEdumonAuthoringAdapter(product: Exclude<ScenarioProductId, 'eduvent'>, productLabel: string): SharedScenarioEditorAdapter<EdumonStoredScenario, EdumonScenarioSnapshot> {
+export function createEdumonAuthoringAdapter(product: EdumonScenarioProduct, productLabel: string): SharedScenarioEditorAdapter<EdumonStoredScenario, EdumonScenarioSnapshot> {
   const module = getEdumonScenarioModule(product)
   const editableVariables = writableScenarioVariables(module)
   const appliedIds = editableVariables.map((variable) => variable.id)
