@@ -5,9 +5,9 @@ import { VENTILATOR_SCENARIO_MODULE } from './ventilator/definition'
 const EDUMON_ANA_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
   id: 'edumon-ana',
   schemaVersion: 1,
-  label: 'EDUMON-Ana',
+  label: 'LoppjuSIM-Anaesth',
   shortLabel: 'Anaesthesia monitor',
-  description: 'Anaesthesia patient-monitor scenarios using the shared EDUSIM scenario library.',
+  description: 'Anaesthesia patient-monitor scenarios using the shared LoppjuSIM scenario library.',
   available: true,
   variables: [],
   templates: [],
@@ -18,9 +18,9 @@ const EDUMON_ANA_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
 const EDUMON_ICU_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
   id: 'edumon-icu',
   schemaVersion: 1,
-  label: 'EDUMON-ICU',
+  label: 'LoppjuSIM-ICU',
   shortLabel: 'ICU monitor',
-  description: 'Intensive-care patient-monitor scenarios using the shared EDUSIM scenario library.',
+  description: 'Intensive-care patient-monitor scenarios using the shared LoppjuSIM scenario library.',
   available: true,
   variables: [],
   templates: [],
