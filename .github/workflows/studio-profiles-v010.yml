@@ -1,0 +1,30 @@
+name: Studio v0.10.0 profiles
+
+on:
+  push:
+    branches: [chatgpt/studio-v0.10.0-profiles]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/studio-v0.10.0-profiles
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python3 scripts/apply-studio-profiles-v010.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit implementation
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src
+          git commit -m "Studio v0.10.0 editable profiles" || exit 0
+          git push
