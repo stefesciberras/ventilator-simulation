@@ -16,3 +16,17 @@
 .edumon-value-capnography .edumon-value-unit {
   color: color-mix(in srgb, #f2d64b 78%, white 22%);
 }
+
+/* Respiratory rate is a clinically important secondary numeric on the CO2 tile.
+   Keep it clearly legible rather than using the generic small detail treatment. */
+.edumon-measurements .edumon-value-capnography .edumon-value-detail {
+  font-size: 14px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+@media (max-width: 680px) {
+  .edumon-measurements .edumon-value-capnography .edumon-value-detail {
+    font-size: 11px;
+  }
+}
