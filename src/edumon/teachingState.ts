@@ -8,4 +8,8 @@ export interface EdumonTeachingState {
   simulationPaused: boolean
   simulationSpeed: EdumonSimulationSpeed
   alarmLimits: EdumonAlarmLimits
+  /** Latest local Drugs & Events activation, used by scenario triggers across a teaching session. */
+  lastActionId?: string | null
+  actionSequence?: number
+  actionSimulationTime?: number | null
 }

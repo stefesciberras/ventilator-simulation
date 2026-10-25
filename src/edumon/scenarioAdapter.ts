@@ -14,6 +14,8 @@ export interface EdumonScenarioRuntimeContext {
   mediaEnded?: boolean
   mediaAcknowledged?: boolean
   stageBaselinePatient?: EdumonScenarioSnapshot['patient']
+  actionEvents?: Array<{ sourceId: string; actor: 'candidate' | 'instructor'; actionId: string; sequence: number }>
+  actionBaselines?: Record<string, number>
 }
 
 function numericMetric(context: EdumonScenarioRuntimeContext, metric: EdumonScenarioMetric): number | null {
@@ -62,6 +64,14 @@ export function createEdumonScenarioRuntimeAdapter(
       if (trigger.type === 'condition') {
         const actual = numericMetric(context, trigger.metric)
         return actual != null && Number.isFinite(actual) && conditionMatches(actual, trigger.operator, trigger.value)
+      }
+      if (trigger.type === 'edusim-action') {
+        const actor = trigger.actor ?? 'either'
+        return (context.actionEvents ?? []).some((event) =>
+          event.actionId === trigger.actionId
+          && event.sequence > (context.actionBaselines?.[event.sourceId] ?? 0)
+          && (actor === 'either' || event.actor === actor),
+        )
       }
       const baseline = context.stageBaselinePatient ?? stage.stage.snapshot.patient
       return changed(context.state.patient[trigger.parameter], baseline[trigger.parameter])

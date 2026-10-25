@@ -34,6 +34,7 @@ import { copySimulationDiagnostic } from '../core/SimulationDiagnostics'
 import { getSimulationProduct } from '../core/products'
 import { autoscaleWaveformSamples, type WaveformAutoscaleOptions } from '../core/WaveformAutoscale'
 import type { EdumonTeachingState } from './teachingState'
+import { getActionRuntimeLog, subscribeToActionRuntime } from '../edusim/actions/ActionRuntime'
 import './edumon.css'
 import './edumon-console-parity.css'
 
@@ -226,6 +227,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const effectivePatientRef = useRef<MonitorPatientState>({ ...DEFAULT_MONITOR_STATE })
   const patientTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; duration: number } | null>(null)
   const scenarioPatientBaselineRef = useRef<MonitorPatientState>({ ...DEFAULT_MONITOR_STATE })
+  const scenarioActionBaselineRef = useRef<Record<string, number>>({})
   const simulationPausedRef = useRef(false)
   const simulationSpeedRef = useRef<EdumonSimulationSpeed>(1)
   const scenarioTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; defaultPolicy: TeachingScenarioTransition; overrides: Record<string, TeachingScenarioTransition> } | null>(null)
@@ -243,9 +245,19 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const launchedScenarioRef = useRef<string | null>(null)
   const [scenarioQuestionState, setScenarioQuestionState] = useState({ answered: false, correct: false })
   const [scenarioMediaState, setScenarioMediaState] = useState({ ended: false, acknowledged: false })
+  const [scenarioActionEvent, setScenarioActionEvent] = useState<{ actionId: string; sequence: number; simulationTime: number } | null>(null)
   const [alarmLimits, setAlarmLimits] = useState<EdumonAlarmLimits>(() => loadEdumonAlarmLimits(persistence))
   const [alarmLimitsOpen, setAlarmLimitsOpen] = useState(false)
   const screenWakeLock = useScreenWakeLock()
+
+  useEffect(() => {
+    const syncActionEvent = () => {
+      const latest = [...getActionRuntimeLog()].reverse().find((entry) => entry.type === 'activate' && Boolean(entry.actionId))
+      setScenarioActionEvent(latest?.actionId ? { actionId: latest.actionId, sequence: latest.sequence, simulationTime: latest.simulationTime } : null)
+    }
+    syncActionEvent()
+    return subscribeToActionRuntime(syncActionEvent)
+  }, [])
 
   useEffect(() => {
     if (frozen || simulationPaused) return
@@ -290,12 +302,15 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const samples = frozenSamples ?? liveSamples
   const measurements = measurementsFor(effectivePatientState)
   const teachingHost = module.id === 'ana' ? edumonAnaTeachingHost : edumonIcuTeachingHost
-  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits }), [patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits])
+  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits, lastActionId: scenarioActionEvent?.actionId ?? null, actionSequence: scenarioActionEvent?.sequence ?? 0, actionSimulationTime: scenarioActionEvent?.simulationTime ?? null }), [patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits, scenarioActionEvent])
   const teachingSession = useProductTeachingSession<EdumonTeachingState>({
     productId: teachingHost.appId,
     state: sharedTeachingState,
     mergeCandidateState: (localState, instructorState) => ({
       ...instructorState,
+      lastActionId: localState.lastActionId ?? null,
+      actionSequence: localState.actionSequence ?? 0,
+      actionSimulationTime: localState.actionSimulationTime ?? null,
       patient: {
         ...instructorState.patient,
         respiratory: localState.patient.respiratory ?? instructorState.patient.respiratory,
@@ -422,17 +437,40 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     onClear: () => scenarioRuntime.stop(),
   })
 
+  const scenarioActionEvents = useMemo(() => {
+    const events: Array<{ sourceId: string; actor: 'candidate' | 'instructor'; actionId: string; sequence: number }> = []
+    if (scenarioActionEvent) {
+      events.push({
+        sourceId: 'local',
+        actor: selfDirected.active || teachingSession.role === 'candidate' ? 'candidate' : 'instructor',
+        actionId: scenarioActionEvent.actionId,
+        sequence: scenarioActionEvent.sequence,
+      })
+    }
+    if (teachingSession.role === 'instructor') {
+      for (const member of teachingSession.members) {
+        if (member.role !== 'candidate') continue
+        const state = member.product_state as Partial<EdumonTeachingState> | null
+        const actionId = state?.lastActionId
+        const sequence = Number(state?.actionSequence ?? 0)
+        if (actionId && Number.isFinite(sequence)) events.push({ sourceId: member.id, actor: 'candidate', actionId, sequence })
+      }
+    }
+    return events
+  }, [scenarioActionEvent, selfDirected.active, teachingSession.role, teachingSession.members])
+
   useEffect(() => {
     setScenarioQuestionState({ answered: false, correct: false })
     setScenarioMediaState({ ended: false, acknowledged: false })
-  }, [scenarioRuntime.stageIndex])
+    scenarioActionBaselineRef.current = Object.fromEntries(scenarioActionEvents.map((event) => [event.sourceId, event.sequence]))
+  }, [scenarioRuntime.scenario?.id, scenarioRuntime.stageIndex])
 
   const selectedAuxiliary = module.auxiliaryMonitors.find((item) => item.id === auxiliaryMonitor) ?? null
 
   useEffect(() => {
     if (scenarioRuntime.status !== 'running') return
-    void scenarioRuntime.evaluate({ simulationTime: elapsed, state: sharedTeachingState, measurements, questionAnswered: scenarioQuestionState.answered, questionCorrect: scenarioQuestionState.correct, mediaEnded: scenarioMediaState.ended, mediaAcknowledged: scenarioMediaState.acknowledged, stageBaselinePatient: scenarioPatientBaselineRef.current }, elapsed)
-  }, [scenarioRuntime, elapsed, sharedTeachingState, measurements, scenarioQuestionState, scenarioMediaState])
+    void scenarioRuntime.evaluate({ simulationTime: elapsed, state: sharedTeachingState, measurements, questionAnswered: scenarioQuestionState.answered, questionCorrect: scenarioQuestionState.correct, mediaEnded: scenarioMediaState.ended, mediaAcknowledged: scenarioMediaState.acknowledged, stageBaselinePatient: scenarioPatientBaselineRef.current, actionEvents: scenarioActionEvents, actionBaselines: scenarioActionBaselineRef.current }, elapsed)
+  }, [scenarioRuntime, elapsed, sharedTeachingState, measurements, scenarioQuestionState, scenarioMediaState, scenarioActionEvents])
 
   const sessionPanel = (
     <SharedBasicSessionPanel

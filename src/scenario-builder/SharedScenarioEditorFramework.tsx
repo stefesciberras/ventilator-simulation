@@ -4,6 +4,7 @@ import {
   authoringId,
   createAuthoringStage,
   defaultAuthoringTrigger,
+  type SharedScenarioActionChoice,
   type SharedScenarioAuthoringBranch,
   type SharedScenarioAuthoringDocument,
   type SharedScenarioAuthoringStage,
@@ -48,6 +49,7 @@ function triggerLabel(trigger: SharedScenarioAuthoringTrigger) {
   if (trigger.type === 'time') return `Time ≥ ${trigger.seconds}s`
   if (trigger.type === 'condition') return `${trigger.metric || 'Metric'} ${trigger.operator === 'lt' ? '<' : trigger.operator === 'gt' ? '>' : '='} ${trigger.value}`
   if (trigger.type === 'action') return `${trigger.actor}: ${trigger.parameter || 'action'}`
+  if (trigger.type === 'edusim-action') return `${trigger.actor}: ${trigger.actionId || 'drug / event'}`
   if (trigger.type === 'question-any') return 'Any answer submitted'
   if (trigger.type === 'question-correct') return 'Correct answer submitted'
   if (trigger.type === 'media-ended') return 'Video finished'
@@ -61,11 +63,13 @@ function pathTriggers(branch: SharedScenarioAuthoringBranch) {
 function TriggerEditor({
   trigger,
   adapter,
+  edusimActionChoices,
   onChange,
   onDelete,
 }: {
   trigger: SharedScenarioAuthoringTrigger
   adapter: SharedScenarioEditorAdapter<unknown, unknown>
+  edusimActionChoices: readonly SharedScenarioActionChoice[]
   onChange: (trigger: SharedScenarioAuthoringTrigger) => void
   onDelete?: () => void
 }) {
@@ -74,6 +78,7 @@ function TriggerEditor({
     else if (type === 'time') onChange({ id: trigger.id, type, seconds: 30 })
     else if (type === 'condition') onChange({ id: trigger.id, type, metric: adapter.conditionMetrics[0]?.id ?? '', operator: 'gt', value: 0 })
     else if (type === 'action') onChange({ id: trigger.id, type, parameter: adapter.actionParameters[0]?.id ?? '', actor: 'candidate' })
+    else if (type === 'edusim-action') onChange({ id: trigger.id, type, actionId: edusimActionChoices[0]?.id ?? '', actor: 'candidate' })
     else onChange({ id: trigger.id, type })
   }
 
@@ -83,6 +88,7 @@ function TriggerEditor({
       <option value="time">Time passed</option>
       <option value="condition">Physiological condition</option>
       <option value="action">Candidate / instructor action</option>
+      {!!adapter.loadEdusimActionChoices && <option value="edusim-action">Drug / event action</option>}
       <option value="question-any">Any question answer</option>
       <option value="question-correct">Correct question answer</option>
       <option value="media-ended">Video finished</option>
@@ -96,6 +102,13 @@ function TriggerEditor({
     </>}
     {trigger.type === 'action' && <>
       <select value={trigger.parameter} onChange={(event) => onChange({ ...trigger, parameter: event.target.value })}>{adapter.actionParameters.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+      <select value={trigger.actor} onChange={(event) => onChange({ ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="candidate">Candidate</option><option value="instructor">Instructor</option><option value="either">Either</option></select>
+    </>}
+    {trigger.type === 'edusim-action' && <>
+      <select value={trigger.actionId} onChange={(event) => onChange({ ...trigger, actionId: event.target.value })}>
+        <optgroup label="Drugs">{edusimActionChoices.filter((item) => item.kind === 'drug').map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>
+        <optgroup label="Events">{edusimActionChoices.filter((item) => item.kind === 'event').map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>
+      </select>
       <select value={trigger.actor} onChange={(event) => onChange({ ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="candidate">Candidate</option><option value="instructor">Instructor</option><option value="either">Either</option></select>
     </>}
     {onDelete && <button type="button" className="scenario-builder-danger shared-scenario-trash-button" onClick={onDelete} aria-label="Remove condition" title="Remove condition"><TrashIcon /></button>}
@@ -164,6 +177,8 @@ function StageTransitionEditor<TScenario, TSnapshot>({
 export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, enabled = true, onStartScenario }: SharedScenarioEditorFrameworkProps<TScenario, TSnapshot>) {
   const library = useProductScenarioLibrary<TScenario>(adapter.product, enabled)
   const [selectedId, setSelectedId] = useState('')
+  const [edusimActionChoices, setEdusimActionChoices] = useState<readonly SharedScenarioActionChoice[]>([])
+  const [edusimActionLoadError, setEdusimActionLoadError] = useState<string | null>(null)
   const [document, setDocument] = useState<SharedScenarioAuthoringDocument<TSnapshot>>(() => {
     const snapshot = adapter.emptySnapshot()
     const stage = createAuthoringStage('Stage 1', snapshot)
@@ -185,6 +200,20 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
 
   const selectedRow = library.items.find((row) => row.id === selectedId) ?? null
   const selectedStage = document.stages.find((stage) => stage.id === selectedStageId) ?? document.stages[0]
+
+  useEffect(() => {
+    let active = true
+    setEdusimActionLoadError(null)
+    if (!adapter.loadEdusimActionChoices) { setEdusimActionChoices([]); return () => { active = false } }
+    void adapter.loadEdusimActionChoices()
+      .then((items) => { if (active) setEdusimActionChoices(items) })
+      .catch((cause) => {
+        if (!active) return
+        setEdusimActionChoices([])
+        setEdusimActionLoadError(cause instanceof Error ? cause.message : 'Unable to load Drugs & Events.')
+      })
+    return () => { active = false }
+  }, [adapter.product])
 
   useEffect(() => {
     if (selectedId && !library.items.some((row) => row.id === selectedId)) setSelectedId('')
@@ -421,7 +450,7 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
           </div>}
 
           <section className="shared-scenario-paths">
-            <div className="shared-scenario-section-heading"><div><span>Scenario flow</span><strong>Paths from this stage</strong><small>Each path has a destination and one or more conditions.</small></div><button type="button" disabled={document.stages.length < 2} onClick={addBranch}>+ Path</button></div>
+            <div className="shared-scenario-section-heading"><div><span>Scenario flow</span><strong>Paths from this stage</strong><small>Each path has a destination and one or more conditions.</small>{edusimActionLoadError && <small>Drugs & Events unavailable: {edusimActionLoadError}</small>}</div><button type="button" disabled={document.stages.length < 2} onClick={addBranch}>+ Path</button></div>
             {stageBranches.sort((a, b) => a.priority - b.priority).map((branch) => {
               const conditions = pathTriggers(branch)
               return <div key={branch.id} className="shared-scenario-path-card">
@@ -436,7 +465,7 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
                 <div className="shared-scenario-path-conditions">
                   {conditions.map((trigger, conditionIndex) => <div className="shared-scenario-path-condition" key={trigger.id}>
                     {conditionIndex > 0 && <span className="shared-scenario-path-join">{branch.triggerMode === 'all' ? 'AND' : 'OR'}</span>}
-                    <TriggerEditor trigger={trigger} adapter={adapter as SharedScenarioEditorAdapter<unknown, unknown>} onChange={(next) => updatePathCondition(branch, trigger.id, next)} onDelete={conditions.length > 1 ? () => removePathCondition(branch, trigger.id) : undefined} />
+                    <TriggerEditor trigger={trigger} adapter={adapter as SharedScenarioEditorAdapter<unknown, unknown>} edusimActionChoices={edusimActionChoices} onChange={(next) => updatePathCondition(branch, trigger.id, next)} onDelete={conditions.length > 1 ? () => removePathCondition(branch, trigger.id) : undefined} />
                   </div>)}
                   <button type="button" className="shared-scenario-add-condition" onClick={() => addPathCondition(branch)}>+ Condition</button>
                 </div>

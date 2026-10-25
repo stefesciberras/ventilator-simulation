@@ -23,13 +23,14 @@ export type EdumonScenarioTrigger =
   | { type: 'time'; seconds: number }
   | { type: 'condition'; metric: EdumonScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
   | { type: 'patient-change'; parameter: keyof MonitorPatientState; actor?: SharedScenarioActor }
+  | { type: 'edusim-action'; actionId: string; actor?: SharedScenarioActor }
   | { type: 'question-any' }
   | { type: 'question-correct' }
   | { type: 'media-ended' }
   | { type: 'media-acknowledged' }
 
 export interface EdumonStoredScenario {
-  schemaVersion: 1 | 2
+  schemaVersion: 1 | 2 | 3
   kind: 'static' | 'dynamic'
   description: string
   definition: TeachingScenarioDefinition<EdumonScenarioSnapshot, EdumonScenarioTrigger>

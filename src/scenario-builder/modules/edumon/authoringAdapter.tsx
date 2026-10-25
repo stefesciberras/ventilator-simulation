@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { DEFAULT_MONITOR_STATE, type CardiacRhythm } from '../../../edumon/types'
 import { RHYTHM_LABELS } from '../../../edumon/monitorEngine'
+import { listEdusimActions } from '../../../edumon/actionLibrary'
 import type { EdumonScenarioMetric, EdumonScenarioSnapshot, EdumonScenarioTrigger, EdumonStoredScenario } from '../../../edumon/scenarioTypes'
 import type { ScenarioProductId } from '../../../teaching/scenario/products'
 import type {
@@ -55,6 +56,7 @@ function toSharedTrigger(trigger: EdumonScenarioTrigger): SharedScenarioAuthorin
   if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct' || trigger.type === 'media-ended' || trigger.type === 'media-acknowledged') return { id, type: trigger.type }
   if (trigger.type === 'time') return { id, type: 'time', seconds: trigger.seconds }
   if (trigger.type === 'condition') return { id, type: 'condition', metric: trigger.metric, operator: trigger.operator, value: trigger.value }
+  if (trigger.type === 'edusim-action') return { id, type: 'edusim-action', actionId: trigger.actionId, actor: trigger.actor ?? 'candidate' }
   return { id, type: 'action', parameter: String(trigger.parameter), actor: trigger.actor ?? 'candidate' }
 }
 
@@ -62,6 +64,7 @@ function fromSharedTrigger(trigger: SharedScenarioAuthoringTrigger): EdumonScena
   if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct' || trigger.type === 'media-ended' || trigger.type === 'media-acknowledged') return { type: trigger.type }
   if (trigger.type === 'time') return { type: 'time', seconds: trigger.seconds }
   if (trigger.type === 'condition') return { type: 'condition', metric: trigger.metric as EdumonScenarioMetric, operator: trigger.operator, value: trigger.value }
+  if (trigger.type === 'edusim-action') return { type: 'edusim-action', actionId: trigger.actionId, actor: trigger.actor }
   return { type: 'patient-change', parameter: trigger.parameter as keyof EdumonScenarioSnapshot['patient'], actor: trigger.actor }
 }
 
@@ -91,6 +94,10 @@ export function createEdumonAuthoringAdapter(product: Exclude<ScenarioProductId,
       { id: 'spo2', label: 'SpO₂' },
       { id: 'peripheralPerfusion', label: 'Peripheral perfusion' },
     ],
+    loadEdusimActionChoices: async () => {
+      const environment = product === 'icu' ? 'edumon-icu' : 'edumon-ana'
+      return (await listEdusimActions(environment)).map((action) => ({ id: action.id, label: action.name, kind: action.kind }))
+    },
     actionParameters: [
       { id: 'rhythm', label: 'Rhythm changed' },
       { id: 'heartRate', label: 'Heart rate changed' },
@@ -137,7 +144,7 @@ export function createEdumonAuthoringAdapter(product: Exclude<ScenarioProductId,
       ],
     }),
     fromDocument: (document: SharedScenarioAuthoringDocument<EdumonScenarioSnapshot>) => ({
-      schemaVersion: 2,
+      schemaVersion: 3,
       kind: document.stages.length > 1 || document.branches.length > 0 || document.stages.some((stage) => stage.kind !== 'state') ? 'dynamic' : 'static',
       description: document.description,
       definition: {
