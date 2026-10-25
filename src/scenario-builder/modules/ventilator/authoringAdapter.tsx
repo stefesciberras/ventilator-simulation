@@ -207,8 +207,8 @@ function sharedPath(fromStageId: string, toStageId: string, triggers: DynamicSce
 export function createVentilatorAuthoringAdapter(seed: InstructorScenarioSnapshot): SharedScenarioEditorAdapter<InstructorScenarioSnapshot, InstructorScenarioSnapshot> {
   const writable = VENTILATOR_SCENARIO_MODULE.variables.filter((variable) => variable.role === 'setting' && variable.writable)
   return {
-    product: 'eduvent',
-    productLabel: 'EDUVENT',
+    product: 'mv',
+    productLabel: 'LoppjuSIM-MV',
     emptySnapshot: () => clone(seed),
     conditionMetrics: VENTILATOR_SCENARIO_MODULE.variables.filter((variable) => variable.role === 'measurement').map((variable) => ({ id: variable.id.replace(/^measurement\./, ''), label: variable.label })),
     actionParameters: [
@@ -252,7 +252,7 @@ export function createVentilatorAuthoringAdapter(seed: InstructorScenarioSnapsho
           paths.push(sharedPath(fromStageId, toStageId, triggers, 1000 + index))
         })
       }
-      return { schemaVersion: 1, product: 'eduvent', name, description: scenario.description ?? '', stages, branches: paths }
+      return { schemaVersion: 1, product: 'mv', name, description: scenario.description ?? '', stages, branches: paths }
     },
     fromDocument: (document: SharedScenarioAuthoringDocument<InstructorScenarioSnapshot>) => {
       const first = clone(document.stages[0]?.snapshot ?? seed)
