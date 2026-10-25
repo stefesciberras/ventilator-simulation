@@ -1,4 +1,4 @@
-import type { SimulationProductId } from './SimulationProductAdapter'
+import { toLegacyProductId, type SimulationProductId } from './SimulationProductAdapter'
 
 export interface SimulationPersistence {
   key: (name: string) => string
@@ -15,14 +15,19 @@ const isBrowser = () => typeof window !== 'undefined' && Boolean(window.localSto
 
 export function createSimulationPersistence(productId: SimulationProductId): SimulationPersistence {
   const prefix = `edusim.${productId}.`
+  const legacyPrefix = `edusim.${toLegacyProductId(productId)}.`
   const key = (name: string) => `${prefix}${name}`
+  const legacyProductKey = (name: string) => `${legacyPrefix}${name}`
 
   const readRaw = (name: string, legacyKeys: string[] = []) => {
     if (!isBrowser()) return null
     const currentKey = key(name)
     const current = window.localStorage.getItem(currentKey)
     if (current != null) return current
-    for (const legacyKey of legacyKeys) {
+
+    const migrationKeys = [legacyProductKey(name), ...legacyKeys]
+    for (const legacyKey of migrationKeys) {
+      if (legacyKey === currentKey) continue
       const legacy = window.localStorage.getItem(legacyKey)
       if (legacy == null) continue
       try { window.localStorage.setItem(currentKey, legacy) } catch { /* best-effort migration */ }
