@@ -1,7 +1,40 @@
-.edumon-measurements {
-  grid-template-rows: repeat(5, minmax(0, 1fr));
+.edumon-temperature-container {
+  align-self: stretch;
+  flex: 0 0 80px;
+  min-width: 80px;
+  margin-left: auto;
+  margin-right: 3px;
+  padding: 5px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+  justify-items: center;
+  border: 1px solid #33424b;
+  border-radius: 8px;
+  background: #111c22;
+  color: #d9e3e7;
+  box-sizing: border-box;
+  text-align: center;
+  order: 90;
 }
 
-.edumon-value-temperature {
+.edumon-temperature-title {
+  color: #aebbc1;
+  font-size: .59rem;
+  font-weight: 900;
+  letter-spacing: .045em;
+}
+
+.edumon-temperature-container strong {
+  align-self: center;
   color: #e7d36f;
+  font-size: 1.3rem;
+  line-height: 1;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.edumon-temperature-container small {
+  color: #7f9099;
+  font-size: .48rem;
 }
