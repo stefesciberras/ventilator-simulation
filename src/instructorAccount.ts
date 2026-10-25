@@ -77,23 +77,16 @@ export interface DynamicScenarioApplyMask {
 export interface DynamicScenarioStage {
   id?: string
   name: string
-  /** Instructor-facing explanation of what should happen during this stage. */
   comment?: string
-  /** v6 content model. Older stages default to controls. */
   stageType?: DynamicScenarioStageType
   media?: DynamicScenarioStageMedia
   question?: DynamicScenarioStageQuestion
-  /** Default transition inherited by numeric controls in this stage. */
   transition?: DynamicScenarioTransition
-  /** Optional per-variable overrides. Discrete values always apply immediately. */
   transitionOverrides?: DynamicScenarioTransitionOverrides
   snapshot: InstructorScenarioSnapshot
-  /** Missing on v0.82.0 stages; absence means apply the complete snapshot. */
   apply?: DynamicScenarioApplyMask
   sourceName?: string
-  /** Legacy single trigger, retained for backwards compatibility. */
   advanceTrigger?: DynamicScenarioTrigger
-  /** v4 trigger list. Any configured trigger may advance the stage (OR semantics). */
   advanceTriggers?: DynamicScenarioTrigger[]
 }
 
@@ -103,9 +96,7 @@ export interface DynamicScenarioBranch {
   id: string
   fromStageId: string
   toStageId: string
-  /** Legacy single trigger retained for schema <= 8 compatibility. */
   trigger: DynamicScenarioTrigger
-  /** Schema v9 path conditions. */
   triggers?: DynamicScenarioTrigger[]
   triggerMode?: DynamicScenarioTriggerMode
   priority: number
@@ -122,7 +113,6 @@ export function dynamicBranchTriggerMode(branch: DynamicScenarioBranch): Dynamic
   return branch.triggerMode === 'all' ? 'all' : 'any'
 }
 
-
 export function dynamicStageTriggers(stage: DynamicScenarioStage): DynamicScenarioTrigger[] {
   const fallback: DynamicScenarioTrigger = (stage.stageType ?? 'controls') === 'question' ? { type: 'question-any' } : { type: 'manual' }
   const configured = stage.advanceTriggers?.length
@@ -138,7 +128,6 @@ export function dynamicStageTriggers(stage: DynamicScenarioStage): DynamicScenar
 }
 
 export interface InstructorScenarioSnapshot {
-  /** Optional on older presets; missing values are treated as v1 static scenarios. */
   schemaVersion?: number
   kind?: InstructorScenarioKind
   description?: string
@@ -283,12 +272,9 @@ function normaliseScenario(scenario: InstructorScenarioSnapshot): InstructorScen
 }
 
 function normalisePreset(row: InstructorPresetRow): InstructorPresetRow {
-  return { ...row, product: row.product ?? 'eduvent', scenario: normaliseScenario(row.scenario) }
+  return { ...row, product: row.product ?? 'mv', scenario: normaliseScenario(row.scenario) }
 }
 
-/**
- * Compatibility exports. Instructor identity is owned by EDUSIM teaching core.
- */
 export {
   isPermanentInstructor,
   getInstructorAccount,
@@ -299,20 +285,20 @@ export {
 } from './teaching/account/InstructorAccountService'
 
 function legacyScenarioRepository(product: ScenarioProductId) {
-  return createScenarioRepository<InstructorScenarioSnapshot>(product, product === 'eduvent' ? {
+  return createScenarioRepository<InstructorScenarioSnapshot>(product, product === 'mv' ? {
     encode: normaliseScenario,
     decode: (scenario) => normaliseScenario(scenario as InstructorScenarioSnapshot),
   } : {})
 }
 
 /** @deprecated Use createScenarioRepository/useProductScenarioLibrary. */
-export async function listInstructorPresets(product: ScenarioProductId = 'eduvent'): Promise<InstructorPresetRow[]> {
+export async function listInstructorPresets(product: ScenarioProductId = 'mv'): Promise<InstructorPresetRow[]> {
   const rows = await legacyScenarioRepository(product).list()
-  return rows as InstructorPresetRow[]
+  return rows.map(normalisePreset) as InstructorPresetRow[]
 }
 
 /** @deprecated Use createScenarioRepository/useProductScenarioLibrary. */
-export async function createInstructorPreset(name: string, scenario: InstructorScenarioSnapshot, product: ScenarioProductId = 'eduvent') {
+export async function createInstructorPreset(name: string, scenario: InstructorScenarioSnapshot, product: ScenarioProductId = 'mv') {
   return legacyScenarioRepository(product).create(name, scenario) as Promise<InstructorPresetRow>
 }
 
@@ -320,12 +306,12 @@ export async function createInstructorPreset(name: string, scenario: InstructorS
 export async function updateInstructorPreset(
   id: string,
   updates: { name?: string; scenario?: InstructorScenarioSnapshot },
-  product: ScenarioProductId = 'eduvent',
+  product: ScenarioProductId = 'mv',
 ) {
   return legacyScenarioRepository(product).update(id, updates) as Promise<InstructorPresetRow>
 }
 
 /** @deprecated Use createScenarioRepository/useProductScenarioLibrary. */
-export async function deleteInstructorPreset(id: string, product: ScenarioProductId = 'eduvent') {
+export async function deleteInstructorPreset(id: string, product: ScenarioProductId = 'mv') {
   return legacyScenarioRepository(product).remove(id)
 }
