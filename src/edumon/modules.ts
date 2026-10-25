@@ -28,7 +28,7 @@ export interface EdumonModuleDefinition {
 export const EDUMON_MODULES: Record<EdumonModuleId, EdumonModuleDefinition> = {
   ana: {
     id: 'ana',
-    productName: 'EDUMON-Ana',
+    productName: 'LoppjuSIM-Anaesth',
     subtitle: 'Anaesthesia patient monitor',
     defaultTeachingModule: 'Anaesthesia monitoring',
     monitorProfile: EDUMON_PRODUCT_MONITOR_PROFILES.ana,
@@ -37,7 +37,7 @@ export const EDUMON_MODULES: Record<EdumonModuleId, EdumonModuleDefinition> = {
   },
   icu: {
     id: 'icu',
-    productName: 'EDUMON-ICU',
+    productName: 'LoppjuSIM-ICU',
     subtitle: 'Intensive care patient monitor',
     defaultTeachingModule: 'Intensive care monitoring',
     monitorProfile: EDUMON_PRODUCT_MONITOR_PROFILES.icu,
