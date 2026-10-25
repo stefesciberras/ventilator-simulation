@@ -42,10 +42,11 @@ function settingToEnvironments(setting: EdusimActionSetting): EdusimActionEnviro
 function normalise(row: Record<string, unknown>): EdusimActionDefinition {
   const setting: EdusimActionSetting = row.setting === 'itu' || row.setting === 'all' ? row.setting : 'ana'
   const priority = Number(row.priority)
+  const id = String(row.id)
   return {
-    id: String(row.id),
+    id,
     kind: row.kind === 'event' ? 'event' : 'drug',
-    name: String(row.name ?? ''),
+    name: id === 'diaphragm-return' ? 'Curare Cleft' : String(row.name ?? ''),
     short_press_action: row.short_press_action === 'toggle' ? 'toggle' : 'momentary',
     long_press_action: typeof row.long_press_action === 'string' && row.long_press_action.length ? row.long_press_action : null,
     duration_seconds: Number(row.duration_seconds ?? 0),
