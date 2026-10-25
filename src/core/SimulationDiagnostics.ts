@@ -4,6 +4,7 @@ export type SimulationDiagnosticWaveformSource = 'live' | 'frozen'
 export type SimulationDiagnosticProvider = () => Record<string, unknown>
 
 const diagnosticProviders = new Map<string, SimulationDiagnosticProvider>()
+let activeDiagnosticCapture: Array<Record<string, unknown>> | null = null
 
 export function registerSimulationDiagnosticProvider(id: string, provider: SimulationDiagnosticProvider): () => void {
   diagnosticProviders.set(id, provider)
@@ -117,9 +118,28 @@ export function createSimulationDiagnostic<TSample = never>(
   return diagnostic
 }
 
+export async function captureSimulationDiagnostics(
+  run: () => void | Promise<void>,
+): Promise<Array<Record<string, unknown>>> {
+  if (activeDiagnosticCapture) throw new Error('A diagnostic capture is already in progress.')
+  const captured: Array<Record<string, unknown>> = []
+  activeDiagnosticCapture = captured
+  try {
+    await run()
+    return [...captured]
+  } finally {
+    activeDiagnosticCapture = null
+  }
+}
+
 export async function copySimulationDiagnostic<TSample = never>(
   options: SimulationDiagnosticOptions<TSample>,
   promptTitle = 'Copy diagnostic JSON',
 ): Promise<boolean> {
-  return copySimulationJson(createSimulationDiagnostic(options), promptTitle, true)
+  const diagnostic = createSimulationDiagnostic(options)
+  if (activeDiagnosticCapture) {
+    activeDiagnosticCapture.push(diagnostic)
+    return true
+  }
+  return copySimulationJson(diagnostic, promptTitle, true)
 }
