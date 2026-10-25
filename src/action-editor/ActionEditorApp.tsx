@@ -6,6 +6,7 @@ import {
   signOutInstructor,
   subscribeToInstructorAccount,
 } from '../instructorAccount'
+import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
 import {
   deleteEdusimAction,
   listEdusimActions,
@@ -96,6 +97,7 @@ export function ActionEditorApp() {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   const selected = useMemo(() => actions.find((action) => action.id === selectedId) ?? null, [actions, selectedId])
 
@@ -230,6 +232,14 @@ export function ActionEditorApp() {
 
   return (
     <main className="action-editor-app">
+      <SimulationAboutDialog
+        open={aboutOpen}
+        productLabel="EDUSIM"
+        title="Drug & Event Library Editor"
+        description="The shared EDUSIM authoring tool for maintaining drug, event and declarative-effect definitions used in educational simulation."
+        onClose={() => setAboutOpen(false)}
+        legalContext="authoring"
+      />
       <header className="action-editor-appbar">
         <div>
           <span>EDUSIM shared authoring</span>
@@ -239,6 +249,7 @@ export function ActionEditorApp() {
         <div className="action-editor-appbar-actions">
           {account && <span>{account.email}</span>}
           {account && <button type="button" onClick={() => void signOut()} disabled={busy}>Sign out</button>}
+          <button type="button" onClick={() => setAboutOpen(true)}>About</button>
           <button type="button" className="primary" onClick={close}>Return to EDUMON</button>
         </div>
       </header>
