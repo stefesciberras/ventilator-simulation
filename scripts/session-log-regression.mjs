@@ -31,6 +31,12 @@ assert(panel.includes('-session-log-${stamp}.csv'), 'CSV export must use session
 assert(panel.includes('fetchStandaloneSessionLogEntries'), 'panel must load standalone local entries')
 assert(panel.includes('subscribeToStandaloneSessionLogEntries'), 'panel must update live in standalone mode')
 assert(panel.includes('local only'), 'standalone UI must disclose that the log is local only')
+assert(panel.includes("if (entry.actor_role === 'instructor') return 'All candidates'"), 'instructor-originated shared entries must identify All candidates as the subject')
+assert(panel.includes('changes.forEach((change, index)'), 'setting snapshots must expand into one human-readable row per changed setting')
+assert(panel.includes('changed by ${actorFor(entry)}'), 'setting rows must identify who made the change')
+assert(panel.includes('row.subject'), 'rendered rows must show a human-readable subject')
+assert(panel.includes('row.message'), 'rendered rows must show a human-readable event sentence')
+assert(!panel.includes('<small>{row.entry.category}</small>'), 'category badges must not clutter the human-readable log')
 
 assert(service.includes("from('edusim_session_log_entries')"), 'client must persist teaching-session logs to shared table')
 assert(service.includes("event: 'INSERT'"), 'client must subscribe to inserted teaching-session log rows')
