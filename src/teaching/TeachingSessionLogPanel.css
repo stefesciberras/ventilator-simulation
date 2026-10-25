@@ -78,7 +78,7 @@
 
 .teaching-session-log-viewer {
   pointer-events: auto;
-  width: min(760px, calc(100vw - 28px));
+  width: min(430px, calc(100vw - 28px));
   max-height: min(78vh, 760px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -112,7 +112,7 @@
 
 @media (max-width: 899px) {
   .teaching-session-log-viewer-overlay { padding: 10px; align-items: end; }
-  .teaching-session-log-viewer { width: 100%; max-height: 78vh; border-radius: 14px 14px 8px 8px; }
+  .teaching-session-log-viewer { width: min(430px, 100%); max-height: 78vh; border-radius: 14px 14px 8px 8px; }
   .teaching-session-log-viewer-header { cursor: default; touch-action: auto; }
 }
 
