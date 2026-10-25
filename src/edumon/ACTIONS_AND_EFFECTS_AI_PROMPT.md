@@ -14,11 +14,14 @@ Core flow:
 
 Manual instructor edits supersede action ownership on that target, but do not bypass absolute hard bounds.
 
+A valid action may intentionally have `effects: []`. Such a no-op action must still be sent through `ActionRuntime` and logged. Do **not** invent a dummy physiological target merely to make a scenario/logging action observable.
+
 ## Core files
 
 - `src/edusim/actions/ActionEffect.ts` — targets/operations, priority, constraints and release behaviour.
 - `src/edusim/actions/ActionRuntime.ts` — timing, priority ordering, constraint resolution, intensity, recover/persist, target supersession and bounded action history.
-- `src/core/SimulationDiagnostics.ts` — runtime diagnostic-provider registry used to include Drug/Event state/history in copied diagnostics.
+- `src/core/SimulationDiagnostics.ts` — runtime diagnostic-provider registry used to include Drug/Event state/history in copied and published diagnostics.
+- `src/teaching/diagnostics/PublishedDiagnostics.ts` — deliberate Supabase publication of diagnostic bundles.
 - `src/edumon/actionPhysiology.ts` — interprets active effects and then calls the hard-bounds layer.
 - `src/edumon/physiologicalBounds.ts` — centralized absolute simulator sanity bounds.
 - `src/edumon/monitorEngine.ts` — rhythm-specific effective-rate constraints and waveform/measurement generation.
@@ -101,9 +104,11 @@ The generic `Relaxant` action retains a 120-second onset. Do not make its respir
 - manual `supersedeActionTarget(...)` interventions;
 - runtime clears.
 
-Current active effects in diagnostics should include their current onset/recovery weight. `ActionRuntime` registers a provider with `SimulationDiagnostics`, so every copied simulation diagnostic may include `runtimeDiagnostics.actions` without product-specific duplication.
+Current active effects in diagnostics should include their current onset/recovery weight. `ActionRuntime` registers a provider with `SimulationDiagnostics`, so every copied or published simulation diagnostic may include `runtimeDiagnostics.actions` without product-specific duplication.
 
-Do not claim browser-local runtime diagnostics are directly accessible from ChatGPT. Direct chat interrogation requires an explicit persistence/upload channel (for example a Supabase diagnostic inbox) with appropriate ownership/RLS and deliberate user publishing.
+No-op actions with `effects: []` still require an `activate` history entry. `Antibiotics` is the reference example: it changes no physiology but its administration time must be visible in the action log and published diagnostics.
+
+Browser-local runtime diagnostics are not directly accessible from ChatGPT. EDUMON provides an explicit **Publish diagnostics** path to the owner-scoped Supabase diagnostic inbox; only after the instructor deliberately publishes a bundle should connected support/chat tooling query it.
 
 ## Timing and release
 
@@ -133,6 +138,12 @@ Surgery, Laryngoscopy and Pain create `stimulus.sympathetic`. Opioids change `an
 
 ## Current action groups
 
+Anaesthesia Drugs: Propofol, Fentanyl, Remifentanil infusion, Relaxant, Neostigmine, Sugammadex, TIVA.
+
+Cardiovascular Drugs: Atropine, Ephedrine, Phenylephrine, Noradrenaline infusion, Adrenaline infusion, Beta blocker.
+
+Other Drugs: **Antibiotics**. It is a momentary, setting `all`, no-op action with `effects: []`, used for scenario/logging semantics.
+
 Cardiovascular Events: Hypertension, Hypotension, Tachycardia, Bradycardia, Hypovolaemia, Bleeding.
 
 Respiratory Events: Apnoea, Curare Cleft, Bronchospasm.
@@ -148,19 +159,20 @@ Anaesthesia events/stimuli include Laryngoscopy, Pain and Surgery.
 1. Inspect current implementation.
 2. Keep actions declarative.
 3. Add validated targets/physiology consumers only when needed.
-4. Use priority + constraints for competing effects.
-5. Keep manual supersession above action priority.
-6. Keep absolute hard bounds centralized and final.
-7. Keep rhythm constraints separate from global sanity bounds.
-8. Preserve the shared sympathetic saturation architecture.
-9. Preserve recover/persist and simulation-time semantics.
-10. Keep fallback and persisted definitions aligned.
-11. Preserve Drug/Event action-history diagnostics when runtime semantics change.
-12. Update regression coverage.
-13. Update both documentation files.
-14. Bump EDUMON version.
-15. Run full CI and merge only when green.
+4. Allow explicit no-op actions for logging/scenario semantics; never add dummy effects.
+5. Use priority + constraints for competing effects.
+6. Keep manual supersession above action priority.
+7. Keep absolute hard bounds centralized and final.
+8. Keep rhythm constraints separate from global sanity bounds.
+9. Preserve the shared sympathetic saturation architecture.
+10. Preserve recover/persist and simulation-time semantics.
+11. Keep fallback and persisted definitions aligned.
+12. Preserve Drug/Event action-history diagnostics when runtime semantics change.
+13. Update regression coverage.
+14. Update both documentation files.
+15. Bump EDUMON version.
+16. Run full CI and merge only when green.
 
 ## Review checklist
 
-Confirm that actions still describe effects; physiology interprets effects; runtime priority semantics remain intact; manual supersession remains target-specific; physiological hard bounds prevent impossible composed values; HR 500 cannot survive model composition; tidal volume is bounded at 0–1000 mL; rhythm-specific rate behavior remains separate; Beta blocker remains `-15 + block-increase + minimum 50`; Bronchospasm, Hypovolaemia, Bleeding and Curare Cleft remain documented; Relaxant suppresses mechanically visible spontaneous breathing over its 120-second onset; action history is present in copied diagnostics; sympathetic saturation remains shared; and build/regressions pass.
+Confirm that actions still describe effects; physiology interprets effects; runtime priority semantics remain intact; manual supersession remains target-specific; physiological hard bounds prevent impossible composed values; HR 500 cannot survive model composition; tidal volume is bounded at 0–1000 mL; rhythm-specific rate behavior remains separate; Beta blocker remains `-15 + block-increase + minimum 50`; Antibiotics remains a no-op Drug in **Others** and is still logged; Bronchospasm, Hypovolaemia, Bleeding and Curare Cleft remain documented; Relaxant suppresses mechanically visible spontaneous breathing over its 120-second onset; action history is present in copied/published diagnostics; sympathetic saturation remains shared; and build/regressions pass.
