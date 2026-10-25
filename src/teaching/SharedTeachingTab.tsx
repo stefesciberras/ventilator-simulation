@@ -78,7 +78,7 @@ export function SharedTeachingTab({
           />
         </>
       )}
-      <TeachingSessionLogPanel productId={host.appId} sessionId={sessionId} />
+      <TeachingSessionLogPanel productId={host.appId} sessionId={sessionId} role={role} />
       {runtimeHost}
       {liveRoom}
       {footer}

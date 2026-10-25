@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { recordSessionLogEvent } from '../teaching/session/sessionLog'
 import type { MonitorPatientState } from './types'
 import { measurementsFor } from './monitorEngine'
 import './edumon-nibp.css'
@@ -195,6 +196,12 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
       setPhase('idle')
       setCuffPressure(0)
       setReading(target)
+      void recordSessionLogEvent({
+        category: 'device',
+        eventType: 'nibp.measured',
+        label: `NIBP measured — ${target.systolic}/${target.diastolic}`,
+        details: { systolic: target.systolic, diastolic: target.diastolic, mean: target.mean, interval: intervalRef.current },
+      }).catch(() => undefined)
 
       const selected = intervalRef.current
       if (selected === 'off') return
@@ -263,38 +270,13 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
 
   return createPortal(<>
     <div ref={tileRef} className={`edumon-control-tile edumon-nibp-tile ${phase !== 'idle' ? 'measuring' : ''}`}>
-      <button
-        type="button"
-        className="edumon-nibp-display-button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        title="NIBP — open measurement controls"
-      >
-        <span>NIBP</span>
-        <strong>{status}</strong>
+      <button type="button" className="edumon-nibp-display-button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-haspopup="dialog" title="NIBP — open measurement controls">
+        <span>NIBP</span><strong>{status}</strong>
         {meanDetail && <small className="edumon-nibp-map">{meanDetail}</small>}
         {phaseDetail && <small className="edumon-nibp-phase-detail">{phaseDetail}</small>}
       </button>
-      <button
-        type="button"
-        className="edumon-nibp-start-button"
-        onPointerDown={handleStartPointerDown}
-        onPointerUp={handleStartPointerUp}
-        onPointerCancel={handleStartPointerCancel}
-        onPointerLeave={clearLongPressTimer}
-        onContextMenu={(event) => event.preventDefault()}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            setOpen(true)
-          }
-        }}
-        title="Press to open NIBP controls. Long press for one immediate reading."
-        aria-label="Start NIBP"
-      >
-        <span className="edumon-nibp-start-label">START</span>
-        <span className="edumon-nibp-start-icon" aria-hidden="true">▶</span>
+      <button type="button" className="edumon-nibp-start-button" onPointerDown={handleStartPointerDown} onPointerUp={handleStartPointerUp} onPointerCancel={handleStartPointerCancel} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => event.preventDefault()} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpen(true) } }} title="Press to open NIBP controls. Long press for one immediate reading." aria-label="Start NIBP">
+        <span className="edumon-nibp-start-label">START</span><span className="edumon-nibp-start-icon" aria-hidden="true">▶</span>
       </button>
     </div>
     {open && (
@@ -302,11 +284,7 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
         <div className="edumon-nibp-popover-heading"><strong>NIBP</strong><span>Measurement interval</span></div>
         <div className="edumon-nibp-intervals">
           <button type="button" onClick={runStat}>STAT</button>
-          {(['2m', '3m', '5m'] as NibpInterval[]).map((option) => (
-            <button key={option} type="button" className={interval === option ? 'active' : ''} onClick={() => chooseInterval(option)}>
-              {option.toUpperCase()}
-            </button>
-          ))}
+          {(['2m', '3m', '5m'] as NibpInterval[]).map((option) => <button key={option} type="button" className={interval === option ? 'active' : ''} onClick={() => chooseInterval(option)}>{option.toUpperCase()}</button>)}
           <button type="button" className={interval === 'off' ? 'active' : ''} onClick={() => chooseInterval('off')}>Off</button>
         </div>
       </div>

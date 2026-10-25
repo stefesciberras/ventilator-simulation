@@ -106,6 +106,9 @@ export function configureSessionLogRuntime(context: SessionLogRuntimeContext): v
 export function getSessionLogRuntimeContext(): SessionLogRuntimeContext { return { ...runtimeContext } }
 export function getStandaloneSessionLogRunId(productId: string): string { return standaloneLog(productId).runId }
 export function fetchStandaloneSessionLogEntries(productId: string): SessionLogEntry[] { return [...standaloneLog(productId).entries] }
+export function clearStandaloneSessionLog(productId: string): void {
+  saveStandaloneLog(productId, { runId: makeRunId(), nextId: 1, entries: [] })
+}
 export function subscribeToStandaloneSessionLogEntries(productId: string, onEntry: (entry: SessionLogEntry) => void): () => void {
   const listeners = standaloneListeners.get(productId) ?? new Set<(entry: SessionLogEntry) => void>()
   listeners.add(onEntry)
@@ -171,13 +174,29 @@ function valueAtPath(value: unknown, segments: string[]): unknown {
   return current
 }
 
+const AUTO_ANAESTHETIC_PATHS = new Set([
+  'heartRate',
+  'systolicPressure',
+  'diastolicPressure',
+  'respiratory.spontaneousRespiratoryRate',
+  'anaestheticPhysiology.depthOfAnaesthesia',
+])
+
 /**
- * Remove structural model hydration from user-facing logs. A whole nested model
- * object can be attached after initial render (for example EDUMON respiratory
- * state); that is schema/runtime hydration, not a user setting change.
+ * Keep the human Session Log focused on deliberate actions/settings. Structural
+ * model hydration and automatic anaesthetic physiology responses are simulator
+ * internals, not candidate/instructor actions, and are omitted from the log.
  */
 export function filterSessionStateChanges(before: unknown, after: unknown, changes: SessionLogStateChange[]): SessionLogStateChange[] {
+  const anaestheticAutoUpdate = changes.some((change) =>
+    change.path === 'anaestheticPhysiology.depthOfAnaesthesia'
+    || change.path.startsWith('anaestheticPhysiology.responseBaseline'),
+  )
+
   return changes.filter((change) => {
+    if (change.path === 'anaestheticGases.fiSevoPercent') return false
+    if (anaestheticAutoUpdate && (AUTO_ANAESTHETIC_PATHS.has(change.path) || change.path.startsWith('anaestheticPhysiology.responseBaseline'))) return false
+
     const segments = change.path.split('.')
     for (let depth = 1; depth < segments.length; depth += 1) {
       const prefix = segments.slice(0, depth)
