@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { getInstructorAccount, subscribeToInstructorAccount } from '../teaching/account/InstructorAccountService'
 import { activateAction, getActiveEffects, getActionRuntimeSimulationTime, isActionToggleRunning, setActionIntensity, subscribeToActionRuntime } from '../edusim/actions/ActionRuntime'
+import type { TeachingRole } from '../teaching/types'
 import { listEdusimActions, type EdusimActionDefinition, type EdusimActionEnvironment } from './actionLibrary'
 import './edumon-actions.css'
 
@@ -28,79 +29,76 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
     { id: 'propofol-hypnotic-effect', target: 'anaesthesia.hypnoticEffect', operation: 'offset', value: 0.65, onsetSeconds: 25, durationSeconds: 180, recoverySeconds: 240 },
     { id: 'propofol-respiratory-drive', target: 'respiration.drive', operation: 'multiplier', value: 0.4, onsetSeconds: 20, durationSeconds: 150, recoverySeconds: 180 },
     { id: 'propofol-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -15, onsetSeconds: 20, durationSeconds: 180, recoverySeconds: 180 },
-  ], sort_order: 10, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', sort_order: 10, created_at: '', updated_at: '' },
   { id: 'fentanyl', kind: 'drug', name: 'Fentanyl', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Opioid action with modest bradycardic and respiratory-depressant effects plus attenuation of nociceptive response.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'fentanyl-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -6, onsetSeconds: 15, durationSeconds: 180, recoverySeconds: 120 },
     { id: 'fentanyl-respiratory-drive', target: 'respiration.drive', operation: 'multiplier', value: 0.75, onsetSeconds: 20, durationSeconds: 240, recoverySeconds: 180 },
     { id: 'fentanyl-nociceptive-response', target: 'anaesthesia.nociceptiveResponse', operation: 'multiplier', value: 0.55, onsetSeconds: 15, durationSeconds: 300, recoverySeconds: 180 },
-  ], sort_order: 20, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', sort_order: 20, created_at: '', updated_at: '' },
   { id: 'remifentanil', kind: 'drug', name: 'Remifentanil infusion', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0, description: 'Toggle Remifentanil infusion. Long press selects low, medium or high infusion intensity.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'remifentanil-nociceptive-response', target: 'anaesthesia.nociceptiveResponse', operation: 'multiplier', value: 0.35, onsetSeconds: 45, durationSeconds: 0, recoverySeconds: 90 },
     { id: 'remifentanil-respiratory-drive', target: 'respiration.drive', operation: 'multiplier', value: 0.65, onsetSeconds: 45, durationSeconds: 0, recoverySeconds: 90 },
     { id: 'remifentanil-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -5, onsetSeconds: 45, durationSeconds: 0, recoverySeconds: 90 },
-  ], sort_order: 30, created_at: '', updated_at: '' },
-  { id: 'relaxant', kind: 'drug', name: 'Relaxant', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Generic non-depolarising neuromuscular blocker.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'relaxant-neuromuscular-block', target: 'neuromuscular.block', operation: 'target', value: 1, onsetSeconds: 120, durationSeconds: 1200, recoverySeconds: 600 }], sort_order: 40, created_at: '', updated_at: '' },
-  { id: 'neostigmine', kind: 'drug', name: 'Neostigmine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Slower, incomplete generic neuromuscular-block reversal.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'neostigmine-neuromuscular-reversal', target: 'neuromuscular.block', operation: 'target', value: 0.2, onsetSeconds: 180, durationSeconds: 7200, recoverySeconds: 0 }], sort_order: 45, created_at: '', updated_at: '' },
-  { id: 'sugammadex', kind: 'drug', name: 'Sugammadex', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Rapid generic neuromuscular-block reversal. Current model does not yet distinguish relaxant class.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'sugammadex-neuromuscular-reversal', target: 'neuromuscular.block', operation: 'target', value: 0, onsetSeconds: 60, durationSeconds: 7200, recoverySeconds: 0 }], sort_order: 47, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', sort_order: 30, created_at: '', updated_at: '' },
+  { id: 'relaxant', kind: 'drug', name: 'Relaxant', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Generic non-depolarising neuromuscular blocker.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'relaxant-neuromuscular-block', target: 'neuromuscular.block', operation: 'target', value: 1, onsetSeconds: 120, durationSeconds: 1200, recoverySeconds: 600 }], candidate_access: 'allowed', sort_order: 40, created_at: '', updated_at: '' },
+  { id: 'neostigmine', kind: 'drug', name: 'Neostigmine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Slower, incomplete generic neuromuscular-block reversal.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'neostigmine-neuromuscular-reversal', target: 'neuromuscular.block', operation: 'target', value: 0.2, onsetSeconds: 180, durationSeconds: 7200, recoverySeconds: 0 }], candidate_access: 'allowed', sort_order: 45, created_at: '', updated_at: '' },
+  { id: 'sugammadex', kind: 'drug', name: 'Sugammadex', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Rapid generic neuromuscular-block reversal. Current model does not yet distinguish relaxant class.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'sugammadex-neuromuscular-reversal', target: 'neuromuscular.block', operation: 'target', value: 0, onsetSeconds: 60, durationSeconds: 7200, recoverySeconds: 0 }], candidate_access: 'allowed', sort_order: 47, created_at: '', updated_at: '' },
   { id: 'tiva', kind: 'drug', name: 'TIVA (Propofol TCI)', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0, description: 'Toggle Propofol TCI-style infusion. Long press selects target intensity.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'tiva-hypnotic-effect', target: 'anaesthesia.hypnoticEffect', operation: 'offset', value: 0.85, onsetSeconds: 60, durationSeconds: 0, recoverySeconds: 300 },
     { id: 'tiva-respiratory-drive', target: 'respiration.drive', operation: 'multiplier', value: 0.55, onsetSeconds: 60, durationSeconds: 0, recoverySeconds: 240 },
     { id: 'tiva-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -12, onsetSeconds: 60, durationSeconds: 0, recoverySeconds: 240 },
-  ], sort_order: 50, created_at: '', updated_at: '' },
-  { id: 'atropine', kind: 'drug', name: 'Atropine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Cardiovascular rescue bolus with predominantly chronotropic effect.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'atropine-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 25, onsetSeconds: 20, durationSeconds: 300, recoverySeconds: 300 }], sort_order: 110, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', sort_order: 50, created_at: '', updated_at: '' },
+  { id: 'atropine', kind: 'drug', name: 'Atropine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Cardiovascular rescue bolus with predominantly chronotropic effect.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'atropine-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 25, onsetSeconds: 20, durationSeconds: 300, recoverySeconds: 300 }], candidate_access: 'allowed', sort_order: 110, created_at: '', updated_at: '' },
   { id: 'ephedrine', kind: 'drug', name: 'Ephedrine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Mixed cardiovascular vasopressor bolus.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'ephedrine-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 12, onsetSeconds: 15, durationSeconds: 240, recoverySeconds: 240 },
     { id: 'ephedrine-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 15, onsetSeconds: 15, durationSeconds: 240, recoverySeconds: 240 },
-  ], sort_order: 120, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', sort_order: 120, created_at: '', updated_at: '' },
   { id: 'phenylephrine', kind: 'drug', name: 'Phenylephrine', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Vasopressor bolus with modest reflex bradycardia.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'phenylephrine-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 25, onsetSeconds: 15, durationSeconds: 180, recoverySeconds: 180 },
     { id: 'phenylephrine-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -8, onsetSeconds: 20, durationSeconds: 180, recoverySeconds: 180 },
-  ], sort_order: 130, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', sort_order: 130, created_at: '', updated_at: '' },
   { id: 'noradrenaline', kind: 'drug', name: 'Noradrenaline infusion', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0, description: 'Toggle noradrenaline infusion. Long press selects infusion intensity.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'noradrenaline-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 20, onsetSeconds: 30, durationSeconds: 0, recoverySeconds: 60 },
     { id: 'noradrenaline-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -3, onsetSeconds: 30, durationSeconds: 0, recoverySeconds: 60 },
-  ], sort_order: 140, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', sort_order: 140, created_at: '', updated_at: '' },
   { id: 'adrenaline', kind: 'drug', name: 'Adrenaline infusion', short_press_action: 'toggle', long_press_action: 'dose-levels', duration_seconds: 0, description: 'Toggle adrenaline infusion. Long press selects infusion intensity.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'adrenaline-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 15, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 45 },
     { id: 'adrenaline-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 15, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 45 },
-  ], sort_order: 150, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', sort_order: 150, created_at: '', updated_at: '' },
   { id: 'beta-blocker', kind: 'drug', name: 'Beta blocker', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Simulate clinically significant beta blockade: modestly lowers heart rate, suppresses lower-priority positive chronotropic responses, and maintains a 50 bpm floor.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [
     { id: 'beta-blocker-heart-rate-offset', target: 'haemodynamics.heartRate', operation: 'offset', value: -15, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
     { id: 'beta-blocker-positive-chronotropy', target: 'haemodynamics.heartRate', operation: 'constraint', constraint: 'block-increase', value: 0, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
     { id: 'beta-blocker-heart-rate-floor', target: 'haemodynamics.heartRate', operation: 'constraint', constraint: 'minimum', value: 50, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 30 },
-  ], priority: 70, sort_order: 160, created_at: '', updated_at: '' },
-  { id: 'antibiotics', kind: 'drug', name: 'Antibiotics', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Scenario/logging action only. Produces no physiological effect.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], priority: 30, sort_order: 310, created_at: '', updated_at: '' },
+  ], candidate_access: 'allowed', priority: 70, sort_order: 160, created_at: '', updated_at: '' },
+  { id: 'antibiotics', kind: 'drug', name: 'Antibiotics', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Scenario/logging action only. Produces no physiological effect.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], candidate_access: 'allowed', priority: 30, sort_order: 310, created_at: '', updated_at: '' },
 
-  { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 10, created_at: '', updated_at: '' },
-  { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 20, created_at: '', updated_at: '' },
-  { id: 'awakening', kind: 'event', name: 'Awakening', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], sort_order: 30, created_at: '', updated_at: '' },
-  { id: 'laryngoscopy', kind: 'event', name: 'Laryngoscopy', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Brief intense sympathetic/nociceptive stimulus.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'laryngoscopy-sympathetic-stimulus', target: 'stimulus.sympathetic', operation: 'offset', value: 1, onsetSeconds: 2, durationSeconds: 30, recoverySeconds: 30 }], sort_order: 40, created_at: '', updated_at: '' },
-  { id: 'pain', kind: 'event', name: 'Pain', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Moderate nociceptive stimulus.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'pain-sympathetic-stimulus', target: 'stimulus.sympathetic', operation: 'offset', value: 0.55, onsetSeconds: 3, durationSeconds: 120, recoverySeconds: 60 }], sort_order: 50, created_at: '', updated_at: '' },
-  { id: 'surgery', kind: 'event', name: 'Surgery', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained operative nociceptive stimulus.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'surgery-sympathetic-stimulus', target: 'stimulus.sympathetic', operation: 'offset', value: 0.75, onsetSeconds: 5, durationSeconds: 0, recoverySeconds: 30 }], sort_order: 60, created_at: '', updated_at: '' },
-
-  { id: 'hypertension', kind: 'event', name: 'Hypertension', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained hypertension.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'hypertension-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 30, onsetSeconds: 15, durationSeconds: 0, recoverySeconds: 30 }], sort_order: 110, created_at: '', updated_at: '' },
-  { id: 'hypotension', kind: 'event', name: 'Hypotension', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained hypotension.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'hypotension-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -30, onsetSeconds: 15, durationSeconds: 0, recoverySeconds: 30 }], sort_order: 120, created_at: '', updated_at: '' },
-  { id: 'tachycardia', kind: 'event', name: 'Tachycardia', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained tachycardia.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'tachycardia-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 40, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 20 }], sort_order: 130, created_at: '', updated_at: '' },
-  { id: 'bradycardia', kind: 'event', name: 'Bradycardia', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained bradycardia.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'bradycardia-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -35, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 20 }], sort_order: 140, created_at: '', updated_at: '' },
+  { id: 'induction', kind: 'event', name: 'Induction', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], candidate_access: 'instructor-only', sort_order: 10, created_at: '', updated_at: '' },
+  { id: 'maintenance', kind: 'event', name: 'Maintenance', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], candidate_access: 'instructor-only', sort_order: 20, created_at: '', updated_at: '' },
+  { id: 'awakening', kind: 'event', name: 'Awakening', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: '', setting: 'ana', environments: ['edumon-ana'], effects: [], candidate_access: 'instructor-only', sort_order: 30, created_at: '', updated_at: '' },
+  { id: 'laryngoscopy', kind: 'event', name: 'Laryngoscopy', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Brief intense sympathetic/nociceptive stimulus.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'laryngoscopy-sympathetic-stimulus', target: 'stimulus.sympathetic', operation: 'offset', value: 1, onsetSeconds: 2, durationSeconds: 30, recoverySeconds: 30 }], candidate_access: 'instructor-only', sort_order: 40, created_at: '', updated_at: '' },
+  { id: 'pain', kind: 'event', name: 'Pain', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Moderate nociceptive stimulus.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'pain-sympathetic-stimulus', target: 'stimulus.sympathetic', operation: 'offset', value: 0.55, onsetSeconds: 3, durationSeconds: 120, recoverySeconds: 60 }], candidate_access: 'instructor-only', sort_order: 50, created_at: '', updated_at: '' },
+  { id: 'surgery', kind: 'event', name: 'Surgery', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained operative nociceptive stimulus.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'surgery-sympathetic-stimulus', target: 'stimulus.sympathetic', operation: 'offset', value: 0.75, onsetSeconds: 5, durationSeconds: 0, recoverySeconds: 30 }], candidate_access: 'instructor-only', sort_order: 60, created_at: '', updated_at: '' },
+  { id: 'hypertension', kind: 'event', name: 'Hypertension', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained hypertension.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'hypertension-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: 30, onsetSeconds: 15, durationSeconds: 0, recoverySeconds: 30 }], candidate_access: 'instructor-only', sort_order: 110, created_at: '', updated_at: '' },
+  { id: 'hypotension', kind: 'event', name: 'Hypotension', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained hypotension.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'hypotension-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -30, onsetSeconds: 15, durationSeconds: 0, recoverySeconds: 30 }], candidate_access: 'instructor-only', sort_order: 120, created_at: '', updated_at: '' },
+  { id: 'tachycardia', kind: 'event', name: 'Tachycardia', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained tachycardia.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'tachycardia-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 40, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 20 }], candidate_access: 'instructor-only', sort_order: 130, created_at: '', updated_at: '' },
+  { id: 'bradycardia', kind: 'event', name: 'Bradycardia', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle sustained bradycardia.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'bradycardia-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: -35, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 20 }], candidate_access: 'instructor-only', sort_order: 140, created_at: '', updated_at: '' },
   { id: 'hypovolaemia', kind: 'event', name: 'Hypovolaemia', short_press_action: 'toggle', long_press_action: 'severity-levels', duration_seconds: 0, description: 'Toggle hypovolaemia. Long press selects low, medium or high severity.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'hypovolaemia-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -20, onsetSeconds: 30, durationSeconds: 0, recoverySeconds: 90, releaseBehaviour: 'persist' },
     { id: 'hypovolaemia-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 15, onsetSeconds: 30, durationSeconds: 0, recoverySeconds: 90, releaseBehaviour: 'persist' },
-  ], sort_order: 150, created_at: '', updated_at: '' },
+  ], candidate_access: 'instructor-only', sort_order: 150, created_at: '', updated_at: '' },
   { id: 'bleeding', kind: 'event', name: 'Bleeding', short_press_action: 'toggle', long_press_action: 'severity-levels', duration_seconds: 0, description: 'Toggle active bleeding. Long press selects low, medium or high severity.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'bleeding-map', target: 'haemodynamics.meanArterialPressure', operation: 'offset', value: -25, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 120, releaseBehaviour: 'persist' },
     { id: 'bleeding-heart-rate', target: 'haemodynamics.heartRate', operation: 'offset', value: 20, onsetSeconds: 20, durationSeconds: 0, recoverySeconds: 120, releaseBehaviour: 'persist' },
-  ], sort_order: 160, created_at: '', updated_at: '' },
-
-  { id: 'apnoea', kind: 'event', name: 'Apnoea', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle absent spontaneous respiratory drive.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'apnoea-respiratory-drive', target: 'respiration.drive', operation: 'set', value: 0, onsetSeconds: 2, durationSeconds: 0, recoverySeconds: 5 }], sort_order: 210, created_at: '', updated_at: '' },
+  ], candidate_access: 'instructor-only', sort_order: 160, created_at: '', updated_at: '' },
+  { id: 'apnoea', kind: 'event', name: 'Apnoea', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Toggle absent spontaneous respiratory drive.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'apnoea-respiratory-drive', target: 'respiration.drive', operation: 'set', value: 0, onsetSeconds: 2, durationSeconds: 0, recoverySeconds: 5 }], candidate_access: 'instructor-only', sort_order: 210, created_at: '', updated_at: '' },
   { id: 'diaphragm-return', kind: 'event', name: 'Curare Cleft', short_press_action: 'momentary', long_press_action: null, duration_seconds: 0, description: 'Return of spontaneous diaphragmatic effort after reversal; also guarantees at least one TOF response.', setting: 'ana', environments: ['edumon-ana'], effects: [
     { id: 'diaphragm-return-drive', target: 'respiration.drive', operation: 'target', value: 1, onsetSeconds: 10, durationSeconds: 900, recoverySeconds: 60 },
     { id: 'diaphragm-return-tof', target: 'neuromuscular.tofMinimumCount', operation: 'target', value: 1, onsetSeconds: 5, durationSeconds: 900, recoverySeconds: 60 },
-  ], sort_order: 220, created_at: '', updated_at: '' },
-  { id: 'bronchospasm', kind: 'event', name: 'Bronchospasm', short_press_action: 'toggle', long_press_action: 'severity-levels', duration_seconds: 0, description: 'Toggle bronchospasm. Long press selects low, medium or high severity.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'bronchospasm-airway-obstruction', target: 'respiration.airwayObstruction', operation: 'offset', value: 0.55, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 45 }], sort_order: 230, created_at: '', updated_at: '' },
-
-  { id: 'monitor-inv-bp', kind: 'event', name: 'Inv BP', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for invasive arterial blood pressure waveform and values. Does not alter physiology.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], priority: 30, sort_order: 310, created_at: '', updated_at: '' },
-  { id: 'monitor-bis', kind: 'event', name: 'BIS', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for BIS monitoring. Does not alter anaesthetic modelling.', setting: 'ana', environments: ['edumon-ana'], effects: [], priority: 30, sort_order: 320, created_at: '', updated_at: '' },
-  { id: 'monitor-temp', kind: 'event', name: 'Temp', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for temperature monitoring. Does not alter patient temperature modelling.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], priority: 30, sort_order: 330, created_at: '', updated_at: '' },
+  ], candidate_access: 'instructor-only', sort_order: 220, created_at: '', updated_at: '' },
+  { id: 'bronchospasm', kind: 'event', name: 'Bronchospasm', short_press_action: 'toggle', long_press_action: 'severity-levels', duration_seconds: 0, description: 'Toggle bronchospasm. Long press selects low, medium or high severity.', setting: 'ana', environments: ['edumon-ana'], effects: [{ id: 'bronchospasm-airway-obstruction', target: 'respiration.airwayObstruction', operation: 'offset', value: 0.55, onsetSeconds: 10, durationSeconds: 0, recoverySeconds: 45 }], candidate_access: 'instructor-only', sort_order: 230, created_at: '', updated_at: '' },
+  { id: 'monitor-inv-bp', kind: 'event', name: 'Inv BP', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for invasive arterial blood pressure waveform and values. Does not alter physiology.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], candidate_access: 'instructor-only', priority: 30, sort_order: 310, created_at: '', updated_at: '' },
+  { id: 'monitor-bis', kind: 'event', name: 'BIS', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for BIS monitoring. Does not alter anaesthetic modelling.', setting: 'ana', environments: ['edumon-ana'], effects: [], candidate_access: 'instructor-only', priority: 30, sort_order: 320, created_at: '', updated_at: '' },
+  { id: 'monitor-temp', kind: 'event', name: 'Temp', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for temperature monitoring. Does not alter patient temperature modelling.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], candidate_access: 'instructor-only', priority: 30, sort_order: 330, created_at: '', updated_at: '' },
 ]
 
 function currentEnvironment(): EdusimActionEnvironment {
@@ -191,7 +189,7 @@ function EdumonActionButton({ definition, active, level, menuOpen, onSelect, onL
   )
 }
 
-export function EdumonActionsPanel() {
+export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRole }) {
   const environment = currentEnvironment()
   const fallback = environment === 'edumon-ana' ? FALLBACK_ANA_ACTIONS : []
   const [definitions, setDefinitions] = useState<EdusimActionDefinition[]>(fallback)
@@ -229,6 +227,7 @@ export function EdumonActionsPanel() {
   }
 
   const trigger = (definition: EdusimActionDefinition) => {
+    if (role === 'candidate' && definition.candidate_access !== 'allowed') return
     const intensity = LEVEL_STEPS[currentLevel(definition)].scale
     activateAction(definition, getActionRuntimeSimulationTime(), supportsLevel(definition) ? intensity : 1)
     setLevelMenuActionId(null)
@@ -242,14 +241,18 @@ export function EdumonActionsPanel() {
   }
 
   const selectLevel = (definition: EdusimActionDefinition, level: ActionLevel) => {
+    if (role === 'candidate' && definition.candidate_access !== 'allowed') return
     ACTION_LEVEL_SELECTIONS.set(definition.id, level)
     if (isRunningToggle(definition.id)) setActionIntensity(definition.id, LEVEL_STEPS[level].scale)
     setLevelMenuActionId(null)
   }
 
   const isActive = (definition: EdusimActionDefinition) => definition.short_press_action === 'toggle' ? isRunningToggle(definition.id) : flashing.has(definition.id)
-  const drugs = definitions.filter((definition) => definition.kind === 'drug')
-  const events = definitions.filter((definition) => definition.kind === 'event')
+  const visibleDefinitions = role === 'candidate'
+    ? definitions.filter((definition) => definition.candidate_access === 'allowed')
+    : definitions
+  const drugs = visibleDefinitions.filter((definition) => definition.kind === 'drug')
+  const events = visibleDefinitions.filter((definition) => definition.kind === 'event')
 
   const renderGroup = (items: EdusimActionDefinition[], label: string) => items.length ? (
     <div className="edumon-action-grid" role="group" aria-label={label}>
@@ -263,7 +266,7 @@ export function EdumonActionsPanel() {
 
   return (
     <div className="edumon-actions-panel" aria-label="Clinical actions">
-      {canEdit && <div className="edumon-action-library-tools"><button type="button" onClick={() => window.location.assign('/actions')}>Edit action library</button></div>}
+      {role !== 'candidate' && canEdit && <div className="edumon-action-library-tools"><button type="button" onClick={() => window.location.assign('/actions')}>Edit action library</button></div>}
       <EdumonActionSection id="drugs" title="Drugs">
         <div className="edumon-drug-classes">
           {renderClass('Anaesthesia', drugs.filter((definition) => drugClass(definition) === 'anaesthesia'), 'drugs')}
