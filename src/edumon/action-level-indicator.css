@@ -1,6 +1,6 @@
 .edumon-action-button:has(.edumon-action-dose-badge) {
   position: relative;
-  padding-bottom: 16px;
+  padding-bottom: 15px;
 }
 
 .edumon-action-dose-badge {
@@ -9,45 +9,37 @@
   --level-bar-3: rgba(255,255,255,0.16);
   position: absolute;
   left: 50%;
-  bottom: 3px;
+  bottom: 4px;
   transform: translateX(-50%);
-  width: 28px;
-  min-width: 28px;
-  height: 10px;
+  width: 25px;
+  min-width: 25px;
+  height: 5px;
   margin: 0;
   padding: 0;
-  border: 1px solid rgba(255,255,255,0.22);
-  border-radius: 3px;
-  background: rgba(0,0,0,0.18);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: transparent;
   font-size: 0 !important;
   line-height: 0;
   box-sizing: border-box;
-  overflow: visible;
   pointer-events: none;
 }
 
 .edumon-action-dose-badge::before {
   content: '';
   position: absolute;
-  left: 3px;
-  top: 2px;
-  width: 4px;
-  height: 4px;
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 5px;
   border-radius: 1px;
   background: var(--level-bar-1);
-  box-shadow: 7px 0 0 var(--level-bar-2), 14px 0 0 var(--level-bar-3);
+  box-shadow: 9px 0 0 var(--level-bar-2), 18px 0 0 var(--level-bar-3);
 }
 
 .edumon-action-dose-badge::after {
-  content: '';
-  position: absolute;
-  right: -3px;
-  top: 2px;
-  width: 2px;
-  height: 4px;
-  border-radius: 0 2px 2px 0;
-  background: rgba(255,255,255,0.28);
+  content: none;
 }
 
 .edumon-action-dose-badge[data-level='medium'] {
@@ -57,11 +49,6 @@
 .edumon-action-dose-badge[data-level='high'] {
   --level-bar-2: #f0a03a;
   --level-bar-3: #f0a03a;
-}
-
-.edumon-action-button.active .edumon-action-dose-badge {
-  border-color: rgba(255,209,154,0.45);
-  background: rgba(240,160,58,0.08);
 }
 
 /* The indicator is out of the flex row, so the action name retains the full button width. */
