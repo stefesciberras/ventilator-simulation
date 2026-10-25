@@ -26,6 +26,10 @@ export interface ScenarioVariableDefinition {
   defaultValue?: ScenarioValue
   options?: ScenarioVariableOption[]
   writable?: boolean
+  /** Dot-separated location inside the product scenario snapshot. */
+  snapshotPath?: string
+  /** Numeric setting may interpolate while entering a stage. */
+  transitionable?: boolean
 }
 
 export interface ScenarioTemplateDefinition {

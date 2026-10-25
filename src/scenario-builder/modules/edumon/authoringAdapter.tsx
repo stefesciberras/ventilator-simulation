@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { DEFAULT_MONITOR_STATE, type CardiacRhythm } from '../../../edumon/types'
-import { RHYTHM_LABELS } from '../../../edumon/monitorEngine'
+import { DEFAULT_MONITOR_STATE } from '../../../edumon/types'
 import { listEdusimActions } from '../../../edumon/actionLibrary'
 import type { EdumonScenarioMetric, EdumonScenarioSnapshot, EdumonScenarioTrigger, EdumonStoredScenario } from '../../../edumon/scenarioTypes'
 import type { ScenarioProductId } from '../../../teaching/scenario/products'
@@ -10,47 +9,74 @@ import type {
   SharedScenarioEditorAdapter,
 } from '../../../teaching/scenario/authoringTypes'
 import type { TeachingScenarioStageContent } from '../../../teaching/scenario/runtimeCore'
+import type { ScenarioVariableDefinition } from '../../model'
+import {
+  getEdumonScenarioModule,
+  readScenarioSnapshotValue,
+  scenarioTriggerVariables,
+  transitionScenarioVariables,
+  writableScenarioVariables,
+  writeScenarioSnapshotValue,
+} from './definition'
 
-const RHYTHMS = Object.keys(RHYTHM_LABELS) as CardiacRhythm[]
+type EdumonScenarioProduct = Extract<ScenarioProductId, 'anaesth' | 'icu'>
 
-const EDUMON_APPLY_IDS = ['rhythm', 'heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion', 'simulationPaused', 'simulationSpeed'] as const
+function displayValue(variable: ScenarioVariableDefinition, value: unknown) {
+  if (variable.type === 'select') return variable.options?.find((option) => option.value === String(value))?.label ?? String(value ?? '')
+  if (variable.type === 'boolean') return value ? 'On' : 'Off'
+  if (typeof value === 'number') {
+    const decimals = variable.step != null && variable.step < 1 ? Math.max(0, String(variable.step).split('.')[1]?.length ?? 0) : 0
+    return `${value.toFixed(decimals)}${variable.unit ? ` ${variable.unit}` : ''}`
+  }
+  return String(value ?? '')
+}
 
-function EdumonSlider({ label, id, value, min, max, step = 1, displayValue, applied, onAppliedChange, onChange }: { label: string; id: string; value: number; min: number; max: number; step?: number; displayValue?: string; applied: boolean; onAppliedChange: (id: string, applied: boolean) => void; onChange: (value: number) => void }) {
-  return <div className={`shared-scenario-variable-row slider ${applied ? 'applied' : 'not-applied'}`}>
+function RegistryVariableControl({
+  variable,
+  snapshot,
+  applied,
+  onAppliedChange,
+  onChange,
+}: {
+  variable: ScenarioVariableDefinition
+  snapshot: EdumonScenarioSnapshot
+  applied: boolean
+  onAppliedChange: (id: string, applied: boolean) => void
+  onChange: (snapshot: EdumonScenarioSnapshot) => void
+}) {
+  const value = readScenarioSnapshotValue(snapshot, variable)
+  const set = (next: unknown) => onChange(writeScenarioSnapshotValue(snapshot, variable, next))
+
+  return <div className={`shared-scenario-variable-row ${variable.type === 'number' ? 'slider' : ''} ${applied ? 'applied' : 'not-applied'}`}>
     <div className="shared-scenario-variable-heading">
-      <label className="shared-scenario-apply-toggle"><input type="checkbox" checked={applied} onChange={(event) => onAppliedChange(id, event.target.checked)} /><span>Apply</span></label>
-      <span className="shared-scenario-variable-label">{label}</span><strong>{displayValue ?? value}</strong>
+      <label className="shared-scenario-apply-toggle"><input type="checkbox" checked={applied} onChange={(event) => onAppliedChange(variable.id, event.target.checked)} /><span>Apply</span></label>
+      <span className="shared-scenario-variable-label">{variable.label}</span>
+      <strong>{displayValue(variable, value)}</strong>
     </div>
-    <input disabled={!applied} className="shared-scenario-control-slider" type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    {variable.type === 'number' && <input disabled={!applied} className="shared-scenario-control-slider" type="range" min={variable.min ?? 0} max={variable.max ?? 100} step={variable.step ?? 1} value={typeof value === 'number' ? value : Number(variable.defaultValue ?? variable.min ?? 0)} onChange={(event) => set(Number(event.target.value))} />}
+    {variable.type === 'select' && <select disabled={!applied} value={String(value ?? variable.defaultValue ?? '')} onChange={(event) => set(typeof value === 'number' ? Number(event.target.value) : event.target.value)}>{variable.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>}
+    {variable.type === 'boolean' && <label className="shared-scenario-boolean-control"><input disabled={!applied} type="checkbox" checked={Boolean(value)} onChange={(event) => set(event.target.checked)} /><span>{value ? 'Enabled' : 'Disabled'}</span></label>}
+    {variable.type === 'string' && <input disabled={!applied} type="text" value={String(value ?? '')} onChange={(event) => set(event.target.value)} />}
   </div>
 }
 
-function EdumonSelect({ label, id, value, applied, children, onAppliedChange, onChange }: { label: string; id: string; value: string | number; applied: boolean; children: ReactNode; onAppliedChange: (id: string, applied: boolean) => void; onChange: (value: string) => void }) {
-  return <div className={`shared-scenario-variable-row ${applied ? 'applied' : 'not-applied'}`}><div className="shared-scenario-variable-heading"><label className="shared-scenario-apply-toggle"><input type="checkbox" checked={applied} onChange={(event) => onAppliedChange(id, event.target.checked)} /><span>Apply</span></label><span className="shared-scenario-variable-label">{label}</span></div><select disabled={!applied} value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></div>
-}
-
-function SnapshotEditor({ snapshot, onChange, appliedVariableIds, onAppliedVariableIdsChange }: { snapshot: EdumonScenarioSnapshot; onChange: (snapshot: EdumonScenarioSnapshot) => void; appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void }) {
-  const patient = snapshot.patient
-  const selected = new Set(appliedVariableIds ?? EDUMON_APPLY_IDS)
+function SnapshotEditor({ product, snapshot, onChange, appliedVariableIds, onAppliedVariableIdsChange }: { product: EdumonScenarioProduct; snapshot: EdumonScenarioSnapshot; onChange: (snapshot: EdumonScenarioSnapshot) => void; appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void }) {
+  const module = getEdumonScenarioModule(product)
+  const editable = writableScenarioVariables(module)
+  const selected = new Set(appliedVariableIds ?? editable.map((variable) => variable.id))
   const setApplied = (id: string, enabled: boolean) => { const next = new Set(selected); if (enabled) next.add(id); else next.delete(id); onAppliedVariableIdsChange?.([...next]) }
-  const setPatient = (patch: Partial<typeof patient>) => onChange({ ...snapshot, patient: { ...patient, ...patch } })
-  const isApplied = (id: string) => selected.has(id)
+  const groups = [...new Set(editable.map((variable) => variable.group))]
+
   return <div className="shared-scenario-eduvent-snapshot shared-scenario-edumon-snapshot">
-    <section className="shared-scenario-control-group monitor">
-      <h3>Monitor patient state</h3>
+    {groups.map((group) => <section key={group} className="shared-scenario-control-group monitor">
+      <h3>{group}</h3>
       <div className="shared-scenario-slider-grid">
-        <EdumonSelect id="rhythm" label="Rhythm" applied={isApplied('rhythm')} onAppliedChange={setApplied} value={patient.rhythm} onChange={(value) => setPatient({ rhythm: value as CardiacRhythm })}>{RHYTHMS.map((rhythm) => <option key={rhythm} value={rhythm}>{RHYTHM_LABELS[rhythm]}</option>)}</EdumonSelect>
-        <EdumonSlider id="heartRate" label="Heart rate" applied={isApplied('heartRate')} onAppliedChange={setApplied} value={patient.heartRate} min={0} max={250} displayValue={`${patient.heartRate} /min`} onChange={(heartRate) => setPatient({ heartRate })} />
-        <EdumonSlider id="systolicPressure" label="Systolic pressure" applied={isApplied('systolicPressure')} onAppliedChange={setApplied} value={patient.systolicPressure} min={0} max={260} displayValue={`${patient.systolicPressure} mmHg`} onChange={(systolicPressure) => setPatient({ systolicPressure })} />
-        <EdumonSlider id="diastolicPressure" label="Diastolic pressure" applied={isApplied('diastolicPressure')} onAppliedChange={setApplied} value={patient.diastolicPressure} min={0} max={180} displayValue={`${patient.diastolicPressure} mmHg`} onChange={(diastolicPressure) => setPatient({ diastolicPressure })} />
-        <EdumonSlider id="spo2" label="SpO₂" applied={isApplied('spo2')} onAppliedChange={setApplied} value={patient.spo2} min={0} max={100} displayValue={`${patient.spo2}%`} onChange={(spo2) => setPatient({ spo2 })} />
-        <EdumonSlider id="peripheralPerfusion" label="Peripheral perfusion" applied={isApplied('peripheralPerfusion')} onAppliedChange={setApplied} value={patient.peripheralPerfusion} min={0} max={2} step={0.05} displayValue={patient.peripheralPerfusion.toFixed(2)} onChange={(peripheralPerfusion) => setPatient({ peripheralPerfusion })} />
-        <EdumonSelect id="simulationPaused" label="Simulation" applied={isApplied('simulationPaused')} onAppliedChange={setApplied} value={snapshot.simulationPaused ? 'paused' : 'running'} onChange={(value) => onChange({ ...snapshot, simulationPaused: value === 'paused' })}><option value="running">Running</option><option value="paused">Paused</option></EdumonSelect>
-        <EdumonSelect id="simulationSpeed" label="Speed" applied={isApplied('simulationSpeed')} onAppliedChange={setApplied} value={snapshot.simulationSpeed} onChange={(value) => onChange({ ...snapshot, simulationSpeed: Number(value) as EdumonScenarioSnapshot['simulationSpeed'] })}><option value={0.5}>×0.5</option><option value={1}>×1</option><option value={1.5}>×1.5</option><option value={2}>×2</option><option value={4}>×4</option></EdumonSelect>
+        {editable.filter((variable) => variable.group === group).map((variable) => <RegistryVariableControl key={variable.id} variable={variable} snapshot={snapshot} applied={selected.has(variable.id)} onAppliedChange={setApplied} onChange={onChange} />)}
       </div>
-    </section>
+    </section>)}
   </div>
 }
+
 function toSharedTrigger(trigger: EdumonScenarioTrigger): SharedScenarioAuthoringTrigger {
   const id = crypto.randomUUID()
   if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct' || trigger.type === 'media-ended' || trigger.type === 'media-acknowledged') return { id, type: trigger.type }
@@ -72,41 +98,26 @@ function contentKind(content: TeachingScenarioStageContent | undefined) {
   return content?.kind ?? 'state'
 }
 
-export function createEdumonAuthoringAdapter(product: Exclude<ScenarioProductId, 'eduvent'>, productLabel: string): SharedScenarioEditorAdapter<EdumonStoredScenario, EdumonScenarioSnapshot> {
+export function createEdumonAuthoringAdapter(product: EdumonScenarioProduct, productLabel: string): SharedScenarioEditorAdapter<EdumonStoredScenario, EdumonScenarioSnapshot> {
+  const module = getEdumonScenarioModule(product)
+  const editableVariables = writableScenarioVariables(module)
+  const appliedIds = editableVariables.map((variable) => variable.id)
+  const measurementVariables = scenarioTriggerVariables(module, 'measurement')
+  const actionVariables = scenarioTriggerVariables(module, 'candidate-action')
+
   return {
     product,
     productLabel,
     emptySnapshot: () => ({ patient: { ...DEFAULT_MONITOR_STATE }, simulationPaused: false, simulationSpeed: 1 }),
-    defaultAppliedVariableIds: () => [...EDUMON_APPLY_IDS],
-    transitionVariables: () => [
-      { id: 'heartRate', label: 'Heart rate' },
-      { id: 'systolicPressure', label: 'Systolic pressure' },
-      { id: 'diastolicPressure', label: 'Diastolic pressure' },
-      { id: 'spo2', label: 'SpO₂' },
-      { id: 'peripheralPerfusion', label: 'Peripheral perfusion' },
-    ],
-    conditionMetrics: [
-      { id: 'heartRate', label: 'Heart rate' },
-      { id: 'systolicPressure', label: 'Systolic pressure' },
-      { id: 'diastolicPressure', label: 'Diastolic pressure' },
-      { id: 'meanPressure', label: 'Mean arterial pressure' },
-      { id: 'pulsePressure', label: 'Pulse pressure' },
-      { id: 'spo2', label: 'SpO₂' },
-      { id: 'peripheralPerfusion', label: 'Peripheral perfusion' },
-    ],
+    defaultAppliedVariableIds: () => [...appliedIds],
+    transitionVariables: () => transitionScenarioVariables(module).map((variable) => ({ id: variable.id, label: variable.label })),
+    conditionMetrics: measurementVariables.map((variable) => ({ id: variable.id, label: variable.label })),
     loadEdusimActionChoices: async () => {
       const environment = product === 'icu' ? 'edumon-icu' : 'edumon-ana'
       return (await listEdusimActions(environment)).map((action) => ({ id: action.id, label: action.name, kind: action.kind }))
     },
-    actionParameters: [
-      { id: 'rhythm', label: 'Rhythm changed' },
-      { id: 'heartRate', label: 'Heart rate changed' },
-      { id: 'systolicPressure', label: 'Systolic pressure changed' },
-      { id: 'diastolicPressure', label: 'Diastolic pressure changed' },
-      { id: 'spo2', label: 'SpO₂ changed' },
-      { id: 'peripheralPerfusion', label: 'Peripheral perfusion changed' },
-    ],
-    renderSnapshotEditor: (snapshot, onChange, options): ReactNode => <SnapshotEditor snapshot={snapshot} onChange={onChange} appliedVariableIds={options?.appliedVariableIds} onAppliedVariableIdsChange={options?.onAppliedVariableIdsChange} />,
+    actionParameters: actionVariables.map((variable) => ({ id: variable.id, label: `${variable.label} changed` })),
+    renderSnapshotEditor: (snapshot, onChange, options): ReactNode => <SnapshotEditor product={product} snapshot={snapshot} onChange={onChange} appliedVariableIds={options?.appliedVariableIds} onAppliedVariableIdsChange={options?.onAppliedVariableIdsChange} />,
     toDocument: (name, scenario) => ({
       schemaVersion: 1,
       product,
@@ -118,7 +129,7 @@ export function createEdumonAuthoringAdapter(product: Exclude<ScenarioProductId,
         notes: stage.notes ?? '',
         kind: contentKind(stage.content),
         snapshot: stage.snapshot,
-        appliedVariableIds: stage.appliedVariableIds ?? [...EDUMON_APPLY_IDS],
+        appliedVariableIds: stage.appliedVariableIds ?? [...appliedIds],
         transition: stage.transition ?? { mode: 'immediate' as const },
         transitionOverrides: stage.transitionOverrides ?? {},
         triggers: [],
