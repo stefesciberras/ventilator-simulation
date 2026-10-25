@@ -1,10 +1,10 @@
 import fs from 'node:fs'
 
-// Keep the shared EDUSIM architecture boundaries executable in the normal build.
+// Keep the shared simulation architecture boundaries executable in the normal build.
 const read = (path) => fs.readFileSync(path, 'utf8')
 const assert = (condition, message) => {
   if (!condition) {
-    console.error(`EDUSIM core regression: ${message}`)
+    console.error(`Core regression: ${message}`)
     process.exitCode = 1
   }
 }
@@ -39,20 +39,24 @@ const workspaceShell = read('src/components/SimulationWorkspaceShell.tsx')
 const laserInteractionCss = read('src/teaching/laser-interaction.css')
 
 // Existing shared shell / UI ownership regression checks.
-assert(eduvent.includes('<SimulationControlFramework'), 'EDUVENT must use SimulationControlFramework')
-assert(edumonPanel.includes('<SimulationControlFramework'), 'EDUMON must use SimulationControlFramework')
-assert(!eduvent.includes('<aside className="control-panel tabbed-control-panel">'), 'EDUVENT must not restore product-owned control-panel chrome')
-assert(edumonPanel.includes('showValue={false}'), 'EDUMON transition control must not duplicate the selected duration beside its label')
+assert(eduvent.includes('<SimulationControlFramework'), 'MV simulator must use SimulationControlFramework')
+assert(edumonPanel.includes('<SimulationControlFramework'), 'monitor simulator must use SimulationControlFramework')
+assert(!eduvent.includes('<aside className="control-panel tabbed-control-panel">'), 'MV simulator must not restore product-owned control-panel chrome')
+assert(edumonPanel.includes('showValue={false}'), 'monitor transition control must not duplicate the selected duration beside its label')
 assert(transition.includes('showValue = true'), 'shared transition control must retain an explicit value-display option')
-assert(physiology.includes('<SecondaryMonitorSurface'), 'EDUVENT physiology display must use SecondaryMonitorSurface')
-assert(edumon.includes('<SecondaryMonitorSurface'), 'EDUMON auxiliary displays must use SecondaryMonitorSurface')
-assert(!edumon.includes('AuxiliaryMonitorModal'), 'EDUMON must not depend on the legacy AuxiliaryMonitorModal wrapper')
+assert(physiology.includes('<SecondaryMonitorSurface'), 'MV physiology display must use SecondaryMonitorSurface')
+assert(edumon.includes('<SecondaryMonitorSurface'), 'monitor auxiliary displays must use SecondaryMonitorSurface')
+assert(!edumon.includes('AuxiliaryMonitorModal'), 'monitor must not depend on the legacy AuxiliaryMonitorModal wrapper')
 
 // Cross-product registration and functional contract.
 assert(adapter.includes('SimulationProductSessionContract'), 'product adapter must expose a functional session contract')
 assert(adapter.includes('SimulationProductScenarioContract'), 'product adapter must expose a functional scenario contract')
-assert(scenarioProducts.includes('EDUSIM_PRODUCTS'), 'scenario routing must derive product metadata from the EDUSIM registry')
-for (const product of ['eduvent', 'edumon-ana', 'edumon-icu']) {
+assert(adapter.includes("export type SimulationProductId = 'mv' | 'anaesth' | 'icu'"), 'canonical product IDs must remain brand-neutral')
+assert(adapter.includes("eduvent: 'mv'"), 'legacy EDUVENT product ID must normalise to mv')
+assert(adapter.includes("'edumon-ana': 'anaesth'"), 'legacy anaesthesia product ID must normalise to anaesth')
+assert(adapter.includes("'edumon-icu': 'icu'"), 'legacy ICU product ID must normalise to icu')
+assert(scenarioProducts.includes('SIMULATION_PRODUCTS'), 'scenario routing must derive product metadata from the neutral registry')
+for (const product of ['mv', 'anaesth', 'icu']) {
   assert(registry.includes(`id: '${product}'`), `product registry must include ${product}`)
 }
 assert((registry.match(/session:/g) ?? []).length >= 3, 'all registered simulators must expose session descriptors')
@@ -60,10 +64,10 @@ assert((registry.match(/scenario:/g) ?? []).length >= 3, 'all registered simulat
 
 // Declarative session-domain ownership rendered by shared UI.
 for (const domain of ["id: 'patient'", "id: 'device'", "id: 'alarms'"]) {
-  assert(eduventContract.includes(domain), `EDUVENT session contract must define ${domain}`)
+  assert(eduventContract.includes(domain), `MV session contract must define ${domain}`)
 }
 for (const domain of ["id: 'patient'", "id: 'alarms'", "id: 'display'"]) {
-  assert(edumonContract.includes(domain), `EDUMON session contract must define ${domain}`)
+  assert(edumonContract.includes(domain), `monitor session contract must define ${domain}`)
 }
 assert(productDashboard.includes('product.session.domains.map'), 'shared dashboard must render product session-domain descriptors')
 assert(productDashboard.includes('product.session?.telemetry'), 'shared dashboard must render product telemetry descriptors')
@@ -100,43 +104,43 @@ assert(laserInteractionCss.includes('.teaching-laser-exit'), 'legacy laser exit 
 
 // Shared persistence and diagnostics infrastructure with product-owned payloads.
 assert(persistence.includes('edusim.${productId}.'), 'shared persistence must namespace values by product')
-assert(eduvent.includes("createSimulationPersistence('eduvent')"), 'EDUVENT must use shared persistence')
-assert(edumon.includes('createSimulationPersistence(productId)'), 'EDUMON must use shared persistence')
-assert(diagnostics.includes('edusim-diagnostic-v1'), 'shared diagnostics must retain the EDUSIM diagnostic envelope')
-assert(eduventDiagnostics.includes('copySimulationDiagnostic'), 'EDUVENT diagnostics must use shared diagnostic infrastructure')
-assert(edumon.includes('copySimulationDiagnostic'), 'EDUMON diagnostics must use shared diagnostic infrastructure')
+assert(eduvent.includes("createSimulationPersistence('mv')"), 'MV simulator must use neutral shared persistence ID')
+assert(edumon.includes('createSimulationPersistence(productId)'), 'monitor must use shared persistence')
+assert(diagnostics.includes('edusim-diagnostic-v1'), 'shared diagnostics must retain the existing diagnostic envelope for compatibility')
+assert(eduventDiagnostics.includes('copySimulationDiagnostic'), 'MV diagnostics must use shared diagnostic infrastructure')
+assert(edumon.includes('copySimulationDiagnostic'), 'monitor diagnostics must use shared diagnostic infrastructure')
 
-// Continuous signal history belongs to EDUSIM core; waveform semantics remain product-owned.
-assert(rollingSignalHistory.includes('class RollingSignalHistory'), 'EDUSIM core must expose a reusable rolling signal history')
+// Continuous signal history belongs to shared core; waveform semantics remain product-owned.
+assert(rollingSignalHistory.includes('class RollingSignalHistory'), 'shared core must expose a reusable rolling signal history')
 assert(rollingSignalHistory.includes('append(sample: TSample)'), 'rolling signal history must append future samples rather than regenerate history')
 assert(rollingSignalHistory.includes('trim(endTime: number)'), 'rolling signal history must trim samples by simulation time')
-assert(edumonMonitorEngine.includes("import { RollingSignalHistory } from '../core/RollingSignalHistory'"), 'EDUMON monitor engine must use the shared rolling signal history')
-assert(edumonMonitorEngine.includes('runtime.history.append(generateNextSample'), 'EDUMON must generate and append only future monitor samples')
-assert(edumonMonitorEngine.includes('const nextPhase = runtime.phase +'), 'EDUMON must advance cardiac phase incrementally rather than recompute historical phase')
-assert(edumonMonitorEngine.includes('runtime.phase = fract(nextPhase)'), 'EDUMON must preserve cardiac phase continuity when a beat completes')
-assert(edumonMonitorEngine.includes('beatHistory'), 'EDUMON derived monitor measurements must be based on generated beat history')
-assert(edumonMonitorEngine.includes('beats.slice(-5)'), 'EDUMON displayed heart rate must average the last five detected beats')
-assert(edumonMonitorEngine.includes('beat.time >= now - 30'), 'EDUMON displayed SpO2 must use a rolling 30-second beat window')
-assert(!edumonMonitorEngine.includes('cardiacPhase(time, rate'), 'EDUMON must not derive the whole visible waveform phase from the current heart rate')
+assert(edumonMonitorEngine.includes("import { RollingSignalHistory } from '../core/RollingSignalHistory'"), 'monitor engine must use the shared rolling signal history')
+assert(edumonMonitorEngine.includes('runtime.history.append(generateNextSample'), 'monitor must generate and append only future monitor samples')
+assert(edumonMonitorEngine.includes('const nextPhase = runtime.phase +'), 'monitor must advance cardiac phase incrementally rather than recompute historical phase')
+assert(edumonMonitorEngine.includes('runtime.phase = fract(nextPhase)'), 'monitor must preserve cardiac phase continuity when a beat completes')
+assert(edumonMonitorEngine.includes('beatHistory'), 'monitor derived measurements must be based on generated beat history')
+assert(edumonMonitorEngine.includes('beats.slice(-5)'), 'displayed heart rate must average the last five detected beats')
+assert(edumonMonitorEngine.includes('beat.time >= now - 30'), 'displayed SpO2 must use a rolling 30-second beat window')
+assert(!edumonMonitorEngine.includes('cardiacPhase(time, rate'), 'monitor must not derive the whole visible waveform phase from the current heart rate')
 
-// Respiratory/metabolic gas exchange belongs to EDUSIM core. Products supply
+// Respiratory/metabolic gas exchange belongs to shared core. Products supply
 // mechanics/ventilation inputs and retain product-specific waveform morphology.
-assert(respiratoryCore.includes('interface RespiratoryPhysiologyInput'), 'EDUSIM core must define product-neutral respiratory inputs')
+assert(respiratoryCore.includes('interface RespiratoryPhysiologyInput'), 'shared core must define product-neutral respiratory inputs')
 assert(respiratoryCore.includes('oxygenConsumptionMlMin'), 'shared respiratory core must model VO2')
 assert(respiratoryCore.includes('co2ProductionMlMin'), 'shared respiratory core must model VCO2')
 assert(respiratoryCore.includes('alveolarVentilationLMin'), 'shared respiratory core must expose alveolar ventilation')
 assert(respiratoryCore.includes('stepRespiratoryPhysiology'), 'shared respiratory core must evolve gas exchange over simulation time')
-assert(respiratoryCore.includes('0.863 * netCo2MlMin'), 'shared respiratory core must preserve the EDUVENT CO2 mass-balance model')
+assert(respiratoryCore.includes('0.863 * netCo2MlMin'), 'shared respiratory core must preserve the MV CO2 mass-balance model')
 assert(respiratoryCore.includes('metabolicDepletionPerSecond'), 'shared respiratory core must preserve oxygen-consumption depletion of the FRC reservoir')
-assert(eduventRespiratoryAdapter.includes("from '../core/physiology/respiratory'"), 'EDUVENT must adapt mechanics into the shared respiratory core')
-assert(edumonRespiratoryAdapter.includes("from '../core/physiology/respiratory'"), 'EDUMON must consume the same shared respiratory core')
-assert(eduventEngine.includes('stepEduventRespiratoryPhysiology'), 'EDUVENT runtime must advance the shared respiratory physiology state')
-assert(eduventEngine.includes('state.alveolarCo2 = shared.output.alveolarCo2MmHg'), 'EDUVENT alveolar CO2 state must be synchronized from shared physiology')
-assert(eduventEngine.includes('sample.spo2 = shared.output.spo2Percent'), 'EDUVENT displayed oxygenation must be sourced from shared physiology')
-assert(eduventLegacyEngine.includes('capnogramSourceValue'), 'EDUVENT must retain product-owned capnogram morphology during physiology extraction')
+assert(eduventRespiratoryAdapter.includes("from '../core/physiology/respiratory'"), 'MV simulator must adapt mechanics into the shared respiratory core')
+assert(edumonRespiratoryAdapter.includes("from '../core/physiology/respiratory'"), 'monitor must consume the same shared respiratory core')
+assert(eduventEngine.includes('stepEduventRespiratoryPhysiology'), 'MV runtime must advance the shared respiratory physiology state')
+assert(eduventEngine.includes('state.alveolarCo2 = shared.output.alveolarCo2MmHg'), 'MV alveolar CO2 state must be synchronized from shared physiology')
+assert(eduventEngine.includes('sample.spo2 = shared.output.spo2Percent'), 'MV displayed oxygenation must be sourced from shared physiology')
+assert(eduventLegacyEngine.includes('capnogramSourceValue'), 'MV simulator must retain product-owned capnogram morphology during physiology extraction')
 assert(!respiratoryCore.includes('capnogramSourceValue'), 'shared respiratory physiology must not own capnogram waveform morphology')
 
 // Completed compatibility cleanup must not regress.
-assert(!fs.existsSync('src/teaching/scenario/useEduventScenarioLibrary.ts'), 'obsolete EDUVENT-only scenario library hook must not be reintroduced')
+assert(!fs.existsSync('src/teaching/scenario/useEduventScenarioLibrary.ts'), 'obsolete product-only scenario library hook must not be reintroduced')
 
-if (!process.exitCode) console.log('EDUSIM core and cross-product contract regression checks passed')
+if (!process.exitCode) console.log('Core and cross-product contract regression checks passed')
