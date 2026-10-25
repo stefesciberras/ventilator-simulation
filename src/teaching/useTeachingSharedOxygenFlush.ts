@@ -76,12 +76,15 @@ export function useTeachingSharedOxygenFlush(role: TeachingRole, sessionId: stri
     activeRef.current = next
     setActiveState(next)
     broadcastState(next)
-    if (changed) {
+    // Start is logged once by the EDUVENT scenario-action event, covering both
+    // local and shared instructor oxygen flushes. The shared controller owns the
+    // explicit stop event, avoiding a duplicate start row on long press.
+    if (changed && !next) {
       void recordSessionLogEvent({
         sessionId,
         category: 'device',
-        eventType: next ? 'oxygen_flush.started' : 'oxygen_flush.stopped',
-        label: next ? 'Oxygen flush started' : 'Oxygen flush stopped',
+        eventType: 'oxygen_flush.stopped',
+        label: 'Oxygen flush stopped',
         details: { shared: true },
       }).catch(() => undefined)
     }
