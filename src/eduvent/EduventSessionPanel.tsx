@@ -50,7 +50,7 @@ interface EduventSessionPanelProps {
 
 function RuntimeTransportBadge({ connection, url, kind }: { connection: LocalRuntimeConnection; url: string | null; kind: RuntimeTransportKind }) {
   if (connection === 'disabled' || kind === 'cloud') return null
-  const name = kind === 'webrtc' ? 'P2P' : kind === 'appliance' ? 'EDUVENT box' : 'LAN server'
+  const name = kind === 'webrtc' ? 'P2P' : kind === 'appliance' ? 'LoppjuSIM box' : 'LAN server'
   const label = connection === 'connected' ? `${name} live` : connection === 'connecting' ? `${name} connecting…` : connection === 'reconnecting' ? `${name} reconnecting…` : `${name} unavailable`
   return <span className={`local-runtime-badge ${connection}`} title={kind === 'webrtc' ? 'Direct WebRTC DataChannel; Supabase signalling/fallback' : (url ?? 'Local runtime relay')}><i />{label}</span>
 }
@@ -60,12 +60,12 @@ function summaryFor(scenario: InstructorScenarioSnapshot) {
 }
 
 export function EduventSessionPanel(props: EduventSessionPanelProps) {
-  const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('eduvent', props.instructorAuthenticated, EDUVENT_SCENARIO_CODEC)
+  const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('mv', props.instructorAuthenticated, EDUVENT_SCENARIO_CODEC)
   const staticPresets = useMemo(() => library.items.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'), [library.items])
   const [selectedId, setSelectedId] = useState('')
   useEffect(() => { setSelectedId((current) => staticPresets.some((row) => row.id === current) ? current : (staticPresets[0]?.id ?? '')) }, [staticPresets])
   const session = props.session
-  const product = getSimulationProduct('eduvent')
+  const product = getSimulationProduct('mv')
   const dashboard = buildProductInstructorDashboard(product, session, {
     onUpdatePolicy: (patch) => props.onUpdatePolicy(patch as Parameters<typeof props.onUpdatePolicy>[0]),
     runtimeBadge: <RuntimeTransportBadge connection={props.localRuntimeConnection} url={props.localRuntimeUrl} kind={props.runtimeTransportKind} />,
@@ -73,7 +73,7 @@ export function EduventSessionPanel(props: EduventSessionPanelProps) {
     onSimulationPausedChange: props.onSimulationPausedChange,
     pausedMessage: 'All candidate simulations are paused by the instructor.',
     onBroadcastNow: props.onBroadcastNow,
-    collapseStorageKey: 'eduvent-instructor-dashboard',
+    collapseStorageKey: 'mv-instructor-dashboard',
   })
 
   return <SharedBasicSessionPanel
@@ -91,8 +91,8 @@ export function EduventSessionPanel(props: EduventSessionPanelProps) {
     members={props.members}
     onLeaveSession={props.onLeaveSession}
     onEndInstructorSession={props.onEndInstructorSession}
-    productId="eduvent"
-    productLabel="EDUVENT"
+    productId="mv"
+    productLabel="LoppjuSIM-MV"
     productDescription="mechanical ventilation simulator"
     instructorDashboard={dashboard}
     instructorStart={{
