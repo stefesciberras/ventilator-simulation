@@ -9,8 +9,10 @@ const assert = (condition, message) => {
 }
 
 const panel = read('src/edumon/EdumonActionsPanel.tsx')
+const actionCss = read('src/edumon/edumon-actions.css')
 const targets = read('src/edusim/actions/ActionEffect.ts')
 const runtime = read('src/edusim/actions/ActionRuntime.ts')
+const diagnostics = read('src/core/SimulationDiagnostics.ts')
 const actionLibrary = read('src/edumon/actionLibrary.ts')
 const editor = read('src/action-editor/ActionEditorApp.tsx')
 const physiology = read('src/edumon/actionPhysiology.ts')
@@ -19,6 +21,7 @@ const tof = read('src/edumon/EdumonAnaGasControl.tsx')
 const migration = read('supabase/migrations/20261024_event_classes_and_respiratory_effects.sql')
 const priorityMigration = read('supabase/migrations/20261024_action_priorities_and_constraints.sql')
 const betaBlockerMigration = read('supabase/migrations/20261024_beta_blocker_hr_floor.sql')
+const curareCleftMigration = read('supabase/migrations/20261025_rename_diaphragm_return_curare_cleft.sql')
 const guide = read('src/edumon/ACTIONS_AND_EFFECTS_GUIDE.md')
 const prompt = read('src/edumon/ACTIONS_AND_EFFECTS_AI_PROMPT.md')
 
@@ -37,17 +40,27 @@ assert(panel.includes("renderClass('Cardiovascular'"), 'Actions UI must render C
 assert(panel.includes("renderClass('Respiratory'"), 'Events UI must render Respiratory class')
 assert(panel.includes('getActiveEffects'), 'toggle UI must derive active state from ActionRuntime')
 assert(!panel.includes('toggleStates'), 'toggle UI must not duplicate runtime ON/OFF state')
+assert(actionCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr));'), 'desktop actions must use three columns')
+assert(actionCss.includes('@media (max-width: 680px)') && actionCss.includes('grid-template-columns: repeat(2, minmax(0, 1fr));'), 'mobile actions must remain two columns')
 
 for (const target of ['respiration.airwayObstruction','neuromuscular.tofMinimumCount']) {
   assert(targets.includes(`'${target}'`), `${target} must be a validated action target`)
 }
 assert(physiology.includes("resolveNumericActionEffect('respiration.airwayObstruction'"), 'bronchospasm must be interpreted by physiology')
 assert(physiology.includes("resolveNumericActionEffect('neuromuscular.tofMinimumCount'"), 'TOF minimum-count target must be interpreted')
+assert(physiology.includes('baselineRespiratory.spontaneousRespiratoryRate * drive * muscleFraction'), 'neuromuscular block must suppress mechanically visible spontaneous breaths')
 assert(tof.includes('currentNeuromuscularBlock'), 'TOF must derive from neuromuscular block')
 assert(tof.includes('currentTofMinimumCount'), 'TOF must respect diaphragm-return minimum count')
 
 assert(runtime.includes('intensity: number'), 'runtime must retain adjustable intensity')
 assert(runtime.includes('export function setActionIntensity'), 'running severity/dose must be adjustable')
+assert(runtime.includes('export function getActionRuntimeLog'), 'action runtime must expose diagnostic history')
+assert(runtime.includes("type: 'activate'"), 'action activation must be logged')
+assert(runtime.includes("type: 'deactivate'"), 'action deactivation must be logged')
+assert(runtime.includes("type: 'supersede-target'"), 'manual target supersession must be logged')
+assert(runtime.includes("registerSimulationDiagnosticProvider('actions'"), 'action runtime must register itself with shared diagnostics')
+assert(diagnostics.includes('registerSimulationDiagnosticProvider'), 'shared diagnostics must support runtime providers')
+assert(diagnostics.includes('runtimeDiagnostics'), 'copied diagnostics must include registered runtime diagnostics')
 assert(targets.includes("'constraint'"), 'constraint must be a validated action operation')
 assert(targets.includes('DEFAULT_EDUSIM_ACTION_PRIORITY = 30'), 'ordinary effect priority must default to 30')
 assert(runtime.includes('effectPriority(a.effect) - effectPriority(b.effect)'), 'runtime must resolve lower priority before higher priority')
@@ -69,6 +82,7 @@ assert(priorityMigration.includes('add column if not exists priority integer not
 assert(betaBlockerMigration.includes('"value":-15'), 'Beta blocker migration must persist -15 bpm')
 assert(betaBlockerMigration.includes('"constraint":"minimum"'), 'Beta blocker migration must persist minimum constraint')
 assert(betaBlockerMigration.includes('"value":50'), 'Beta blocker migration must persist 50 bpm floor')
+assert(curareCleftMigration.includes("name = 'Curare Cleft'"), 'Curare Cleft rename must be reproducible')
 
 // Absolute physiological hard-bound architecture.
 assert(bounds.includes('EDUMON_PHYSIOLOGICAL_BOUNDS'), 'hard bounds must be centralized')
@@ -76,14 +90,14 @@ assert(bounds.includes('heartRate: { min: 0, max: 240 }'), 'global HR hard bound
 assert(bounds.includes('systolicPressure: { min: 20, max: 300 }'), 'global SBP hard bound must be 20-300')
 assert(bounds.includes('diastolicPressure: { min: 10, max: 200 }'), 'global DBP hard bound must be 10-200')
 assert(bounds.includes('respiratoryRate: { min: 0, max: 80 }'), 'global RR hard bound must be 0-80')
-assert(bounds.includes('tidalVolumeMl: { min: 0, max: 3000 }'), 'global tidal-volume hard bound must be 0-3000')
+assert(bounds.includes('tidalVolumeMl: { min: 0, max: 1000 }'), 'global tidal-volume hard bound must be 0-1000')
 assert(bounds.includes('export function applyEdumonPhysiologicalBounds'), 'hard-bound applicator must be exported')
 assert(bounds.includes('deadSpaceMl: clamp(settings.deadSpaceMl, 0, Math.max(0, tidalVolumeMl))'), 'dead space must not exceed bounded tidal volume')
 assert(physiology.includes('applyEdumonPhysiologicalBounds({'), 'action physiology must finish through hard bounds')
 assert(!physiology.includes('heartRate: clamp(actionHeartRate + sympathetic.heartRateOffset, 0, 300)'), 'legacy scattered HR 300 clamp must be removed')
 
 for (const [name, text] of [['guide', guide], ['prompt', prompt]]) {
-  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','Bronchospasm','Hypovolaemia','Bleeding','Return of diaphragm breathing','Beta blocker','block-increase','minimum','50 bpm','priority','physiological hard bounds','HR 500']) {
+  for (const phrase of ['Maintenance contract','Actions describe effects; physiology interprets effects.','Bronchospasm','Hypovolaemia','Bleeding','Curare Cleft','Beta blocker','block-increase','minimum','50 bpm','priority','physiological hard bounds','HR 500','action history','mechanically visible']) {
     assert(text.includes(phrase), `${name} must document ${phrase}`)
   }
 }
