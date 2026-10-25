@@ -1,18 +1,19 @@
-# Ventilator Simulation
+# LoppjuSIM
 
-Browser-based educational mechanical ventilation simulator built with Vite, React and TypeScript.
+LoppjuSIM is a browser-based clinical simulation platform built with Vite, React and TypeScript for education and simulation training.
 
-## v0.1 scope
+## Product family
 
-- VC-A/C, PC-A/C and PSV modes
-- Single-compartment respiratory mechanics model
-- Adjustable compliance, inspiratory/expiratory resistance, spontaneous respiratory rate and patient effort
-- Continuously scrolling pressure, flow and volume waveforms with Freeze/Resume
-- Basic monitored values: RR, VTe, minute ventilation, Ppeak, Pmean and PEEP
-- Patient presets: Normal, ARDS, COPD and Asthma
-- O₂ enrichment, nebuliser and waveform freeze controls (initial teaching UI)
+- **LoppjuSIM-MV** — mechanical ventilation simulation
+- **LoppjuSIM-Anaesth** — anaesthesia patient-monitor simulation
+- **LoppjuSIM-ICU** — intensive-care patient-monitor simulation *(coming soon)*
+- **LoppjuSIM-Studio** — shared scenario and simulation-content authoring workspace
 
-The simulator is intentionally separated into a physiology engine and user interface so additional modes, alarms, pathologies and scenarios can be added without rewriting the core display.
+The platform shares teaching, instructor-session, scenario and interface foundations while keeping product-specific simulation engines independent.
+
+## Development compatibility
+
+Existing internal product IDs, routes and storage keys such as `eduvent`, `edumon-ana`, `edumon-icu`, `/eduvent` and `/edumon/...` are retained for compatibility. They are implementation identifiers rather than the public product names.
 
 ## Run locally
 
@@ -27,4 +28,6 @@ npm run dev
 npm run build
 ```
 
-> Educational simulation only. This software is not a medical device and must not be used for clinical decision-making.
+> For education and simulation training only. LoppjuSIM is educational simulation software and is not intended for use as a medical device, for diagnosis, patient monitoring, treatment, clinical decision-making, or in the care of real patients.
+
+© 2026 Stephen Sciberras. LoppjuSIM. All rights reserved.
