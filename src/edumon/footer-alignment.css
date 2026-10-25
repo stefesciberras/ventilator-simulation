@@ -1,0 +1,19 @@
+/* Keep the ANA footer monitor cluster anchored to the right edge whether or not
+   the optional temperature tile is currently displayed. */
+.edumon-app-shell .simulation-console-footer .edumon-control-strip > .edumon-tof-container {
+  margin-left: auto !important;
+  order: 91;
+}
+
+.edumon-app-shell .simulation-console-footer .edumon-control-strip > .edumon-temperature-container {
+  margin-left: auto !important;
+  order: 90;
+}
+
+.edumon-app-shell .simulation-console-footer .edumon-control-strip > .edumon-temperature-container + .edumon-tof-container {
+  margin-left: 0 !important;
+}
+
+.edumon-app-shell .simulation-console-footer .edumon-control-strip > .edumon-ana-gas-footer {
+  order: 92;
+}
