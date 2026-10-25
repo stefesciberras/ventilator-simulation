@@ -12,6 +12,12 @@
   gap: 12px;
 }
 
+.teaching-session-log-profile-button {
+  margin-left: auto;
+  min-width: 82px;
+  align-self: stretch;
+}
+
 .teaching-session-log-empty {
   min-height: 72px;
   display: grid;
@@ -52,6 +58,7 @@
 .teaching-session-log-entry.category-settings > strong { color: #bee0c6; }
 .teaching-session-log-entry.category-settings .teaching-session-log-subject { color: #9eb3bf; }
 .teaching-session-log-error { color: #e69a9a; font-size: .7rem; }
+.teaching-session-log-viewer-error { padding: 0 12px 8px; }
 
 .teaching-session-log-actions,
 .teaching-session-log-viewer-footer {
@@ -105,7 +112,17 @@
 .teaching-session-log-viewer-header > div { display: grid; gap: 2px; }
 .teaching-session-log-viewer-header span { color: #77bcd4; font-size: .65rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 .teaching-session-log-viewer-header strong { color: #eef7fa; font-size: 1rem; }
-.teaching-session-log-viewer-header button { min-width: 74px; }
+.teaching-session-log-close {
+  min-width: 0 !important;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 1.35rem;
+  line-height: 1;
+}
 .teaching-session-log-viewer-stage { min-height: 180px; overflow: auto; padding: 12px; }
 .teaching-session-log-viewer-list { max-height: none; }
 .teaching-session-log-viewer-footer { padding: 12px 14px; border-top: 1px solid rgba(255,255,255,.09); background: rgba(5,12,16,.58); }

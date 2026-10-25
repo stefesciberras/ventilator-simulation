@@ -47,7 +47,6 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
   profileClassName = '',
 }: SimulationControlFrameworkProps<TTab, TProfile>) {
   const selected = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]
-  const wrapSelectedInLockFieldset = Boolean(selected?.locked || selected?.lockClassName)
 
   return (
     <aside className={`control-panel edusim-control-framework ${className}`.trim()} aria-label={ariaLabel}>
@@ -83,16 +82,26 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
       </div>
 
       <div className={`edusim-control-panel-body control-tab-content ${bodyClassName}`.trim()}>
-        {selected && (
-          <div className={`control-tab-pane edusim-control-tab-pane ${selected.panelClassName ?? ''}`.trim()} role="tabpanel">
-            {wrapSelectedInLockFieldset ? (
-              <fieldset className={`session-lock-fieldset ${selected.locked ? 'locked' : ''} edusim-control-lock ${selected.lockClassName ?? ''}`.trim()} disabled={selected.locked}>
-                {selected.locked && <div className="session-control-lock-label">{selected.lockLabel ?? 'Instructor controlled'}</div>}
-                {selected.content}
-              </fieldset>
-            ) : selected.content}
-          </div>
-        )}
+        {tabs.map((tab) => {
+          const active = selected?.id === tab.id
+          const wrapInLockFieldset = Boolean(tab.locked || tab.lockClassName)
+          return (
+            <div
+              key={tab.id}
+              className={`control-tab-pane edusim-control-tab-pane ${tab.panelClassName ?? ''}`.trim()}
+              role="tabpanel"
+              hidden={!active}
+              aria-hidden={!active}
+            >
+              {wrapInLockFieldset ? (
+                <fieldset className={`session-lock-fieldset ${tab.locked ? 'locked' : ''} edusim-control-lock ${tab.lockClassName ?? ''}`.trim()} disabled={tab.locked}>
+                  {tab.locked && <div className="session-control-lock-label">{tab.lockLabel ?? 'Instructor controlled'}</div>}
+                  {tab.content}
+                </fieldset>
+              ) : tab.content}
+            </div>
+          )
+        })}
       </div>
 
       {footer && <div className="edusim-control-framework-footer">{footer}</div>}
