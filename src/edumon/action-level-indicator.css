@@ -1,13 +1,20 @@
+.edumon-action-button:has(.edumon-action-dose-badge) {
+  position: relative;
+  padding-bottom: 16px;
+}
+
 .edumon-action-dose-badge {
   --level-bar-1: #f0a03a;
   --level-bar-2: rgba(255,255,255,0.16);
   --level-bar-3: rgba(255,255,255,0.16);
-  position: relative;
-  flex: 0 0 28px;
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  transform: translateX(-50%);
   width: 28px;
   min-width: 28px;
-  height: 14px;
-  margin-left: 2px;
+  height: 10px;
+  margin: 0;
   padding: 0;
   border: 1px solid rgba(255,255,255,0.22);
   border-radius: 3px;
@@ -17,15 +24,16 @@
   line-height: 0;
   box-sizing: border-box;
   overflow: visible;
+  pointer-events: none;
 }
 
 .edumon-action-dose-badge::before {
   content: '';
   position: absolute;
   left: 3px;
-  top: 3px;
+  top: 2px;
   width: 4px;
-  height: 6px;
+  height: 4px;
   border-radius: 1px;
   background: var(--level-bar-1);
   box-shadow: 7px 0 0 var(--level-bar-2), 14px 0 0 var(--level-bar-3);
@@ -35,7 +43,7 @@
   content: '';
   position: absolute;
   right: -3px;
-  top: 4px;
+  top: 2px;
   width: 2px;
   height: 4px;
   border-radius: 0 2px 2px 0;
@@ -56,9 +64,10 @@
   background: rgba(240,160,58,0.08);
 }
 
-/* Keep long action names inside the button; the level indicator owns a fixed compact slot. */
+/* The indicator is out of the flex row, so the action name retains the full button width. */
 .edumon-action-button > span:first-child {
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
