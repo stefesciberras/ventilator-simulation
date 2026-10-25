@@ -1,0 +1,7 @@
+.edumon-measurements {
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+}
+
+.edumon-value-temperature {
+  color: #e7d36f;
+}
