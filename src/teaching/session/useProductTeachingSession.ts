@@ -38,6 +38,7 @@ export function useProductTeachingSession<TState>({
   )
   const stateRef = useRef(state)
   const suppressInstructorBroadcastRef = useRef(false)
+  const candidateStateInitialisedRef = useRef(false)
 
   useEffect(() => { stateRef.current = state }, [state])
 
@@ -53,9 +54,10 @@ export function useProductTeachingSession<TState>({
     host: {
       onSessionRow: (row, nextRole, source, force) => {
         if (nextRole === 'candidate') {
-          const nextState = mergeCandidateState
+          const nextState = candidateStateInitialisedRef.current && mergeCandidateState
             ? mergeCandidateState(stateRef.current, row.product_state)
             : row.product_state
+          candidateStateInitialisedRef.current = true
           stateRef.current = nextState
           setState(nextState)
           return
@@ -66,6 +68,9 @@ export function useProductTeachingSession<TState>({
           setState(row.product_state)
           window.setTimeout(() => { suppressInstructorBroadcastRef.current = false }, 0)
         }
+      },
+      onSessionCleared: () => {
+        candidateStateInitialisedRef.current = false
       },
     },
   })
