@@ -57,7 +57,7 @@ export function getSessionLogRuntimeContext(): SessionLogRuntimeContext {
 
 export async function recordSessionLogEvent(input: RecordSessionLogEventInput): Promise<void> {
   const sessionId = input.sessionId ?? runtimeContext.sessionId
-  if (!sessionId || runtimeContext.role === 'standalone') return
+  if (!sessionId || (runtimeContext.role === 'standalone' && input.sessionId == null)) return
 
   const { error } = await supabase.from('edusim_session_log_entries').insert({
     session_id: sessionId,
