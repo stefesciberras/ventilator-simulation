@@ -103,8 +103,9 @@ assert(workspaceShell.includes('onTouchCancel={resetSwipe}'), 'React workspace m
 assert(laserInteractionCss.includes('.teaching-laser-exit'), 'legacy laser exit affordance must remain hidden')
 
 // Shared persistence and diagnostics infrastructure with product-owned payloads.
-assert(persistence.includes('edusim.${productId}.'), 'shared persistence must namespace values by product')
-assert(eduvent.includes("createSimulationPersistence('mv')"), 'MV simulator must use neutral shared persistence ID')
+assert(persistence.includes('edusim.${productId}.'), 'shared persistence must namespace values by neutral product ID')
+assert(persistence.includes('normaliseSimulationProductId(productAlias)'), 'shared persistence must normalise legacy product aliases immediately at its boundary')
+assert(persistence.includes('legacyProductKey(name)'), 'shared persistence must migrate existing product-prefixed local values')
 assert(edumon.includes('createSimulationPersistence(productId)'), 'monitor must use shared persistence')
 assert(diagnostics.includes('edusim-diagnostic-v1'), 'shared diagnostics must retain the existing diagnostic envelope for compatibility')
 assert(eduventDiagnostics.includes('copySimulationDiagnostic'), 'MV diagnostics must use shared diagnostic infrastructure')
