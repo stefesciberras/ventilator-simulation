@@ -12,7 +12,7 @@ export interface InstructorWorkspaceProps {
 export function InstructorWorkspace({ scenarioAction, settingsAction, runtime, dialogs }: InstructorWorkspaceProps) {
   return <>
     {scenarioAction}
-    {settingsAction}
+    {settingsAction && <span className="loppjusim-hidden-settings-controller">{settingsAction}</span>}
     {runtime}
     {dialogs}
   </>
