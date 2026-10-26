@@ -13,6 +13,7 @@ import { createDefaultVentilatorScenario } from './modules/ventilator/defaultSce
 import { VentilatorScenarioEditor } from './modules/ventilator/VentilatorScenarioEditor'
 import { EdumonScenarioEditor } from './modules/edumon/EdumonScenarioEditor'
 import { ProfileEditor } from './ProfileEditor'
+import { OrganisationManager } from './OrganisationManager'
 import type { EdumonStoredScenario } from '../edumon/scenarioTypes'
 import type { ProductScenarioRow } from '../teaching/scenario/productLibrary'
 import { SCENARIO_PRODUCTS, type ScenarioProductId } from '../teaching/scenario/products'
@@ -20,11 +21,13 @@ import { DEFAULT_SCENARIO_MODULE_ID, SCENARIO_MODULES } from './modules/registry
 import { SCENARIO_BUILDER_VERSION } from './version'
 import './scenarioBuilder.css'
 
+type StudioResource = 'scenarios' | 'profiles' | 'organisation'
+
 export function ScenarioBuilderApp() {
   const [account, setAccount] = useState<User | null>(null)
   const [presets, setPresets] = useState<InstructorPresetRow[]>([])
   const [moduleId, setModuleId] = useState(DEFAULT_SCENARIO_MODULE_ID)
-  const [resource, setResource] = useState<'scenarios' | 'profiles'>('scenarios')
+  const [resource, setResource] = useState<StudioResource>('scenarios')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [email, setEmail] = useState('')
@@ -118,7 +121,7 @@ export function ScenarioBuilderApp() {
         open={aboutOpen}
         productLabel="LoppjuSIM-Studio"
         title="Simulation Studio"
-        description="The shared LoppjuSIM authoring workspace for scenarios, patient profiles and simulation actions."
+        description="The shared LoppjuSIM authoring workspace for scenarios, organisation profile libraries and simulation actions."
         version={SCENARIO_BUILDER_VERSION}
         onClose={() => setAboutOpen(false)}
         legalContext="authoring"
@@ -127,7 +130,7 @@ export function ScenarioBuilderApp() {
         <div>
           <span className="scenario-builder-eyebrow">Simulation authoring workspace</span>
           <h1>LoppjuSIM-Studio</h1>
-          <small>Studio v{SCENARIO_BUILDER_VERSION} · LoppjuSIM shared scenario framework</small>
+          <small>Studio v{SCENARIO_BUILDER_VERSION} · LoppjuSIM shared authoring framework</small>
         </div>
         <div className="scenario-builder-appbar-actions">
           {account && <span className="scenario-builder-account">{account.email}</span>}
@@ -137,7 +140,7 @@ export function ScenarioBuilderApp() {
         </div>
       </header>
 
-      <section className="scenario-builder-modulebar">
+      {resource !== 'organisation' && <section className="scenario-builder-modulebar">
         <label>
           <span>Simulation module</span>
           <select value={moduleId} onChange={(event) => setModuleId(event.target.value)}>
@@ -148,22 +151,23 @@ export function ScenarioBuilderApp() {
           <strong>{selectedModule.label}</strong>
           <p>{selectedModule.description}</p>
         </div>
-      </section>
+      </section>}
 
       <nav className="scenario-builder-resourcebar" aria-label="Studio resources">
         <button type="button" className={resource === 'scenarios' ? 'selected' : ''} onClick={() => setResource('scenarios')}>Scenarios</button>
         <button type="button" className={resource === 'profiles' ? 'selected' : ''} onClick={() => setResource('profiles')}>Profiles</button>
+        <button type="button" className={resource === 'organisation' ? 'selected' : ''} onClick={() => setResource('organisation')}>Organisation</button>
         <button type="button" onClick={() => window.location.assign('/actions')}>Actions</button>
       </nav>
 
       {loading ? (
-        <section className="scenario-builder-state">Loading scenario workspace…</section>
+        <section className="scenario-builder-state">Loading Studio workspace…</section>
       ) : !account ? (
         <section className="scenario-builder-signin">
           <div>
             <span>Instructor cloud</span>
-            <h2>Sign in to author scenarios</h2>
-            <p>LoppjuSIM-Studio uses the same instructor account and scenario library as the simulators.</p>
+            <h2>Sign in to LoppjuSIM-Studio</h2>
+            <p>Organisation membership and shared libraries use your permanent instructor account.</p>
           </div>
           <form onSubmit={signIn}>
             <label><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
@@ -172,6 +176,8 @@ export function ScenarioBuilderApp() {
           </form>
           {message && <div className="scenario-builder-message">{message}</div>}
         </section>
+      ) : resource === 'organisation' ? (
+        <section className="scenario-builder-workspace"><OrganisationManager /></section>
       ) : resource === 'profiles' ? (
         <section className="scenario-builder-workspace">
           <ProfileEditor product={moduleId === 'ventilator' ? 'mv' : moduleId === 'anaesth' ? 'anaesth' : 'icu'} />

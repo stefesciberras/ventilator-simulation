@@ -24,7 +24,12 @@ export function useProductProfiles<TValues extends object>(product: ScenarioProd
   useEffect(() => {
     void refresh()
     const unsubscribe = subscribeToInstructorAccount(() => { void refresh() })
-    return unsubscribe
+    const onOrganisationChange = () => { void refresh() }
+    window.addEventListener('lopjusim:active-organisation-changed', onOrganisationChange)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('lopjusim:active-organisation-changed', onOrganisationChange)
+    }
   }, [refresh])
 
   return { rows, loading, message, refresh }

@@ -1377,7 +1377,13 @@ export default function App() {
     Asthma: { ...PATIENT_PROFILES.Asthma, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.Asthma)?.values ?? {}) },
     Paed: { ...PATIENT_PROFILES.Paed, ...(savedPatientProfiles.find((row) => row.base_key === MV_PROFILE_KEYS.Paed)?.values ?? {}) },
   }), [savedPatientProfiles, resolvedArdsProfiles])
-  const customPatientProfiles = useMemo(() => new Map(savedPatientProfiles.filter((row) => !row.base_key).map((row) => [row.name, row.values])), [savedPatientProfiles])
+  const customPatientProfiles = useMemo(() => {
+    const profiles = new Map<string, PatientSettings>()
+    for (const row of savedPatientProfiles.filter((candidate) => !candidate.base_key)) {
+      if (!profiles.has(row.name)) profiles.set(row.name, row.values)
+    }
+    return profiles
+  }, [savedPatientProfiles])
 
   const oxygenBoostTimer = `0:${String(oxygenBoostSecondsRemaining).padStart(2, '0')}`
   const selectedProfileSettings = selectedPatientProfile === 'ARDS' && ardsSeverity !== 'off'

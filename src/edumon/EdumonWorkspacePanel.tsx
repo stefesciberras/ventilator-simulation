@@ -62,7 +62,12 @@ export function EdumonWorkspacePanel({
       const override = savedProfiles.find((row) => row.base_key === baseKey)
       if (override) result[name] = { ...result[name], ...override.values }
     }
-    for (const row of savedProfiles.filter((candidate) => !candidate.base_key)) result[row.name] = row.values
+    const customProfileNames = new Set<string>()
+    for (const row of savedProfiles.filter((candidate) => !candidate.base_key)) {
+      if (customProfileNames.has(row.name)) continue
+      result[row.name] = row.values
+      customProfileNames.add(row.name)
+    }
     return result
   }, [savedProfiles])
   const [pressuresCoupled, setPressuresCoupled] = useState(false)
