@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { EdusimBackLink } from './EdusimBackLink'
+import { LoppjuSimPlatformMenu, type LoppjuSimRunMode } from './LoppjuSimPlatformMenu'
 import './SimulationTopBar.css'
 
 export type SharedSimulationSpeed = 0.5 | 1 | 1.5 | 2 | 4
@@ -37,6 +38,8 @@ interface SimulationTopBarProps {
   statusText?: string
   version?: string
   onAbout?: () => void
+  runMode?: LoppjuSimRunMode
+  showPlatformMenu?: boolean
   className?: string
   brandClassName?: string
   statusClassName?: string
@@ -65,6 +68,8 @@ export function SimulationTopBar({
   statusText,
   version,
   onAbout,
+  runMode = 'standalone',
+  showPlatformMenu = true,
   className = '',
   brandClassName = '',
   statusClassName = '',
@@ -118,6 +123,7 @@ export function SimulationTopBar({
         <span className={`status-dot ${simulationPaused ? 'paused' : ''}`} />
         {statusText && <span className={statusTextClassName || 'simulation-status-text'}>{statusText}</span>}
         {rightActions}
+        {showPlatformMenu && <LoppjuSimPlatformMenu role={runMode} productLabel={publicBrandKicker} />}
         {version && <span className="version">v{version}</span>}
         {onAbout && <button type="button" className="top-about-button" onClick={onAbout}>About</button>}
       </div>
