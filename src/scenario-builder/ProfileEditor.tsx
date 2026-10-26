@@ -53,15 +53,15 @@ function displayValue(variable: ScenarioVariableDefinition, value: unknown) {
 
 export function ProfileEditor({ product }: { product: ScenarioProductId }) {
   const { rows, loading, message, refresh } = useProductProfiles<Record<string, unknown>>(product)
-  const { memberships, active, setActiveOrganisation } = useOrganisations()
-  const [scope, setScope] = useState<LibraryScope>(() => active ? 'organisation' : 'user')
+  const { memberships, active, loading: organisationsLoading, setActiveOrganisation } = useOrganisations()
+  const [scope, setScope] = useState<LibraryScope>('organisation')
   const builtins = useMemo(() => builtinProfilesForProduct(product), [product])
   const variables = useMemo(() => profileVariables(product), [product])
   const canManageOrganisation = active?.membership.role === 'owner' || active?.membership.role === 'admin'
 
   useEffect(() => {
-    if (!active && scope === 'organisation') setScope('user')
-  }, [active?.organisation.id, scope])
+    if (!organisationsLoading && !active && scope === 'organisation') setScope('user')
+  }, [organisationsLoading, active?.organisation.id, scope])
 
   const requestedScope = useMemo<ProductProfileScope>(() => (
     scope === 'organisation' && active
