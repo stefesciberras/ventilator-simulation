@@ -6,6 +6,7 @@ import {
   type RespiratoryPhysiologyState,
 } from '../core/physiology/respiratory'
 import { setActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
+import { calculateConfiguredVdVtFromValues, calculateEffectiveDeadSpaceFromVdVt } from '../patientMetrics'
 import { applyEdumonActionPhysiology } from './actionPhysiology'
 import {
   DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
@@ -30,10 +31,21 @@ export function currentEdumonRespiratorySpO2(fallback: number): number {
 }
 
 export function resolvedMonitorRespiratorySettings(state: MonitorPatientState): MonitorRespiratorySettings {
-  return {
+  const configured = state.respiratory ?? {}
+  const merged = {
     ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
-    ...(state.respiratory ?? {}),
+    ...configured,
   }
+  const configuredVdVt = calculateConfiguredVdVtFromValues(
+    configured.vdVt,
+    configured.vdVt == null ? configured.deadSpaceMl : undefined,
+    merged.tidalVolumeMl,
+  )
+  const effectiveDeadSpace = calculateEffectiveDeadSpaceFromVdVt(
+    { sex: merged.sex, heightCm: merged.heightCm, vdVt: configuredVdVt },
+    merged.tidalVolumeMl,
+  )
+  return { ...merged, vdVt: configuredVdVt, deadSpaceMl: effectiveDeadSpace.deadSpaceMl }
 }
 
 export function monitorRespiratoryInput(state: MonitorPatientState, simulationTime = 0): RespiratoryPhysiologyInput {

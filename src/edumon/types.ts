@@ -28,6 +28,9 @@ export interface MonitorRespiratorySettings {
   spontaneousTidalVolumeMl: number
   /** Current EDUMON ventilation mode. Older scenarios omit this and are treated as Manual/spontaneous. */
   ventilatorMode?: MonitorVentilationMode
+  /** Physiological dead-space fraction. Effective dead-space volume follows the current tidal volume, as in LoppjuSIM-MV. */
+  vdVt: number
+  /** Resolved effective dead-space volume. Older payloads may provide this without vdVt. */
   deadSpaceMl: number
   fio2: number
   peepCmH2O: number
@@ -47,6 +50,7 @@ export const DEFAULT_MONITOR_RESPIRATORY_SETTINGS: MonitorRespiratorySettings = 
   tidalVolumeMl: 500,
   spontaneousRespiratoryRate: 12,
   spontaneousTidalVolumeMl: 500,
+  vdVt: 0.4,
   deadSpaceMl: 150,
   fio2: 0.21,
   peepCmH2O: 0,
