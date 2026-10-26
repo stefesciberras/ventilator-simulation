@@ -85,10 +85,7 @@ export function useProductTeachingSession<TState>({
   mergeCandidateState,
   instructorBroadcastDebounceMs = 120,
 }: UseProductTeachingSessionArgs<TState>) {
-  const repository = useMemo(
-    () => createProductTeachingSessionRepository<TState>(productId),
-    [productId],
-  )
+  const repository = useMemo(() => createProductTeachingSessionRepository<TState>(productId), [productId])
   const stateRef = useRef(state)
   const suppressInstructorBroadcastRef = useRef(false)
   const candidateStateInitialisedRef = useRef(false)
@@ -123,9 +120,7 @@ export function useProductTeachingSession<TState>({
     host: {
       onSessionRow: (row, nextRole, source, force) => {
         if (nextRole === 'candidate') {
-          const nextState = candidateStateInitialisedRef.current && mergeCandidateState
-            ? mergeCandidateState(stateRef.current, row.product_state)
-            : row.product_state
+          const nextState = candidateStateInitialisedRef.current && mergeCandidateState ? mergeCandidateState(stateRef.current, row.product_state) : row.product_state
           candidateStateInitialisedRef.current = true
           stateRef.current = nextState
           setState(nextState)
@@ -147,9 +142,7 @@ export function useProductTeachingSession<TState>({
     },
   })
 
-  const runtimeMode: ProductSessionRuntimeMode = core.role === 'standalone'
-    ? preferredRuntimeMode
-    : stateRuntimeMode(core.session?.product_state) ?? 'teaching'
+  const runtimeMode: ProductSessionRuntimeMode = core.role === 'standalone' ? preferredRuntimeMode : stateRuntimeMode(core.session?.product_state) ?? 'teaching'
 
   const setPreferredRuntimeMode = (next: ProductSessionRuntimeMode) => {
     setPreferredRuntimeModeState(next)
@@ -158,6 +151,16 @@ export function useProductTeachingSession<TState>({
       window.dispatchEvent(new Event(PRODUCT_SESSION_RUNTIME_MODE_EVENT))
     }
   }
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.dataset.loppjusimSessionRole = core.role
+    document.documentElement.dataset.loppjusimRuntimeMode = runtimeMode
+    return () => {
+      if (document.documentElement.dataset.loppjusimSessionRole === core.role) delete document.documentElement.dataset.loppjusimSessionRole
+      if (document.documentElement.dataset.loppjusimRuntimeMode === runtimeMode) delete document.documentElement.dataset.loppjusimRuntimeMode
+    }
+  }, [core.role, runtimeMode])
 
   useEffect(() => {
     configureSessionLogRuntime({ productId, sessionId: core.session?.id ?? null, role: core.role })
@@ -188,18 +191,11 @@ export function useProductTeachingSession<TState>({
       sync()
       unsubscribe = subscribeToActionRuntime(sync)
     })
-    return () => {
-      disposed = true
-      unsubscribe?.()
-    }
+    return () => { disposed = true; unsubscribe?.() }
   }, [productId, core.role, core.session?.id, runtimeMode])
 
-  const stateSignature = useMemo(() => {
-    try { return JSON.stringify(state) } catch { return '' }
-  }, [state])
-  const sessionStateSignature = useMemo(() => {
-    try { return JSON.stringify(core.session?.product_state ?? null) } catch { return '' }
-  }, [core.session?.product_state])
+  const stateSignature = useMemo(() => { try { return JSON.stringify(state) } catch { return '' } }, [state])
+  const sessionStateSignature = useMemo(() => { try { return JSON.stringify(core.session?.product_state ?? null) } catch { return '' } }, [core.session?.product_state])
   const candidateMemberSignature = useMemo(() => {
     if (core.role !== 'instructor' || runtimeMode !== 'simulation') return ''
     const candidate = core.members.find((member) => member.role === 'candidate')
@@ -213,10 +209,7 @@ export function useProductTeachingSession<TState>({
     const merged = mergeCandidateState(candidate.product_state, stateRef.current)
     let currentSignature = ''
     let mergedSignature = ''
-    try {
-      currentSignature = JSON.stringify(stateRef.current)
-      mergedSignature = JSON.stringify(merged)
-    } catch { return }
+    try { currentSignature = JSON.stringify(stateRef.current); mergedSignature = JSON.stringify(merged) } catch { return }
     if (currentSignature === mergedSignature) return
     stateRef.current = merged
     suppressInstructorBroadcastRef.current = false
@@ -233,22 +226,15 @@ export function useProductTeachingSession<TState>({
       const seen = processedCandidateActionRef.current.get(member.id) ?? 0
       if (command.sequence <= seen) continue
       processedCandidateActionRef.current.set(member.id, command.sequence)
-      void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonAction }) =>
-        applyReplicatedEdumonAction(environment, command).catch(() => false),
-      )
+      void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonAction }) => applyReplicatedEdumonAction(environment, command).catch(() => false))
     }
   }, [productId, core.role, runtimeMode, candidateMemberSignature, core.members])
 
   useEffect(() => {
     if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session?.id) return
     if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current)
-    candidateFastTelemetryTimerRef.current = window.setTimeout(() => {
-      candidateFastTelemetryTimerRef.current = null
-      void core.touchMemberNow().catch(() => undefined)
-    }, 80)
-    return () => {
-      if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current)
-    }
+    candidateFastTelemetryTimerRef.current = window.setTimeout(() => { candidateFastTelemetryTimerRef.current = null; void core.touchMemberNow().catch(() => undefined) }, 80)
+    return () => { if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current) }
   }, [core.role, core.session?.id, runtimeMode, stateSignature])
 
   useEffect(() => {
@@ -256,20 +242,14 @@ export function useProductTeachingSession<TState>({
     if (stateSignature === sessionStateSignature) return
     const timer = window.setTimeout(() => {
       if (!core.session) return
-      void core.updateSession({
-        product_state: stateRef.current,
-        product_state_revision: Number(core.session.product_state_revision ?? 0) + 1,
-      })
+      void core.updateSession({ product_state: stateRef.current, product_state_revision: Number(core.session.product_state_revision ?? 0) + 1 })
     }, Math.max(0, instructorBroadcastDebounceMs))
     return () => window.clearTimeout(timer)
   }, [core.role, core.session?.id, core.session?.product_state_revision, stateSignature, sessionStateSignature, instructorBroadcastDebounceMs])
 
   useEffect(() => {
     if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current)
-    if (core.role !== 'standalone') {
-      standaloneStateRef.current = state
-      return
-    }
+    if (core.role !== 'standalone') { standaloneStateRef.current = state; return }
     standaloneLogTimerRef.current = window.setTimeout(() => {
       const before = standaloneStateRef.current
       const after = stateRef.current
@@ -277,28 +257,12 @@ export function useProductTeachingSession<TState>({
       if (consumeSessionLogModelState(after)) return
       const changes = filterSessionStateChanges(before, after, diffSessionState(before, after))
       if (!changes.length) return
-      void recordSessionLogEvent({
-        category: 'settings',
-        eventType: 'standalone.settings.changed',
-        label: settingChangesLabel('Settings changed', changes),
-        details: { before, after, changes },
-      }).catch(() => undefined)
+      void recordSessionLogEvent({ category: 'settings', eventType: 'standalone.settings.changed', label: settingChangesLabel('Settings changed', changes), details: { before, after, changes } }).catch(() => undefined)
     }, 300)
-    return () => {
-      if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current)
-    }
+    return () => { if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current) }
   }, [core.role, state, stateSignature])
 
-  const startInstructor = () => core.startInstructor({
-    productId,
-    state: withRuntimeMode(stateRef.current, preferredRuntimeMode),
-  })
+  const startInstructor = () => core.startInstructor({ productId, state: withRuntimeMode(stateRef.current, preferredRuntimeMode) })
 
-  return {
-    ...core,
-    startInstructor,
-    runtimeMode,
-    preferredRuntimeMode,
-    setPreferredRuntimeMode,
-  }
+  return { ...core, startInstructor, runtimeMode, preferredRuntimeMode, setPreferredRuntimeMode }
 }
