@@ -1,0 +1,30 @@
+name: Profile organisation default v0.11.0
+
+on:
+  push:
+    branches: [chatgpt/studio-v0.11.0-organisations]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/studio-v0.11.0-organisations
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python3 scripts/fix-profile-org-default-v011.py
+      - run: npm ci
+      - run: npm run build
+      - name: Commit fix
+        run: |
+          git config user.name "stefesciberras"
+          git config user.email "43134239+stefesciberras@users.noreply.github.com"
+          git add src/scenario-builder/ProfileEditor.tsx
+          git commit -m "Default Profiles to active organisation" || exit 0
+          git push
