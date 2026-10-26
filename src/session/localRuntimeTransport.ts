@@ -1,6 +1,7 @@
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import type { AlarmLimits } from '../alarmTypes'
 import type { SimulationSpeed } from '../simulationSpeed'
+import type { LoppjuSimRuntimeMode, SimulationCommand } from '../core/runtimeModes'
 
 export type LocalRuntimeConnection = 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
@@ -44,6 +45,7 @@ export interface LocalScenarioRuntimeEvent {
 export type LocalRuntimePayload =
   | { type: 'snapshot'; snapshot: LocalRuntimeSnapshot }
   | { type: 'scenario-event'; event: LocalScenarioRuntimeEvent }
+  | { type: 'command'; command: SimulationCommand }
 
 export interface LocalRuntimeEnvelope {
   type: 'runtime'
@@ -55,6 +57,8 @@ export interface LocalRuntimeEnvelope {
 interface LocalRuntimeTransportOptions {
   url: string
   role: 'instructor' | 'candidate'
+  /** Teaching remains the legacy/default behavior. */
+  runtimeMode?: Extract<LoppjuSimRuntimeMode, 'simulation' | 'teaching'>
   sessionKey: string
   sessionId: string
   clientId: string
@@ -133,9 +137,17 @@ export class LocalRuntimeTransport {
   }
 
   publish(payload: LocalRuntimePayload) {
-    if (this.options.role !== 'instructor' || this.socket?.readyState !== WebSocket.OPEN) return false
+    if (this.socket?.readyState !== WebSocket.OPEN) return false
+    const runtimeMode = this.options.runtimeMode ?? 'teaching'
+    const instructorMayPublish = this.options.role === 'instructor'
+    const simulationCandidateMayPublishCommand = this.options.role === 'candidate' && runtimeMode === 'simulation' && payload.type === 'command'
+    if (!instructorMayPublish && !simulationCandidateMayPublishCommand) return false
     this.socket.send(JSON.stringify({ type: 'publish', payload }))
     return true
+  }
+
+  publishCommand(command: SimulationCommand) {
+    return this.publish({ type: 'command', command })
   }
 
   requestResync() {
@@ -155,6 +167,7 @@ export class LocalRuntimeTransport {
         socket.send(JSON.stringify({
           type: 'hello',
           role: this.options.role,
+          runtimeMode: this.options.runtimeMode ?? 'teaching',
           sessionKey: this.options.sessionKey,
           sessionId: this.options.sessionId,
           clientId: this.options.clientId,
