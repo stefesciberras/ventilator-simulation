@@ -14,6 +14,14 @@ export type ProductSessionRuntimeMode = 'simulation' | 'teaching'
 export const PRODUCT_SESSION_RUNTIME_MODE_KEY = 'loppjusim.product-session-runtime-mode'
 export const PRODUCT_SESSION_RUNTIME_MODE_EVENT = 'loppjusim-product-runtime-mode-change'
 
+type ReplicatedActionCommand = {
+  sequence: number
+  type: 'activate' | 'deactivate' | 'intensity'
+  actionId: string
+  intensity?: number
+  simulationTime: number
+}
+
 function readPreferredRuntimeMode(): ProductSessionRuntimeMode {
   if (typeof window === 'undefined') return 'teaching'
   return window.localStorage.getItem(PRODUCT_SESSION_RUNTIME_MODE_KEY) === 'simulation' ? 'simulation' : 'teaching'
@@ -29,6 +37,32 @@ function stateRuntimeMode<TState>(state: TState | null | undefined): ProductSess
 function withRuntimeMode<TState>(state: TState, runtimeMode: ProductSessionRuntimeMode): TState {
   if (!state || typeof state !== 'object' || Array.isArray(state)) return state
   return { ...(state as Record<string, unknown>), runtimeMode } as TState
+}
+
+function withActionCommand<TState>(state: TState, actionCommand: ReplicatedActionCommand | null): TState {
+  if (!state || typeof state !== 'object' || Array.isArray(state) || !actionCommand) return state
+  return { ...(state as Record<string, unknown>), actionCommand } as TState
+}
+
+function readActionCommand<TState>(state: TState | null | undefined): ReplicatedActionCommand | null {
+  if (!state || typeof state !== 'object') return null
+  const value = (state as Record<string, unknown>).actionCommand
+  if (!value || typeof value !== 'object') return null
+  const command = value as Partial<ReplicatedActionCommand>
+  if (!Number.isFinite(command.sequence) || !command.actionId || !command.type || !Number.isFinite(command.simulationTime)) return null
+  if (command.type !== 'activate' && command.type !== 'deactivate' && command.type !== 'intensity') return null
+  return {
+    sequence: Number(command.sequence),
+    type: command.type,
+    actionId: String(command.actionId),
+    intensity: Number.isFinite(command.intensity) ? Number(command.intensity) : undefined,
+    simulationTime: Number(command.simulationTime),
+  }
+}
+
+function isEdumonProduct(productId: SimulationProductId) {
+  const value = String(productId).toLowerCase()
+  return value.includes('ana') || value.includes('icu')
 }
 
 interface UseProductTeachingSessionArgs<TState> {
@@ -61,6 +95,8 @@ export function useProductTeachingSession<TState>({
   const standaloneStateRef = useRef(state)
   const standaloneLogTimerRef = useRef<number | null>(null)
   const candidateFastTelemetryTimerRef = useRef<number | null>(null)
+  const candidateActionCommandRef = useRef<ReplicatedActionCommand | null>(null)
+  const processedCandidateActionRef = useRef(new Map<string, number>())
   const [preferredRuntimeMode, setPreferredRuntimeModeState] = useState<ProductSessionRuntimeMode>(() => readPreferredRuntimeMode())
 
   useEffect(() => { stateRef.current = state }, [state])
@@ -83,7 +119,7 @@ export function useProductTeachingSession<TState>({
   >({
     storageNamespace: `edusim.${toLegacyProductId(productId)}`,
     repository,
-    getMemberTelemetry: () => ({ state: stateRef.current }),
+    getMemberTelemetry: () => ({ state: withActionCommand(stateRef.current, candidateActionCommandRef.current) }),
     host: {
       onSessionRow: (row, nextRole, source, force) => {
         if (nextRole === 'candidate') {
@@ -104,6 +140,8 @@ export function useProductTeachingSession<TState>({
       },
       onSessionCleared: () => {
         candidateStateInitialisedRef.current = false
+        candidateActionCommandRef.current = null
+        processedCandidateActionRef.current.clear()
         standaloneStateRef.current = stateRef.current
       },
     },
@@ -125,6 +163,36 @@ export function useProductTeachingSession<TState>({
     configureSessionLogRuntime({ productId, sessionId: core.session?.id ?? null, role: core.role })
     if (core.role === 'standalone') standaloneStateRef.current = stateRef.current
   }, [productId, core.role, core.session?.id])
+
+  useEffect(() => {
+    if (!isEdumonProduct(productId)) return
+    let disposed = false
+    let unsubscribe: (() => void) | null = null
+    void import('../../edusim/actions/ActionRuntime').then(({ getActionRuntimeLog, subscribeToActionRuntime }) => {
+      if (disposed) return
+      const sync = () => {
+        if (core.role !== 'candidate' || runtimeMode !== 'simulation') return
+        const latest = [...getActionRuntimeLog()].reverse().find((entry) => entry.actionId && (entry.type === 'activate' || entry.type === 'deactivate' || entry.type === 'intensity'))
+        if (!latest?.actionId) return
+        const previous = candidateActionCommandRef.current
+        if (previous && previous.sequence >= latest.sequence) return
+        candidateActionCommandRef.current = {
+          sequence: latest.sequence,
+          type: latest.type as ReplicatedActionCommand['type'],
+          actionId: latest.actionId,
+          intensity: latest.intensity,
+          simulationTime: latest.simulationTime,
+        }
+        void core.touchMemberNow().catch(() => undefined)
+      }
+      sync()
+      unsubscribe = subscribeToActionRuntime(sync)
+    })
+    return () => {
+      disposed = true
+      unsubscribe?.()
+    }
+  }, [productId, core.role, core.session?.id, runtimeMode])
 
   const stateSignature = useMemo(() => {
     try { return JSON.stringify(state) } catch { return '' }
@@ -154,6 +222,22 @@ export function useProductTeachingSession<TState>({
     suppressInstructorBroadcastRef.current = false
     setState(merged)
   }, [core.role, runtimeMode, candidateMemberSignature, mergeCandidateState, core.members, setState])
+
+  useEffect(() => {
+    if (!isEdumonProduct(productId) || core.role !== 'instructor' || runtimeMode !== 'simulation') return
+    const environment = String(productId).toLowerCase().includes('icu') ? 'edumon-icu' : 'edumon-ana'
+    for (const member of core.members) {
+      if (member.role !== 'candidate') continue
+      const command = readActionCommand(member.product_state)
+      if (!command) continue
+      const seen = processedCandidateActionRef.current.get(member.id) ?? 0
+      if (command.sequence <= seen) continue
+      processedCandidateActionRef.current.set(member.id, command.sequence)
+      void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonAction }) =>
+        applyReplicatedEdumonAction(environment, command).catch(() => false),
+      )
+    }
+  }, [productId, core.role, runtimeMode, candidateMemberSignature, core.members])
 
   useEffect(() => {
     if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session?.id) return
