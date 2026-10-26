@@ -1,3 +1,4 @@
+import type { LoppjuSimRuntimeMode } from '../core/runtimeModes'
 import type { EdumonSimulationSpeed } from './EdumonTopBar'
 import type { MonitorPatientState } from './types'
 import type { TeachingScenarioDefinition } from '../teaching/scenario/runtimeCore'
@@ -33,6 +34,8 @@ export interface EdumonStoredScenario {
   schemaVersion: 1 | 2 | 3
   kind: 'static' | 'dynamic'
   description: string
+  /** Omitted by legacy scenarios; omission means compatible with all runtime modes. */
+  supportedModes?: LoppjuSimRuntimeMode[]
   definition: TeachingScenarioDefinition<EdumonScenarioSnapshot, EdumonScenarioTrigger>
 }
 

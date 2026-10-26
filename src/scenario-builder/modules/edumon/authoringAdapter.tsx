@@ -156,6 +156,7 @@ export function createEdumonAuthoringAdapter(product: EdumonScenarioProduct, pro
       product,
       name,
       description: scenario.description ?? '',
+      supportedModes: scenario.supportedModes,
       stages: scenario.definition.stages.map((stage, index) => ({
         id: stage.id,
         name: stage.name || `Stage ${index + 1}`,
@@ -191,6 +192,7 @@ export function createEdumonAuthoringAdapter(product: EdumonScenarioProduct, pro
       schemaVersion: 3,
       kind: document.stages.length > 1 || document.branches.length > 0 || document.stages.some((stage) => stage.kind !== 'state') ? 'dynamic' : 'static',
       description: document.description,
+      supportedModes: document.supportedModes,
       definition: {
         id: `edumon-${crypto.randomUUID()}`,
         name: document.name,
