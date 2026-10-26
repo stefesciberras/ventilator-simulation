@@ -27,6 +27,16 @@ interface ProfileItem {
 
 type LibraryScope = 'organisation' | 'user'
 
+function clinicalGroupClass(product: ScenarioProductId, group: string) {
+  if (product !== 'anaesth' && product !== 'icu') return 'patient'
+  if (group === 'Patient') return 'patient'
+  if (group === 'Cardiovascular') return 'cardiovascular'
+  if (group === 'Respiratory') return 'respiratory'
+  if (group === 'Metabolism') return 'metabolism'
+  if (group === 'Anaesthesia') return 'anaesthesia'
+  return 'monitor'
+}
+
 function profileGroupOrder(product: ScenarioProductId, variables: Array<{ variable: ScenarioVariableDefinition }>) {
   const present = new Set(variables.map(({ variable }) => variable.group))
   if (product === 'anaesth' || product === 'icu') {
@@ -277,7 +287,7 @@ export function ProfileEditor({ product }: { product: ScenarioProductId }) {
           {!selected.builtin && libraryWritable && <label className="studio-profile-name"><span>Patient name</span><input value={draftName} onChange={(event) => setDraftName(event.target.value)} /></label>}
 
           <div className="studio-profile-groups">
-            {groups.map((group) => <section key={group} className="shared-scenario-control-group monitor">
+            {groups.map((group) => <section key={group} className={`shared-scenario-control-group ${clinicalGroupClass(product, group)}`}>
               <h3>{group}</h3>
               <div className="shared-scenario-slider-grid">
                 {variables.filter(({ variable }) => variable.group === group).map(({ variable, key }) => {
