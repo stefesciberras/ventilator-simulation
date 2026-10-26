@@ -4,6 +4,7 @@ import type { SimulationSpeed } from '../simulationSpeed'
 import type { LoppjuSimRuntimeMode, SimulationCommand } from '../core/runtimeModes'
 
 export type LocalRuntimeConnection = 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+export type LocalSessionRuntimeMode = Extract<LoppjuSimRuntimeMode, 'simulation' | 'teaching'>
 
 export interface LocalRuntimePolicy {
   syncPatient: boolean
@@ -57,13 +58,14 @@ export interface LocalRuntimeEnvelope {
 interface LocalRuntimeTransportOptions {
   url: string
   role: 'instructor' | 'candidate'
-  /** Teaching remains the legacy/default behavior. */
-  runtimeMode?: Extract<LoppjuSimRuntimeMode, 'simulation' | 'teaching'>
+  /** Teaching remains the legacy/default behavior. Candidates learn the authoritative room mode on welcome. */
+  runtimeMode?: LocalSessionRuntimeMode
   sessionKey: string
   sessionId: string
   clientId: string
   onConnection: (state: LocalRuntimeConnection) => void
   onEnvelope: (envelope: LocalRuntimeEnvelope) => void
+  onRuntimeMode?: (mode: LocalSessionRuntimeMode) => void
 }
 
 const MAX_RECONNECT_DELAY_MS = 5000
@@ -119,8 +121,11 @@ export class LocalRuntimeTransport {
   private reconnectAttempts = 0
   private intentionallyClosed = false
   private lastSequence = 0
+  private runtimeMode: LocalSessionRuntimeMode
 
-  constructor(private readonly options: LocalRuntimeTransportOptions) {}
+  constructor(private readonly options: LocalRuntimeTransportOptions) {
+    this.runtimeMode = options.runtimeMode ?? 'teaching'
+  }
 
   connect() {
     this.intentionallyClosed = false
@@ -138,9 +143,8 @@ export class LocalRuntimeTransport {
 
   publish(payload: LocalRuntimePayload) {
     if (this.socket?.readyState !== WebSocket.OPEN) return false
-    const runtimeMode = this.options.runtimeMode ?? 'teaching'
     const instructorMayPublish = this.options.role === 'instructor'
-    const simulationCandidateMayPublishCommand = this.options.role === 'candidate' && runtimeMode === 'simulation' && payload.type === 'command'
+    const simulationCandidateMayPublishCommand = this.options.role === 'candidate' && this.runtimeMode === 'simulation' && payload.type === 'command'
     if (!instructorMayPublish && !simulationCandidateMayPublishCommand) return false
     this.socket.send(JSON.stringify({ type: 'publish', payload }))
     return true
@@ -167,7 +171,7 @@ export class LocalRuntimeTransport {
         socket.send(JSON.stringify({
           type: 'hello',
           role: this.options.role,
-          runtimeMode: this.options.runtimeMode ?? 'teaching',
+          runtimeMode: this.runtimeMode,
           sessionKey: this.options.sessionKey,
           sessionId: this.options.sessionId,
           clientId: this.options.clientId,
@@ -181,6 +185,9 @@ export class LocalRuntimeTransport {
         if (!message || typeof message !== 'object') return
         const record = message as Record<string, unknown>
         if (record.type === 'welcome') {
+          const negotiatedMode: LocalSessionRuntimeMode = record.runtimeMode === 'simulation' ? 'simulation' : 'teaching'
+          if (negotiatedMode !== this.runtimeMode) this.runtimeMode = negotiatedMode
+          this.options.onRuntimeMode?.(this.runtimeMode)
           const sequence = Number(record.sequence ?? 0)
           if (Number.isFinite(sequence)) this.lastSequence = Math.max(this.lastSequence, sequence)
           const snapshot = record.snapshot
