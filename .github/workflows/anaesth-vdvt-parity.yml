@@ -23,6 +23,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/patientMetrics.ts src/edumon/types.ts src/edumon/respiratoryPhysiology.ts src/scenario-builder/modules/edumon/definition.ts src/scenario-builder/modules/edumon/authoringAdapter.tsx src/scenario-builder/version.ts src/edumon/appVersion.ts
-          git commit -m "Align Anaesth dead-space physiology with MV VDVT"
+          git add src/edumon/EdumonWorkspacePanel.tsx
+          git commit -m "Use VDVT in Anaesth physiology controls"
           git push
