@@ -8,10 +8,9 @@ export interface InstructorWorkspaceProps {
   dialogs?: ReactNode
 }
 
-/** Product-neutral instructor chrome shared by EDUSIM simulators. */
-export function InstructorWorkspace({ accountAction, scenarioAction, settingsAction, runtime, dialogs }: InstructorWorkspaceProps) {
+/** Product-neutral instructor/session chrome. Platform account/settings actions live in the shared LoppjuSIM menu. */
+export function InstructorWorkspace({ scenarioAction, settingsAction, runtime, dialogs }: InstructorWorkspaceProps) {
   return <>
-    {accountAction}
     {scenarioAction}
     {settingsAction}
     {runtime}
