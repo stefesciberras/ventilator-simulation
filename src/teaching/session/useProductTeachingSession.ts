@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SimulationCommand } from '../../core/runtimeModes'
 import { toLegacyProductId, type SimulationProductId } from '../../core/SimulationProductAdapter'
+import type { ActionRuntimeSnapshot } from '../../edusim/actions/ActionRuntime'
 import { getDefaultLocalRuntimeUrl, LocalRuntimeTransport, type LocalRuntimeConnection } from '../../session/localRuntimeTransport'
 import { useSharedTeachingSession } from './useSharedTeachingSession'
 import {
@@ -46,9 +47,13 @@ function withRuntimeMode<TState>(state: TState, runtimeMode: ProductSessionRunti
   return { ...(state as Record<string, unknown>), runtimeMode } as TState
 }
 
-function withActionCommand<TState>(state: TState, actionCommand: ReplicatedActionCommand | null): TState {
-  if (!state || typeof state !== 'object' || Array.isArray(state) || !actionCommand) return state
-  return { ...(state as Record<string, unknown>), actionCommand } as TState
+function withActionRuntime<TState>(state: TState, actionCommand: ReplicatedActionCommand | null, actionRuntimeSnapshot: ActionRuntimeSnapshot | null): TState {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return state
+  const additions: Record<string, unknown> = {}
+  if (actionCommand) additions.actionCommand = actionCommand
+  if (actionRuntimeSnapshot) additions.actionRuntimeSnapshot = actionRuntimeSnapshot
+  if (!Object.keys(additions).length) return state
+  return { ...(state as Record<string, unknown>), ...additions } as TState
 }
 
 function readActionCommand<TState>(state: TState | null | undefined): ReplicatedActionCommand | null {
@@ -65,6 +70,15 @@ function readActionCommand<TState>(state: TState | null | undefined): Replicated
     intensity: Number.isFinite(command.intensity) ? Number(command.intensity) : undefined,
     simulationTime: Number(command.simulationTime),
   }
+}
+
+function readActionRuntimeSnapshot<TState>(state: TState | null | undefined): ActionRuntimeSnapshot | null {
+  if (!state || typeof state !== 'object') return null
+  const value = (state as Record<string, unknown>).actionRuntimeSnapshot
+  if (!value || typeof value !== 'object') return null
+  const snapshot = value as Partial<ActionRuntimeSnapshot>
+  if (!Number.isFinite(snapshot.simulationTime) || !Array.isArray(snapshot.activeEffects) || !Array.isArray(snapshot.activeToggleActions)) return null
+  return snapshot as ActionRuntimeSnapshot
 }
 
 function isEdumonProduct(productId: SimulationProductId) {
@@ -101,6 +115,7 @@ export function useProductTeachingSession<TState>({
   const candidateFastTelemetryTimerRef = useRef<number | null>(null)
   const candidateLocalPublishTimerRef = useRef<number | null>(null)
   const candidateActionCommandRef = useRef<ReplicatedActionCommand | null>(null)
+  const candidateActionRuntimeSnapshotRef = useRef<ActionRuntimeSnapshot | null>(null)
   const processedCandidateActionRef = useRef(new Map<string, number>())
   const localTransportRef = useRef<LocalRuntimeTransport | null>(null)
   const localClientIdRef = useRef(crypto.randomUUID())
@@ -127,7 +142,7 @@ export function useProductTeachingSession<TState>({
   >({
     storageNamespace: `edusim.${toLegacyProductId(productId)}`,
     repository,
-    getMemberTelemetry: () => ({ state: withActionCommand(stateRef.current, candidateActionCommandRef.current) }),
+    getMemberTelemetry: () => ({ state: withActionRuntime(stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current) }),
     host: {
       onSessionRow: (row, nextRole, source, force) => {
         if (nextRole === 'candidate') {
@@ -147,6 +162,7 @@ export function useProductTeachingSession<TState>({
       onSessionCleared: () => {
         candidateStateInitialisedRef.current = false
         candidateActionCommandRef.current = null
+        candidateActionRuntimeSnapshotRef.current = null
         processedCandidateActionRef.current.clear()
         localTransportRef.current?.disconnect()
         localTransportRef.current = null
@@ -169,12 +185,14 @@ export function useProductTeachingSession<TState>({
   const applyReplicatedAction = (sourceId: string, candidateState: TState) => {
     if (!isEdumonProduct(productId)) return
     const command = readActionCommand(candidateState)
-    if (!command) return
+    const snapshot = readActionRuntimeSnapshot(candidateState)
+    if (!command || !snapshot) return
     const seen = processedCandidateActionRef.current.get(sourceId) ?? 0
     if (command.sequence <= seen) return
     processedCandidateActionRef.current.set(sourceId, command.sequence)
-    const environment = String(productId).toLowerCase().includes('icu') ? 'edumon-icu' : 'edumon-ana'
-    void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonAction }) => applyReplicatedEdumonAction(environment, command).catch(() => false))
+    void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonActionSnapshot }) => {
+      applyReplicatedEdumonActionSnapshot(snapshot)
+    })
   }
 
   const applyCandidateState = (sourceId: string, candidateState: TState) => {
@@ -242,7 +260,7 @@ export function useProductTeachingSession<TState>({
     if (!isEdumonProduct(productId)) return
     let disposed = false
     let unsubscribe: (() => void) | null = null
-    void import('../../edusim/actions/ActionRuntime').then(({ getActionRuntimeLog, subscribeToActionRuntime }) => {
+    void import('../../edusim/actions/ActionRuntime').then(({ getActionRuntimeLog, getActionRuntimeSnapshot, subscribeToActionRuntime }) => {
       if (disposed) return
       const sync = () => {
         if (core.role !== 'candidate' || runtimeMode !== 'simulation') return
@@ -257,6 +275,7 @@ export function useProductTeachingSession<TState>({
           intensity: latest.intensity,
           simulationTime: latest.simulationTime,
         }
+        candidateActionRuntimeSnapshotRef.current = getActionRuntimeSnapshot(latest.simulationTime)
         void core.touchMemberNow().catch(() => undefined)
         const row = core.session
         if (row && localTransportRef.current) {
@@ -267,7 +286,7 @@ export function useProductTeachingSession<TState>({
             actorRole: 'candidate',
             type: 'device.parameter.set',
             product: String(productId),
-            payload: { kind: 'candidate-product-state', state: withActionCommand(stateRef.current, candidateActionCommandRef.current) },
+            payload: { kind: 'candidate-product-state', state: withActionRuntime(stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current) },
             simulationTime: latest.simulationTime,
             clientTime: Date.now(),
           }
@@ -319,7 +338,7 @@ export function useProductTeachingSession<TState>({
         actorRole: 'candidate',
         type: 'device.parameter.set',
         product: String(productId),
-        payload: { kind: 'candidate-product-state', state: withActionCommand(stateRef.current, candidateActionCommandRef.current) },
+        payload: { kind: 'candidate-product-state', state: withActionRuntime(stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current) },
         simulationTime: Date.now() / 1000,
         clientTime: Date.now(),
       }
