@@ -1,3 +1,7 @@
+.loppjusim-hidden-settings-controller > .top-account-button {
+  display: none !important;
+}
+
 .loppjusim-platform-menu {
   position: relative;
   display: inline-flex;
