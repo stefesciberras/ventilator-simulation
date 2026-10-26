@@ -97,10 +97,17 @@ export function EdumonWorkspacePanel({
     supersedeActionTarget('haemodynamics.heartRate')
     supersedeActionTarget('haemodynamics.meanArterialPressure')
     onPatientStateChange({
+      ...patientState,
       ...values,
-      respiratory: patientState.respiratory,
+      respiratory: {
+        ...(patientState.respiratory ?? {}),
+        ...(values.respiratory ?? {}),
+      },
       anaestheticGases: patientState.anaestheticGases,
-      anaestheticPhysiology: patientState.anaestheticPhysiology,
+      anaestheticPhysiology: {
+        ...(patientState.anaestheticPhysiology ?? {}),
+        ...(values.anaestheticPhysiology ?? {}),
+      },
     })
   }
 
