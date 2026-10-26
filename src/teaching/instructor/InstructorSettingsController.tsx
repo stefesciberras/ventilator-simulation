@@ -34,9 +34,10 @@ export interface InstructorSettingsControllerProps {
   version: string
   role: 'standalone' | 'instructor' | 'candidate'
   auth: InstructorAccountAuthState
+  showTrigger?: boolean
 }
 
-export function InstructorSettingsController({ productLabel, version, role, auth }: InstructorSettingsControllerProps) {
+export function InstructorSettingsController({ productLabel, version, role, auth, showTrigger = true }: InstructorSettingsControllerProps) {
   const [open, setOpen] = useState(false)
   const initialSupabaseConfig = getSupabaseLocalOverride()
   const activeSupabaseConfig = getSupabaseConfiguration()
@@ -49,6 +50,15 @@ export function InstructorSettingsController({ productLabel, version, role, auth
   const [instructorEmail, setInstructorEmail] = useState(initialInstructorDetails.email)
   const [instructorCentre, setInstructorCentre] = useState(initialInstructorDetails.centre)
   const [instructorDetailsMessage, setInstructorDetailsMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const openFromPlatformMenu = () => {
+      if (!auth.account) return
+      setOpen(true)
+    }
+    window.addEventListener('loppjusim:open-settings', openFromPlatformMenu)
+    return () => window.removeEventListener('loppjusim:open-settings', openFromPlatformMenu)
+  }, [auth.account])
 
   useEffect(() => {
     if (!open) return
@@ -83,7 +93,7 @@ export function InstructorSettingsController({ productLabel, version, role, auth
     setSupabaseConfigMessage(null); setSupabaseConfigError(null)
     try {
       saveSupabaseLocalOverride(supabaseProject, supabasePublishableKey)
-      setSupabaseConfigMessage('Centre configuration saved. EDUSIM is reconnecting…')
+      setSupabaseConfigMessage('Centre configuration saved. LoppjuSIM is reconnecting…')
       window.setTimeout(() => window.location.reload(), 250)
     } catch (cause) { setSupabaseConfigError(cause instanceof Error ? cause.message : 'Unable to save Supabase configuration.') }
   }
@@ -91,13 +101,13 @@ export function InstructorSettingsController({ productLabel, version, role, auth
   const resetCentreSupabase = () => {
     if (role !== 'standalone') { setSupabaseConfigError('End or leave the teaching session before changing centre configuration.'); return }
     clearSupabaseLocalOverride()
-    setSupabaseConfigMessage('Local override cleared. EDUSIM is reconnecting to the deployment default…')
+    setSupabaseConfigMessage('Local override cleared. LoppjuSIM is reconnecting to the deployment default…')
     setSupabaseConfigError(null)
     window.setTimeout(() => window.location.reload(), 250)
   }
 
   return <>
-    <button type="button" className="top-account-button" title={`${productLabel} settings`} aria-label={`Open ${productLabel} settings`} onClick={() => setOpen(true)}><MenuIcon /></button>
+    {showTrigger && <button type="button" className="top-account-button" title={`${productLabel} settings`} aria-label={`Open ${productLabel} settings`} onClick={() => setOpen(true)}><MenuIcon /></button>}
     {open && <div className="account-dialog-backdrop" onMouseDown={() => setOpen(false)}>
       <section className="account-dialog settings-dialog" role="dialog" aria-modal="true" aria-label={`${productLabel} settings`} onMouseDown={(event) => event.stopPropagation()}>
         <div className="account-dialog-heading"><div><span>{productLabel}</span><h2>Settings</h2></div><button type="button" className="account-close-button" onClick={() => setOpen(false)} aria-label="Close settings">×</button></div>
