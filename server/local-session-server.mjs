@@ -31,7 +31,7 @@ function roomFor(sessionKey) {
   if (!/^[A-Z0-9]{6}$/.test(key)) return null
   let room = rooms.get(key)
   if (!room) {
-    room = { key, sequence: 0, snapshot: null, history: [], clients: new Set(), instructor: null }
+    room = { key, sequence: 0, snapshot: null, history: [], clients: new Set(), instructor: null, runtimeMode: 'teaching' }
     rooms.set(key, room)
   }
   return room
@@ -56,7 +56,7 @@ function replay(room, socket, lastSequence) {
     for (const item of missing) send(socket, item)
     return
   }
-  send(socket, { type: 'welcome', sequence: room.sequence, snapshot: room.snapshot })
+  send(socket, { type: 'welcome', sequence: room.sequence, snapshot: room.snapshot, runtimeMode: room.runtimeMode })
 }
 
 function detach(socket) {
@@ -135,7 +135,10 @@ wss.on('connection', (socket) => {
       socket.eduventRole = message.role === 'instructor' ? 'instructor' : 'candidate'
       socket.eduventClientId = String(message.clientId || '')
       room.clients.add(socket)
-      if (socket.eduventRole === 'instructor') room.instructor = socket
+      if (socket.eduventRole === 'instructor') {
+        room.instructor = socket
+        room.runtimeMode = message.runtimeMode === 'simulation' ? 'simulation' : 'teaching'
+      }
       const lastSequence = Math.max(0, Number(message.lastSequence || 0))
       replay(room, socket, lastSequence)
       return
@@ -144,9 +147,16 @@ wss.on('connection', (socket) => {
     const room = socket.eduventRoom
     if (!room) return
     if (message.type === 'publish') {
-      if (socket.eduventRole !== 'instructor' || room.instructor !== socket) return
       const payload = message.payload
-      if (!payload || (payload.type !== 'snapshot' && payload.type !== 'scenario-event')) return
+      if (!payload || (payload.type !== 'snapshot' && payload.type !== 'scenario-event' && payload.type !== 'command')) return
+
+      const isAuthoritativeInstructor = socket.eduventRole === 'instructor' && room.instructor === socket
+      const isSimulationCandidateCommand = socket.eduventRole === 'candidate' && room.runtimeMode === 'simulation' && payload.type === 'command'
+      if (!isAuthoritativeInstructor && !isSimulationCandidateCommand) return
+
+      // Candidates may request mutations in Simulation mode, but they may never
+      // publish canonical snapshots or instructor/scenario events directly.
+      if (socket.eduventRole === 'candidate' && payload.type !== 'command') return
       publish(room, payload)
       return
     }
@@ -169,7 +179,7 @@ const heartbeat = setInterval(() => {
 heartbeat.unref?.()
 
 server.listen(port, host, () => {
-  console.log('\nEDUVENT local teaching server is running.\n')
+  console.log('\nloppjuSIM local session server is running.\n')
   console.log(`Instructor: http://localhost:${port}`)
   const interfaces = networkInterfaces()
   for (const addresses of Object.values(interfaces)) {
@@ -177,7 +187,7 @@ server.listen(port, host, () => {
       if (address.family === 'IPv4' && !address.internal) console.log(`Candidates: http://${address.address}:${port}`)
     }
   }
-  console.log('\nKeep this terminal open during the teaching session. Supabase remains available for authentication, persistence and cloud fallback; live runtime state uses this LAN relay when clients load EDUVENT from this address.\n')
+  console.log('\nKeep this terminal open during the session. Teaching keeps candidate runtimes independent; Simulation allows candidate commands into the instructor-authoritative shared runtime. Supabase remains available for authentication, persistence and cloud fallback.\n')
 })
 
 process.on('SIGINT', () => {
