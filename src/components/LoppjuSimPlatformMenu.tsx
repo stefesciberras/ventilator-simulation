@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { InstructorAccountDialog, InstructorCloudIcon, useInstructorAccountAuth } from './InstructorAccountAuth'
+import { getSessionLogRuntimeContext } from '../teaching/session/sessionLog'
 import './LoppjuSimPlatformMenu.css'
 
 export type LoppjuSimRunMode = 'standalone' | 'instructor' | 'candidate'
@@ -27,11 +28,22 @@ function SettingsIcon() {
 
 const modeLabel = (role: LoppjuSimRunMode) => role === 'standalone' ? 'Standalone' : role === 'instructor' ? 'Instructor session' : 'Candidate session'
 
-export function LoppjuSimPlatformMenu({ role = 'standalone', productLabel }: LoppjuSimPlatformMenuProps) {
+export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformMenuProps) {
   const [open, setOpen] = useState(false)
+  const [runtimeRole, setRuntimeRole] = useState<LoppjuSimRunMode>(() => getSessionLogRuntimeContext().role)
   const menuRef = useRef<HTMLDivElement>(null)
-  const auth = useInstructorAccountAuth({ locked: role !== 'standalone' })
+  const effectiveRole = role ?? runtimeRole
+  const auth = useInstructorAccountAuth({ locked: effectiveRole !== 'standalone' })
   const authenticated = Boolean(auth.account)
+  const platformUnlocked = authenticated && effectiveRole === 'standalone'
+
+  useEffect(() => {
+    if (role) return
+    const update = () => setRuntimeRole(getSessionLogRuntimeContext().role)
+    update()
+    const timer = window.setInterval(update, 400)
+    return () => window.clearInterval(timer)
+  }, [role])
 
   useEffect(() => {
     if (!open) return
@@ -58,13 +70,13 @@ export function LoppjuSimPlatformMenu({ role = 'standalone', productLabel }: Lop
   }
 
   const openSettings = () => {
-    if (!authenticated) return
+    if (!platformUnlocked) return
     setOpen(false)
     window.dispatchEvent(new CustomEvent('loppjusim:open-settings'))
   }
 
   const navigate = (href: string) => {
-    if (!authenticated) return
+    if (!platformUnlocked) return
     window.location.assign(href)
   }
 
@@ -87,33 +99,33 @@ export function LoppjuSimPlatformMenu({ role = 'standalone', productLabel }: Lop
             <span>{productLabel}</span>
             <strong>LoppjuSIM</strong>
           </div>
-          <span className={`loppjusim-mode-badge ${role}`}>{modeLabel(role)}</span>
+          <span className={`loppjusim-mode-badge ${effectiveRole}`}>{modeLabel(effectiveRole)}</span>
         </div>
         <div className="loppjusim-menu-account">
           <InstructorCloudIcon connected={authenticated} />
           <div><span>{authenticated ? 'Signed in' : 'Standalone access'}</span><strong>{auth.account?.email ?? 'No account connected'}</strong></div>
         </div>
         <div className="loppjusim-menu-items">
-          <button type="button" role="menuitem" onClick={openAccount} disabled={role !== 'standalone'}>
+          <button type="button" role="menuitem" onClick={openAccount} disabled={effectiveRole !== 'standalone'}>
             <InstructorCloudIcon connected={authenticated} /><span>{authenticated ? 'Account' : 'Sign in'}</span>
           </button>
           <button type="button" role="menuitem" disabled title="Registration will be enabled later">
             <span className="loppjusim-menu-icon-text">+</span><span>Register</span><small>Coming soon</small>
           </button>
-          <button type="button" role="menuitem" disabled={!authenticated} onClick={() => navigate('/scenarios')}>
+          <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate('/scenarios')}>
             <StudioIcon /><span>Scenario Studio</span>
           </button>
-          <button type="button" role="menuitem" disabled={!authenticated} onClick={() => navigate('/actions')}>
+          <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate('/actions')}>
             <LibraryIcon /><span>Drug &amp; Event Library</span>
           </button>
-          <button type="button" role="menuitem" disabled={!authenticated} onClick={openSettings}>
+          <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={openSettings}>
             <SettingsIcon /><span>Settings</span>
           </button>
         </div>
         {!authenticated && <p className="loppjusim-menu-hint">Sign in to enable authoring tools and settings. Standalone simulation remains available without an account.</p>}
-        {role !== 'standalone' && <p className="loppjusim-menu-hint">Account changes are locked while a teaching session is active.</p>}
+        {effectiveRole !== 'standalone' && <p className="loppjusim-menu-hint">Session mode is active. Account changes and standalone authoring tools are locked until the session ends.</p>}
       </section>}
     </div>
-    <InstructorAccountDialog auth={auth} locked={role !== 'standalone'} />
+    <InstructorAccountDialog auth={auth} locked={effectiveRole !== 'standalone'} />
   </>
 }
