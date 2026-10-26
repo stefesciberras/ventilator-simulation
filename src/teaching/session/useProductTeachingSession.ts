@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { SimulationCommand } from '../../core/runtimeModes'
 import { toLegacyProductId, type SimulationProductId } from '../../core/SimulationProductAdapter'
+import { getDefaultLocalRuntimeUrl, LocalRuntimeTransport, type LocalRuntimeConnection } from '../../session/localRuntimeTransport'
 import { useSharedTeachingSession } from './useSharedTeachingSession'
 import {
   createProductTeachingSessionRepository,
@@ -20,6 +22,11 @@ type ReplicatedActionCommand = {
   actionId: string
   intensity?: number
   simulationTime: number
+}
+
+type CandidateStateCommandPayload<TState> = {
+  kind: 'candidate-product-state'
+  state: TState
 }
 
 function readPreferredRuntimeMode(): ProductSessionRuntimeMode {
@@ -92,8 +99,12 @@ export function useProductTeachingSession<TState>({
   const standaloneStateRef = useRef(state)
   const standaloneLogTimerRef = useRef<number | null>(null)
   const candidateFastTelemetryTimerRef = useRef<number | null>(null)
+  const candidateLocalPublishTimerRef = useRef<number | null>(null)
   const candidateActionCommandRef = useRef<ReplicatedActionCommand | null>(null)
   const processedCandidateActionRef = useRef(new Map<string, number>())
+  const localTransportRef = useRef<LocalRuntimeTransport | null>(null)
+  const localClientIdRef = useRef(crypto.randomUUID())
+  const [localRuntimeConnection, setLocalRuntimeConnection] = useState<LocalRuntimeConnection>('disabled')
   const [preferredRuntimeMode, setPreferredRuntimeModeState] = useState<ProductSessionRuntimeMode>(() => readPreferredRuntimeMode())
 
   useEffect(() => { stateRef.current = state }, [state])
@@ -137,6 +148,9 @@ export function useProductTeachingSession<TState>({
         candidateStateInitialisedRef.current = false
         candidateActionCommandRef.current = null
         processedCandidateActionRef.current.clear()
+        localTransportRef.current?.disconnect()
+        localTransportRef.current = null
+        setLocalRuntimeConnection('disabled')
         standaloneStateRef.current = stateRef.current
       },
     },
@@ -150,6 +164,31 @@ export function useProductTeachingSession<TState>({
       window.localStorage.setItem(PRODUCT_SESSION_RUNTIME_MODE_KEY, next)
       window.dispatchEvent(new Event(PRODUCT_SESSION_RUNTIME_MODE_EVENT))
     }
+  }
+
+  const applyReplicatedAction = (sourceId: string, candidateState: TState) => {
+    if (!isEdumonProduct(productId)) return
+    const command = readActionCommand(candidateState)
+    if (!command) return
+    const seen = processedCandidateActionRef.current.get(sourceId) ?? 0
+    if (command.sequence <= seen) return
+    processedCandidateActionRef.current.set(sourceId, command.sequence)
+    const environment = String(productId).toLowerCase().includes('icu') ? 'edumon-icu' : 'edumon-ana'
+    void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonAction }) => applyReplicatedEdumonAction(environment, command).catch(() => false))
+  }
+
+  const applyCandidateState = (sourceId: string, candidateState: TState) => {
+    if (core.role !== 'instructor' || runtimeMode !== 'simulation' || !mergeCandidateState) return
+    const merged = mergeCandidateState(candidateState, stateRef.current)
+    let currentSignature = ''
+    let mergedSignature = ''
+    try { currentSignature = JSON.stringify(stateRef.current); mergedSignature = JSON.stringify(merged) } catch { return }
+    if (currentSignature !== mergedSignature) {
+      stateRef.current = merged
+      suppressInstructorBroadcastRef.current = false
+      setState(merged)
+    }
+    applyReplicatedAction(sourceId, candidateState)
   }
 
   useEffect(() => {
@@ -166,6 +205,38 @@ export function useProductTeachingSession<TState>({
     configureSessionLogRuntime({ productId, sessionId: core.session?.id ?? null, role: core.role })
     if (core.role === 'standalone') standaloneStateRef.current = stateRef.current
   }, [productId, core.role, core.session?.id])
+
+  useEffect(() => {
+    localTransportRef.current?.disconnect()
+    localTransportRef.current = null
+    setLocalRuntimeConnection('disabled')
+    const row = core.session
+    const url = getDefaultLocalRuntimeUrl()
+    if (!row || core.role === 'standalone' || !url || runtimeMode !== 'simulation') return
+    const transport = new LocalRuntimeTransport({
+      url,
+      role: core.role,
+      runtimeMode: 'simulation',
+      sessionKey: row.session_key,
+      sessionId: row.id,
+      clientId: localClientIdRef.current,
+      onConnection: setLocalRuntimeConnection,
+      onEnvelope: (envelope) => {
+        if (core.role !== 'instructor' || envelope.payload.type !== 'command') return
+        const command = envelope.payload.command
+        if (command.product !== String(productId) || command.type !== 'device.parameter.set') return
+        const payload = command.payload as Partial<CandidateStateCommandPayload<TState>>
+        if (payload.kind !== 'candidate-product-state' || payload.state == null) return
+        applyCandidateState(command.actorId, payload.state)
+      },
+    })
+    localTransportRef.current = transport
+    transport.connect()
+    return () => {
+      transport.disconnect()
+      if (localTransportRef.current === transport) localTransportRef.current = null
+    }
+  }, [core.role, core.session?.id, core.session?.session_key, runtimeMode, productId, mergeCandidateState])
 
   useEffect(() => {
     if (!isEdumonProduct(productId)) return
@@ -187,6 +258,21 @@ export function useProductTeachingSession<TState>({
           simulationTime: latest.simulationTime,
         }
         void core.touchMemberNow().catch(() => undefined)
+        const row = core.session
+        if (row && localTransportRef.current) {
+          const command: SimulationCommand<CandidateStateCommandPayload<TState>> = {
+            id: crypto.randomUUID(),
+            sessionId: row.id,
+            actorId: localClientIdRef.current,
+            actorRole: 'candidate',
+            type: 'device.parameter.set',
+            product: String(productId),
+            payload: { kind: 'candidate-product-state', state: withActionCommand(stateRef.current, candidateActionCommandRef.current) },
+            simulationTime: latest.simulationTime,
+            clientTime: Date.now(),
+          }
+          localTransportRef.current.publishCommand(command)
+        }
       }
       sync()
       unsubscribe = subscribeToActionRuntime(sync)
@@ -203,39 +289,44 @@ export function useProductTeachingSession<TState>({
   }, [core.role, core.members, runtimeMode])
 
   useEffect(() => {
-    if (core.role !== 'instructor' || runtimeMode !== 'simulation' || !mergeCandidateState) return
+    if (core.role !== 'instructor' || runtimeMode !== 'simulation') return
     const candidate = core.members.find((member) => member.role === 'candidate')
-    if (!candidate?.product_state) return
-    const merged = mergeCandidateState(candidate.product_state, stateRef.current)
-    let currentSignature = ''
-    let mergedSignature = ''
-    try { currentSignature = JSON.stringify(stateRef.current); mergedSignature = JSON.stringify(merged) } catch { return }
-    if (currentSignature === mergedSignature) return
-    stateRef.current = merged
-    suppressInstructorBroadcastRef.current = false
-    setState(merged)
-  }, [core.role, runtimeMode, candidateMemberSignature, mergeCandidateState, core.members, setState])
-
-  useEffect(() => {
-    if (!isEdumonProduct(productId) || core.role !== 'instructor' || runtimeMode !== 'simulation') return
-    const environment = String(productId).toLowerCase().includes('icu') ? 'edumon-icu' : 'edumon-ana'
-    for (const member of core.members) {
-      if (member.role !== 'candidate') continue
-      const command = readActionCommand(member.product_state)
-      if (!command) continue
-      const seen = processedCandidateActionRef.current.get(member.id) ?? 0
-      if (command.sequence <= seen) continue
-      processedCandidateActionRef.current.set(member.id, command.sequence)
-      void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonAction }) => applyReplicatedEdumonAction(environment, command).catch(() => false))
-    }
-  }, [productId, core.role, runtimeMode, candidateMemberSignature, core.members])
+    if (candidate?.product_state) applyCandidateState(memberSourceId(candidate), candidate.product_state)
+  }, [core.role, runtimeMode, candidateMemberSignature, core.members])
 
   useEffect(() => {
     if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session?.id) return
     if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current)
-    candidateFastTelemetryTimerRef.current = window.setTimeout(() => { candidateFastTelemetryTimerRef.current = null; void core.touchMemberNow().catch(() => undefined) }, 80)
+    candidateFastTelemetryTimerRef.current = window.setTimeout(() => {
+      candidateFastTelemetryTimerRef.current = null
+      void core.touchMemberNow().catch(() => undefined)
+    }, 80)
     return () => { if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current) }
   }, [core.role, core.session?.id, runtimeMode, stateSignature])
+
+  useEffect(() => {
+    if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session) return
+    if (candidateLocalPublishTimerRef.current != null) window.clearTimeout(candidateLocalPublishTimerRef.current)
+    candidateLocalPublishTimerRef.current = window.setTimeout(() => {
+      candidateLocalPublishTimerRef.current = null
+      const transport = localTransportRef.current
+      const row = core.session
+      if (!transport || !row) return
+      const command: SimulationCommand<CandidateStateCommandPayload<TState>> = {
+        id: crypto.randomUUID(),
+        sessionId: row.id,
+        actorId: localClientIdRef.current,
+        actorRole: 'candidate',
+        type: 'device.parameter.set',
+        product: String(productId),
+        payload: { kind: 'candidate-product-state', state: withActionCommand(stateRef.current, candidateActionCommandRef.current) },
+        simulationTime: Date.now() / 1000,
+        clientTime: Date.now(),
+      }
+      transport.publishCommand(command)
+    }, 40)
+    return () => { if (candidateLocalPublishTimerRef.current != null) window.clearTimeout(candidateLocalPublishTimerRef.current) }
+  }, [core.role, core.session?.id, runtimeMode, stateSignature, productId])
 
   useEffect(() => {
     if (core.role !== 'instructor' || !core.session || suppressInstructorBroadcastRef.current) return
@@ -262,7 +353,13 @@ export function useProductTeachingSession<TState>({
     return () => { if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current) }
   }, [core.role, state, stateSignature])
 
+  useEffect(() => () => localTransportRef.current?.disconnect(), [])
+
   const startInstructor = () => core.startInstructor({ productId, state: withRuntimeMode(stateRef.current, preferredRuntimeMode) })
 
-  return { ...core, startInstructor, runtimeMode, preferredRuntimeMode, setPreferredRuntimeMode }
+  return { ...core, startInstructor, runtimeMode, preferredRuntimeMode, setPreferredRuntimeMode, localRuntimeConnection }
+}
+
+function memberSourceId<TState>(member: ProductTeachingMemberRow<TState>) {
+  return member.id
 }
