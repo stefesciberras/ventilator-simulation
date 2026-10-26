@@ -11,6 +11,7 @@ import type {
 import type { TeachingScenarioStageContent } from '../../../teaching/scenario/runtimeCore'
 import type { ScenarioVariableDefinition } from '../../model'
 import {
+  EDUMON_PATIENT_GROUP_ORDER,
   getEdumonScenarioModule,
   readScenarioSnapshotValue,
   scenarioTriggerVariables,
@@ -45,27 +46,28 @@ function RegistryVariableControl({
   onChange: (snapshot: EdumonScenarioSnapshot) => void
 }) {
   const value = readScenarioSnapshotValue(snapshot, variable)
+  const effectiveValue = value ?? variable.defaultValue ?? (variable.type === 'number' ? variable.min ?? 0 : undefined)
   const set = (next: unknown) => onChange(writeScenarioSnapshotValue(snapshot, variable, next))
 
   return <div className={`shared-scenario-variable-row ${variable.type === 'number' ? 'slider' : ''} ${applied ? 'applied' : 'not-applied'}`}>
     <div className="shared-scenario-variable-heading">
       <label className="shared-scenario-apply-toggle"><input type="checkbox" checked={applied} onChange={(event) => onAppliedChange(variable.id, event.target.checked)} /><span>Apply</span></label>
       <span className="shared-scenario-variable-label">{variable.label}</span>
-      <strong>{displayValue(variable, value)}</strong>
+      <strong>{displayValue(variable, effectiveValue)}</strong>
     </div>
-    {variable.type === 'number' && <input disabled={!applied} className="shared-scenario-control-slider" type="range" min={variable.min ?? 0} max={variable.max ?? 100} step={variable.step ?? 1} value={typeof value === 'number' ? value : Number(variable.defaultValue ?? variable.min ?? 0)} onChange={(event) => set(Number(event.target.value))} />}
-    {variable.type === 'select' && <select disabled={!applied} value={String(value ?? variable.defaultValue ?? '')} onChange={(event) => set(typeof value === 'number' ? Number(event.target.value) : event.target.value)}>{variable.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>}
-    {variable.type === 'boolean' && <label className="shared-scenario-boolean-control"><input disabled={!applied} type="checkbox" checked={Boolean(value)} onChange={(event) => set(event.target.checked)} /><span>{value ? 'Enabled' : 'Disabled'}</span></label>}
-    {variable.type === 'string' && <input disabled={!applied} type="text" value={String(value ?? '')} onChange={(event) => set(event.target.value)} />}
+    {variable.type === 'number' && <input disabled={!applied} className="shared-scenario-control-slider" type="range" min={variable.min ?? 0} max={variable.max ?? 100} step={variable.step ?? 1} value={typeof effectiveValue === 'number' ? effectiveValue : Number(variable.defaultValue ?? variable.min ?? 0)} onChange={(event) => set(Number(event.target.value))} />}
+    {variable.type === 'select' && <select disabled={!applied} value={String(effectiveValue ?? '')} onChange={(event) => set(typeof effectiveValue === 'number' ? Number(event.target.value) : event.target.value)}>{variable.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>}
+    {variable.type === 'boolean' && <label className="shared-scenario-boolean-control"><input disabled={!applied} type="checkbox" checked={Boolean(effectiveValue)} onChange={(event) => set(event.target.checked)} /><span>{effectiveValue ? 'Enabled' : 'Disabled'}</span></label>}
+    {variable.type === 'string' && <input disabled={!applied} type="text" value={String(effectiveValue ?? '')} onChange={(event) => set(event.target.value)} />}
   </div>
 }
 
 function SnapshotEditor({ product, snapshot, onChange, appliedVariableIds, onAppliedVariableIdsChange }: { product: EdumonScenarioProduct; snapshot: EdumonScenarioSnapshot; onChange: (snapshot: EdumonScenarioSnapshot) => void; appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void }) {
   const module = getEdumonScenarioModule(product)
-  const editable = writableScenarioVariables(module)
+  const editable = writableScenarioVariables(module).filter((variable) => variable.snapshotPath?.startsWith('patient.'))
   const selected = new Set(appliedVariableIds ?? editable.map((variable) => variable.id))
   const setApplied = (id: string, enabled: boolean) => { const next = new Set(selected); if (enabled) next.add(id); else next.delete(id); onAppliedVariableIdsChange?.([...next]) }
-  const groups = [...new Set(editable.map((variable) => variable.group))]
+  const groups = EDUMON_PATIENT_GROUP_ORDER.filter((group) => editable.some((variable) => variable.group === group))
 
   return <div className="shared-scenario-eduvent-snapshot shared-scenario-edumon-snapshot">
     {groups.map((group) => <section key={group} className="shared-scenario-control-group monitor">
@@ -100,7 +102,7 @@ function contentKind(content: TeachingScenarioStageContent | undefined) {
 
 export function createEdumonAuthoringAdapter(product: EdumonScenarioProduct, productLabel: string): SharedScenarioEditorAdapter<EdumonStoredScenario, EdumonScenarioSnapshot> {
   const module = getEdumonScenarioModule(product)
-  const editableVariables = writableScenarioVariables(module)
+  const editableVariables = writableScenarioVariables(module).filter((variable) => variable.snapshotPath?.startsWith('patient.'))
   const appliedIds = editableVariables.map((variable) => variable.id)
   const measurementVariables = scenarioTriggerVariables(module, 'measurement')
   const actionVariables = scenarioTriggerVariables(module, 'candidate-action')

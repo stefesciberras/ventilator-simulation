@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ScenarioVariableDefinition } from './model'
 import type { ScenarioProductId } from '../teaching/scenario/products'
 import { VENTILATOR_SCENARIO_MODULE } from './modules/ventilator/definition'
-import { getEdumonScenarioModule } from './modules/edumon/definition'
+import { EDUMON_PATIENT_GROUP_ORDER, getEdumonScenarioModule } from './modules/edumon/definition'
 import { builtinProfilesForProduct } from '../profiles/builtinProfiles'
 import {
   createProductProfile,
@@ -26,6 +26,14 @@ interface ProfileItem {
 }
 
 type LibraryScope = 'organisation' | 'user'
+
+function profileGroupOrder(product: ScenarioProductId, variables: Array<{ variable: ScenarioVariableDefinition }>) {
+  const present = new Set(variables.map(({ variable }) => variable.group))
+  if (product === 'anaesth' || product === 'icu') {
+    return EDUMON_PATIENT_GROUP_ORDER.filter((group) => present.has(group))
+  }
+  return [...present]
+}
 
 function profileVariables(product: ScenarioProductId): Array<{ variable: ScenarioVariableDefinition; key: string }> {
   if (product === 'mv') {
@@ -94,6 +102,7 @@ export function ProfileEditor({ product }: { product: ScenarioProductId }) {
   const [scope, setScope] = useState<LibraryScope>('organisation')
   const builtins = useMemo(() => builtinProfilesForProduct(product), [product])
   const variables = useMemo(() => profileVariables(product), [product])
+  const groups = useMemo(() => profileGroupOrder(product, variables), [product, variables])
   const canManageOrganisation = active?.membership.role === 'owner' || active?.membership.role === 'admin'
 
   useEffect(() => {
@@ -268,16 +277,17 @@ export function ProfileEditor({ product }: { product: ScenarioProductId }) {
           {!selected.builtin && libraryWritable && <label className="studio-profile-name"><span>Patient name</span><input value={draftName} onChange={(event) => setDraftName(event.target.value)} /></label>}
 
           <div className="studio-profile-groups">
-            {[...new Set(variables.map(({ variable }) => variable.group))].map((group) => <section key={group} className="shared-scenario-control-group monitor">
+            {groups.map((group) => <section key={group} className="shared-scenario-control-group monitor">
               <h3>{group}</h3>
               <div className="shared-scenario-slider-grid">
                 {variables.filter(({ variable }) => variable.group === group).map(({ variable, key }) => {
                   const value = readValue(draftValues, key)
+                  const effectiveValue = value ?? variable.defaultValue ?? (variable.type === 'number' ? variable.min ?? 0 : undefined)
                   return <div key={variable.id} className={`shared-scenario-variable-row ${variable.type === 'number' ? 'slider' : ''}`}>
-                    <div className="shared-scenario-variable-heading"><span className="shared-scenario-variable-label">{variable.label}</span><strong>{displayValue(variable, value)}</strong></div>
-                    {variable.type === 'number' && <input disabled={!libraryWritable} className="shared-scenario-control-slider" type="range" min={variable.min ?? 0} max={variable.max ?? 100} step={variable.step ?? 1} value={typeof value === 'number' ? value : Number(variable.defaultValue ?? variable.min ?? 0)} onChange={(event) => updateValue(key, Number(event.target.value))} />}
-                    {variable.type === 'select' && <select disabled={!libraryWritable} value={String(value ?? variable.defaultValue ?? '')} onChange={(event) => updateValue(key, event.target.value)}>{variable.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>}
-                    {variable.type === 'boolean' && <label className="shared-scenario-boolean-control"><input disabled={!libraryWritable} type="checkbox" checked={Boolean(value)} onChange={(event) => updateValue(key, event.target.checked)} /><span>{value ? 'Enabled' : 'Disabled'}</span></label>}
+                    <div className="shared-scenario-variable-heading"><span className="shared-scenario-variable-label">{variable.label}</span><strong>{displayValue(variable, effectiveValue)}</strong></div>
+                    {variable.type === 'number' && <input disabled={!libraryWritable} className="shared-scenario-control-slider" type="range" min={variable.min ?? 0} max={variable.max ?? 100} step={variable.step ?? 1} value={typeof effectiveValue === 'number' ? effectiveValue : Number(variable.defaultValue ?? variable.min ?? 0)} onChange={(event) => updateValue(key, Number(event.target.value))} />}
+                    {variable.type === 'select' && <select disabled={!libraryWritable} value={String(effectiveValue ?? '')} onChange={(event) => updateValue(key, event.target.value)}>{variable.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>}
+                    {variable.type === 'boolean' && <label className="shared-scenario-boolean-control"><input disabled={!libraryWritable} type="checkbox" checked={Boolean(effectiveValue)} onChange={(event) => updateValue(key, event.target.checked)} /><span>{effectiveValue ? 'Enabled' : 'Disabled'}</span></label>}
                   </div>
                 })}
               </div>
