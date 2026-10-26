@@ -300,6 +300,9 @@ export function useProductTeachingSession<TState>({
   }, [productId, core.role, core.session?.id, runtimeMode])
 
   const stateSignature = useMemo(() => { try { return JSON.stringify(state) } catch { return '' } }, [state])
+  const instructorStateSignature = useMemo(() => {
+    try { return JSON.stringify(withRuntimeMode(state, runtimeMode)) } catch { return '' }
+  }, [state, runtimeMode])
   const sessionStateSignature = useMemo(() => { try { return JSON.stringify(core.session?.product_state ?? null) } catch { return '' } }, [core.session?.product_state])
   const candidateMemberSignature = useMemo(() => {
     if (core.role !== 'instructor' || runtimeMode !== 'simulation') return ''
@@ -349,13 +352,16 @@ export function useProductTeachingSession<TState>({
 
   useEffect(() => {
     if (core.role !== 'instructor' || !core.session || suppressInstructorBroadcastRef.current) return
-    if (stateSignature === sessionStateSignature) return
+    if (instructorStateSignature === sessionStateSignature) return
     const timer = window.setTimeout(() => {
       if (!core.session) return
-      void core.updateSession({ product_state: stateRef.current, product_state_revision: Number(core.session.product_state_revision ?? 0) + 1 })
+      void core.updateSession({
+        product_state: withRuntimeMode(stateRef.current, runtimeMode),
+        product_state_revision: Number(core.session.product_state_revision ?? 0) + 1,
+      })
     }, Math.max(0, instructorBroadcastDebounceMs))
     return () => window.clearTimeout(timer)
-  }, [core.role, core.session?.id, core.session?.product_state_revision, stateSignature, sessionStateSignature, instructorBroadcastDebounceMs])
+  }, [core.role, core.session?.id, core.session?.product_state_revision, runtimeMode, instructorStateSignature, sessionStateSignature, instructorBroadcastDebounceMs])
 
   useEffect(() => {
     if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current)
