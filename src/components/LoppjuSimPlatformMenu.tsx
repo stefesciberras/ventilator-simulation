@@ -28,6 +28,12 @@ function SettingsIcon() {
 
 const modeLabel = (role: LoppjuSimRunMode) => role === 'standalone' ? 'Standalone' : role === 'instructor' ? 'Instructor session' : 'Candidate session'
 
+function scenarioProductForLabel(productLabel: string) {
+  if (productLabel === 'LoppjuSIM-Anaesth') return 'anaesth'
+  if (productLabel === 'LoppjuSIM-ICU') return 'icu'
+  return 'mv'
+}
+
 export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformMenuProps) {
   const [open, setOpen] = useState(false)
   const [runtimeRole, setRuntimeRole] = useState<LoppjuSimRunMode>(() => getSessionLogRuntimeContext().role)
@@ -36,6 +42,7 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
   const auth = useInstructorAccountAuth({ locked: effectiveRole !== 'standalone' })
   const authenticated = Boolean(auth.account)
   const platformUnlocked = authenticated && effectiveRole === 'standalone'
+  const scenarioProduct = scenarioProductForLabel(productLabel)
 
   useEffect(() => {
     if (role) return
@@ -112,7 +119,7 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
           <button type="button" role="menuitem" disabled title="Registration will be enabled later">
             <span className="loppjusim-menu-icon-text">+</span><span>Register</span><small>Coming soon</small>
           </button>
-          <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate('/scenarios')}>
+          <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate(`/scenarios?product=${scenarioProduct}`)}>
             <StudioIcon /><span>Scenario Studio</span>
           </button>
           <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate('/actions')}>
