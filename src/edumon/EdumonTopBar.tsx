@@ -32,7 +32,7 @@ interface EdumonTopBarProps {
   onAbout: () => void
 }
 
-export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, accountAction, diagnosticsAction, onAbout }: EdumonTopBarProps) {
+export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, diagnosticsAction, onAbout }: EdumonTopBarProps) {
   const settingsAuth = useInstructorAccountAuth({ locked: simulationControlsLocked })
 
   useEffect(() => {
@@ -47,22 +47,25 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
   }, [])
 
   return (
-    <SimulationTopBar
-      brandKicker={module.productName}
-      title={module.subtitle}
-      simulationPaused={simulationPaused}
-      simulationSpeed={simulationSpeed}
-      elapsedSeconds={elapsedSeconds}
-      onPausedChange={onPausedChange}
-      onSpeedChange={onSpeedChange}
-      controlsControlledByInstructor={simulationControlsLocked}
-      rightActions={<>{accountAction}<button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button><InstructorSettingsController productLabel={module.productName} version={EDUMON_APP_VERSION} role={simulationControlsLocked ? 'candidate' : 'standalone'} auth={settingsAuth} />{diagnosticsAction}</>}
-      statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
-      version={EDUMON_APP_VERSION}
-      onAbout={onAbout}
-      className="edumon-topbar"
-      brandClassName="edumon-topbar-brand"
-      statusClassName="edumon-topbar-status"
-    />
+    <>
+      <SimulationTopBar
+        brandKicker={module.productName}
+        title={module.subtitle}
+        simulationPaused={simulationPaused}
+        simulationSpeed={simulationSpeed}
+        elapsedSeconds={elapsedSeconds}
+        onPausedChange={onPausedChange}
+        onSpeedChange={onSpeedChange}
+        controlsControlledByInstructor={simulationControlsLocked}
+        rightActions={<><button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button>{diagnosticsAction}</>}
+        statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
+        version={EDUMON_APP_VERSION}
+        onAbout={onAbout}
+        className="edumon-topbar"
+        brandClassName="edumon-topbar-brand"
+        statusClassName="edumon-topbar-status"
+      />
+      <span className="loppjusim-hidden-settings-controller"><InstructorSettingsController productLabel={module.productName} version={EDUMON_APP_VERSION} role={simulationControlsLocked ? 'candidate' : 'standalone'} auth={settingsAuth} /></span>
+    </>
   )
 }
