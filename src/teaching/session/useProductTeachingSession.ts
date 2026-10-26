@@ -11,7 +11,8 @@ import {
 import { configureSessionLogRuntime, consumeSessionLogModelState, diffSessionState, filterSessionStateChanges, recordSessionLogEvent, settingChangesLabel } from './sessionLog'
 
 export type ProductSessionRuntimeMode = 'simulation' | 'teaching'
-const PRODUCT_SESSION_RUNTIME_MODE_KEY = 'loppjusim.product-session-runtime-mode'
+export const PRODUCT_SESSION_RUNTIME_MODE_KEY = 'loppjusim.product-session-runtime-mode'
+export const PRODUCT_SESSION_RUNTIME_MODE_EVENT = 'loppjusim-product-runtime-mode-change'
 
 function readPreferredRuntimeMode(): ProductSessionRuntimeMode {
   if (typeof window === 'undefined') return 'teaching'
@@ -63,6 +64,16 @@ export function useProductTeachingSession<TState>({
   const [preferredRuntimeMode, setPreferredRuntimeModeState] = useState<ProductSessionRuntimeMode>(() => readPreferredRuntimeMode())
 
   useEffect(() => { stateRef.current = state }, [state])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const syncPreference = () => setPreferredRuntimeModeState(readPreferredRuntimeMode())
+    window.addEventListener(PRODUCT_SESSION_RUNTIME_MODE_EVENT, syncPreference)
+    window.addEventListener('storage', syncPreference)
+    return () => {
+      window.removeEventListener(PRODUCT_SESSION_RUNTIME_MODE_EVENT, syncPreference)
+      window.removeEventListener('storage', syncPreference)
+    }
+  }, [])
 
   const core = useSharedTeachingSession<
     ProductTeachingSessionRow<TState>,
@@ -104,7 +115,10 @@ export function useProductTeachingSession<TState>({
 
   const setPreferredRuntimeMode = (next: ProductSessionRuntimeMode) => {
     setPreferredRuntimeModeState(next)
-    if (typeof window !== 'undefined') window.localStorage.setItem(PRODUCT_SESSION_RUNTIME_MODE_KEY, next)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(PRODUCT_SESSION_RUNTIME_MODE_KEY, next)
+      window.dispatchEvent(new Event(PRODUCT_SESSION_RUNTIME_MODE_EVENT))
+    }
   }
 
   useEffect(() => {
