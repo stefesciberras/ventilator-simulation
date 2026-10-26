@@ -10,7 +10,7 @@ import type {
 const rhythmOptions = (Object.keys(RHYTHM_LABELS) as CardiacRhythm[]).map((value) => ({ value, label: RHYTHM_LABELS[value] }))
 const morphologyOptions = (ECG_MORPHOLOGIES as EcgMorphology[]).map((value) => ({ value, label: ECG_MORPHOLOGY_LABELS[value] }))
 
-export const EDUMON_PATIENT_GROUP_ORDER = ['Patient characteristics', 'Cardiovascular', 'Respiratory', 'Metabolism', 'Anaesthesia'] as const
+export const EDUMON_PATIENT_GROUP_ORDER = ['Patient', 'Cardiovascular', 'Respiratory', 'Metabolism', 'Anaesthesia'] as const
 
 const variables: ScenarioVariableDefinition[] = [
   { id: 'rhythm', label: 'Rhythm', group: 'Cardiovascular', type: 'select', role: 'setting', options: rhythmOptions, writable: true, snapshotPath: 'patient.rhythm' },
@@ -32,8 +32,8 @@ const variables: ScenarioVariableDefinition[] = [
   { id: 'maxSpO2', label: 'Maximum SpO₂', group: 'Respiratory', type: 'number', role: 'setting', unit: '%', min: 50, max: 100, step: 1, defaultValue: 100, writable: true, snapshotPath: 'patient.respiratory.maxSpO2' },
   { id: 'oxygenConsumptionMlMin', label: 'VO₂', group: 'Metabolism', type: 'number', role: 'setting', unit: 'mL/min', min: 50, max: 600, step: 10, defaultValue: 250, writable: true, snapshotPath: 'patient.respiratory.oxygenConsumptionMlMin' },
   { id: 'co2ProductionMlMin', label: 'VCO₂', group: 'Metabolism', type: 'number', role: 'setting', unit: 'mL/min', min: 50, max: 600, step: 10, defaultValue: 250, writable: true, snapshotPath: 'patient.respiratory.co2ProductionMlMin' },
-  { id: 'sex', label: 'Sex', group: 'Patient characteristics', type: 'select', role: 'setting', options: [{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }], writable: true, snapshotPath: 'patient.respiratory.sex' },
-  { id: 'heightCm', label: 'Height', group: 'Patient characteristics', type: 'number', role: 'setting', unit: 'cm', min: 50, max: 220, step: 1, defaultValue: 170, writable: true, snapshotPath: 'patient.respiratory.heightCm' },
+  { id: 'sex', label: 'Sex', group: 'Patient', type: 'select', role: 'setting', options: [{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }], writable: true, snapshotPath: 'patient.respiratory.sex' },
+  { id: 'heightCm', label: 'Height', group: 'Patient', type: 'number', role: 'setting', unit: 'cm', min: 50, max: 220, step: 1, defaultValue: 170, writable: true, snapshotPath: 'patient.respiratory.heightCm' },
   { id: 'anaestheticSensitivity', label: 'Anaesthetic sensitivity', group: 'Anaesthesia', type: 'number', role: 'setting', min: -1, max: 1, step: 0.1, defaultValue: 0, writable: true, snapshotPath: 'patient.anaestheticPhysiology.anaestheticSensitivity' },
   { id: 'anaestheticResponse', label: 'Anaesthetic haemodynamic response', group: 'Anaesthesia', type: 'number', role: 'setting', min: -1, max: 1, step: 0.1, defaultValue: 0, writable: true, snapshotPath: 'patient.anaestheticPhysiology.anaestheticResponse' },
   { id: 'depthOfAnaesthesia', label: 'Depth of anaesthesia', group: 'Anaesthesia', type: 'number', role: 'setting', min: 1, max: 5, step: 1, defaultValue: 5, writable: true, snapshotPath: 'patient.anaestheticPhysiology.depthOfAnaesthesia' },

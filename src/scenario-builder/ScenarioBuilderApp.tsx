@@ -20,6 +20,7 @@ import { SCENARIO_PRODUCTS, type ScenarioProductId } from '../teaching/scenario/
 import { DEFAULT_SCENARIO_MODULE_ID, SCENARIO_MODULES } from './modules/registry'
 import { SCENARIO_BUILDER_VERSION } from './version'
 import './scenarioBuilder.css'
+import './clinicalSections.css'
 
 type StudioResource = 'scenarios' | 'profiles' | 'organisation'
 

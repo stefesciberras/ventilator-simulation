@@ -22,6 +22,15 @@ import {
 
 type EdumonScenarioProduct = Extract<ScenarioProductId, 'anaesth' | 'icu'>
 
+function clinicalGroupClass(group: string) {
+  if (group === 'Patient') return 'patient'
+  if (group === 'Cardiovascular') return 'cardiovascular'
+  if (group === 'Respiratory') return 'respiratory'
+  if (group === 'Metabolism') return 'metabolism'
+  if (group === 'Anaesthesia') return 'anaesthesia'
+  return 'monitor'
+}
+
 function displayValue(variable: ScenarioVariableDefinition, value: unknown) {
   if (variable.type === 'select') return variable.options?.find((option) => option.value === String(value))?.label ?? String(value ?? '')
   if (variable.type === 'boolean') return value ? 'On' : 'Off'
@@ -70,7 +79,7 @@ function SnapshotEditor({ product, snapshot, onChange, appliedVariableIds, onApp
   const groups = EDUMON_PATIENT_GROUP_ORDER.filter((group) => editable.some((variable) => variable.group === group))
 
   return <div className="shared-scenario-eduvent-snapshot shared-scenario-edumon-snapshot">
-    {groups.map((group) => <section key={group} className="shared-scenario-control-group monitor">
+    {groups.map((group) => <section key={group} className={`shared-scenario-control-group ${clinicalGroupClass(group)}`}>
       <h3>{group}</h3>
       <div className="shared-scenario-slider-grid">
         {editable.filter((variable) => variable.group === group).map((variable) => <RegistryVariableControl key={variable.id} variable={variable} snapshot={snapshot} applied={selected.has(variable.id)} onAppliedChange={setApplied} onChange={onChange} />)}
