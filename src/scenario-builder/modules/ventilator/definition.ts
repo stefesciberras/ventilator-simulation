@@ -108,9 +108,9 @@ const actionTriggers: ScenarioTriggerSourceDefinition[] = variables
 export const VENTILATOR_SCENARIO_MODULE: ScenarioModuleDefinition<InstructorPresetRow> = {
   id: 'ventilator',
   schemaVersion: 1,
-  label: 'Mechanical ventilation',
-  shortLabel: 'Ventilator',
-  description: 'EDUVENT patient, ventilator and physiology scenarios.',
+  label: 'LoppjuSIM-MV',
+  shortLabel: 'LoppjuSIM-MV',
+  description: 'LoppjuSIM-MV patient, ventilator and respiratory physiology scenarios.',
   available: true,
   variables,
   templates,

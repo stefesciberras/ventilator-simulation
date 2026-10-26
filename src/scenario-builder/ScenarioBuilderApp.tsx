@@ -24,10 +24,23 @@ import './clinicalSections.css'
 
 type StudioResource = 'scenarios' | 'profiles' | 'organisation'
 
+function moduleIdFromProduct(product: string | null) {
+  if (product === 'anaesth') return 'anaesth'
+  if (product === 'icu') return 'icu'
+  if (product === 'mv') return 'ventilator'
+  return DEFAULT_SCENARIO_MODULE_ID
+}
+
+function productFromModuleId(moduleId: string): ScenarioProductId {
+  if (moduleId === 'anaesth') return 'anaesth'
+  if (moduleId === 'icu') return 'icu'
+  return 'mv'
+}
+
 export function ScenarioBuilderApp() {
   const [account, setAccount] = useState<User | null>(null)
   const [presets, setPresets] = useState<InstructorPresetRow[]>([])
-  const [moduleId, setModuleId] = useState(DEFAULT_SCENARIO_MODULE_ID)
+  const [moduleId, setModuleId] = useState(() => moduleIdFromProduct(new URLSearchParams(window.location.search).get('product')))
   const [resource, setResource] = useState<StudioResource>('scenarios')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -111,6 +124,13 @@ export function ScenarioBuilderApp() {
   const startScenario = (preset: InstructorPresetRow) => startProductScenario(preset.product ?? 'mv', preset.id)
   const startEdumonScenario = (row: ProductScenarioRow<EdumonStoredScenario>) => startProductScenario(row.product, row.id)
 
+  const selectModule = (nextModuleId: string) => {
+    setModuleId(nextModuleId)
+    const url = new URL(window.location.href)
+    url.searchParams.set('product', productFromModuleId(nextModuleId))
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+
   const closeBuilder = () => {
     if (launchingScenarioRef.current) return
     window.location.assign('/')
@@ -144,7 +164,7 @@ export function ScenarioBuilderApp() {
       {resource !== 'organisation' && <section className="scenario-builder-modulebar">
         <label>
           <span>Simulation module</span>
-          <select value={moduleId} onChange={(event) => setModuleId(event.target.value)}>
+          <select value={moduleId} onChange={(event) => selectModule(event.target.value)}>
             {SCENARIO_MODULES.map((module) => <option key={module.id} value={module.id} disabled={!module.available}>{module.label}</option>)}
           </select>
         </label>
