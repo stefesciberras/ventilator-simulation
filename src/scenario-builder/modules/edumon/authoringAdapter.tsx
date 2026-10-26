@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { DEFAULT_MONITOR_STATE } from '../../../edumon/types'
+import { calculateConfiguredVdVtFromValues } from '../../../patientMetrics'
 import { listEdusimActions } from '../../../edumon/actionLibrary'
 import type { EdumonScenarioMetric, EdumonScenarioSnapshot, EdumonScenarioTrigger, EdumonStoredScenario } from '../../../edumon/scenarioTypes'
 import type { ScenarioProductId } from '../../../teaching/scenario/products'
@@ -21,6 +22,27 @@ import {
 } from './definition'
 
 type EdumonScenarioProduct = Extract<ScenarioProductId, 'anaesth' | 'icu'>
+
+function normalizeLegacyDeadSpaceSnapshot(snapshot: EdumonScenarioSnapshot): EdumonScenarioSnapshot {
+  const respiratory = snapshot.patient.respiratory
+  if (!respiratory || respiratory.vdVt != null || respiratory.deadSpaceMl == null) return snapshot
+  const referenceTidalVolumeMl = respiratory.tidalVolumeMl ?? respiratory.spontaneousTidalVolumeMl ?? 500
+  return {
+    ...snapshot,
+    patient: {
+      ...snapshot.patient,
+      respiratory: {
+        ...respiratory,
+        vdVt: calculateConfiguredVdVtFromValues(undefined, respiratory.deadSpaceMl, referenceTidalVolumeMl),
+      },
+    },
+  }
+}
+
+function normalizeLegacyAppliedVariableIds(ids: string[] | undefined): string[] | undefined {
+  if (!ids) return ids
+  return [...new Set(ids.map((id) => id === 'deadSpaceMl' ? 'vdVt' : id))]
+}
 
 function clinicalGroupClass(group: string) {
   if (group === 'Patient') return 'patient'
@@ -139,8 +161,8 @@ export function createEdumonAuthoringAdapter(product: EdumonScenarioProduct, pro
         name: stage.name || `Stage ${index + 1}`,
         notes: stage.notes ?? '',
         kind: contentKind(stage.content),
-        snapshot: stage.snapshot,
-        appliedVariableIds: stage.appliedVariableIds ?? [...appliedIds],
+        snapshot: normalizeLegacyDeadSpaceSnapshot(stage.snapshot),
+        appliedVariableIds: normalizeLegacyAppliedVariableIds(stage.appliedVariableIds) ?? [...appliedIds],
         transition: stage.transition ?? { mode: 'immediate' as const },
         transitionOverrides: stage.transitionOverrides ?? {},
         triggers: [],
