@@ -136,7 +136,6 @@ export function EdumonWorkspacePanel({
   const updateRespiratory = (patch: Partial<MonitorRespiratorySettings>) => {
     if (patientControlsLocked) return
     const nextRespiratory = { ...respiratory, ...patch }
-    nextRespiratory.deadSpaceMl = Math.min(nextRespiratory.deadSpaceMl, Math.max(0, nextRespiratory.tidalVolumeMl))
     onPatientStateChange({ ...patientState, respiratory: nextRespiratory })
   }
 
@@ -267,7 +266,7 @@ export function EdumonWorkspacePanel({
         <section className="control-section edumon-physio-panel">
           <div className="control-section-title"><h2>Respiratory / gas exchange</h2></div>
           <label className="edumon-signal-control edumon-signal-capnography"><span>Patient respiratory rate <b>{Math.round(modelledRespiratory.spontaneousRespiratoryRate)}/min</b></span><input disabled={patientControlsLocked} type="range" min="0" max="40" step="1" value={clamp(modelledRespiratory.spontaneousRespiratoryRate, 0, 40)} onChange={(event) => updateModelledRespiratoryRate(Number(event.target.value))} /></label>
-          <label className="edumon-signal-control edumon-signal-capnography"><span>Dead space <b>{Math.round(respiratory.deadSpaceMl)} mL</b></span><input disabled={patientControlsLocked} type="range" min="0" max={Math.max(0, respiratory.tidalVolumeMl)} step="10" value={respiratory.deadSpaceMl} onChange={(event) => updateRespiratory({ deadSpaceMl: Number(event.target.value) })} /></label>
+          <label className="edumon-signal-control edumon-signal-capnography"><span>Vd/Vt <b>{respiratory.vdVt.toFixed(2)}</b></span><input disabled={patientControlsLocked} type="range" min="0.1" max="0.9" step="0.05" value={respiratory.vdVt} onChange={(event) => updateRespiratory({ vdVt: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>VCO₂ <b>{Math.round(respiratory.co2ProductionMlMin)} mL/min</b></span><input disabled={patientControlsLocked} type="range" min="50" max="600" step="10" value={respiratory.co2ProductionMlMin} onChange={(event) => updateRespiratory({ co2ProductionMlMin: Number(event.target.value) })} /></label>
           <label className="edumon-signal-control edumon-signal-capnography"><span>VO₂ <b>{Math.round(respiratory.oxygenConsumptionMlMin)} mL/min</b></span><input disabled={patientControlsLocked} type="range" min="50" max="600" step="10" value={respiratory.oxygenConsumptionMlMin} onChange={(event) => updateRespiratory({ oxygenConsumptionMlMin: Number(event.target.value) })} /></label>
           {teachingHost.appId === 'anaesth' && (
