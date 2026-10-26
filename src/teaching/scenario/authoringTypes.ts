@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { LoppjuSimRuntimeMode } from '../../core/runtimeModes'
 import type { ScenarioProductId } from './products'
 import type {
   ScenarioActor,
@@ -67,6 +68,11 @@ export interface SharedScenarioAuthoringDocument<TSnapshot> {
   product: ScenarioProductId
   name: string
   description: string
+  /**
+   * User-facing runtime modes in which this scenario may be used. Omitted on
+   * legacy documents; omission is interpreted as all modes for compatibility.
+   */
+  supportedModes?: LoppjuSimRuntimeMode[]
   stages: SharedScenarioAuthoringStage<TSnapshot>[]
   branches: SharedScenarioAuthoringBranch[]
 }
