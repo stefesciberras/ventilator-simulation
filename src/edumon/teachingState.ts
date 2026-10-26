@@ -1,4 +1,5 @@
 import type { LoppjuSimRuntimeMode } from '../core/runtimeModes'
+import type { ActionRuntimeSnapshot } from '../edusim/actions/ActionRuntime'
 import type { EdumonAlarmLimits } from './alarmDefinitions'
 import type { EdumonSimulationSpeed } from './EdumonTopBar'
 import type { MonitorPatientState } from './types'
@@ -23,6 +24,8 @@ export interface EdumonTeachingState {
   lastActionId?: string | null
   actionSequence?: number
   actionSimulationTime?: number | null
-  /** Latest candidate-originated Drugs/Events mutation for shared Simulation mode. */
+  /** Latest candidate-originated Drugs/Events mutation, used for de-duplication. */
   actionCommand?: EdumonActionCommandState | null
+  /** Complete declarative ActionRuntime state so Simulation mode remains LAN/offline capable. */
+  actionRuntimeSnapshot?: ActionRuntimeSnapshot | null
 }
