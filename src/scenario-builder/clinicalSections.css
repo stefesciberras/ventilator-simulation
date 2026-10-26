@@ -1,0 +1,76 @@
+/* LoppjuSIM-Studio EDUMON clinical section accents.
+   Reuses the existing shared scenario control-group layout and slider styling. */
+
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.patient,
+.studio-profile-groups .shared-scenario-control-group.patient {
+  --scenario-control-accent: #e8f0f3;
+  border-color: #56636a;
+  background: #0d1418;
+}
+
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.cardiovascular,
+.studio-profile-groups .shared-scenario-control-group.cardiovascular {
+  --scenario-control-accent: #ef6464;
+  border-color: #6b3d42;
+  background: #1a0f12;
+}
+
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.respiratory,
+.studio-profile-groups .shared-scenario-control-group.respiratory {
+  --scenario-control-accent: #61bedd;
+  border-color: #365e6f;
+  background: #0b171d;
+}
+
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.metabolism,
+.studio-profile-groups .shared-scenario-control-group.metabolism {
+  --scenario-control-accent: #a66ddd;
+  border-color: #5d4a75;
+  background: #15101c;
+}
+
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.anaesthesia,
+.studio-profile-groups .shared-scenario-control-group.anaesthesia {
+  --scenario-control-accent: #e7c85e;
+  border-color: #6b6038;
+  background: #19170d;
+}
+
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.patient .shared-scenario-control-slider,
+.studio-profile-groups .shared-scenario-control-group.patient .shared-scenario-control-slider,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.cardiovascular .shared-scenario-control-slider,
+.studio-profile-groups .shared-scenario-control-group.cardiovascular .shared-scenario-control-slider,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.respiratory .shared-scenario-control-slider,
+.studio-profile-groups .shared-scenario-control-group.respiratory .shared-scenario-control-slider,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.metabolism .shared-scenario-control-slider,
+.studio-profile-groups .shared-scenario-control-group.metabolism .shared-scenario-control-slider,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.anaesthesia .shared-scenario-control-slider,
+.studio-profile-groups .shared-scenario-control-group.anaesthesia .shared-scenario-control-slider {
+  accent-color: var(--scenario-control-accent);
+}
+
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.patient .shared-scenario-control-slider::-webkit-slider-thumb,
+.studio-profile-groups .shared-scenario-control-group.patient .shared-scenario-control-slider::-webkit-slider-thumb,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.cardiovascular .shared-scenario-control-slider::-webkit-slider-thumb,
+.studio-profile-groups .shared-scenario-control-group.cardiovascular .shared-scenario-control-slider::-webkit-slider-thumb,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.respiratory .shared-scenario-control-slider::-webkit-slider-thumb,
+.studio-profile-groups .shared-scenario-control-group.respiratory .shared-scenario-control-slider::-webkit-slider-thumb,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.metabolism .shared-scenario-control-slider::-webkit-slider-thumb,
+.studio-profile-groups .shared-scenario-control-group.metabolism .shared-scenario-control-slider::-webkit-slider-thumb,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.anaesthesia .shared-scenario-control-slider::-webkit-slider-thumb,
+.studio-profile-groups .shared-scenario-control-group.anaesthesia .shared-scenario-control-slider::-webkit-slider-thumb {
+  background: var(--scenario-control-accent);
+}
+
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.patient .shared-scenario-control-slider::-moz-range-thumb,
+.studio-profile-groups .shared-scenario-control-group.patient .shared-scenario-control-slider::-moz-range-thumb,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.cardiovascular .shared-scenario-control-slider::-moz-range-thumb,
+.studio-profile-groups .shared-scenario-control-group.cardiovascular .shared-scenario-control-slider::-moz-range-thumb,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.respiratory .shared-scenario-control-slider::-moz-range-thumb,
+.studio-profile-groups .shared-scenario-control-group.respiratory .shared-scenario-control-slider::-moz-range-thumb,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.metabolism .shared-scenario-control-slider::-moz-range-thumb,
+.studio-profile-groups .shared-scenario-control-group.metabolism .shared-scenario-control-slider::-moz-range-thumb,
+.shared-scenario-edumon-snapshot .shared-scenario-control-group.anaesthesia .shared-scenario-control-slider::-moz-range-thumb,
+.studio-profile-groups .shared-scenario-control-group.anaesthesia .shared-scenario-control-slider::-moz-range-thumb {
+  background: var(--scenario-control-accent);
+}
