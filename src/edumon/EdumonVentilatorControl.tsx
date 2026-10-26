@@ -72,6 +72,40 @@ function findVisibleFooterHost(): HTMLElement | null {
     ?? null
 }
 
+function ventilatorFromRespiratory(respiratory: MonitorRespiratorySettings, current?: VentilatorState): VentilatorState {
+  return {
+    mode: (respiratory.ventilatorMode ?? current?.mode ?? 'MANUAL') as EdumonVentilatorMode,
+    rate: Math.max(5, Math.round(respiratory.ventilatorSetRate ?? respiratory.respiratoryRate ?? current?.rate ?? 12)),
+    tidalVolume: Math.max(250, Math.round(respiratory.ventilatorSetTidalVolumeMl ?? respiratory.tidalVolumeMl ?? current?.tidalVolume ?? 500)),
+    peep: Math.max(0, Number(respiratory.peepCmH2O ?? current?.peep ?? 5)),
+    fio2: Math.max(21, Math.round((respiratory.fio2 ?? 0.21) * 100)),
+    inspiratoryTime: Number(respiratory.ventilatorInspiratoryTimeSeconds ?? current?.inspiratoryTime ?? 1),
+    inspiratoryFlow: Number(respiratory.ventilatorInspiratoryFlowLMin ?? current?.inspiratoryFlow ?? 30),
+    plateauPercent: Number(respiratory.ventilatorPlateauPercent ?? current?.plateauPercent ?? 0),
+    pressureControl: Number(respiratory.ventilatorPressureControlCmH2O ?? current?.pressureControl ?? 15),
+    volumeGuaranteePressureLimit: Number(respiratory.ventilatorVolumeGuaranteePressureLimitCmH2O ?? current?.volumeGuaranteePressureLimit ?? 40),
+    pressureSupport: Number(respiratory.ventilatorPressureSupportCmH2O ?? current?.pressureSupport ?? 10),
+    terminationSensitivity: Number(respiratory.ventilatorTerminationSensitivityPercent ?? current?.terminationSensitivity ?? 25),
+    simvSyncWindowPercent: Number(respiratory.ventilatorSimvSyncWindowPercent ?? current?.simvSyncWindowPercent ?? 25),
+  }
+}
+
+function sameVentilator(a: VentilatorState, b: VentilatorState) {
+  return a.mode === b.mode
+    && Math.abs(a.rate - b.rate) < 0.001
+    && Math.abs(a.tidalVolume - b.tidalVolume) < 0.001
+    && Math.abs(a.peep - b.peep) < 0.001
+    && Math.abs(a.fio2 - b.fio2) < 0.001
+    && Math.abs(a.inspiratoryTime - b.inspiratoryTime) < 0.001
+    && Math.abs(a.inspiratoryFlow - b.inspiratoryFlow) < 0.001
+    && Math.abs(a.plateauPercent - b.plateauPercent) < 0.001
+    && Math.abs(a.pressureControl - b.pressureControl) < 0.001
+    && Math.abs(a.volumeGuaranteePressureLimit - b.volumeGuaranteePressureLimit) < 0.001
+    && Math.abs(a.pressureSupport - b.pressureSupport) < 0.001
+    && Math.abs(a.terminationSensitivity - b.terminationSensitivity) < 0.001
+    && Math.abs(a.simvSyncWindowPercent - b.simvSyncWindowPercent) < 0.001
+}
+
 function deriveEffectiveVentilation(ventilator: VentilatorState, respiratory: MonitorRespiratorySettings): EffectiveVentilation {
   const compliance = Math.max(20, respiratory.complianceMlPerCmH2O)
   const spontaneousRate = clamp(respiratory.spontaneousRespiratoryRate, 0, 40)
@@ -93,9 +127,7 @@ function deriveEffectiveVentilation(ventilator: VentilatorState, respiratory: Mo
     } else {
       tidalVolumeMl = ventilator.tidalVolume
       peakPressureCmH2O = ventilator.peep + ventilator.tidalVolume / compliance + 4
-      if (ventilator.mode === 'VG-PC') {
-        peakPressureCmH2O = Math.min(ventilator.volumeGuaranteePressureLimit, peakPressureCmH2O)
-      }
+      if (ventilator.mode === 'VG-PC') peakPressureCmH2O = Math.min(ventilator.volumeGuaranteePressureLimit, peakPressureCmH2O)
     }
   }
 
@@ -119,21 +151,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
   patientRef.current = patientState
 
   const [host, setHost] = useState<HTMLElement | null>(null)
-  const [ventilator, setVentilator] = useState<VentilatorState>(() => ({
-    mode: 'MANUAL',
-    rate: Math.max(5, Math.round(respiratory.respiratoryRate || 12)),
-    tidalVolume: Math.max(250, Math.round(respiratory.tidalVolumeMl || 500)),
-    peep: Math.max(0, Math.round(respiratory.peepCmH2O || 5)),
-    fio2: Math.max(21, Math.round((respiratory.fio2 || 0.21) * 100)),
-    inspiratoryTime: 1,
-    inspiratoryFlow: 30,
-    plateauPercent: 0,
-    pressureControl: 15,
-    volumeGuaranteePressureLimit: 40,
-    pressureSupport: 10,
-    terminationSensitivity: 25,
-    simvSyncWindowPercent: 25,
-  }))
+  const [ventilator, setVentilator] = useState<VentilatorState>(() => ventilatorFromRespiratory(respiratory))
 
   useEffect(() => {
     const findHost = () => setHost((current) => {
@@ -156,6 +174,25 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     return () => host.classList.remove('edumon-control-strip-with-ventilator')
   }, [host])
 
+  useEffect(() => {
+    const next = ventilatorFromRespiratory(respiratory, ventilator)
+    if (!sameVentilator(next, ventilator)) setVentilator(next)
+  }, [
+    respiratory.ventilatorMode,
+    respiratory.ventilatorSetRate,
+    respiratory.ventilatorSetTidalVolumeMl,
+    respiratory.peepCmH2O,
+    respiratory.fio2,
+    respiratory.ventilatorInspiratoryTimeSeconds,
+    respiratory.ventilatorInspiratoryFlowLMin,
+    respiratory.ventilatorPlateauPercent,
+    respiratory.ventilatorPressureControlCmH2O,
+    respiratory.ventilatorVolumeGuaranteePressureLimitCmH2O,
+    respiratory.ventilatorPressureSupportCmH2O,
+    respiratory.ventilatorTerminationSensitivityPercent,
+    respiratory.ventilatorSimvSyncWindowPercent,
+  ])
+
   const currentIeRatio = ieRatioFrom(ventilator)
 
   const controls = useMemo<Array<InteractiveSettingSpec<VentilatorSettingKey>>>(() => {
@@ -165,37 +202,24 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     ]
 
     if (ventilator.mode === 'MANUAL') return items
-
-    if (ventilator.mode !== 'PSV') {
-      items.push({ key: 'rate', label: isSimvMode(ventilator.mode) ? 'SIMV RR' : 'RR', value: ventilator.rate, display: `${Math.round(ventilator.rate)}`, unit: '/min', min: 5, max: 40, step: 1 })
-    }
-    if (usesTidalVolume(ventilator.mode)) {
-      items.push({ key: 'tidalVolume', label: ventilator.mode === 'VG-PC' ? 'VT target' : 'VT', value: ventilator.tidalVolume, display: `${Math.round(ventilator.tidalVolume)}`, unit: 'mL', min: 250, max: 800, step: 10 })
-    }
-    if (hasConventionalMandatoryTiming(ventilator.mode)) {
-      items.push({ key: 'ieRatio', label: 'I:E', value: Number(currentIeRatio.toFixed(1)), display: `1:${currentIeRatio.toFixed(1)}`, min: MIN_IE, max: MAX_IE, step: 0.1 })
-    }
+    if (ventilator.mode !== 'PSV') items.push({ key: 'rate', label: isSimvMode(ventilator.mode) ? 'SIMV RR' : 'RR', value: ventilator.rate, display: `${Math.round(ventilator.rate)}`, unit: '/min', min: 5, max: 40, step: 1 })
+    if (usesTidalVolume(ventilator.mode)) items.push({ key: 'tidalVolume', label: ventilator.mode === 'VG-PC' ? 'VT target' : 'VT', value: ventilator.tidalVolume, display: `${Math.round(ventilator.tidalVolume)}`, unit: 'mL', min: 250, max: 800, step: 10 })
+    if (hasConventionalMandatoryTiming(ventilator.mode)) items.push({ key: 'ieRatio', label: 'I:E', value: Number(currentIeRatio.toFixed(1)), display: `1:${currentIeRatio.toFixed(1)}`, min: MIN_IE, max: MAX_IE, step: 0.1 })
     if (isVolumeMandatoryMode(ventilator.mode)) {
       items.push(
         { key: 'inspiratoryFlow', label: 'Flow', value: ventilator.inspiratoryFlow, display: `${ventilator.inspiratoryFlow.toFixed(0)}`, unit: 'L/min', min: 10, max: 140, step: 1 },
         { key: 'plateauPercent', label: 'Plateau', value: ventilator.plateauPercent, display: `${ventilator.plateauPercent.toFixed(0)}`, unit: '% Ti', min: 0, max: 20, step: 1 },
       )
     }
-    if (isPressureMandatoryMode(ventilator.mode)) {
-      items.push({ key: 'pressureControl', label: 'Pinsp', value: ventilator.pressureControl, display: `${ventilator.pressureControl.toFixed(0)}`, unit: 'cmH₂O', min: 5, max: 30, step: 1 })
-    }
-    if (ventilator.mode === 'VG-PC') {
-      items.push({ key: 'volumeGuaranteePressureLimit', label: 'Pmax', value: ventilator.volumeGuaranteePressureLimit, display: `${ventilator.volumeGuaranteePressureLimit.toFixed(0)}`, unit: 'cmH₂O', min: 20, max: 60, step: 1 })
-    }
+    if (isPressureMandatoryMode(ventilator.mode)) items.push({ key: 'pressureControl', label: 'Pinsp', value: ventilator.pressureControl, display: `${ventilator.pressureControl.toFixed(0)}`, unit: 'cmH₂O', min: 5, max: 30, step: 1 })
+    if (ventilator.mode === 'VG-PC') items.push({ key: 'volumeGuaranteePressureLimit', label: 'Pmax', value: ventilator.volumeGuaranteePressureLimit, display: `${ventilator.volumeGuaranteePressureLimit.toFixed(0)}`, unit: 'cmH₂O', min: 20, max: 60, step: 1 })
     if (ventilator.mode === 'PSV' || isSimvMode(ventilator.mode)) {
       items.push(
         { key: 'pressureSupport', label: 'PS', value: ventilator.pressureSupport, display: `${ventilator.pressureSupport.toFixed(0)}`, unit: 'cmH₂O', min: 0, max: 25, step: 1 },
         { key: 'terminationSensitivity', label: 'ETS', value: ventilator.terminationSensitivity, display: `${ventilator.terminationSensitivity.toFixed(0)}`, unit: '%', min: 5, max: 80, step: 5 },
       )
     }
-    if (isSimvMode(ventilator.mode)) {
-      items.push({ key: 'simvSyncWindowPercent', label: 'Sync', value: ventilator.simvSyncWindowPercent, display: `${ventilator.simvSyncWindowPercent.toFixed(0)}`, unit: '%', min: 5, max: 75, step: 5 })
-    }
+    if (isSimvMode(ventilator.mode)) items.push({ key: 'simvSyncWindowPercent', label: 'Sync', value: ventilator.simvSyncWindowPercent, display: `${ventilator.simvSyncWindowPercent.toFixed(0)}`, unit: '%', min: 5, max: 75, step: 5 })
     return items
   }, [currentIeRatio, ventilator])
 
@@ -208,6 +232,16 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       respiratoryRate: effective.respiratoryRate,
       tidalVolumeMl: effective.tidalVolumeMl,
       ventilatorMode: next.mode,
+      ventilatorSetRate: next.rate,
+      ventilatorSetTidalVolumeMl: next.tidalVolume,
+      ventilatorInspiratoryTimeSeconds: next.inspiratoryTime,
+      ventilatorInspiratoryFlowLMin: next.inspiratoryFlow,
+      ventilatorPlateauPercent: next.plateauPercent,
+      ventilatorPressureControlCmH2O: next.pressureControl,
+      ventilatorVolumeGuaranteePressureLimitCmH2O: next.volumeGuaranteePressureLimit,
+      ventilatorPressureSupportCmH2O: next.pressureSupport,
+      ventilatorTerminationSensitivityPercent: next.terminationSensitivity,
+      ventilatorSimvSyncWindowPercent: next.simvSyncWindowPercent,
       peepCmH2O: next.peep,
       fio2: next.fio2 / 100,
     }
@@ -219,10 +253,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     if (
       Math.abs(effective.respiratoryRate - respiratory.respiratoryRate) > 0.001
       || Math.abs(effective.tidalVolumeMl - respiratory.tidalVolumeMl) > 0.001
-      || respiratory.ventilatorMode !== ventilator.mode
-    ) {
-      publishRespiratory(ventilator)
-    }
+    ) publishRespiratory(ventilator)
     // Patient spontaneous breathing is intentionally the only external input
     // that changes effective ventilation without the ventilator itself changing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,12 +291,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       <div className="edumon-ventilator-controls">
         <label className="edumon-ventilator-mode" title={disabled ? 'Ventilator mode controlled by instructor' : 'Change ventilation mode'}>
           <span>VENT MODE</span>
-          <select
-            disabled={disabled}
-            value={ventilator.mode}
-            onChange={(event) => selectMode(event.target.value as EdumonVentilatorMode)}
-            aria-label="Ventilation mode"
-          >
+          <select disabled={disabled} value={ventilator.mode} onChange={(event) => selectMode(event.target.value as EdumonVentilatorMode)} aria-label="Ventilation mode">
             {MODES.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
           </select>
         </label>

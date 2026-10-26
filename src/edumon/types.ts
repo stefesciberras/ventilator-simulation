@@ -28,6 +28,17 @@ export interface MonitorRespiratorySettings {
   spontaneousTidalVolumeMl: number
   /** Current EDUMON ventilation mode. Older scenarios omit this and are treated as Manual/spontaneous. */
   ventilatorMode?: MonitorVentilationMode
+  /** Canonical device settings. Kept separate from effective gas-exchange values so Simulation peers render the same ventilator UI. */
+  ventilatorSetRate?: number
+  ventilatorSetTidalVolumeMl?: number
+  ventilatorInspiratoryTimeSeconds?: number
+  ventilatorInspiratoryFlowLMin?: number
+  ventilatorPlateauPercent?: number
+  ventilatorPressureControlCmH2O?: number
+  ventilatorVolumeGuaranteePressureLimitCmH2O?: number
+  ventilatorPressureSupportCmH2O?: number
+  ventilatorTerminationSensitivityPercent?: number
+  ventilatorSimvSyncWindowPercent?: number
   /** Physiological dead-space fraction. Effective dead-space volume follows the current tidal volume, as in LoppjuSIM-MV. */
   vdVt: number
   /** Resolved effective dead-space volume. Older payloads may provide this without vdVt. */
