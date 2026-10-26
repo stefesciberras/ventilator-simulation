@@ -191,7 +191,7 @@ export function ProfileEditor({ product }: { product: ScenarioProductId }) {
       if (destinationScope.type === 'user' && scope !== 'user') setScope('user')
       await refresh()
       setSelectedKey(created.id)
-      setLocalMessage(destinationScope.type === 'organisation' ? 'Patient duplicated into the organisation library.' : 'Profile duplicated into My patients.')
+      setLocalMessage(destinationScope.type === 'organisation' ? 'Patient duplicated into the organisation library.' : 'Patient duplicated into My patients.')
     } catch (cause) {
       setLocalMessage(cause instanceof Error ? cause.message : 'Unable to duplicate patient preset.')
     } finally {
@@ -259,12 +259,12 @@ export function ProfileEditor({ product }: { product: ScenarioProductId }) {
             <div className="studio-profile-actions">
               <button type="button" onClick={() => void duplicate()} disabled={busy}>{scope === 'organisation' && !canManageOrganisation ? 'Copy to My patients' : 'Duplicate'}</button>
               {selected.builtin && selected.overridden && libraryWritable && <button type="button" onClick={() => void reset()} disabled={busy}>Restore inherited</button>}
-              {!selected.builtin && libraryWritable && <button type="button" className="studio-profile-delete" onClick={() => void remove()} disabled={busy} aria-label="Delete profile" title="Delete profile">🗑</button>}
+              {!selected.builtin && libraryWritable && <button type="button" className="studio-profile-delete" onClick={() => void remove()} disabled={busy} aria-label="Delete patient" title="Delete patient">🗑</button>}
               {libraryWritable && <button type="button" className="scenario-builder-primary" onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save patient'}</button>}
             </div>
           </header>
 
-          {!libraryWritable && <div className="studio-profile-readonly">Instructor role: organisation profiles are read-only. You can copy a profile into My patients and edit your personal copy.</div>}
+          {!libraryWritable && <div className="studio-profile-readonly">Instructor role: organisation patients are read-only. You can copy a patient into My patients and edit your personal copy.</div>}
           {!selected.builtin && libraryWritable && <label className="studio-profile-name"><span>Patient name</span><input value={draftName} onChange={(event) => setDraftName(event.target.value)} /></label>}
 
           <div className="studio-profile-groups">
