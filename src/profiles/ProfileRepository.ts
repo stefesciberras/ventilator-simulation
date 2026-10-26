@@ -30,7 +30,7 @@ function decodeRow<TValues extends object>(row: Record<string, unknown>): Produc
   return row as unknown as ProductProfileRow<TValues>
 }
 
-function scopeMatches(row: ProductProfileRow, scope: ProductProfileScope, userId: string) {
+function scopeMatches<TValues extends object>(row: ProductProfileRow<TValues>, scope: ProductProfileScope, userId: string) {
   return scope.type === 'user'
     ? row.owner_type === 'user' && row.owner_user_id === userId
     : row.owner_type === 'organisation' && row.organisation_id === scope.organisationId
