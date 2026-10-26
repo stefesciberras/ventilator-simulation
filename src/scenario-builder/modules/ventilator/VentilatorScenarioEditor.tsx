@@ -1,6 +1,6 @@
 import type { InstructorPresetRow, InstructorScenarioSnapshot } from '../../../instructorAccount'
 import type { ProductScenarioRow } from '../../../teaching/scenario/productLibrary'
-import { SharedScenarioEditorFramework } from '../../SharedScenarioEditorFramework'
+import { RuntimeModeScenarioEditor } from '../../RuntimeModeScenarioEditor'
 import { createRuntimeAwareVentilatorAuthoringAdapter } from './runtimeModeAuthoringAdapter'
 
 interface VentilatorScenarioEditorProps {
@@ -13,7 +13,7 @@ interface VentilatorScenarioEditorProps {
 }
 
 export function VentilatorScenarioEditor({ seedScenario, onStartScenario }: VentilatorScenarioEditorProps) {
-  return <SharedScenarioEditorFramework
+  return <RuntimeModeScenarioEditor
     adapter={createRuntimeAwareVentilatorAuthoringAdapter(seedScenario)}
     onStartScenario={(row: ProductScenarioRow<InstructorScenarioSnapshot>) => onStartScenario(row as InstructorPresetRow)}
   />
