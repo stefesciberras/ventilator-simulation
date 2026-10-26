@@ -121,7 +121,7 @@ export function ScenarioBuilderApp() {
         open={aboutOpen}
         productLabel="LoppjuSIM-Studio"
         title="Simulation Studio"
-        description="The shared LoppjuSIM authoring workspace for scenarios, organisation profile libraries and simulation actions."
+        description="The shared LoppjuSIM authoring workspace for scenarios, organisation patient libraries and simulation actions."
         version={SCENARIO_BUILDER_VERSION}
         onClose={() => setAboutOpen(false)}
         legalContext="authoring"
@@ -155,7 +155,7 @@ export function ScenarioBuilderApp() {
 
       <nav className="scenario-builder-resourcebar" aria-label="Studio resources">
         <button type="button" className={resource === 'scenarios' ? 'selected' : ''} onClick={() => setResource('scenarios')}>Scenarios</button>
-        <button type="button" className={resource === 'profiles' ? 'selected' : ''} onClick={() => setResource('profiles')}>Profiles</button>
+        <button type="button" className={resource === 'profiles' ? 'selected' : ''} onClick={() => setResource('profiles')}>Patient</button>
         <button type="button" className={resource === 'organisation' ? 'selected' : ''} onClick={() => setResource('organisation')}>Organisation</button>
         <button type="button" onClick={() => window.location.assign('/actions')}>Actions</button>
       </nav>
