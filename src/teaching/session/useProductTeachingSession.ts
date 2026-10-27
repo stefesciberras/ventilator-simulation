@@ -127,6 +127,7 @@ export function useProductTeachingSession<TState>({
   const suppressInstructorBroadcastRef = useRef(false)
   const candidateStateInitialisedRef = useRef(false)
   const candidateCanonicalSignatureRef = useRef('')
+  const candidateMutationStateRef = useRef<TState | null>(null)
   const candidateMutationRevisionRef = useRef(0)
   const processedCandidateMutationRevisionRef = useRef(0)
   const standaloneStateRef = useRef(state)
@@ -154,7 +155,7 @@ export function useProductTeachingSession<TState>({
   }, [])
 
   const candidateTelemetryState = () => withCandidateMutationRevision(
-    withActionRuntime(stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current),
+    withActionRuntime(candidateMutationStateRef.current ?? stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current),
     candidateMutationRevisionRef.current,
   )
 
@@ -192,6 +193,7 @@ export function useProductTeachingSession<TState>({
       onSessionCleared: () => {
         candidateStateInitialisedRef.current = false
         candidateCanonicalSignatureRef.current = ''
+        candidateMutationStateRef.current = null
         candidateMutationRevisionRef.current = 0
         processedCandidateMutationRevisionRef.current = 0
         candidateActionCommandRef.current = null
@@ -312,6 +314,7 @@ export function useProductTeachingSession<TState>({
           simulationTime: latest.simulationTime,
         }
         candidateActionRuntimeSnapshotRef.current = getActionRuntimeSnapshot(latest.simulationTime)
+        candidateMutationStateRef.current = stateRef.current
         candidateMutationRevisionRef.current += 1
         void core.touchMemberNow().catch(() => undefined)
         const row = core.session
@@ -354,6 +357,7 @@ export function useProductTeachingSession<TState>({
   useEffect(() => {
     if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session?.id) return
     if (currentStateSignature === candidateCanonicalSignatureRef.current) return
+    candidateMutationStateRef.current = state
     candidateMutationRevisionRef.current += 1
     if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current)
     candidateFastTelemetryTimerRef.current = window.setTimeout(() => {
