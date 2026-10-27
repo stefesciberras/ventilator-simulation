@@ -11,6 +11,7 @@ import {
   recordSessionLogEvent,
   subscribeToSessionLogEntries,
   subscribeToStandaloneSessionLogEntries,
+  type SessionLogActorRole,
   type SessionLogEntry,
   type SessionLogStateChange,
 } from './session/sessionLog'
@@ -22,7 +23,7 @@ interface DisplayRow { key: string; entry: SessionLogEntry; subject: string; mes
 interface DragState { pointerId: number; startX: number; startY: number; originX: number; originY: number; baseLeft: number; baseTop: number; width: number; height: number }
 
 const FRIENDLY_SETTING_NAMES: Record<string, string> = {
-  fio2: 'FiO₂', peep: 'PEEP', rate: 'rate', tidalVolume: 'tidal volume', inspiratoryTime: 'inspiratory time', inspiratoryFlow: 'inspiratory flow', pressureControl: 'pressure control', pressureSupport: 'pressure support', mode: 'mode', heartRate: 'heart rate', systolicPressure: 'systolic pressure', diastolicPressure: 'diastolic pressure', spo2: 'SpO₂', temperatureC: 'temperature', simulationPaused: 'simulation pause', simulationSpeed: 'simulation speed',
+  fio2: 'FiO₂', peep: 'PEEP', rate: 'rate', tidalVolume: 'tidal volume', inspiratoryTime: 'inspiratory time', inspiratoryFlow: 'inspiratory flow', pressureControl: 'pressure control', pressureSupport: 'pressure support', mode: 'mode', heartRate: 'heart rate', systolicPressure: 'systolic pressure', diastolicPressure: 'diastolic pressure', spo2: 'SpO₂', temperatureC: 'temperature', simulationPaused: 'simulation pause', simulationSpeed: 'simulation speed', ventilatorMode: 'ventilator mode', ventilatorSetRate: 'ventilator rate', ventilatorSetTidalVolumeMl: 'tidal volume', peepCmH2O: 'PEEP',
 }
 
 function safeFilePart(value: string) { return value.replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'edusim' }
@@ -31,14 +32,53 @@ function mergeEntries(current: SessionLogEntry[], incoming: SessionLogEntry[]): 
 function displayTime(entry: SessionLogEntry): string { const date = new Date(entry.client_occurred_at || entry.created_at); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) }
 function shortValue(value: unknown): string { if (typeof value === 'number') return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100); if (typeof value === 'boolean') return value ? 'on' : 'off'; if (value == null) return '—'; if (typeof value === 'string') return value; try { return JSON.stringify(value) } catch { return String(value) } }
 function settingName(change: SessionLogStateChange): string { const leaf = change.path.split('.').pop() ?? change.path; return FRIENDLY_SETTING_NAMES[leaf] ?? leaf.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase() }
-function subjectFor(entry: SessionLogEntry): string { if (entry.actor_role === 'standalone') return 'Standalone'; if (entry.actor_role === 'instructor') return 'All candidates'; return entry.actor_name || 'Candidate' }
-function actorFor(entry: SessionLogEntry): string { if (entry.actor_role === 'standalone') return 'Standalone'; if (entry.actor_role === 'instructor') return 'Instructor'; return entry.actor_name || 'Candidate' }
-function humanSettingMessage(entry: SessionLogEntry, change: SessionLogStateChange): string { const message = `${settingName(change)} ${shortValue(change.from)} → ${shortValue(change.to)}`; return entry.actor_role === 'standalone' ? message : `${message}, changed by ${actorFor(entry)}` }
-function humanEventMessage(entry: SessionLogEntry): string { if (entry.actor_role === 'standalone') return entry.label; return `${entry.label} by ${actorFor(entry)}` }
+function logicalActorRole(entry: SessionLogEntry): SessionLogActorRole {
+  const explicit = entry.details?._originRole
+  if (explicit === 'candidate' || explicit === 'instructor' || explicit === 'standalone') return explicit
+  if (entry.event_type.startsWith('candidate.')) return 'candidate'
+  if (entry.event_type.startsWith('instructor.')) return 'instructor'
+  return entry.actor_role
+}
+function actorFor(entry: SessionLogEntry): string {
+  const logicalRole = logicalActorRole(entry)
+  if (logicalRole === 'standalone') return 'Standalone'
+  if (logicalRole === 'instructor') return 'Instructor'
+  return entry.actor_role === 'candidate' && entry.actor_name ? entry.actor_name : 'Candidate'
+}
+function subjectFor(entry: SessionLogEntry, simulationMode: boolean): string {
+  if (simulationMode && logicalActorRole(entry) !== 'standalone') return 'Shared simulation'
+  const logicalRole = logicalActorRole(entry)
+  if (logicalRole === 'standalone') return 'Standalone'
+  if (logicalRole === 'instructor') return 'All candidates'
+  return entry.actor_role === 'candidate' && entry.actor_name ? entry.actor_name : 'Candidate'
+}
+function humanSettingMessage(entry: SessionLogEntry, change: SessionLogStateChange): string { const message = `${settingName(change)} ${shortValue(change.from)} → ${shortValue(change.to)}`; return logicalActorRole(entry) === 'standalone' ? message : `${message}, changed by ${actorFor(entry)}` }
+function humanEventMessage(entry: SessionLogEntry): string {
+  if (entry.event_type === 'candidate.joined' || entry.event_type === 'session.started' || entry.event_type === 'session.ended') return entry.label
+  if (logicalActorRole(entry) === 'standalone') return entry.label
+  return `${entry.label} by ${actorFor(entry)}`
+}
 function afterLatestClear(entries: SessionLogEntry[]): SessionLogEntry[] { let last = -1; entries.forEach((entry, index) => { if (entry.event_type === 'session.log.cleared') last = index }); return last >= 0 ? entries.slice(last + 1) : entries }
-function displayRows(entries: SessionLogEntry[]): DisplayRow[] {
+function actionDedupeKey(entry: SessionLogEntry): string | null {
+  if (!entry.event_type.startsWith('action.')) return null
+  const actionId = typeof entry.details?.actionId === 'string' ? entry.details.actionId : ''
+  const simulationTime = typeof entry.simulation_time_seconds === 'number' ? Math.round(entry.simulation_time_seconds * 10) / 10 : null
+  return `${entry.event_type}|${actionId}|${simulationTime ?? entry.label}`
+}
+function dedupeReplicatedActions(entries: SessionLogEntry[]): SessionLogEntry[] {
+  const byKey = new Map<string, SessionLogEntry>()
+  const passthrough: SessionLogEntry[] = []
+  for (const entry of entries) {
+    const key = actionDedupeKey(entry)
+    if (!key) { passthrough.push(entry); continue }
+    const existing = byKey.get(key)
+    if (!existing || (logicalActorRole(existing) !== 'candidate' && logicalActorRole(entry) === 'candidate')) byKey.set(key, entry)
+  }
+  return [...passthrough, ...byKey.values()].sort((a, b) => a.id - b.id)
+}
+function displayRows(entries: SessionLogEntry[], simulationMode: boolean): DisplayRow[] {
   const rows: DisplayRow[] = []
-  for (const entry of afterLatestClear(entries)) {
+  for (const entry of dedupeReplicatedActions(afterLatestClear(entries))) {
     if (entry.event_type === 'session.log.cleared') continue
     if (entry.category === 'settings') {
       const before = entry.details?.before
@@ -46,11 +86,11 @@ function displayRows(entries: SessionLogEntry[]): DisplayRow[] {
       if (before != null && after != null) {
         const changes = filterSessionStateChanges(before, after, diffSessionState(before, after))
         if (!changes.length) continue
-        changes.forEach((change, index) => rows.push({ key: `${entry.id}:setting:${index}`, entry, subject: subjectFor(entry), message: humanSettingMessage(entry, change) }))
+        changes.forEach((change, index) => rows.push({ key: `${entry.id}:setting:${index}`, entry, subject: subjectFor(entry, simulationMode), message: humanSettingMessage(entry, change) }))
         continue
       }
     }
-    rows.push({ key: `${entry.id}:event`, entry, subject: subjectFor(entry), message: humanEventMessage(entry) })
+    rows.push({ key: `${entry.id}:event`, entry, subject: subjectFor(entry, simulationMode), message: humanEventMessage(entry) })
   }
   return rows.reverse()
 }
@@ -76,6 +116,7 @@ export function TeachingSessionLogPanel({ productId, sessionId, role }: Teaching
   const standalone = !sessionId
   const standaloneRunId = standalone ? getStandaloneSessionLogRunId(productId) : null
   const canClear = role === 'instructor' || role === 'standalone'
+  const simulationMode = typeof document !== 'undefined' && document.documentElement.dataset.loppjusimRuntimeMode === 'simulation'
 
   useEffect(() => {
     const findHost = () => setProfileHost(document.querySelector<HTMLElement>('.edumon-profile-strip'))
@@ -95,9 +136,9 @@ export function TeachingSessionLogPanel({ productId, sessionId, role }: Teaching
     return () => { active = false; void closeSessionLogChannel(channel) }
   }, [productId, sessionId])
 
-  const rows = useMemo(() => displayRows(entries), [entries])
+  const rows = useMemo(() => displayRows(entries, simulationMode), [entries, simulationMode])
   const csv = useMemo(() => {
-    const csvRows = [['time', 'subject', 'event', 'actor', 'role', 'category', 'details'], ...rows.map((row) => [row.entry.client_occurred_at || row.entry.created_at, row.subject, row.message, actorFor(row.entry), row.entry.actor_role, row.entry.category, row.entry.details])]
+    const csvRows = [['time', 'subject', 'event', 'actor', 'role', 'category', 'details'], ...rows.map((row) => [row.entry.client_occurred_at || row.entry.created_at, row.subject, row.message, actorFor(row.entry), logicalActorRole(row.entry), row.entry.category, row.entry.details])]
     return `${csvRows.map((row) => row.map(csvCell).join(',')).join('\n')}\n`
   }, [rows])
 
