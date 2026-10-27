@@ -27,6 +27,41 @@ export interface ProductTeachingMemberTelemetry<TState> {
   state: TState
 }
 
+export interface ProductSimulationPatchResult<TState> {
+  applied: boolean
+  session: ProductTeachingSessionRow<TState>
+  actorRole: 'instructor' | 'candidate'
+  mutationId: string
+}
+
+export async function applyProductSimulationPatch<TState>(
+  productId: SimulationProductId,
+  sessionId: string,
+  expectedRevision: number,
+  patch: Record<string, unknown>,
+  mutationId: string,
+): Promise<ProductSimulationPatchResult<TState>> {
+  await ensureAnonymousSession()
+  const storageProductId = toLegacyProductId(productId)
+  const { data, error } = await supabase.rpc('apply_edusim_simulation_patch', {
+    p_session_id: sessionId,
+    p_expected_revision: expectedRevision,
+    p_patch: patch,
+    p_mutation_id: mutationId,
+  })
+  if (error) throw error
+  const result = Array.isArray(data) ? data[0] : data
+  if (!result?.session_row) throw new Error('Simulation mutation returned no canonical session state.')
+  const session = result.session_row as ProductTeachingSessionRow<TState>
+  if (session.product_id !== storageProductId) throw new Error('Simulation mutation returned the wrong simulator state.')
+  return {
+    applied: Boolean(result.applied),
+    session,
+    actorRole: result.actor_role === 'candidate' ? 'candidate' : 'instructor',
+    mutationId: String(result.mutation_id ?? mutationId),
+  }
+}
+
 export function createProductTeachingSessionRepository<TState>(productId: SimulationProductId): SharedTeachingSessionRepository<
   ProductTeachingSessionRow<TState>,
   ProductTeachingMemberRow<TState>,
