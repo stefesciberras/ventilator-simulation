@@ -37,6 +37,13 @@ const displayControls = read('src/components/useSimulationDisplayControls.ts')
 const mobileWorkspace = read('src/components/mobileWorkspaceRuntime.ts')
 const workspaceShell = read('src/components/SimulationWorkspaceShell.tsx')
 const laserInteractionCss = read('src/teaching/laser-interaction.css')
+const expiratoryFlowLimitation = read('src/expiratoryFlowLimitation.ts')
+
+// EDUVENT waveform morphology regression checks.
+assert(eduventLegacyEngine.includes('function pressureRiseFraction'), 'pressure-targeted breaths must retain a finite pressure rise')
+assert(eduventLegacyEngine.includes('const triggerResponseDelay = 0.06'), 'patient trigger response must not restore the exaggerated 150 ms delay')
+assert(eduventLegacyEngine.includes('preTriggerPressureDeflectionLimit'), 'pre-trigger Paw deflection must remain bounded without altering trigger detection')
+assert(expiratoryFlowLimitation.includes('const blendWidth = Math.max(ceilingLs * 0.15, 0.015)'), 'obstructive flow limitation must blend smoothly into its choke-flow envelope')
 
 // Existing shared shell / UI ownership regression checks.
 assert(eduvent.includes('<SimulationControlFramework'), 'MV simulator must use SimulationControlFramework')

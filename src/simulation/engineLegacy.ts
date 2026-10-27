@@ -4,6 +4,13 @@ import { applyExpiratoryFlowLimitation } from '../expiratoryFlowLimitation'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
+function pressureRiseFraction(elapsed: number, riseTime = 0.12): number {
+  const x = clamp(elapsed / Math.max(riseTime, 0.02), 0, 1)
+  // Smoothstep reaches the set pressure without the square leading edge of an
+  // ideal pressure source and without an exponential tail that never settles.
+  return x * x * (3 - 2 * x)
+}
+
 export interface SimulationOptions {
   inspiratoryHoldRequestTime?: number | null
   inspiratoryHoldReleaseTime?: number | null
@@ -685,7 +692,10 @@ export function stepSimulation(
   const patientEffortStart = pmus > 0.1 && state.previousPmus <= 0.1
   const spontaneousCycle = patient.spontaneousRate > 0 ? 60 / patient.spontaneousRate : Number.POSITIVE_INFINITY
   const triggerRefractoryPeriod = 0.12
-  const triggerResponseDelay = 0.15
+  // Modern ventilators usually respond within a few tens of milliseconds.
+  // The previous 150 ms delay exposed too much unsupported inspiratory effort
+  // and created a deep Paw trough / flow spike before an assisted breath.
+  const triggerResponseDelay = 0.06
   const expiratoryTriggerFraction = 0.25
   const spontaneousCycleIndex = Number.isFinite(spontaneousCycle) ? Math.floor((t + dt * 0.1) / spontaneousCycle) : -1
 
@@ -894,9 +904,10 @@ export function stepSimulation(
         inspiration = false
       }
     } else {
-      pressure = ventilator.peep + ventilator.pressureControl
+      const appliedDrivingPressure = ventilator.pressureControl * pressureRiseFraction(elapsed)
+      pressure = ventilator.peep + appliedDrivingPressure
       const elasticPressure = state.volume / complianceL
-      const availableDrivingPressure = ventilator.pressureControl - elasticPressure + pmus
+      const availableDrivingPressure = appliedDrivingPressure - elasticPressure + pmus
       flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
     }
   } else if (state.breathActive && state.activeBreathType === 'vg-pc') {
@@ -933,9 +944,12 @@ export function stepSimulation(
     } else {
       // Subsequent breaths are pressure controlled, therefore inspiratory flow
       // decelerates naturally as elastic recoil approaches the pressure target.
-      pressure = ventilator.peep + state.vgPressureControl
+      // Apply the same finite pneumatic rise as ordinary PC rather than stepping
+      // instantaneously from PEEP to the AutoFlow pressure target.
+      const appliedDrivingPressure = state.vgPressureControl * pressureRiseFraction(elapsed)
+      pressure = ventilator.peep + appliedDrivingPressure
       const elasticPressure = state.volume / complianceL
-      const availableDrivingPressure = state.vgPressureControl - elasticPressure + pmus
+      const availableDrivingPressure = appliedDrivingPressure - elasticPressure + pmus
       flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
 
       const excessiveVolume = state.inspiredThisBreath >= targetVolume * 1.3
@@ -967,9 +981,10 @@ export function stepSimulation(
       }
     }
   } else if (state.breathActive && state.activeBreathType === 'ps') {
-    pressure = ventilator.peep + ventilator.pressureSupport
+    const appliedSupportPressure = ventilator.pressureSupport * pressureRiseFraction(elapsed)
+    pressure = ventilator.peep + appliedSupportPressure
     const elasticPressure = state.volume / complianceL
-    const availableDrivingPressure = ventilator.pressureSupport - elasticPressure + pmus
+    const availableDrivingPressure = appliedSupportPressure - elasticPressure + pmus
     flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
     state.peakInspiratoryFlow = Math.max(state.peakInspiratoryFlow, flowLs)
     const terminationFraction = clamp(ventilator.terminationSensitivity, 5, 80) / 100
@@ -1037,7 +1052,16 @@ export function stepSimulation(
       const effortLimitedFlow = applyExpiratoryFlowLimitation(requestedFlow, state.volume, patient)
       flowLs = effortLimitedFlow.flowLs
       expiratoryFlowLimited = expiratoryFlowLimited || effortLimitedFlow.limited
-      pressure = ventilator.peep - Math.max(0, netPatientDrivingPressure)
+
+      // A patient can create a visible trigger notch, but the displayed airway
+      // pressure should not follow full Pmus once the demand valve is sensing the
+      // effort. Cap the pre-trigger depression to a clinically recognisable
+      // deflection while trigger detection itself continues to use the uncapped
+      // predicted signal above. This preserves difficult triggering with auto-PEEP
+      // without the unrealistic deep trough before PC/VG-PC/PS breaths.
+      const preTriggerPressureDeflectionLimit = clamp(pressureTriggerSensitivity + 1, 1.5, 3)
+      const pressureDeflection = Math.min(Math.max(0, netPatientDrivingPressure), preTriggerPressureDeflectionLimit)
+      pressure = ventilator.peep - pressureDeflection
     } else {
       flowLs = passiveExpiratoryFlow
       pressure = ventilator.peep
