@@ -43,10 +43,31 @@ export function applyExpiratoryFlowLimitation(
   const ceilingLs = lowVolumeCeilingLs + volumeSlopePerSecond * Math.max(volumeAboveSetPeepL, 0)
 
   const requestedMagnitude = -requestedFlowLs
-  const limitedMagnitude = Math.min(requestedMagnitude, ceilingLs)
+
+  // Do not switch abruptly from the ordinary RC solution to the choke-flow
+  // envelope. A hard Math.min() produces a visible corner each time an
+  // obstructed breath crosses the envelope. Blend over a narrow +/-15% band
+  // around the ceiling so flow and its slope change continuously while the
+  // final severe-obstruction ceiling remains unchanged.
+  const blendWidth = Math.max(ceilingLs * 0.15, 0.015)
+  const blendLow = Math.max(0, ceilingLs - blendWidth)
+  const blendHigh = ceilingLs + blendWidth
+  let limitedMagnitude = requestedMagnitude
+  let limited = false
+
+  if (requestedMagnitude >= blendHigh) {
+    limitedMagnitude = ceilingLs
+    limited = true
+  } else if (requestedMagnitude > blendLow) {
+    const x = clamp((requestedMagnitude - blendLow) / Math.max(blendHigh - blendLow, 1e-6), 0, 1)
+    const smooth = x * x * (3 - 2 * x)
+    limitedMagnitude = requestedMagnitude + (ceilingLs - requestedMagnitude) * smooth
+    limited = smooth > 0.01
+  }
+
   return {
     flowLs: -limitedMagnitude,
-    limited: requestedMagnitude > ceilingLs + 1e-6,
+    limited,
     ceilingLs,
   }
 }
