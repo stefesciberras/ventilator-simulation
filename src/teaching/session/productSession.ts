@@ -34,6 +34,11 @@ export interface ProductSimulationPatchResult<TState> {
   mutationId: string
 }
 
+function currentSimulationActorRole(): 'instructor' | 'candidate' {
+  if (typeof document !== 'undefined' && document.documentElement.dataset.loppjusimSessionRole === 'candidate') return 'candidate'
+  return 'instructor'
+}
+
 export async function applyProductSimulationPatch<TState>(
   productId: SimulationProductId,
   sessionId: string,
@@ -48,6 +53,7 @@ export async function applyProductSimulationPatch<TState>(
     p_expected_revision: expectedRevision,
     p_patch: patch,
     p_mutation_id: mutationId,
+    p_actor_role: currentSimulationActorRole(),
   })
   if (error) throw error
   const result = Array.isArray(data) ? data[0] : data
