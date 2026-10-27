@@ -16,6 +16,7 @@ import { configureSessionLogRuntime, consumeSessionLogModelState, diffSessionSta
 export type ProductSessionRuntimeMode = 'simulation' | 'teaching'
 export const PRODUCT_SESSION_RUNTIME_MODE_KEY = 'loppjusim.product-session-runtime-mode'
 export const PRODUCT_SESSION_RUNTIME_MODE_EVENT = 'loppjusim-product-runtime-mode-change'
+const CANDIDATE_MUTATION_REVISION_KEY = '_candidateMutationRevision'
 
 type ReplicatedActionCommand = {
   sequence: number
@@ -54,6 +55,21 @@ function withActionRuntime<TState>(state: TState, actionCommand: ReplicatedActio
   if (actionRuntimeSnapshot) additions.actionRuntimeSnapshot = actionRuntimeSnapshot
   if (!Object.keys(additions).length) return state
   return { ...(state as Record<string, unknown>), ...additions } as TState
+}
+
+function withCandidateMutationRevision<TState>(state: TState, revision: number): TState {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return state
+  return { ...(state as Record<string, unknown>), [CANDIDATE_MUTATION_REVISION_KEY]: revision } as TState
+}
+
+function candidateMutationRevision<TState>(state: TState | null | undefined): number {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return 0
+  const revision = Number((state as Record<string, unknown>)[CANDIDATE_MUTATION_REVISION_KEY])
+  return Number.isFinite(revision) && revision > 0 ? revision : 0
+}
+
+function stateSignature(value: unknown): string {
+  try { return JSON.stringify(value) } catch { return '' }
 }
 
 function readActionCommand<TState>(state: TState | null | undefined): ReplicatedActionCommand | null {
@@ -110,6 +126,9 @@ export function useProductTeachingSession<TState>({
   const stateRef = useRef(state)
   const suppressInstructorBroadcastRef = useRef(false)
   const candidateStateInitialisedRef = useRef(false)
+  const candidateCanonicalSignatureRef = useRef('')
+  const candidateMutationRevisionRef = useRef(0)
+  const processedCandidateMutationRevisionRef = useRef(0)
   const standaloneStateRef = useRef(state)
   const standaloneLogTimerRef = useRef<number | null>(null)
   const candidateFastTelemetryTimerRef = useRef<number | null>(null)
@@ -134,6 +153,11 @@ export function useProductTeachingSession<TState>({
     }
   }, [])
 
+  const candidateTelemetryState = () => withCandidateMutationRevision(
+    withActionRuntime(stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current),
+    candidateMutationRevisionRef.current,
+  )
+
   const core = useSharedTeachingSession<
     ProductTeachingSessionRow<TState>,
     ProductTeachingMemberRow<TState>,
@@ -142,7 +166,7 @@ export function useProductTeachingSession<TState>({
   >({
     storageNamespace: `edusim.${toLegacyProductId(productId)}`,
     repository,
-    getMemberTelemetry: () => ({ state: withActionRuntime(stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current) }),
+    getMemberTelemetry: () => ({ state: candidateTelemetryState() }),
     host: {
       onSessionRow: (row, nextRole, source, force) => {
         if (nextRole === 'candidate') {
@@ -153,6 +177,7 @@ export function useProductTeachingSession<TState>({
               ? mergeCandidateState(stateRef.current, row.product_state)
               : row.product_state
           candidateStateInitialisedRef.current = true
+          if (rowRuntimeMode === 'simulation') candidateCanonicalSignatureRef.current = stateSignature(nextState)
           stateRef.current = nextState
           setState(nextState)
           return
@@ -166,6 +191,9 @@ export function useProductTeachingSession<TState>({
       },
       onSessionCleared: () => {
         candidateStateInitialisedRef.current = false
+        candidateCanonicalSignatureRef.current = ''
+        candidateMutationRevisionRef.current = 0
+        processedCandidateMutationRevisionRef.current = 0
         candidateActionCommandRef.current = null
         candidateActionRuntimeSnapshotRef.current = null
         processedCandidateActionRef.current.clear()
@@ -202,6 +230,9 @@ export function useProductTeachingSession<TState>({
 
   const applyCandidateState = (sourceId: string, candidateState: TState) => {
     if (core.role !== 'instructor' || runtimeMode !== 'simulation' || !mergeCandidateState) return
+    const revision = candidateMutationRevision(candidateState)
+    if (revision <= processedCandidateMutationRevisionRef.current) return
+    processedCandidateMutationRevisionRef.current = revision
     const merged = mergeCandidateState(candidateState, stateRef.current)
     let currentSignature = ''
     let mergedSignature = ''
@@ -281,6 +312,7 @@ export function useProductTeachingSession<TState>({
           simulationTime: latest.simulationTime,
         }
         candidateActionRuntimeSnapshotRef.current = getActionRuntimeSnapshot(latest.simulationTime)
+        candidateMutationRevisionRef.current += 1
         void core.touchMemberNow().catch(() => undefined)
         const row = core.session
         if (row && localTransportRef.current) {
@@ -291,7 +323,7 @@ export function useProductTeachingSession<TState>({
             actorRole: 'candidate',
             type: 'device.parameter.set',
             product: String(productId),
-            payload: { kind: 'candidate-product-state', state: withActionRuntime(stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current) },
+            payload: { kind: 'candidate-product-state', state: candidateTelemetryState() },
             simulationTime: latest.simulationTime,
             clientTime: Date.now(),
           }
@@ -304,15 +336,13 @@ export function useProductTeachingSession<TState>({
     return () => { disposed = true; unsubscribe?.() }
   }, [productId, core.role, core.session?.id, runtimeMode])
 
-  const stateSignature = useMemo(() => { try { return JSON.stringify(state) } catch { return '' } }, [state])
-  const instructorStateSignature = useMemo(() => {
-    try { return JSON.stringify(withRuntimeMode(state, runtimeMode)) } catch { return '' }
-  }, [state, runtimeMode])
-  const sessionStateSignature = useMemo(() => { try { return JSON.stringify(core.session?.product_state ?? null) } catch { return '' } }, [core.session?.product_state])
+  const currentStateSignature = useMemo(() => stateSignature(state), [state])
+  const instructorStateSignature = useMemo(() => stateSignature(withRuntimeMode(state, runtimeMode)), [state, runtimeMode])
+  const sessionStateSignature = useMemo(() => stateSignature(core.session?.product_state ?? null), [core.session?.product_state])
   const candidateMemberSignature = useMemo(() => {
     if (core.role !== 'instructor' || runtimeMode !== 'simulation') return ''
     const candidate = core.members.find((member) => member.role === 'candidate')
-    try { return JSON.stringify(candidate?.product_state ?? null) } catch { return '' }
+    return stateSignature(candidate?.product_state ?? null)
   }, [core.role, core.members, runtimeMode])
 
   useEffect(() => {
@@ -323,16 +353,19 @@ export function useProductTeachingSession<TState>({
 
   useEffect(() => {
     if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session?.id) return
+    if (currentStateSignature === candidateCanonicalSignatureRef.current) return
+    candidateMutationRevisionRef.current += 1
     if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current)
     candidateFastTelemetryTimerRef.current = window.setTimeout(() => {
       candidateFastTelemetryTimerRef.current = null
       void core.touchMemberNow().catch(() => undefined)
     }, 80)
     return () => { if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current) }
-  }, [core.role, core.session?.id, runtimeMode, stateSignature])
+  }, [core.role, core.session?.id, runtimeMode, currentStateSignature])
 
   useEffect(() => {
     if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session) return
+    if (currentStateSignature === candidateCanonicalSignatureRef.current) return
     if (candidateLocalPublishTimerRef.current != null) window.clearTimeout(candidateLocalPublishTimerRef.current)
     candidateLocalPublishTimerRef.current = window.setTimeout(() => {
       candidateLocalPublishTimerRef.current = null
@@ -346,14 +379,14 @@ export function useProductTeachingSession<TState>({
         actorRole: 'candidate',
         type: 'device.parameter.set',
         product: String(productId),
-        payload: { kind: 'candidate-product-state', state: withActionRuntime(stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current) },
+        payload: { kind: 'candidate-product-state', state: candidateTelemetryState() },
         simulationTime: Date.now() / 1000,
         clientTime: Date.now(),
       }
       transport.publishCommand(command)
     }, 40)
     return () => { if (candidateLocalPublishTimerRef.current != null) window.clearTimeout(candidateLocalPublishTimerRef.current) }
-  }, [core.role, core.session?.id, runtimeMode, stateSignature, productId])
+  }, [core.role, core.session?.id, runtimeMode, currentStateSignature, productId])
 
   useEffect(() => {
     if (core.role !== 'instructor' || !core.session || suppressInstructorBroadcastRef.current) return
@@ -381,7 +414,7 @@ export function useProductTeachingSession<TState>({
       void recordSessionLogEvent({ category: 'settings', eventType: 'standalone.settings.changed', label: settingChangesLabel('Settings changed', changes), details: { before, after, changes } }).catch(() => undefined)
     }, 300)
     return () => { if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current) }
-  }, [core.role, state, stateSignature])
+  }, [core.role, state, currentStateSignature])
 
   useEffect(() => () => localTransportRef.current?.disconnect(), [])
 
