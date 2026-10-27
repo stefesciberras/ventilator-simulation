@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { SimulationCommand } from '../../core/runtimeModes'
 import { toLegacyProductId, type SimulationProductId } from '../../core/SimulationProductAdapter'
 import type { ActionRuntimeSnapshot } from '../../edusim/actions/ActionRuntime'
-import { getDefaultLocalRuntimeUrl, LocalRuntimeTransport, type LocalRuntimeConnection } from '../../session/localRuntimeTransport'
+import type { LocalRuntimeConnection } from '../../session/localRuntimeTransport'
 import { useSharedTeachingSession } from './useSharedTeachingSession'
 import {
+  applyProductSimulationPatch,
   createProductTeachingSessionRepository,
   type ProductTeachingCreateInput,
   type ProductTeachingMemberRow,
@@ -16,9 +16,11 @@ import { configureSessionLogRuntime, consumeSessionLogModelState, diffSessionSta
 export type ProductSessionRuntimeMode = 'simulation' | 'teaching'
 export const PRODUCT_SESSION_RUNTIME_MODE_KEY = 'loppjusim.product-session-runtime-mode'
 export const PRODUCT_SESSION_RUNTIME_MODE_EVENT = 'loppjusim-product-runtime-mode-change'
-const CANDIDATE_MUTATION_REVISION_KEY = '_candidateMutationRevision'
 
 type ReplicatedActionCommand = {
+  commandId?: string
+  actorId?: string
+  actorRole?: 'instructor' | 'candidate'
   sequence: number
   type: 'activate' | 'deactivate' | 'intensity'
   actionId: string
@@ -26,10 +28,7 @@ type ReplicatedActionCommand = {
   simulationTime: number
 }
 
-type CandidateStateCommandPayload<TState> = {
-  kind: 'candidate-product-state'
-  state: TState
-}
+type JsonObject = Record<string, unknown>
 
 function readPreferredRuntimeMode(): ProductSessionRuntimeMode {
   if (typeof window === 'undefined') return 'teaching'
@@ -48,28 +47,40 @@ function withRuntimeMode<TState>(state: TState, runtimeMode: ProductSessionRunti
   return { ...(state as Record<string, unknown>), runtimeMode } as TState
 }
 
-function withActionRuntime<TState>(state: TState, actionCommand: ReplicatedActionCommand | null, actionRuntimeSnapshot: ActionRuntimeSnapshot | null): TState {
-  if (!state || typeof state !== 'object' || Array.isArray(state)) return state
-  const additions: Record<string, unknown> = {}
-  if (actionCommand) additions.actionCommand = actionCommand
-  if (actionRuntimeSnapshot) additions.actionRuntimeSnapshot = actionRuntimeSnapshot
-  if (!Object.keys(additions).length) return state
-  return { ...(state as Record<string, unknown>), ...additions } as TState
-}
-
-function withCandidateMutationRevision<TState>(state: TState, revision: number): TState {
-  if (!state || typeof state !== 'object' || Array.isArray(state)) return state
-  return { ...(state as Record<string, unknown>), [CANDIDATE_MUTATION_REVISION_KEY]: revision } as TState
-}
-
-function candidateMutationRevision<TState>(state: TState | null | undefined): number {
-  if (!state || typeof state !== 'object' || Array.isArray(state)) return 0
-  const revision = Number((state as Record<string, unknown>)[CANDIDATE_MUTATION_REVISION_KEY])
-  return Number.isFinite(revision) && revision > 0 ? revision : 0
-}
-
 function stateSignature(value: unknown): string {
   try { return JSON.stringify(value) } catch { return '' }
+}
+
+function isPlainObject(value: unknown): value is JsonObject {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function buildPatchValue(base: unknown, current: unknown): unknown | undefined {
+  if (Object.is(base, current)) return undefined
+  if (isPlainObject(base) && isPlainObject(current)) {
+    const patch: JsonObject = {}
+    for (const key of Object.keys(current)) {
+      const child = buildPatchValue(base[key], current[key])
+      if (child !== undefined) patch[key] = child
+    }
+    return Object.keys(patch).length ? patch : undefined
+  }
+  if (stateSignature(base) === stateSignature(current)) return undefined
+  return current
+}
+
+function buildStatePatch<TState>(base: TState, current: TState): JsonObject | null {
+  const patch = buildPatchValue(base, current)
+  return isPlainObject(patch) && Object.keys(patch).length ? patch : null
+}
+
+function mergePatchObjects(base: JsonObject, patch: JsonObject): JsonObject {
+  const result: JsonObject = { ...base }
+  for (const [key, value] of Object.entries(patch)) {
+    if (isPlainObject(result[key]) && isPlainObject(value)) result[key] = mergePatchObjects(result[key] as JsonObject, value)
+    else result[key] = value
+  }
+  return result
 }
 
 function readActionCommand<TState>(state: TState | null | undefined): ReplicatedActionCommand | null {
@@ -80,6 +91,9 @@ function readActionCommand<TState>(state: TState | null | undefined): Replicated
   if (!Number.isFinite(command.sequence) || !command.actionId || !command.type || !Number.isFinite(command.simulationTime)) return null
   if (command.type !== 'activate' && command.type !== 'deactivate' && command.type !== 'intensity') return null
   return {
+    commandId: typeof command.commandId === 'string' ? command.commandId : undefined,
+    actorId: typeof command.actorId === 'string' ? command.actorId : undefined,
+    actorRole: command.actorRole === 'candidate' ? 'candidate' : command.actorRole === 'instructor' ? 'instructor' : undefined,
     sequence: Number(command.sequence),
     type: command.type,
     actionId: String(command.actionId),
@@ -106,11 +120,7 @@ interface UseProductTeachingSessionArgs<TState> {
   productId: SimulationProductId
   state: TState
   setState: (state: TState) => void
-  /**
-   * Defines the candidate-controlled projection that may propagate back to the
-   * instructor in Simulation mode. Teaching mode still uses it to preserve local
-   * candidate fields, while Simulation candidates always accept canonical instructor state.
-   */
+  /** Teaching-mode candidates preserve these local fields when instructor state arrives. */
   mergeCandidateState?: (localState: TState, instructorState: TState) => TState
   instructorBroadcastDebounceMs?: number
 }
@@ -124,23 +134,21 @@ export function useProductTeachingSession<TState>({
 }: UseProductTeachingSessionArgs<TState>) {
   const repository = useMemo(() => createProductTeachingSessionRepository<TState>(productId), [productId])
   const stateRef = useRef(state)
-  const suppressInstructorBroadcastRef = useRef(false)
   const candidateStateInitialisedRef = useRef(false)
-  const candidateCanonicalSignatureRef = useRef('')
-  const candidateMutationStateRef = useRef<TState | null>(null)
-  const candidateMutationRevisionRef = useRef(0)
-  const processedCandidateMutationRevisionRef = useRef(0)
+  const canonicalStateRef = useRef<TState | null>(null)
+  const canonicalStateSignatureRef = useRef('')
+  const canonicalRevisionRef = useRef(0)
+  const simulationPatchQueueRef = useRef<JsonObject | null>(null)
+  const simulationMutationInFlightRef = useRef(false)
+  const simulationMutationTimerRef = useRef<number | null>(null)
   const standaloneStateRef = useRef(state)
   const standaloneLogTimerRef = useRef<number | null>(null)
-  const candidateFastTelemetryTimerRef = useRef<number | null>(null)
-  const candidateLocalPublishTimerRef = useRef<number | null>(null)
-  const candidateActionCommandRef = useRef<ReplicatedActionCommand | null>(null)
-  const candidateActionRuntimeSnapshotRef = useRef<ActionRuntimeSnapshot | null>(null)
-  const processedCandidateActionRef = useRef(new Map<string, number>())
-  const localTransportRef = useRef<LocalRuntimeTransport | null>(null)
+  const processedCanonicalActionsRef = useRef(new Set<string>())
+  const applyingCanonicalActionRef = useRef(false)
+  const observedLocalActionSequenceRef = useRef(0)
   const localClientIdRef = useRef(crypto.randomUUID())
-  const [localRuntimeConnection, setLocalRuntimeConnection] = useState<LocalRuntimeConnection>('disabled')
   const [preferredRuntimeMode, setPreferredRuntimeModeState] = useState<ProductSessionRuntimeMode>(() => readPreferredRuntimeMode())
+  const localRuntimeConnection: LocalRuntimeConnection = 'disabled'
 
   useEffect(() => { stateRef.current = state }, [state])
   useEffect(() => {
@@ -154,10 +162,21 @@ export function useProductTeachingSession<TState>({
     }
   }, [])
 
-  const candidateTelemetryState = () => withCandidateMutationRevision(
-    withActionRuntime(candidateMutationStateRef.current ?? stateRef.current, candidateActionCommandRef.current, candidateActionRuntimeSnapshotRef.current),
-    candidateMutationRevisionRef.current,
-  )
+  const applyCanonicalAction = (nextState: TState) => {
+    if (!isEdumonProduct(productId)) return
+    const command = readActionCommand(nextState)
+    const snapshot = readActionRuntimeSnapshot(nextState)
+    if (!command || !snapshot) return
+    const key = command.commandId ?? `${command.actorId ?? 'legacy'}:${command.sequence}:${command.actionId}`
+    if (processedCanonicalActionsRef.current.has(key)) return
+    processedCanonicalActionsRef.current.add(key)
+    if (command.actorId && command.actorId === localClientIdRef.current) return
+    void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonActionSnapshot }) => {
+      applyingCanonicalActionRef.current = true
+      try { applyReplicatedEdumonActionSnapshot(snapshot) }
+      finally { applyingCanonicalActionRef.current = false }
+    })
+  }
 
   const core = useSharedTeachingSession<
     ProductTeachingSessionRow<TState>,
@@ -167,41 +186,47 @@ export function useProductTeachingSession<TState>({
   >({
     storageNamespace: `edusim.${toLegacyProductId(productId)}`,
     repository,
-    getMemberTelemetry: () => ({ state: candidateTelemetryState() }),
+    getMemberTelemetry: () => ({ state: stateRef.current }),
     host: {
       onSessionRow: (row, nextRole, source, force) => {
-        if (nextRole === 'candidate') {
-          const rowRuntimeMode = stateRuntimeMode(row.product_state) ?? 'teaching'
-          const nextState = rowRuntimeMode === 'simulation'
-            ? row.product_state
-            : candidateStateInitialisedRef.current && mergeCandidateState
-              ? mergeCandidateState(stateRef.current, row.product_state)
-              : row.product_state
+        const rowRuntimeMode = stateRuntimeMode(row.product_state) ?? 'teaching'
+        if (rowRuntimeMode === 'simulation') {
+          canonicalStateRef.current = row.product_state
+          canonicalStateSignatureRef.current = stateSignature(row.product_state)
+          canonicalRevisionRef.current = Number(row.product_state_revision ?? 0)
+          applyCanonicalAction(row.product_state)
+          stateRef.current = row.product_state
+          setState(row.product_state)
           candidateStateInitialisedRef.current = true
-          if (rowRuntimeMode === 'simulation') candidateCanonicalSignatureRef.current = stateSignature(nextState)
+          return
+        }
+
+        if (nextRole === 'candidate') {
+          const nextState = candidateStateInitialisedRef.current && mergeCandidateState
+            ? mergeCandidateState(stateRef.current, row.product_state)
+            : row.product_state
+          candidateStateInitialisedRef.current = true
           stateRef.current = nextState
           setState(nextState)
           return
         }
+
         if (nextRole === 'instructor' && force && source === 'resume') {
-          suppressInstructorBroadcastRef.current = true
           stateRef.current = row.product_state
           setState(row.product_state)
-          window.setTimeout(() => { suppressInstructorBroadcastRef.current = false }, 0)
         }
       },
       onSessionCleared: () => {
         candidateStateInitialisedRef.current = false
-        candidateCanonicalSignatureRef.current = ''
-        candidateMutationStateRef.current = null
-        candidateMutationRevisionRef.current = 0
-        processedCandidateMutationRevisionRef.current = 0
-        candidateActionCommandRef.current = null
-        candidateActionRuntimeSnapshotRef.current = null
-        processedCandidateActionRef.current.clear()
-        localTransportRef.current?.disconnect()
-        localTransportRef.current = null
-        setLocalRuntimeConnection('disabled')
+        canonicalStateRef.current = null
+        canonicalStateSignatureRef.current = ''
+        canonicalRevisionRef.current = 0
+        simulationPatchQueueRef.current = null
+        simulationMutationInFlightRef.current = false
+        if (simulationMutationTimerRef.current != null) window.clearTimeout(simulationMutationTimerRef.current)
+        simulationMutationTimerRef.current = null
+        processedCanonicalActionsRef.current.clear()
+        observedLocalActionSequenceRef.current = 0
         standaloneStateRef.current = stateRef.current
       },
     },
@@ -217,34 +242,53 @@ export function useProductTeachingSession<TState>({
     }
   }
 
-  const applyReplicatedAction = (sourceId: string, candidateState: TState) => {
-    if (!isEdumonProduct(productId)) return
-    const command = readActionCommand(candidateState)
-    const snapshot = readActionRuntimeSnapshot(candidateState)
-    if (!command || !snapshot) return
-    const seen = processedCandidateActionRef.current.get(sourceId) ?? 0
-    if (command.sequence <= seen) return
-    processedCandidateActionRef.current.set(sourceId, command.sequence)
-    void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonActionSnapshot }) => {
-      applyReplicatedEdumonActionSnapshot(snapshot)
-    })
+  const flushSimulationPatchRef = useRef<() => Promise<void>>(async () => undefined)
+
+  const scheduleSimulationFlush = (delay = Math.max(40, instructorBroadcastDebounceMs)) => {
+    if (simulationMutationTimerRef.current != null) window.clearTimeout(simulationMutationTimerRef.current)
+    simulationMutationTimerRef.current = window.setTimeout(() => {
+      simulationMutationTimerRef.current = null
+      void flushSimulationPatchRef.current()
+    }, delay)
   }
 
-  const applyCandidateState = (sourceId: string, candidateState: TState) => {
-    if (core.role !== 'instructor' || runtimeMode !== 'simulation' || !mergeCandidateState) return
-    const revision = candidateMutationRevision(candidateState)
-    if (revision <= processedCandidateMutationRevisionRef.current) return
-    processedCandidateMutationRevisionRef.current = revision
-    const merged = mergeCandidateState(candidateState, stateRef.current)
-    let currentSignature = ''
-    let mergedSignature = ''
-    try { currentSignature = JSON.stringify(stateRef.current); mergedSignature = JSON.stringify(merged) } catch { return }
-    if (currentSignature !== mergedSignature) {
-      stateRef.current = merged
-      suppressInstructorBroadcastRef.current = false
-      setState(merged)
+  const enqueueSimulationPatch = (patch: JsonObject) => {
+    if (!Object.keys(patch).length) return
+    simulationPatchQueueRef.current = simulationPatchQueueRef.current
+      ? mergePatchObjects(simulationPatchQueueRef.current, patch)
+      : patch
+    scheduleSimulationFlush()
+  }
+
+  flushSimulationPatchRef.current = async () => {
+    if (simulationMutationInFlightRef.current) return
+    const row = core.session
+    const patch = simulationPatchQueueRef.current
+    if (!row || core.role === 'standalone' || runtimeMode !== 'simulation' || !patch) return
+
+    simulationPatchQueueRef.current = null
+    simulationMutationInFlightRef.current = true
+    const mutationId = crypto.randomUUID()
+    const expectedRevision = canonicalRevisionRef.current || Number(row.product_state_revision ?? 0)
+
+    try {
+      const result = await applyProductSimulationPatch<TState>(productId, row.id, expectedRevision, patch, mutationId)
+      if (core.session?.id === result.session.id) core.replaceSession(result.session, 'runtime')
+      if (!result.applied) {
+        simulationPatchQueueRef.current = simulationPatchQueueRef.current
+          ? mergePatchObjects(patch, simulationPatchQueueRef.current)
+          : patch
+      }
+      core.setExternalError(null)
+    } catch (cause) {
+      simulationPatchQueueRef.current = simulationPatchQueueRef.current
+        ? mergePatchObjects(patch, simulationPatchQueueRef.current)
+        : patch
+      core.setExternalError(cause instanceof Error ? cause.message : 'Unable to update shared Simulation state.')
+    } finally {
+      simulationMutationInFlightRef.current = false
+      if (simulationPatchQueueRef.current) scheduleSimulationFlush(20)
     }
-    applyReplicatedAction(sourceId, candidateState)
   }
 
   useEffect(() => {
@@ -263,77 +307,34 @@ export function useProductTeachingSession<TState>({
   }, [productId, core.role, core.session?.id])
 
   useEffect(() => {
-    localTransportRef.current?.disconnect()
-    localTransportRef.current = null
-    setLocalRuntimeConnection('disabled')
-    const row = core.session
-    const url = getDefaultLocalRuntimeUrl()
-    if (!row || core.role === 'standalone' || !url || runtimeMode !== 'simulation') return
-    const transport = new LocalRuntimeTransport({
-      url,
-      role: core.role,
-      runtimeMode: 'simulation',
-      sessionKey: row.session_key,
-      sessionId: row.id,
-      clientId: localClientIdRef.current,
-      onConnection: setLocalRuntimeConnection,
-      onEnvelope: (envelope) => {
-        if (core.role !== 'instructor' || envelope.payload.type !== 'command') return
-        const command = envelope.payload.command
-        if (command.product !== String(productId) || command.type !== 'device.parameter.set') return
-        const payload = command.payload as Partial<CandidateStateCommandPayload<TState>>
-        if (payload.kind !== 'candidate-product-state' || payload.state == null) return
-        applyCandidateState(command.actorId, payload.state)
-      },
-    })
-    localTransportRef.current = transport
-    transport.connect()
-    return () => {
-      transport.disconnect()
-      if (localTransportRef.current === transport) localTransportRef.current = null
-    }
-  }, [core.role, core.session?.id, core.session?.session_key, runtimeMode, productId, mergeCandidateState])
-
-  useEffect(() => {
-    if (!isEdumonProduct(productId)) return
+    if (!isEdumonProduct(productId) || core.role === 'standalone' || runtimeMode !== 'simulation') return
     let disposed = false
     let unsubscribe: (() => void) | null = null
     void import('../../edusim/actions/ActionRuntime').then(({ getActionRuntimeLog, getActionRuntimeSnapshot, subscribeToActionRuntime }) => {
       if (disposed) return
+      const latestAtAttach = [...getActionRuntimeLog()].reverse().find((entry) => entry.actionId && (entry.type === 'activate' || entry.type === 'deactivate' || entry.type === 'intensity'))
+      observedLocalActionSequenceRef.current = latestAtAttach?.sequence ?? 0
+
       const sync = () => {
-        if (core.role !== 'candidate' || runtimeMode !== 'simulation') return
+        if (applyingCanonicalActionRef.current || core.role === 'standalone' || runtimeMode !== 'simulation') return
         const latest = [...getActionRuntimeLog()].reverse().find((entry) => entry.actionId && (entry.type === 'activate' || entry.type === 'deactivate' || entry.type === 'intensity'))
-        if (!latest?.actionId) return
-        const previous = candidateActionCommandRef.current
-        if (previous && previous.sequence >= latest.sequence) return
-        candidateActionCommandRef.current = {
+        if (!latest?.actionId || latest.sequence <= observedLocalActionSequenceRef.current) return
+        observedLocalActionSequenceRef.current = latest.sequence
+        const command: ReplicatedActionCommand = {
+          commandId: crypto.randomUUID(),
+          actorId: localClientIdRef.current,
+          actorRole: core.role,
           sequence: latest.sequence,
           type: latest.type as ReplicatedActionCommand['type'],
           actionId: latest.actionId,
           intensity: latest.intensity,
           simulationTime: latest.simulationTime,
         }
-        candidateActionRuntimeSnapshotRef.current = getActionRuntimeSnapshot(latest.simulationTime)
-        candidateMutationStateRef.current = stateRef.current
-        candidateMutationRevisionRef.current += 1
-        void core.touchMemberNow().catch(() => undefined)
-        const row = core.session
-        if (row && localTransportRef.current) {
-          const command: SimulationCommand<CandidateStateCommandPayload<TState>> = {
-            id: crypto.randomUUID(),
-            sessionId: row.id,
-            actorId: localClientIdRef.current,
-            actorRole: 'candidate',
-            type: 'device.parameter.set',
-            product: String(productId),
-            payload: { kind: 'candidate-product-state', state: candidateTelemetryState() },
-            simulationTime: latest.simulationTime,
-            clientTime: Date.now(),
-          }
-          localTransportRef.current.publishCommand(command)
-        }
+        enqueueSimulationPatch({
+          actionCommand: command,
+          actionRuntimeSnapshot: getActionRuntimeSnapshot(latest.simulationTime),
+        })
       }
-      sync()
       unsubscribe = subscribeToActionRuntime(sync)
     })
     return () => { disposed = true; unsubscribe?.() }
@@ -342,58 +343,18 @@ export function useProductTeachingSession<TState>({
   const currentStateSignature = useMemo(() => stateSignature(state), [state])
   const instructorStateSignature = useMemo(() => stateSignature(withRuntimeMode(state, runtimeMode)), [state, runtimeMode])
   const sessionStateSignature = useMemo(() => stateSignature(core.session?.product_state ?? null), [core.session?.product_state])
-  const candidateMemberSignature = useMemo(() => {
-    if (core.role !== 'instructor' || runtimeMode !== 'simulation') return ''
-    const candidate = core.members.find((member) => member.role === 'candidate')
-    return stateSignature(candidate?.product_state ?? null)
-  }, [core.role, core.members, runtimeMode])
 
   useEffect(() => {
-    if (core.role !== 'instructor' || runtimeMode !== 'simulation') return
-    const candidate = core.members.find((member) => member.role === 'candidate')
-    if (candidate?.product_state) applyCandidateState(memberSourceId(candidate), candidate.product_state)
-  }, [core.role, runtimeMode, candidateMemberSignature, core.members])
-
-  useEffect(() => {
-    if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session?.id) return
-    if (currentStateSignature === candidateCanonicalSignatureRef.current) return
-    candidateMutationStateRef.current = state
-    candidateMutationRevisionRef.current += 1
-    if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current)
-    candidateFastTelemetryTimerRef.current = window.setTimeout(() => {
-      candidateFastTelemetryTimerRef.current = null
-      void core.touchMemberNow().catch(() => undefined)
-    }, 80)
-    return () => { if (candidateFastTelemetryTimerRef.current != null) window.clearTimeout(candidateFastTelemetryTimerRef.current) }
+    if (core.role === 'standalone' || runtimeMode !== 'simulation' || !core.session?.id) return
+    const canonical = canonicalStateRef.current ?? core.session.product_state
+    if (!canonical) return
+    if (currentStateSignature === canonicalStateSignatureRef.current) return
+    const patch = buildStatePatch(canonical, state)
+    if (patch) enqueueSimulationPatch(patch)
   }, [core.role, core.session?.id, runtimeMode, currentStateSignature])
 
   useEffect(() => {
-    if (core.role !== 'candidate' || runtimeMode !== 'simulation' || !core.session) return
-    if (currentStateSignature === candidateCanonicalSignatureRef.current) return
-    if (candidateLocalPublishTimerRef.current != null) window.clearTimeout(candidateLocalPublishTimerRef.current)
-    candidateLocalPublishTimerRef.current = window.setTimeout(() => {
-      candidateLocalPublishTimerRef.current = null
-      const transport = localTransportRef.current
-      const row = core.session
-      if (!transport || !row) return
-      const command: SimulationCommand<CandidateStateCommandPayload<TState>> = {
-        id: crypto.randomUUID(),
-        sessionId: row.id,
-        actorId: localClientIdRef.current,
-        actorRole: 'candidate',
-        type: 'device.parameter.set',
-        product: String(productId),
-        payload: { kind: 'candidate-product-state', state: candidateTelemetryState() },
-        simulationTime: Date.now() / 1000,
-        clientTime: Date.now(),
-      }
-      transport.publishCommand(command)
-    }, 40)
-    return () => { if (candidateLocalPublishTimerRef.current != null) window.clearTimeout(candidateLocalPublishTimerRef.current) }
-  }, [core.role, core.session?.id, runtimeMode, currentStateSignature, productId])
-
-  useEffect(() => {
-    if (core.role !== 'instructor' || !core.session || suppressInstructorBroadcastRef.current) return
+    if (core.role !== 'instructor' || runtimeMode !== 'teaching' || !core.session) return
     if (instructorStateSignature === sessionStateSignature) return
     const timer = window.setTimeout(() => {
       if (!core.session) return
@@ -420,13 +381,11 @@ export function useProductTeachingSession<TState>({
     return () => { if (standaloneLogTimerRef.current != null) window.clearTimeout(standaloneLogTimerRef.current) }
   }, [core.role, state, currentStateSignature])
 
-  useEffect(() => () => localTransportRef.current?.disconnect(), [])
+  useEffect(() => () => {
+    if (simulationMutationTimerRef.current != null) window.clearTimeout(simulationMutationTimerRef.current)
+  }, [])
 
   const startInstructor = () => core.startInstructor({ productId, state: withRuntimeMode(stateRef.current, preferredRuntimeMode) })
 
   return { ...core, startInstructor, runtimeMode, preferredRuntimeMode, setPreferredRuntimeMode, localRuntimeConnection }
-}
-
-function memberSourceId<TState>(member: ProductTeachingMemberRow<TState>) {
-  return member.id
 }
