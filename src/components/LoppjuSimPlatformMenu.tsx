@@ -43,6 +43,7 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
   const authenticated = Boolean(auth.account)
   const platformUnlocked = authenticated && effectiveRole === 'standalone'
   const scenarioProduct = scenarioProductForLabel(productLabel)
+  const drugEventLibraryAvailable = productLabel !== 'LoppjuSIM-MV'
 
   useEffect(() => {
     if (role) return
@@ -122,8 +123,14 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
           <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate(`/scenarios?product=${scenarioProduct}`)}>
             <StudioIcon /><span>Scenario Studio</span>
           </button>
-          <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate('/actions')}>
-            <LibraryIcon /><span>Drug &amp; Event Library</span>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!platformUnlocked || !drugEventLibraryAvailable}
+            title={drugEventLibraryAvailable ? undefined : 'Drug & Event Library is not yet available for LoppjuSIM-MV'}
+            onClick={() => drugEventLibraryAvailable && navigate('/actions')}
+          >
+            <LibraryIcon /><span>Drug &amp; Event Library</span>{!drugEventLibraryAvailable && <small>Coming later</small>}
           </button>
           <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={openSettings}>
             <SettingsIcon /><span>Settings</span>
