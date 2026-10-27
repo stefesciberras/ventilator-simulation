@@ -1,0 +1,78 @@
+.session-invite-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(5, 10, 18, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.session-invite-modal {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: var(--panel-bg, #111923);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  padding: 22px;
+}
+
+.session-invite-modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.session-invite-modal-heading span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.session-invite-modal-heading strong {
+  display: block;
+  font-size: 1.25rem;
+}
+
+.session-invite-code {
+  display: inline-block;
+  margin: 4px 0 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.session-invite-status {
+  margin: 0 0 14px;
+  line-height: 1.45;
+  opacity: 0.82;
+}
+
+.session-invite-modal .candidate-join-form {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .session-invite-modal-backdrop {
+    padding: 12px;
+  }
+
+  .session-invite-modal {
+    width: min(100%, 440px);
+    border-radius: 14px;
+    padding: 18px;
+  }
+}
