@@ -204,6 +204,7 @@ const AUTOMATIC_MODEL_PATHS = new Set([
   'systolicPressure',
   'diastolicPressure',
   'respiratory.respiratoryRate',
+  'respiratory.tidalVolumeMl',
   'respiratory.spontaneousRespiratoryRate',
   'respiratory.spontaneousTidalVolumeMl',
   'anaestheticPhysiology.depthOfAnaesthesia',
@@ -211,6 +212,7 @@ const AUTOMATIC_MODEL_PATHS = new Set([
   'patient.systolicPressure',
   'patient.diastolicPressure',
   'patient.respiratory.respiratoryRate',
+  'patient.respiratory.tidalVolumeMl',
   'patient.respiratory.spontaneousRespiratoryRate',
   'patient.respiratory.spontaneousTidalVolumeMl',
   'patient.anaestheticPhysiology.depthOfAnaesthesia',
@@ -223,7 +225,31 @@ const RUNTIME_BOOKKEEPING_PREFIXES = [
   'actionSimulationTime',
   'actionCommand',
   'actionRuntimeSnapshot',
+  '_candidateMutationRevision',
 ]
+
+const EDUMON_VENTILATOR_DEFAULTS: Record<string, unknown> = {
+  ventilatorMode: 'MANUAL',
+  ventilatorSetRate: 12,
+  ventilatorSetTidalVolumeMl: 500,
+  ventilatorInspiratoryTimeSeconds: 1,
+  ventilatorInspiratoryFlowLMin: 30,
+  ventilatorPlateauPercent: 0,
+  ventilatorPressureControlCmH2O: 15,
+  ventilatorVolumeGuaranteePressureLimitCmH2O: 40,
+  ventilatorPressureSupportCmH2O: 10,
+  ventilatorTerminationSensitivityPercent: 25,
+  ventilatorSimvSyncWindowPercent: 25,
+  peepCmH2O: 0,
+  fio2: 0.21,
+}
+
+function respiratoryControlLeaf(path: string): string | null {
+  const prefix = path.startsWith('patient.respiratory.') ? 'patient.respiratory.' : path.startsWith('respiratory.') ? 'respiratory.' : null
+  if (!prefix) return null
+  const leaf = path.slice(prefix.length)
+  return Object.prototype.hasOwnProperty.call(EDUMON_VENTILATOR_DEFAULTS, leaf) ? leaf : null
+}
 
 /**
  * Keep the human Session Log focused on deliberate actions/settings. Structural
@@ -231,25 +257,39 @@ const RUNTIME_BOOKKEEPING_PREFIXES = [
  * internals, not candidate/instructor actions, and are omitted from the log.
  */
 export function filterSessionStateChanges(before: unknown, after: unknown, changes: SessionLogStateChange[]): SessionLogStateChange[] {
-  return changes.filter((change) => {
-    if (change.path === 'anaestheticGases.fiSevoPercent' || change.path === 'patient.anaestheticGases.fiSevoPercent') return false
-    if (AUTOMATIC_MODEL_PATHS.has(change.path)) return false
-    if (change.path.startsWith('anaestheticPhysiology.responseBaseline') || change.path.startsWith('patient.anaestheticPhysiology.responseBaseline')) return false
-    if (RUNTIME_BOOKKEEPING_PREFIXES.some((prefix) => change.path === prefix || change.path.startsWith(`${prefix}.`))) return false
+  const output: SessionLogStateChange[] = []
+  for (const change of changes) {
+    if (change.path === 'anaestheticGases.fiSevoPercent' || change.path === 'patient.anaestheticGases.fiSevoPercent') continue
+    if (AUTOMATIC_MODEL_PATHS.has(change.path)) continue
+    if (change.path.startsWith('anaestheticPhysiology.responseBaseline') || change.path.startsWith('patient.anaestheticPhysiology.responseBaseline')) continue
+    if (RUNTIME_BOOKKEEPING_PREFIXES.some((prefix) => change.path === prefix || change.path.startsWith(`${prefix}.`))) continue
+
+    const respiratoryLeaf = respiratoryControlLeaf(change.path)
+    if (change.path.startsWith('respiratory.') || change.path.startsWith('patient.respiratory.')) {
+      if (!respiratoryLeaf) continue
+      // Missing fields in a telemetry patch mean "not supplied", never "delete".
+      if (change.to == null) continue
+      const normalisedFrom = change.from == null ? EDUMON_VENTILATOR_DEFAULTS[respiratoryLeaf] : change.from
+      if (Object.is(normalisedFrom, change.to)) continue
+      output.push({ ...change, from: normalisedFrom })
+      continue
+    }
 
     const segments = change.path.split('.')
+    let structuralHydration = false
     for (let depth = 1; depth < segments.length; depth += 1) {
       const prefix = segments.slice(0, depth)
       const beforeValue = valueAtPath(before, prefix)
       const afterValue = valueAtPath(after, prefix)
-      if (beforeValue == null && isPlainObject(afterValue)) return false
+      if (beforeValue == null && isPlainObject(afterValue)) { structuralHydration = true; break }
     }
-    return true
-  })
+    if (!structuralHydration) output.push(change)
+  }
+  return output
 }
 
 const FRIENDLY_SETTING_NAMES: Record<string, string> = {
-  fio2: 'FiO₂', peep: 'PEEP', rate: 'rate', tidalVolume: 'tidal volume', inspiratoryTime: 'inspiratory time', inspiratoryFlow: 'inspiratory flow', pressureControl: 'pressure control', pressureSupport: 'pressure support', mode: 'mode', heartRate: 'heart rate', systolicPressure: 'systolic pressure', diastolicPressure: 'diastolic pressure', spo2: 'SpO₂', temperatureC: 'temperature', simulationPaused: 'simulation pause', simulationSpeed: 'simulation speed', ventilatorMode: 'ventilator mode', ventilatorSetRate: 'ventilator rate', ventilatorSetTidalVolumeMl: 'tidal volume', peepCmH2O: 'PEEP',
+  fio2: 'FiO₂', peep: 'PEEP', rate: 'rate', tidalVolume: 'tidal volume', inspiratoryTime: 'inspiratory time', inspiratoryFlow: 'inspiratory flow', pressureControl: 'pressure control', pressureSupport: 'pressure support', mode: 'mode', heartRate: 'heart rate', systolicPressure: 'systolic pressure', diastolicPressure: 'diastolic pressure', spo2: 'SpO₂', temperatureC: 'temperature', simulationPaused: 'simulation pause', simulationSpeed: 'simulation speed', ventilatorMode: 'ventilator mode', ventilatorSetRate: 'ventilator rate', ventilatorSetTidalVolumeMl: 'tidal volume', peepCmH2O: 'PEEP', ventilatorInspiratoryTimeSeconds: 'inspiratory time', ventilatorInspiratoryFlowLMin: 'inspiratory flow', ventilatorPlateauPercent: 'plateau', ventilatorPressureControlCmH2O: 'pressure control', ventilatorVolumeGuaranteePressureLimitCmH2O: 'pressure limit', ventilatorPressureSupportCmH2O: 'pressure support', ventilatorTerminationSensitivityPercent: 'termination sensitivity', ventilatorSimvSyncWindowPercent: 'SIMV sync window',
 }
 
 function shortValue(value: unknown): string {
