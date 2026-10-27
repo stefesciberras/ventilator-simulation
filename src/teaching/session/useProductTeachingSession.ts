@@ -91,9 +91,9 @@ interface UseProductTeachingSessionArgs<TState> {
   state: TState
   setState: (state: TState) => void
   /**
-   * Defines which candidate-local fields survive instructor broadcasts. In Simulation
-   * mode the same projection is also used in reverse, allowing only those fields to
-   * propagate from the candidate back into the authoritative instructor state.
+   * Defines the candidate-controlled projection that may propagate back to the
+   * instructor in Simulation mode. Teaching mode still uses it to preserve local
+   * candidate fields, while Simulation candidates always accept canonical instructor state.
    */
   mergeCandidateState?: (localState: TState, instructorState: TState) => TState
   instructorBroadcastDebounceMs?: number
@@ -146,7 +146,12 @@ export function useProductTeachingSession<TState>({
     host: {
       onSessionRow: (row, nextRole, source, force) => {
         if (nextRole === 'candidate') {
-          const nextState = candidateStateInitialisedRef.current && mergeCandidateState ? mergeCandidateState(stateRef.current, row.product_state) : row.product_state
+          const rowRuntimeMode = stateRuntimeMode(row.product_state) ?? 'teaching'
+          const nextState = rowRuntimeMode === 'simulation'
+            ? row.product_state
+            : candidateStateInitialisedRef.current && mergeCandidateState
+              ? mergeCandidateState(stateRef.current, row.product_state)
+              : row.product_state
           candidateStateInitialisedRef.current = true
           stateRef.current = nextState
           setState(nextState)

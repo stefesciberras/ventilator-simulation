@@ -145,12 +145,16 @@ export async function recordSessionLogEvent(input: RecordSessionLogEventInput): 
   }
   const sessionId = input.sessionId ?? runtimeContext.sessionId
   if (!sessionId) return
+  const details = {
+    ...(input.details ?? {}),
+    _originRole: runtimeContext.role,
+  }
   const { error } = await supabase.from('edusim_session_log_entries').insert({
     session_id: sessionId,
     category: input.category,
     event_type: input.eventType.slice(0, 100),
     label: input.label.slice(0, 240),
-    details: input.details ?? {},
+    details,
     simulation_time_seconds: input.simulationTimeSeconds ?? null,
     client_occurred_at: new Date().toISOString(),
   })
@@ -195,29 +199,43 @@ function valueAtPath(value: unknown, segments: string[]): unknown {
   return current
 }
 
-const AUTO_ANAESTHETIC_PATHS = new Set([
+const AUTOMATIC_MODEL_PATHS = new Set([
   'heartRate',
   'systolicPressure',
   'diastolicPressure',
   'respiratory.respiratoryRate',
   'respiratory.spontaneousRespiratoryRate',
+  'respiratory.spontaneousTidalVolumeMl',
   'anaestheticPhysiology.depthOfAnaesthesia',
+  'patient.heartRate',
+  'patient.systolicPressure',
+  'patient.diastolicPressure',
+  'patient.respiratory.respiratoryRate',
+  'patient.respiratory.spontaneousRespiratoryRate',
+  'patient.respiratory.spontaneousTidalVolumeMl',
+  'patient.anaestheticPhysiology.depthOfAnaesthesia',
 ])
+
+const RUNTIME_BOOKKEEPING_PREFIXES = [
+  'runtimeMode',
+  'lastActionId',
+  'actionSequence',
+  'actionSimulationTime',
+  'actionCommand',
+  'actionRuntimeSnapshot',
+]
 
 /**
  * Keep the human Session Log focused on deliberate actions/settings. Structural
- * model hydration and automatic anaesthetic physiology responses are simulator
+ * model hydration, calculated physiology and action-runtime replication are simulator
  * internals, not candidate/instructor actions, and are omitted from the log.
  */
 export function filterSessionStateChanges(before: unknown, after: unknown, changes: SessionLogStateChange[]): SessionLogStateChange[] {
-  const anaestheticAutoUpdate = changes.some((change) =>
-    change.path === 'anaestheticPhysiology.depthOfAnaesthesia'
-    || change.path.startsWith('anaestheticPhysiology.responseBaseline'),
-  )
-
   return changes.filter((change) => {
-    if (change.path === 'anaestheticGases.fiSevoPercent') return false
-    if (anaestheticAutoUpdate && (AUTO_ANAESTHETIC_PATHS.has(change.path) || change.path.startsWith('anaestheticPhysiology.responseBaseline'))) return false
+    if (change.path === 'anaestheticGases.fiSevoPercent' || change.path === 'patient.anaestheticGases.fiSevoPercent') return false
+    if (AUTOMATIC_MODEL_PATHS.has(change.path)) return false
+    if (change.path.startsWith('anaestheticPhysiology.responseBaseline') || change.path.startsWith('patient.anaestheticPhysiology.responseBaseline')) return false
+    if (RUNTIME_BOOKKEEPING_PREFIXES.some((prefix) => change.path === prefix || change.path.startsWith(`${prefix}.`))) return false
 
     const segments = change.path.split('.')
     for (let depth = 1; depth < segments.length; depth += 1) {
@@ -231,7 +249,7 @@ export function filterSessionStateChanges(before: unknown, after: unknown, chang
 }
 
 const FRIENDLY_SETTING_NAMES: Record<string, string> = {
-  fio2: 'FiO₂', peep: 'PEEP', rate: 'rate', tidalVolume: 'tidal volume', inspiratoryTime: 'inspiratory time', inspiratoryFlow: 'inspiratory flow', pressureControl: 'pressure control', pressureSupport: 'pressure support', mode: 'mode', heartRate: 'heart rate', systolicPressure: 'systolic pressure', diastolicPressure: 'diastolic pressure', spo2: 'SpO₂', temperatureC: 'temperature', simulationPaused: 'simulation pause', simulationSpeed: 'simulation speed',
+  fio2: 'FiO₂', peep: 'PEEP', rate: 'rate', tidalVolume: 'tidal volume', inspiratoryTime: 'inspiratory time', inspiratoryFlow: 'inspiratory flow', pressureControl: 'pressure control', pressureSupport: 'pressure support', mode: 'mode', heartRate: 'heart rate', systolicPressure: 'systolic pressure', diastolicPressure: 'diastolic pressure', spo2: 'SpO₂', temperatureC: 'temperature', simulationPaused: 'simulation pause', simulationSpeed: 'simulation speed', ventilatorMode: 'ventilator mode', ventilatorSetRate: 'ventilator rate', ventilatorSetTidalVolumeMl: 'tidal volume', peepCmH2O: 'PEEP',
 }
 
 function shortValue(value: unknown): string {
