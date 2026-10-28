@@ -10,6 +10,7 @@ const assert = (condition, message) => {
 }
 
 const eduvent = read('src/App.tsx')
+const eduventControls = read('src/components/Controls.tsx')
 const eduventEngine = read('src/simulation/engine.ts')
 const eduventLegacyEngine = read('src/simulation/engineLegacy.ts')
 const respiratoryCore = read('src/core/physiology/respiratory/RespiratoryPhysiology.ts')
@@ -44,6 +45,11 @@ assert(eduventLegacyEngine.includes('function pressureRiseFraction'), 'pressure-
 assert(eduventLegacyEngine.includes('const triggerResponseDelay = 0.06'), 'patient trigger response must not restore the exaggerated 150 ms delay')
 assert(eduventLegacyEngine.includes('preTriggerPressureDeflectionLimit'), 'pre-trigger Paw deflection must remain bounded without altering trigger detection')
 assert(expiratoryFlowLimitation.includes('const blendWidth = Math.max(ceilingLs * 0.15, 0.015)'), 'obstructive flow limitation must blend smoothly into its choke-flow envelope')
+assert(expiratoryFlowLimitation.includes('const severityGain = Math.pow(severity, 1.4)'), 'EFL severity score must retain graded non-linear strength')
+assert(expiratoryFlowLimitation.includes('const airwayInvolvement = clamp'), 'EFL morphology must distinguish airway involvement from severity')
+assert(expiratoryFlowLimitation.includes('earlyFlowSpikeReliefLs'), 'airway-type EFL must retain the early dog-leg flow morphology')
+assert(eduventControls.includes('label="EFL severity"'), 'patient controls must present EFL as a severity score rather than a percentage')
+assert(eduventControls.includes('max={1} step={0.1}'), 'EFL severity control must use a 0.0-1.0 point scale')
 
 // PEEP/reference-state regression check.
 assert(eduventLegacyEngine.includes('peepReferenceShiftVolume'), 'MV engine must rebase trapped volume when external PEEP changes')
