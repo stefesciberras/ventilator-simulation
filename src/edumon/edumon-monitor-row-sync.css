@@ -1,0 +1,22 @@
+.edumon-monitor-body .edumon-measurements.edumon-measurements-row-synced {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.edumon-monitor-body .edumon-measurements.edumon-measurements-row-synced > .edumon-value-panel {
+  flex: 0 0 var(--edumon-matched-row-height, auto);
+  height: var(--edumon-matched-row-height, auto);
+  min-height: 0;
+  max-height: var(--edumon-matched-row-height, none);
+  box-sizing: border-box;
+}
+
+.edumon-monitor-body .edumon-measurements.edumon-measurements-row-synced > .metrics-actions {
+  position: absolute;
+  z-index: 12;
+  top: 6px;
+  right: 6px;
+  margin: 0;
+}

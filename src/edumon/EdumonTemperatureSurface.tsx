@@ -7,6 +7,7 @@ import {
   useEdumonMonitorDisplayDomBridge,
   useMonitorDisplayEnabled,
 } from './monitorDisplayActions'
+import { useEdumonMonitorRowSync } from './useEdumonMonitorRowSync'
 import './edumon-temperature.css'
 
 const DEFAULT_TEMPERATURE_C = 37
@@ -25,6 +26,7 @@ export function EdumonTemperatureSurface({ patientState }: { patientState: Monit
   const temperature = patientState.temperatureC ?? DEFAULT_TEMPERATURE_C
   const temperatureEnabled = useMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.temperature)
   useEdumonMonitorDisplayDomBridge()
+  useEdumonMonitorRowSync()
 
   useEffect(() => {
     const findHost = () => setFooterHost(findVisibleFooterHost())
