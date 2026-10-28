@@ -1,0 +1,31 @@
+.edumon-monitor-body .edumon-waveform-area,
+.edumon-monitor-body .edumon-measurements {
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+}
+
+.edumon-monitor-body .edumon-measurements {
+  position: relative;
+}
+
+.edumon-monitor-body .edumon-measurements > .metrics-actions {
+  position: absolute;
+  z-index: 12;
+  top: 6px;
+  right: 6px;
+  margin: 0;
+}
+
+.edumon-monitor-body .edumon-waveform-area.edumon-has-bis,
+.edumon-monitor-body .edumon-measurements.edumon-has-bis {
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+}
+
+html[data-edumon-monitor-inv-bp='false'] .edumon-monitor-body .edumon-waveform-area:not(.edumon-has-bis),
+html[data-edumon-monitor-inv-bp='false'] .edumon-monitor-body .edumon-measurements:not(.edumon-has-bis) {
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+
+html[data-edumon-monitor-inv-bp='false'] .edumon-monitor-body .edumon-waveform-area.edumon-has-bis,
+html[data-edumon-monitor-inv-bp='false'] .edumon-monitor-body .edumon-measurements.edumon-has-bis {
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+}
