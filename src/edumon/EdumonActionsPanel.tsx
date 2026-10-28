@@ -3,6 +3,15 @@ import { getInstructorAccount, subscribeToInstructorAccount } from '../teaching/
 import { activateAction, getActiveEffects, getActionRuntimeSimulationTime, isActionToggleRunning, setActionIntensity, subscribeToActionRuntime } from '../edusim/actions/ActionRuntime'
 import type { TeachingRole } from '../teaching/types'
 import { listEdusimActions, type EdusimActionDefinition, type EdusimActionEnvironment } from './actionLibrary'
+import { listCandidateActionPermissions, setCandidateActionPermission } from './sessionActionPermissions'
+import {
+  EDUMON_MONITOR_DISPLAY_ACTION_IDS,
+  clearInstructorMonitorDisplays,
+  isInstructorMonitorDisplayEnabled,
+  subscribeToInstructorMonitorDisplays,
+  toggleInstructorMonitorDisplay,
+  type EdumonMonitorDisplayActionId,
+} from './monitorDisplayActions'
 import './edumon-actions.css'
 
 export type EdumonActionSectionId = 'drugs' | 'events'
@@ -101,8 +110,18 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
   { id: 'monitor-temp', kind: 'event', name: 'Temp', short_press_action: 'toggle', long_press_action: null, duration_seconds: 0, description: 'Display-only toggle for temperature monitoring. Does not alter patient temperature modelling.', setting: 'all', environments: ['edumon-ana', 'edumon-icu'], effects: [], candidate_access: 'instructor-only', priority: 30, sort_order: 330, created_at: '', updated_at: '' },
 ]
 
+const INSTRUCTOR_MONITOR_BUTTONS: Array<{ id: EdumonMonitorDisplayActionId; label: string }> = [
+  { id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.invasiveBloodPressure, label: 'Inv AP' },
+  { id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.bis, label: 'BIS' },
+  { id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.temperature, label: 'Temp' },
+]
+
 function currentEnvironment(): EdusimActionEnvironment {
   return window.location.pathname.startsWith('/edumon/icu') ? 'edumon-icu' : 'edumon-ana'
+}
+
+function productIdForEnvironment(environment: EdusimActionEnvironment): string {
+  return environment === 'edumon-icu' ? 'edumon-icu' : 'edumon-ana'
 }
 
 function drugClass(definition: EdusimActionDefinition): DrugClass {
@@ -142,13 +161,16 @@ function EdumonActionSection({ id, title, children }: { id: EdumonActionSectionI
   )
 }
 
-function EdumonActionButton({ definition, active, level, menuOpen, onSelect, onLongPress, onLevelSelect }: {
+function EdumonActionButton({ definition, active, level, menuOpen, candidateEnabled, permissionManaged, onSelect, onLongPress, onPermissionToggle, onLevelSelect }: {
   definition: EdusimActionDefinition
   active: boolean
   level: ActionLevel
   menuOpen: boolean
+  candidateEnabled: boolean
+  permissionManaged: boolean
   onSelect: (definition: EdusimActionDefinition) => void
   onLongPress: (definition: EdusimActionDefinition) => void
+  onPermissionToggle: (definition: EdusimActionDefinition) => void
   onLevelSelect: (definition: EdusimActionDefinition, level: ActionLevel) => void
 }) {
   const longPressTimer = useRef<number | null>(null)
@@ -157,23 +179,36 @@ function EdumonActionButton({ definition, active, level, menuOpen, onSelect, onL
   const severity = definition.long_press_action === 'severity-levels'
   const clearLongPress = () => { if (longPressTimer.current != null) window.clearTimeout(longPressTimer.current); longPressTimer.current = null }
   const pointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!hasLevelMenu || event.button !== 0) return
+    if ((!hasLevelMenu && !permissionManaged) || event.button !== 0) return
     suppressClick.current = false
     clearLongPress()
-    longPressTimer.current = window.setTimeout(() => { suppressClick.current = true; onLongPress(definition) }, 550)
+    longPressTimer.current = window.setTimeout(() => {
+      suppressClick.current = true
+      if (permissionManaged) onPermissionToggle(definition)
+      else onLongPress(definition)
+    }, 550)
   }
   const click = () => {
     clearLongPress()
     if (suppressClick.current) { suppressClick.current = false; return }
     onSelect(definition)
   }
-  const detail = [definition.description, hasLevelMenu ? `Long press: ${severity ? 'severity' : 'dose'} level` : ''].filter(Boolean).join(' · ')
+  const detail = [
+    definition.description,
+    permissionManaged ? `Long press: ${candidateEnabled ? 'hide from' : 'allow for'} candidate` : '',
+    hasLevelMenu ? `${permissionManaged ? 'Level button' : 'Long press'}: ${severity ? 'severity' : 'dose'} level` : '',
+  ].filter(Boolean).join(' · ')
   return (
     <div className="edumon-action-button-wrap">
-      <button type="button" className={`edumon-action-button ${definition.short_press_action} ${active ? 'active' : ''}`.trim()} aria-pressed={definition.short_press_action === 'toggle' ? active : undefined} onPointerDown={pointerDown} onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress} onClick={click} title={detail || undefined}>
+      <button type="button" className={`edumon-action-button ${definition.short_press_action} ${active ? 'active' : ''} ${candidateEnabled ? 'candidate-enabled' : ''}`.trim()} aria-pressed={definition.short_press_action === 'toggle' ? active : undefined} onPointerDown={pointerDown} onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress} onClick={click} title={detail || undefined}>
         <span>{definition.name}</span>
-        {hasLevelMenu && <small className="edumon-action-dose-badge">{level === 'low' ? 'L' : level === 'high' ? 'H' : 'M'}</small>}
+        {candidateEnabled && <small className="edumon-action-candidate-badge" title="Available to candidate">C</small>}
       </button>
+      {hasLevelMenu && (
+        <button type="button" className="edumon-action-dose-trigger" onClick={() => onLongPress(definition)} aria-label={`Set ${definition.name} ${severity ? 'severity' : 'dose'} level`} title={`Set ${severity ? 'severity' : 'dose'} level`}>
+          {level === 'low' ? 'L' : level === 'high' ? 'H' : 'M'}
+        </button>
+      )}
       {menuOpen && (
         <div className="edumon-dose-menu" role="menu" aria-label={`${definition.name} ${severity ? 'severity' : 'dose'} level`}>
           {(Object.keys(LEVEL_STEPS) as ActionLevel[]).map((candidate) => {
@@ -191,12 +226,16 @@ function EdumonActionButton({ definition, active, level, menuOpen, onSelect, onL
 
 export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRole }) {
   const environment = currentEnvironment()
+  const productId = productIdForEnvironment(environment)
   const fallback = environment === 'edumon-ana' ? FALLBACK_ANA_ACTIONS : []
   const [definitions, setDefinitions] = useState<EdusimActionDefinition[]>(fallback)
   const [flashing, setFlashing] = useState<Set<string>>(new Set())
   const [levelMenuActionId, setLevelMenuActionId] = useState<string | null>(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [candidatePermissions, setCandidatePermissions] = useState<Set<string>>(new Set())
+  const [permissionStatus, setPermissionStatus] = useState<string | null>(null)
   const [, setRuntimeRevision] = useState(0)
+  const [, setInstructorMonitorRevision] = useState(0)
   const timersRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
@@ -213,12 +252,38 @@ export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRol
   }, [])
 
   useEffect(() => subscribeToActionRuntime(() => setRuntimeRevision((value) => value + 1)), [])
+  useEffect(() => subscribeToInstructorMonitorDisplays(() => setInstructorMonitorRevision((value) => value + 1)), [])
   useEffect(() => () => { for (const timer of timersRef.current.values()) window.clearTimeout(timer); timersRef.current.clear() }, [])
+
+  useEffect(() => {
+    if (role === 'standalone') {
+      setCandidatePermissions(new Set())
+      return
+    }
+    let active = true
+    const refresh = async () => {
+      try {
+        const next = await listCandidateActionPermissions(productId, role)
+        if (active) setCandidatePermissions(next)
+      } catch {
+        if (active) setCandidatePermissions(new Set())
+      }
+    }
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), 1200)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [productId, role])
+
+  useEffect(() => {
+    if (role === 'instructor') return
+    clearInstructorMonitorDisplays()
+  }, [role])
 
   const runningToggleEffects = (actionId: string) => getActiveEffects(getActionRuntimeSimulationTime())
     .filter((active) => active.actionId === actionId && active.mode === 'toggle' && active.stoppedAtSimulationTime == null)
 
   const isRunningToggle = (actionId: string) => isActionToggleRunning(actionId)
+  const candidateCanUse = (definition: EdusimActionDefinition) => definition.candidate_access === 'allowed' || candidatePermissions.has(definition.id)
 
   const currentLevel = (definition: EdusimActionDefinition): ActionLevel => {
     const running = runningToggleEffects(definition.id)[0]
@@ -227,7 +292,7 @@ export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRol
   }
 
   const trigger = (definition: EdusimActionDefinition) => {
-    if (role === 'candidate' && definition.candidate_access !== 'allowed') return
+    if (role === 'candidate' && !candidateCanUse(definition)) return
     const intensity = LEVEL_STEPS[currentLevel(definition)].scale
     activateAction(definition, getActionRuntimeSimulationTime(), supportsLevel(definition) ? intensity : 1)
     setLevelMenuActionId(null)
@@ -241,47 +306,108 @@ export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRol
   }
 
   const selectLevel = (definition: EdusimActionDefinition, level: ActionLevel) => {
-    if (role === 'candidate' && definition.candidate_access !== 'allowed') return
+    if (role === 'candidate' && !candidateCanUse(definition)) return
     ACTION_LEVEL_SELECTIONS.set(definition.id, level)
     if (isRunningToggle(definition.id)) setActionIntensity(definition.id, LEVEL_STEPS[level].scale)
     setLevelMenuActionId(null)
   }
 
+  const toggleCandidatePermission = async (definition: EdusimActionDefinition) => {
+    if (role !== 'instructor' || definition.kind !== 'event' || definition.candidate_access === 'allowed') return
+    const nextAllowed = !candidatePermissions.has(definition.id)
+    setCandidatePermissions((current) => {
+      const next = new Set(current)
+      if (nextAllowed) next.add(definition.id)
+      else next.delete(definition.id)
+      return next
+    })
+    setPermissionStatus(`${definition.name}: ${nextAllowed ? 'available to candidate' : 'hidden from candidate'}`)
+    window.setTimeout(() => setPermissionStatus(null), 1800)
+    try {
+      await setCandidateActionPermission(productId, definition.id, nextAllowed)
+    } catch {
+      setCandidatePermissions((current) => {
+        const next = new Set(current)
+        if (nextAllowed) next.delete(definition.id)
+        else next.add(definition.id)
+        return next
+      })
+      setPermissionStatus(`Could not update ${definition.name} candidate access`)
+    }
+  }
+
   const isActive = (definition: EdusimActionDefinition) => definition.short_press_action === 'toggle' ? isRunningToggle(definition.id) : flashing.has(definition.id)
   const visibleDefinitions = role === 'candidate'
-    ? definitions.filter((definition) => definition.candidate_access === 'allowed')
+    ? definitions.filter(candidateCanUse)
     : definitions
   const drugs = visibleDefinitions.filter((definition) => definition.kind === 'drug')
   const events = visibleDefinitions.filter((definition) => definition.kind === 'event')
 
-  const renderGroup = (items: EdusimActionDefinition[], label: string) => items.length ? (
+  const renderGroup = (items: EdusimActionDefinition[], label: string) => (
     <div className="edumon-action-grid" role="group" aria-label={label}>
-      {items.map((definition) => <EdumonActionButton key={definition.id} definition={definition} active={isActive(definition)} level={currentLevel(definition)} menuOpen={levelMenuActionId === definition.id} onSelect={trigger} onLongPress={(action) => setLevelMenuActionId(action.id)} onLevelSelect={selectLevel} />)}
+      {items.map((definition) => <EdumonActionButton
+        key={definition.id}
+        definition={definition}
+        active={isActive(definition)}
+        level={currentLevel(definition)}
+        menuOpen={levelMenuActionId === definition.id}
+        candidateEnabled={candidatePermissions.has(definition.id)}
+        permissionManaged={role === 'instructor' && definition.kind === 'event' && definition.candidate_access !== 'allowed'}
+        onSelect={trigger}
+        onLongPress={(action) => setLevelMenuActionId(action.id)}
+        onPermissionToggle={toggleCandidatePermission}
+        onLevelSelect={selectLevel}
+      />)}
     </div>
-  ) : <div className="edumon-action-empty">No actions are currently available for this group.</div>
-
-  const renderClass = (title: string, items: EdusimActionDefinition[], noun: string) => (
-    <section className="edumon-drug-class" aria-label={`${title} ${noun}`}><h4>{title}</h4>{renderGroup(items, `${title} ${noun}`)}</section>
   )
+
+  const renderClass = (title: string, items: EdusimActionDefinition[], noun: string) => {
+    if (!items.length) return null
+    return <section className="edumon-drug-class" aria-label={`${title} ${noun}`}><h4>{title}</h4>{renderGroup(items, `${title} ${noun}`)}</section>
+  }
+
+  const renderInstructorOnlyMonitors = () => {
+    if (role !== 'instructor') return null
+    return (
+      <section className="edumon-drug-class edumon-instructor-monitor-class" aria-label="Instructor only monitors">
+        <h4>Instructor only</h4>
+        <div className="edumon-action-grid" role="group" aria-label="Instructor only monitor displays">
+          {INSTRUCTOR_MONITOR_BUTTONS.map((item) => {
+            const active = isInstructorMonitorDisplayEnabled(item.id)
+            return (
+              <button key={item.id} type="button" className={`edumon-action-button toggle instructor-monitor ${active ? 'active' : ''}`.trim()} aria-pressed={active} onClick={() => toggleInstructorMonitorDisplay(item.id)} title="Display only on the instructor monitor">
+                <span>{item.label}</span><small className="edumon-action-local-badge">I</small>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+    )
+  }
+
+  const hasDrugs = drugs.length > 0
+  const hasEvents = events.length > 0 || role === 'instructor'
 
   return (
     <div className="edumon-actions-panel" aria-label="Clinical actions">
       {role !== 'candidate' && canEdit && <div className="edumon-action-library-tools"><button type="button" onClick={() => window.location.assign('/actions')}>Edit action library</button></div>}
-      <EdumonActionSection id="drugs" title="Drugs">
+      {permissionStatus && <div className="edumon-action-permission-status" role="status">{permissionStatus}</div>}
+      {hasDrugs && <EdumonActionSection id="drugs" title="Drugs">
         <div className="edumon-drug-classes">
           {renderClass('Anaesthesia', drugs.filter((definition) => drugClass(definition) === 'anaesthesia'), 'drugs')}
           {renderClass('Cardiovascular', drugs.filter((definition) => drugClass(definition) === 'cardiovascular'), 'drugs')}
           {renderClass('Others', drugs.filter((definition) => drugClass(definition) === 'other'), 'drugs')}
         </div>
-      </EdumonActionSection>
-      <EdumonActionSection id="events" title="Events">
+      </EdumonActionSection>}
+      {hasEvents && <EdumonActionSection id="events" title="Events">
         <div className="edumon-drug-classes">
           {renderClass('Anaesthesia', events.filter((definition) => eventClass(definition) === 'anaesthesia'), 'events')}
           {renderClass('Cardiovascular', events.filter((definition) => eventClass(definition) === 'cardiovascular'), 'events')}
           {renderClass('Respiratory', events.filter((definition) => eventClass(definition) === 'respiratory'), 'events')}
           {renderClass('Monitors', events.filter((definition) => eventClass(definition) === 'monitors'), 'events')}
+          {renderInstructorOnlyMonitors()}
         </div>
-      </EdumonActionSection>
+      </EdumonActionSection>}
     </div>
   )
 }
