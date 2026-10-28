@@ -45,6 +45,10 @@ assert(eduventLegacyEngine.includes('const triggerResponseDelay = 0.06'), 'patie
 assert(eduventLegacyEngine.includes('preTriggerPressureDeflectionLimit'), 'pre-trigger Paw deflection must remain bounded without altering trigger detection')
 assert(expiratoryFlowLimitation.includes('const blendWidth = Math.max(ceilingLs * 0.15, 0.015)'), 'obstructive flow limitation must blend smoothly into its choke-flow envelope')
 
+// PEEP/reference-state regression check.
+assert(eduventLegacyEngine.includes('peepReferenceShiftVolume'), 'MV engine must rebase trapped volume when external PEEP changes')
+assert(eduventLegacyEngine.includes('state.lastPeep = ventilator.peep'), 'MV engine must track the applied external PEEP reference')
+
 // Existing shared shell / UI ownership regression checks.
 assert(eduvent.includes('<SimulationControlFramework'), 'MV simulator must use SimulationControlFramework')
 assert(edumonPanel.includes('<SimulationControlFramework'), 'monitor simulator must use SimulationControlFramework')
