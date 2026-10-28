@@ -948,7 +948,7 @@ export default function App() {
   const conventionalTimedMode = activeMode !== 'PSV' && activeMode !== 'APRV' && activeMode !== 'BIPAP'
   const volumeMandatoryMode = activeMode === 'VC-AC' || activeMode === 'SIMV-VC'
   const simvMode = activeMode === 'SIMV-VC' || activeMode === 'SIMV-PC'
-  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'APRV' && activeMode !== 'BIPAP'
+  const manualHoldAvailable = activeMode !== 'PSV' && activeMode !== 'BIPAP'
 
   const latestBreathStart = useMemo(() => getLatestBreathStart(timeline), [timeline])
   const apneaAlarmActive = latestBreathStart == null
@@ -1136,7 +1136,7 @@ export default function App() {
   }
 
   const beginExpiratoryHold = () => {
-    if (waveformFrozen || simulationPaused || activeMode === 'APRV' || expiratoryHoldPressed) return
+    if (waveformFrozen || simulationPaused || activeMode === 'BIPAP' || expiratoryHoldPressed) return
     recordScenarioAction('expiratory-hold')
     setInspiratoryHoldRequestTime(null)
     setInspiratoryHoldReleaseTime(null)
@@ -1598,8 +1598,8 @@ export default function App() {
             ><span className="hold-label-two-line"><span>Insp</span><span>Hold</span></span></button>
             <button
               className={`hardware-button hold-button ${expiratoryHoldPressed ? 'active' : ''}`}
-              disabled={waveformFrozen || simulationPaused || activeMode === 'APRV' || activeMode === 'BIPAP'}
-              title={(activeMode === 'APRV' || activeMode === 'BIPAP') ? 'Expiratory hold is unavailable in two-level pressure modes' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
+              disabled={waveformFrozen || simulationPaused || activeMode === 'BIPAP'}
+              title={activeMode === 'BIPAP' ? 'Expiratory hold is unavailable in BIPAP mode' : 'Press and hold for an end-expiratory occlusion; release to freeze the trace'}
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beginExpiratoryHold() }}
               onPointerUp={releaseExpiratoryHold}
               onPointerCancel={releaseExpiratoryHold}

@@ -186,7 +186,7 @@ export function VentilatorControls({ settings, onChange, onReset, fio2Override, 
   }
 
   const modes: VentilatorMode[] = ['VC-AC', 'SIMV-VC', 'PC-AC', 'SIMV-PC', 'BIPAP', 'VG-PC', 'APRV', 'PSV']
-  const zeroPressureSupport = (settings.mode === 'PSV' || isSimvMode(settings.mode)) && settings.pressureSupport <= 0.001
+  const zeroPressureSupport = settings.mode === 'PSV' && settings.pressureSupport <= 0.001
 
   const triggerControls = (
     <div className="trigger-controls">

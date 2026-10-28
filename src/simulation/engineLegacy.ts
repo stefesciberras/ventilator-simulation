@@ -494,6 +494,7 @@ function twoLevelSample(
   pmus: number,
   complianceL: number,
   mode: 'APRV' | 'BIPAP',
+  options: SimulationOptions = {},
 ): Sample {
   let high: boolean
   let previousHigh: boolean
@@ -502,6 +503,17 @@ function twoLevelSample(
   let breathTrigger: Sample['breathTrigger']
   let ventilatorTriggerDetected = false
   const patientEffortStart = pmus > 0.1 && state.previousPmus <= 0.1
+  const inspiratoryHoldRequested = mode === 'APRV' && isRequestHeld(t, options.inspiratoryHoldRequestTime, options.inspiratoryHoldReleaseTime)
+  const expiratoryHoldRequested = mode === 'APRV' && isRequestHeld(t, options.expiratoryHoldRequestTime, options.expiratoryHoldReleaseTime)
+
+  // APRV manual holds pause the pressure-phase clock while the airway is
+  // occluded. This preserves the selected Thigh/Tlow timing after release
+  // instead of allowing the underlying APRV phase to run on invisibly.
+  if (mode === 'APRV') {
+    if (state.inspiratoryHoldActive && !inspiratoryHoldRequested) state.inspiratoryHoldActive = false
+    if (state.expiratoryHoldActive && !expiratoryHoldRequested) state.expiratoryHoldActive = false
+    if (state.inspiratoryHoldActive || state.expiratoryHoldActive) state.modeStartTime += dt
+  }
 
   if (mode === 'BIPAP') {
     previousHigh = state.bipapHigh
@@ -578,6 +590,15 @@ function twoLevelSample(
     }
   }
 
+  if (mode === 'APRV') {
+    if (!state.inspiratoryHoldActive && !state.expiratoryHoldActive) {
+      if (inspiratoryHoldRequested && high) state.inspiratoryHoldActive = true
+      else if (expiratoryHoldRequested && !high) state.expiratoryHoldActive = true
+    }
+    if (state.inspiratoryHoldActive) high = true
+    else if (state.expiratoryHoldActive) high = false
+  }
+
   const targetPressure = high ? pHigh : pLow
   const elasticPressure = state.volume / complianceL
   const spontaneousPressureDeflection = mode === 'BIPAP'
@@ -593,7 +614,13 @@ function twoLevelSample(
   const resistance = drivingPressure >= 0
     ? Math.max(patient.resistance, 0.5)
     : Math.max(patient.expiratoryResistance, 0.5)
-  const flowLs = drivingPressure / resistance
+  let flowLs = drivingPressure / resistance
+  let displayedPressure = targetPressure - spontaneousPressureDeflection
+
+  if (mode === 'APRV' && (state.inspiratoryHoldActive || state.expiratoryHoldActive)) {
+    flowLs = 0
+    displayedPressure = pLow + elasticPressure - pmus
+  }
 
   state.volume = clamp(state.volume + flowLs * dt, 0, 2.5)
 
@@ -614,7 +641,7 @@ function twoLevelSample(
 
   const sample: Sample = {
     time: Number(t.toFixed(4)),
-    pressure: clamp(targetPressure - spontaneousPressureDeflection, -5, 80),
+    pressure: clamp(displayedPressure, -5, 80),
     flow: flowLmin,
     volume: state.volume * 1000,
     musclePressure: pmus,
@@ -627,7 +654,7 @@ function twoLevelSample(
     ventilatorTriggerDetected,
     ventilatorTriggerBaseline: ventilatorTriggerDetected ? pLow : undefined,
     patientEffortStart,
-    expiratoryHold: false,
+    expiratoryHold: state.expiratoryHoldActive,
     simvSyncWindow: false,
   }
 
@@ -687,12 +714,14 @@ export function stepSimulation(
   updateOxygenation(state, ventilator, patient, t, dt, complianceL)
 
   if (mode === 'APRV' || mode === 'BIPAP') {
-    const sample = twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode)
+    const sample = twoLevelSample(state, ventilator, patient, t, dt, pmus, complianceL, mode, options)
     const pressureLimit = options.pressureLimit == null ? null : clamp(options.pressureLimit, 5, 60)
     if (pressureLimit != null && sample.phase === 'inspiration' && sample.pressure >= pressureLimit) {
       sample.pressure = pressureLimit
       sample.flow = 0
       sample.pressureLimitHit = true
+      state.inspiratoryHoldActive = false
+      state.expiratoryHoldActive = false
       state.expirationStartTime = t
       if (mode === 'BIPAP') {
         state.bipapHigh = false
@@ -738,7 +767,7 @@ export function stepSimulation(
   const predictedAirwayPressure = ventilator.peep - Math.max(0, triggerNetDrivingPressure)
   const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
   const supportTriggeringDisabled =
-    (mode === 'PSV' || isSimv(mode)) && ventilator.pressureSupport <= 0.001
+    mode === 'PSV' && ventilator.pressureSupport <= 0.001
   const mandatoryMode = mode !== 'PSV'
   const patientTriggerAllowed =
     !mandatoryMode ||
