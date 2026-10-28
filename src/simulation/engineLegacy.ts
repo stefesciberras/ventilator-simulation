@@ -25,6 +25,8 @@ export interface SimulationState {
   lastMode: VentilatorMode | null
   modeStartTime: number
   volume: number
+  /** Last applied external PEEP, used to preserve absolute alveolar pressure when the PEEP setting changes. */
+  lastPeep: number | null
   breathStart: number
   lastAssistedBreath: number
   lastMandatoryBreath: number
@@ -67,6 +69,7 @@ export function createSimulationState(): SimulationState {
     lastMode: null,
     modeStartTime: 0,
     volume: 0,
+    lastPeep: null,
     breathStart: -100,
     lastAssistedBreath: -100,
     lastMandatoryBreath: -100,
@@ -642,6 +645,20 @@ export function stepSimulation(
   options: SimulationOptions = {},
 ): Sample {
   const complianceL = Math.max(patient.compliance / 1000, 0.001)
+
+  // state.volume is stored relative to the equilibrium imposed by external PEEP.
+  // Rebase that relative volume whenever PEEP changes so absolute alveolar elastic
+  // pressure is continuous at the instant of the setting change. Subsequent lung
+  // emptying still follows resistance and expiratory flow limitation.
+  if (state.lastPeep == null) {
+    state.lastPeep = ventilator.peep
+  } else if (Math.abs(state.lastPeep - ventilator.peep) > 1e-9) {
+    const previousPeep = state.lastPeep
+    const peepReferenceShiftVolume = (previousPeep - ventilator.peep) * complianceL
+    state.volume = clamp(state.volume + peepReferenceShiftVolume, 0, 2.5)
+    state.lastPeep = ventilator.peep
+  }
+
   const mandatoryCycle = 60 / Math.max(ventilator.rate, 1)
   const postCycleReleaseGuard = 0.06
 
