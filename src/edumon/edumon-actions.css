@@ -25,6 +25,16 @@
   border-color: rgba(240,160,58,0.58);
 }
 
+.edumon-action-permission-status {
+  padding: 7px 9px;
+  border: 1px solid rgba(240,160,58,0.28);
+  border-radius: 7px;
+  background: rgba(240,160,58,0.08);
+  color: #ffc170;
+  font-size: 0.69rem;
+  font-weight: 750;
+}
+
 .edumon-action-section {
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 9px;
@@ -87,11 +97,6 @@
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 
-.edumon-action-empty {
-  color: #7f8d96;
-  font-size: 0.72rem;
-}
-
 .edumon-drug-classes {
   display: grid;
   gap: 14px;
@@ -114,6 +119,10 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.edumon-instructor-monitor-class h4 {
+  color: #ffc170;
 }
 
 .edumon-action-grid {
@@ -170,22 +179,59 @@
   background: rgba(240,160,58,0.28);
 }
 
-.edumon-action-dose-badge {
+.edumon-action-button.candidate-enabled {
+  border-color: rgba(103,231,127,0.48);
+}
+
+.edumon-action-candidate-badge,
+.edumon-action-local-badge {
   min-width: 18px;
   height: 18px;
   display: grid;
   place-items: center;
   border-radius: 5px;
-  background: rgba(255,255,255,0.08);
-  color: #aebbc4;
   font-size: 0.58rem;
   font-weight: 900;
   line-height: 1;
 }
 
-.edumon-action-button.active .edumon-action-dose-badge {
-  background: rgba(240,160,58,0.16);
+.edumon-action-candidate-badge {
+  background: rgba(103,231,127,0.14);
+  color: #86ef98;
+}
+
+.edumon-action-local-badge {
+  background: rgba(240,160,58,0.14);
+  color: #ffc170;
+}
+
+.edumon-action-dose-trigger {
+  position: absolute;
+  z-index: 2;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  color: #aebbc4;
+  font-size: 0.58rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.edumon-action-dose-trigger:hover {
+  border-color: rgba(240,160,58,0.35);
   color: #ffd19a;
+}
+
+.edumon-action-button-wrap:has(.edumon-action-dose-trigger) .edumon-action-button {
+  padding-right: 34px;
 }
 
 .edumon-dose-menu {
