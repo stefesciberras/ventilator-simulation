@@ -1,0 +1,34 @@
+name: Apply v0.83.0.46 EFL model
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.83.0.46-paper-informed-efl
+    paths:
+      - .github/workflows/apply-v0.83.0.46-efl.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.83.0.46-paper-informed-efl
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: node scripts/apply-v0.83.0.46-efl.mjs
+      - run: npm ci
+      - run: npm run build
+      - name: Commit transformed source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/Controls.tsx src/appVersion.ts scripts/core-regression.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "v0.83.0.46 use paper-informed EFL severity model"
+          git push origin HEAD:chatgpt/v0.83.0.46-paper-informed-efl
