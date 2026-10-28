@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { isActionToggleRunning, subscribeToActionRuntime } from '../edusim/actions/ActionRuntime'
 import './edumon-monitor-actions.css'
+import './edumon-monitor-row-alignment.css'
 
 export const EDUMON_MONITOR_DISPLAY_ACTION_IDS = {
   invasiveBloodPressure: 'monitor-inv-bp',
