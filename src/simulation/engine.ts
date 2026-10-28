@@ -64,6 +64,82 @@ function sharedStateFor(state: SimulationState): RespiratoryPhysiologyState {
   })
 }
 
+function requestHeld(
+  t: number,
+  requestTime: number | null | undefined,
+  releaseTime: number | null | undefined,
+): boolean {
+  return requestTime != null && t >= requestTime && (releaseTime == null || t < releaseTime)
+}
+
+function wrapPhase(value: number, cycle: number): number {
+  return ((value % cycle) + cycle) % cycle
+}
+
+/**
+ * APRV uses a long PHigh phase followed by a short release to PLow. A manual
+ * hold must therefore latch at the END of the relevant phase, not merely while
+ * that pressure level happens to be active:
+ *
+ * - Inspiratory hold: PHigh -> PLow boundary, before release flow starts.
+ * - Expiratory hold: PLow -> PHigh boundary, before reinflation starts.
+ *
+ * v0.83.0.47 allowed holds to start anywhere within the matching pressure
+ * phase. In particular an expiratory-hold press could latch immediately after
+ * the release began, trapping near-end-inspiratory volume and making the two
+ * APRV hold buttons appear reversed. Queue the request until its proper phase
+ * boundary and then preserve the legacy occlusion mechanics/phase-clock pause.
+ */
+function aprvBoundaryHoldOptions(
+  state: SimulationState,
+  ventilator: VentilatorSettings,
+  t: number,
+  dt: number,
+  options: SimulationOptions,
+): SimulationOptions {
+  if (ventilator.mode !== 'APRV') return options
+
+  const inspiratoryRequestHeld = requestHeld(
+    t,
+    options.inspiratoryHoldRequestTime,
+    options.inspiratoryHoldReleaseTime,
+  )
+  const expiratoryRequestHeld = requestHeld(
+    t,
+    options.expiratoryHoldRequestTime,
+    options.expiratoryHoldReleaseTime,
+  )
+
+  const tHigh = Math.max(ventilator.tHigh, 0.1)
+  const tLow = Math.max(ventilator.tLow, 0.05)
+  const cycle = tHigh + tLow
+  const elapsed = t - state.modeStartTime
+  const phase = wrapPhase(elapsed, cycle)
+  const previousPhase = wrapPhase(elapsed - dt, cycle)
+  const high = phase < tHigh
+  const previousHigh = previousPhase < tHigh
+
+  const noHoldActive = !state.inspiratoryHoldActive && !state.expiratoryHoldActive
+  const startInspiratoryHold = noHoldActive && inspiratoryRequestHeld && previousHigh && !high
+  const startExpiratoryHold = noHoldActive && expiratoryRequestHeld && !previousHigh && high
+
+  // Keep the APRV clock on the just-completed phase for this first occluded
+  // sample. The legacy engine will then pause modeStartTime on subsequent held
+  // samples and will resume the correct next phase when the button is released.
+  if (startInspiratoryHold || startExpiratoryHold) state.modeStartTime += dt
+
+  const passInspiratoryRequest = inspiratoryRequestHeld && (state.inspiratoryHoldActive || startInspiratoryHold)
+  const passExpiratoryRequest = expiratoryRequestHeld && (state.expiratoryHoldActive || startExpiratoryHold)
+
+  return {
+    ...options,
+    inspiratoryHoldRequestTime: passInspiratoryRequest ? t : null,
+    inspiratoryHoldReleaseTime: null,
+    expiratoryHoldRequestTime: passExpiratoryRequest ? t : null,
+    expiratoryHoldReleaseTime: null,
+  }
+}
+
 export function createSimulationState(): SimulationState {
   const legacy = createLegacySimulationState()
   return {
@@ -90,8 +166,9 @@ export function stepSimulation(
   const respiratoryRate = effectiveRespiratoryRate(state, ventilator, patient, t)
   const expiredTidalVolumeL = state.lastExpiredTidalVolume
   const previousSharedState = sharedStateFor(state)
+  const effectiveOptions = aprvBoundaryHoldOptions(state, ventilator, t, dt, options)
 
-  const sample = legacyStepSimulation(state, ventilator, patient, t, dt, options)
+  const sample = legacyStepSimulation(state, ventilator, patient, t, dt, effectiveOptions)
   const shared = stepEduventRespiratoryPhysiology(
     previousSharedState,
     ventilator,
