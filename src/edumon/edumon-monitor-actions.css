@@ -1,5 +1,5 @@
-html[data-edumon-monitor-inv-bp='false'] .edumon-trace-art,
-html[data-edumon-monitor-inv-bp='false'] .edumon-value-art {
+html:not([data-edumon-monitor-inv-bp='true']) .edumon-trace-art,
+html:not([data-edumon-monitor-inv-bp='true']) .edumon-value-art {
   display: none !important;
 }
 
