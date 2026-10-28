@@ -10,17 +10,27 @@ export interface ExpiratoryFlowLimitResult {
 }
 
 /**
- * Approximate effort-independent expiratory flow limitation.
+ * Approximate effort-independent expiratory flow limitation (EFL).
  *
- * The ordinary single-compartment model gives flow = -V/(Rexp*C), so greater
- * trapped volume always creates proportionally greater expiratory flow. In
- * obstructive disease that becomes unrealistic once dynamic airway compression
- * creates a choke point. We therefore cap negative flow with a simple
- * volume-dependent maximum-expiratory-flow envelope. The envelope rises with
- * lung volume, allowing a new hyperinflated equilibrium rather than unlimited
- * volume accumulation, while becoming progressively flatter as severity rises.
+ * `patient.expiratoryFlowLimitation` is a dimensionless SEVERITY SCORE:
+ *   0.0 = no EFL
+ *   1.0 = very severe EFL
+ * It is deliberately not a percentage reduction in expiratory flow.
  *
- * Severity 0 leaves the linear RC model unchanged.
+ * The model is informed by Junhasavasdikul et al. (Crit Care 2024;
+ * doi:10.1186/s13054-024-04953-9), who describe two useful physiological
+ * patterns during mechanical ventilation:
+ *   - early EFL, associated mainly with airway disease and sometimes showing
+ *     an initial expiratory-flow spike followed by a flatter low-flow segment;
+ *   - late EFL, in which expiration initially resembles the unrestricted
+ *     resistance curve and becomes flow-limited later in expiration.
+ *
+ * We do not claim that the 0-1 score is clinically calibrated to that study.
+ * Instead, severity controls how restrictive/flat the maximum-expiratory-flow
+ * envelope becomes, while the existing expiratory-resistance setting provides
+ * a continuous airway-involvement signal. High Rexp therefore biases the
+ * envelope toward the early-airway/dog-leg phenotype without conflating airway
+ * resistance itself with EFL severity.
  */
 export function applyExpiratoryFlowLimitation(
   requestedFlowLs: number,
@@ -34,21 +44,43 @@ export function applyExpiratoryFlowLimitation(
 
   const pbw = calculatePredictedBodyWeight(patient.sex ?? 'male', patient.heightCm ?? 170)
   const sizeScale = clamp(Math.sqrt(pbw / 66), 0.55, 1.35)
+  const volumeL = Math.max(volumeAboveSetPeepL, 0)
 
-  // A simplified maximum-expiratory-flow/volume envelope. At severe settings
-  // the pressure-independent portion dominates; at higher lung volumes the
-  // ceiling still rises enough for a stable EELV to exist.
-  const lowVolumeCeilingLs = Math.max(0.03, (0.14 - 0.10 * severity) * sizeScale)
-  const volumeSlopePerSecond = Math.max(0.12, (0.38 - 0.13 * severity) * sizeScale)
-  const ceilingLs = lowVolumeCeilingLs + volumeSlopePerSecond * Math.max(volumeAboveSetPeepL, 0)
+  // Separate airway calibre from EFL severity. The paper found early EFL mainly
+  // in patients with airway involvement and late EFL mainly in non-airway
+  // disease. Rexp is therefore used only to bias morphology/onset, not to define
+  // the EFL severity score itself.
+  const airwayInvolvement = clamp((Math.max(patient.expiratoryResistance, 0) - 10) / 30, 0, 1)
+
+  // Make the lower half of the severity scale genuinely mild/moderate instead
+  // of behaving almost like severe clipping. At 1.0 the envelope remains close
+  // to the previous severe-obstruction ceiling.
+  const severityGain = Math.pow(severity, 1.4)
+  const lowVolumeCeilingLs = Math.max(0.04, (0.30 - 0.25 * severityGain) * sizeScale)
+  const volumeSlopePerSecond = Math.max(0.22, (0.85 - 0.58 * severityGain) * sizeScale)
+
+  // Airway-type early EFL: permit a brief high-volume flow spike, then lose that
+  // extra flow rapidly as lung volume falls through the elbow. This creates the
+  // clinically recognisable spike -> flatter low-flow ('dog-leg') morphology
+  // described for severe early EFL, while low-Rexp patients retain a smoother
+  // late-EFL pattern.
+  const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
+  const elbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
+  const volumeAboveElbowL = Math.max(0, volumeL - elbowVolumeL)
+  const earlyFlowSpikeReliefLs =
+    airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * volumeAboveElbowL
+
+  const ceilingLs =
+    lowVolumeCeilingLs +
+    volumeSlopePerSecond * volumeL +
+    earlyFlowSpikeReliefLs
 
   const requestedMagnitude = -requestedFlowLs
 
-  // Do not switch abruptly from the ordinary RC solution to the choke-flow
-  // envelope. A hard Math.min() produces a visible corner each time an
-  // obstructed breath crosses the envelope. Blend over a narrow +/-15% band
-  // around the ceiling so flow and its slope change continuously while the
-  // final severe-obstruction ceiling remains unchanged.
+  // Smooth convergence onto the maximum-expiratory-flow envelope. This mirrors
+  // the physiological idea that reducing downstream pressure does not increase
+  // flow once the choke-flow envelope is reached, but avoids a numerical corner
+  // on the displayed waveform.
   const blendWidth = Math.max(ceilingLs * 0.15, 0.015)
   const blendLow = Math.max(0, ceilingLs - blendWidth)
   const blendHigh = ceilingLs + blendWidth

@@ -46,7 +46,7 @@ export const PATIENT_PROFILES: Record<PatientProfileName, PatientSettings> = {
   // Moderate remains the compatibility value for code/scenarios that refer to the generic ARDS profile.
   ARDS: { ...ARDS_PROFILES.moderate },
   COPD: { ...normalPhysiology, vdVt: 0.5, shuntFraction: 0.05, compliance: 80, chestWallCompliance: normalAdultChestWallCompliance, resistance: 16, expiratoryResistance: 28, expiratoryFlowLimitation: 0.8, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -5 },
-  Asthma: { ...normalPhysiology, vdVt: 0.5, shuntFraction: 0.04, compliance: 70, chestWallCompliance: normalAdultChestWallCompliance, resistance: 25, expiratoryResistance: 40, expiratoryFlowLimitation: 0.95, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30, endExpiratoryOesophagealPressure: -5 },
+  Asthma: { ...normalPhysiology, vdVt: 0.5, shuntFraction: 0.04, compliance: 70, chestWallCompliance: normalAdultChestWallCompliance, resistance: 25, expiratoryResistance: 40, expiratoryFlowLimitation: 1.0, spontaneousRate: 24, effort: 11, neuralInspiratoryTime: 0.8, effortRisePercent: 20, effortRelaxationPercent: 30, endExpiratoryOesophagealPressure: -5 },
   Paed: { sex: 'male', heightCm: 110, oxygenConsumption: 120, frc: 500, shuntFraction: 0.03, maxSpO2: 100, co2Production: 100, vdVt: 0.4, compliance: 20, chestWallCompliance: paediatricChestWallCompliance, resistance: 8, expiratoryResistance: 10, expiratoryFlowLimitation: 0, spontaneousRate: 22, effort: 5, neuralInspiratoryTime: 0.7, effortRisePercent: 40, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -4 },
 }
 

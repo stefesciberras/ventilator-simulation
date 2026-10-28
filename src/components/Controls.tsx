@@ -368,7 +368,7 @@ export function PatientControls({ settings, onChange, onReset, onResetPhysiology
       <Slider label="Chest wall compliance" value={settings.chestWallCompliance ?? Math.round(predictedBodyWeight * 3)} unit=" mL/cmH₂O" min={40} max={400} step={5} onChange={(v) => patch({ chestWallCompliance: v })} />
       <Slider label="Airway resistance" value={settings.resistance} unit=" cmH₂O/L/s" min={3} max={40} onChange={(v) => patch({ resistance: v })} />
       <Slider label="Expiratory resistance" value={settings.expiratoryResistance} unit=" cmH₂O/L/s" min={3} max={50} onChange={(v) => patch({ expiratoryResistance: v })} />
-      <Slider label="Expiratory flow limitation" value={Math.round((settings.expiratoryFlowLimitation ?? 0) * 100)} unit="%" min={0} max={100} step={5} onChange={(v) => patch({ expiratoryFlowLimitation: v / 100 })} />
+      <Slider label="EFL severity" value={Math.round((settings.expiratoryFlowLimitation ?? 0) * 10) / 10} unit="" min={0} max={1} step={0.1} displayValue={(Math.round((settings.expiratoryFlowLimitation ?? 0) * 10) / 10).toFixed(1)} onChange={(v) => patch({ expiratoryFlowLimitation: v })} />
       <Slider label="Inspiratory effort" value={settings.effort} unit=" cmH₂O" min={0} max={20} onChange={(v) => patch({ effort: v })} />
       <Slider label="Neural inspiratory time" value={settings.neuralInspiratoryTime} unit=" s" min={0.3} max={3} step={0.1} onChange={(v) => patch({ neuralInspiratoryTime: v })} />
       <EffortPhaseControl
