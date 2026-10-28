@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { MonitorPatientState } from './types'
+import { EdumonBisTrend } from './EdumonBisTrend'
 import {
   EDUMON_MONITOR_DISPLAY_ACTION_IDS,
   useEdumonMonitorDisplayDomBridge,
@@ -37,14 +38,16 @@ export function EdumonTemperatureSurface({ patientState }: { patientState: Monit
     }
   }, [])
 
-  if (!footerHost || !temperatureEnabled) return null
+  const temperaturePortal = footerHost && temperatureEnabled
+    ? createPortal(
+      <div className="edumon-temperature-container" aria-label={`Temperature ${temperature.toFixed(1)} degrees Celsius`}>
+        <span className="edumon-temperature-title">TEMP</span>
+        <strong>{temperature.toFixed(1)}</strong>
+        <small>°C</small>
+      </div>,
+      footerHost,
+    )
+    : null
 
-  return createPortal(
-    <div className="edumon-temperature-container" aria-label={`Temperature ${temperature.toFixed(1)} degrees Celsius`}>
-      <span className="edumon-temperature-title">TEMP</span>
-      <strong>{temperature.toFixed(1)}</strong>
-      <small>°C</small>
-    </div>,
-    footerHost,
-  )
+  return <><EdumonBisTrend patientState={patientState} />{temperaturePortal}</>
 }
