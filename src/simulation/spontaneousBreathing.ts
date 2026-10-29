@@ -3,7 +3,7 @@ import type { PatientSettings } from './types'
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 /**
- * EDUVENT-only spontaneous breathing mechanics.
+ * EDUVENT-only spontaneous breathing and patient/ventilator interaction mechanics.
  *
  * This module deliberately lives under src/simulation rather than the shared
  * EDUSIM respiratory physiology core. EDUMON/Anaesth consumes the shared gas
@@ -29,9 +29,24 @@ export interface PressureDemandResult {
   sourcePressureDropCmH2O: number
 }
 
+export interface FlowControlledPressureInput {
+  peepCmH2O: number
+  commandedFlowLs: number
+  musclePressureCmH2O: number
+  volumeAbovePeepL: number
+  complianceLPerCmH2O: number
+  airwayResistanceCmH2OPerLs: number
+}
+
+export interface FlowControlledPressureResult {
+  airwayPressureCmH2O: number
+  elasticPressureCmH2O: number
+  resistivePressureCmH2O: number
+}
+
 /**
  * Effective source impedance of the ventilator demand valve/circuit during
- * spontaneous pressure assistance. This keeps ordinary flow close to the ideal
+ * pressure-targeted ventilation. This keeps ordinary flow close to the ideal
  * equation-of-motion solution, but prevents an infinitely stiff pressure source
  * from generating very large instantaneous flow when patient demand is high.
  */
@@ -72,9 +87,10 @@ export function patientMusclePressure(t: number, patient: PatientSettings): numb
 }
 
 /**
- * Solve a spontaneous pressure-assisted breath with a finite-impedance demand
- * source. The source impedance produces a transient Paw droop at high demand,
- * then Paw returns toward the requested support/CPAP target as flow falls.
+ * Solve a pressure-targeted breath with a finite-impedance demand source.
+ * The same controller is used by spontaneous pressure support and mandatory
+ * pressure-controlled breaths so patient effort interacts with the pressure
+ * source consistently across modes.
  */
 export function solvePressureDemand(input: PressureDemandInput): PressureDemandResult {
   const compliance = Math.max(input.complianceLPerCmH2O, 0.001)
@@ -93,6 +109,26 @@ export function solvePressureDemand(input: PressureDemandInput): PressureDemandR
     elasticPressureCmH2O: elasticPressure,
     idealInfiniteSourceFlowLs,
     sourcePressureDropCmH2O: sourcePressureDrop,
+  }
+}
+
+/**
+ * Solve airway pressure for a volume-controlled breath where ventilator flow is
+ * authoritative. Patient effort therefore changes Paw, not delivered flow:
+ * Paw = PEEP + Pelastic + Presistive - Pmus.
+ */
+export function solveFlowControlledPressure(input: FlowControlledPressureInput): FlowControlledPressureResult {
+  const compliance = Math.max(input.complianceLPerCmH2O, 0.001)
+  const airwayResistance = Math.max(input.airwayResistanceCmH2OPerLs, 0.5)
+  const flowLs = Math.max(0, input.commandedFlowLs)
+  const elasticPressure = Math.max(input.volumeAbovePeepL, 0) / compliance
+  const resistivePressure = airwayResistance * flowLs
+  const airwayPressure = input.peepCmH2O + elasticPressure + resistivePressure - input.musclePressureCmH2O
+
+  return {
+    airwayPressureCmH2O: airwayPressure,
+    elasticPressureCmH2O: elasticPressure,
+    resistivePressureCmH2O: resistivePressure,
   }
 }
 
