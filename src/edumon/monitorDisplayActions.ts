@@ -65,7 +65,7 @@ export function useMonitorDisplayEnabled(actionId: EdumonMonitorDisplayActionId)
   return sharedEnabled || instructorOnlyEnabled
 }
 
-function syncInstructorCapnographyButton(): void {
+function syncCapnographyButton(): void {
   const instructorHost = document.querySelector<HTMLElement>('.edumon-instructor-monitor-class .edumon-action-grid')
   const standaloneHost = document.querySelector<HTMLElement>('.edumon-drug-class[aria-label="Monitors events"] .edumon-action-grid')
   const host = instructorHost ?? standaloneHost
@@ -83,12 +83,19 @@ function syncInstructorCapnographyButton(): void {
     button.type = 'button'
     button.addEventListener('click', () => toggleInstructorMonitorDisplay(EDUMON_MONITOR_DISPLAY_ACTION_IDS.capnography))
   }
-  button.className = `edumon-action-button toggle ${instructorOnly ? 'instructor-monitor' : ''}`.trim()
-  button.title = instructorOnly ? 'Display only on the instructor monitor' : 'Show or hide capnography on this monitor'
-  button.innerHTML = instructorOnly
+
+  const desiredClassName = `edumon-action-button toggle ${instructorOnly ? 'instructor-monitor' : ''}`.trim()
+  const desiredTitle = instructorOnly ? 'Display only on the instructor monitor' : 'Show or hide capnography on this monitor'
+  const desiredMarkup = instructorOnly
     ? '<span>Capno</span><small class="edumon-action-local-badge">I</small>'
     : '<span>Capno</span>'
 
+  // Keep this bridge idempotent. The Actions panel is watched for structural
+  // changes; rewriting innerHTML on every observer callback creates a
+  // self-sustaining MutationObserver loop and can hang Chromium.
+  if (button.className !== desiredClassName) button.className = desiredClassName
+  if (button.title !== desiredTitle) button.title = desiredTitle
+  if (button.innerHTML !== desiredMarkup) button.innerHTML = desiredMarkup
   if (button.parentElement !== host) host.appendChild(button)
 
   const active = isInstructorMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.capnography)
@@ -113,7 +120,7 @@ export function useEdumonMonitorDisplayDomBridge(): void {
   }, [capnography])
 
   useEffect(() => {
-    const sync = () => syncInstructorCapnographyButton()
+    const sync = () => syncCapnographyButton()
     sync()
     const unsubscribe = subscribeToInstructorMonitorDisplays(sync)
     const observer = new MutationObserver(sync)

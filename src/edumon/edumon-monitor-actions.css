@@ -12,10 +12,12 @@ html:not([data-edumon-monitor-capnography]) .edumon-value-capnography {
   display: none !important;
 }
 
-/* Keep the primary monitor on a stable three-slot waveform/value grid.
-   With only two visible waveforms, the third slot remains empty so enabling
-   capnography fills that slot without resizing the existing traces. */
-.edumon-waveform-area,
-.edumon-measurements {
-  grid-template-rows: repeat(3, minmax(0, 1fr));
+/* Keep the primary monitor on a stable three-slot waveform/value grid on all
+   viewport sizes. Other EDUMON/mobile rules previously collapsed the grid to
+   the number of visible traces, which made two traces grow to half-height and
+   then shrink when capnography was enabled. */
+.edumon-monitor-body .edumon-waveform-area,
+.edumon-monitor-body .edumon-measurements {
+  grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+  grid-auto-rows: minmax(0, 1fr) !important;
 }
