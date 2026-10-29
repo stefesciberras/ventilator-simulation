@@ -1,12 +1,15 @@
-.edumon-action-button:has(.edumon-action-dose-badge) {
-  position: relative;
-  padding-bottom: 15px;
-}
-
-.edumon-action-dose-badge {
+.edumon-action-dose-badge,
+.edumon-action-dose-trigger {
   --level-bar-1: #f0a03a;
   --level-bar-2: rgba(255,255,255,0.16);
   --level-bar-3: rgba(255,255,255,0.16);
+  box-sizing: border-box;
+  color: transparent;
+  font-size: 0 !important;
+  line-height: 0;
+}
+
+.edumon-action-dose-badge {
   position: absolute;
   left: 50%;
   bottom: 4px;
@@ -19,34 +22,49 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: transparent;
-  font-size: 0 !important;
-  line-height: 0;
-  box-sizing: border-box;
   pointer-events: none;
 }
 
-.edumon-action-dose-badge::before {
+.edumon-action-dose-trigger {
+  width: 25px;
+  min-width: 25px;
+  height: 20px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.edumon-action-dose-trigger:hover {
+  border-color: transparent;
+  background: rgba(240,160,58,0.06);
+}
+
+.edumon-action-dose-badge::before,
+.edumon-action-dose-trigger::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 0;
+  left: 50%;
+  top: 50%;
   width: 7px;
   height: 5px;
   border-radius: 1px;
   background: var(--level-bar-1);
   box-shadow: 9px 0 0 var(--level-bar-2), 18px 0 0 var(--level-bar-3);
+  transform: translate(-12.5px, -2.5px);
 }
 
-.edumon-action-dose-badge::after {
+.edumon-action-dose-badge::after,
+.edumon-action-dose-trigger::after {
   content: none;
 }
 
-.edumon-action-dose-badge[data-level='medium'] {
+.edumon-action-dose-badge[data-level='medium'],
+.edumon-action-dose-trigger[data-level='medium'] {
   --level-bar-2: #f0a03a;
 }
 
-.edumon-action-dose-badge[data-level='high'] {
+.edumon-action-dose-badge[data-level='high'],
+.edumon-action-dose-trigger[data-level='high'] {
   --level-bar-2: #f0a03a;
   --level-bar-3: #f0a03a;
 }
