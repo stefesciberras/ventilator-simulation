@@ -8,6 +8,7 @@ import type {
   SharedScenarioAuthoringDocument,
   SharedScenarioAuthoringTrigger,
   SharedScenarioEditorAdapter,
+  SharedScenarioTriggerRegistryItem,
 } from '../../../teaching/scenario/authoringTypes'
 import type { TeachingScenarioStageContent } from '../../../teaching/scenario/runtimeCore'
 import type { ScenarioVariableDefinition } from '../../model'
@@ -116,14 +117,17 @@ function toSharedTrigger(trigger: EdumonScenarioTrigger): SharedScenarioAuthorin
   if (trigger.type === 'time') return { id, type: 'time', seconds: trigger.seconds }
   if (trigger.type === 'condition') return { id, type: 'condition', metric: trigger.metric, operator: trigger.operator, value: trigger.value }
   if (trigger.type === 'edusim-action') return { id, type: 'edusim-action', actionId: trigger.actionId, actor: trigger.actor ?? 'candidate' }
-  return { id, type: 'action', parameter: String(trigger.parameter), actor: trigger.actor ?? 'candidate' }
+  if (trigger.type === 'parameter-change') return { id, type: 'action', parameter: trigger.parameterId, actor: trigger.actor ?? 'either' }
+  return { id, type: 'action', parameter: String(trigger.parameter), actor: trigger.actor ?? 'either' }
 }
 
-function fromSharedTrigger(trigger: SharedScenarioAuthoringTrigger): EdumonScenarioTrigger {
+function fromSharedTrigger(trigger: SharedScenarioAuthoringTrigger, module = getEdumonScenarioModule('anaesth')): EdumonScenarioTrigger {
   if (trigger.type === 'manual' || trigger.type === 'question-any' || trigger.type === 'question-correct' || trigger.type === 'media-ended' || trigger.type === 'media-acknowledged') return { type: trigger.type }
   if (trigger.type === 'time') return { type: 'time', seconds: trigger.seconds }
   if (trigger.type === 'condition') return { type: 'condition', metric: trigger.metric as EdumonScenarioMetric, operator: trigger.operator, value: trigger.value }
   if (trigger.type === 'edusim-action') return { type: 'edusim-action', actionId: trigger.actionId, actor: trigger.actor }
+  const variable = module.variables.find((item) => item.id === trigger.parameter)
+  if (variable?.snapshotPath) return { type: 'parameter-change', parameterId: variable.id, snapshotPath: variable.snapshotPath, actor: trigger.actor }
   return { type: 'patient-change', parameter: trigger.parameter as keyof EdumonScenarioSnapshot['patient'], actor: trigger.actor }
 }
 
@@ -137,19 +141,26 @@ export function createEdumonAuthoringAdapter(product: EdumonScenarioProduct, pro
   const appliedIds = editableVariables.map((variable) => variable.id)
   const measurementVariables = scenarioTriggerVariables(module, 'measurement')
   const actionVariables = scenarioTriggerVariables(module, 'candidate-action')
+  const triggerRegistry: SharedScenarioTriggerRegistryItem[] = [
+    { id: 'runtime:manual', label: 'Instructor choice', group: 'Runtime', kind: 'manual' },
+    { id: 'runtime:time', label: 'Time passed', group: 'Runtime', kind: 'time' },
+    ...measurementVariables.map((variable) => ({ id: `measurement:${variable.id}`, label: variable.label, group: variable.group, kind: 'measurement' as const, metric: variable.id, unit: variable.unit })),
+    ...actionVariables.map((variable) => ({ id: `parameter-change:${variable.id}`, label: `${variable.label} changed`, group: variable.group, kind: 'parameter-change' as const, parameter: variable.id, actors: ['candidate', 'instructor', 'either'] as const })),
+  ]
 
   return {
     product,
     productLabel,
     emptySnapshot: () => ({ patient: { ...DEFAULT_MONITOR_STATE }, simulationPaused: false, simulationSpeed: 1 }),
     defaultAppliedVariableIds: () => [...appliedIds],
-    transitionVariables: () => transitionScenarioVariables(module).map((variable) => ({ id: variable.id, label: variable.label })),
-    conditionMetrics: measurementVariables.map((variable) => ({ id: variable.id, label: variable.label })),
+    transitionVariables: () => transitionScenarioVariables(module).map((variable) => ({ id: variable.id, label: variable.label, group: variable.group })),
+    conditionMetrics: measurementVariables.map((variable) => ({ id: variable.id, label: variable.label, group: variable.group })),
+    triggerRegistry,
     loadEdusimActionChoices: async () => {
       const environment = product === 'icu' ? 'edumon-icu' : 'edumon-ana'
-      return (await listEdusimActions(environment)).map((action) => ({ id: action.id, label: action.name, kind: action.kind }))
+      return (await listEdusimActions(environment)).map((action) => ({ id: action.id, label: action.name, kind: action.kind, group: action.kind === 'drug' ? 'Drugs' : 'Events' }))
     },
-    actionParameters: actionVariables.map((variable) => ({ id: variable.id, label: `${variable.label} changed` })),
+    actionParameters: actionVariables.map((variable) => ({ id: variable.id, label: `${variable.label} changed`, group: variable.group })),
     renderSnapshotEditor: (snapshot, onChange, options): ReactNode => <SnapshotEditor product={product} snapshot={snapshot} onChange={onChange} appliedVariableIds={options?.appliedVariableIds} onAppliedVariableIdsChange={options?.onAppliedVariableIdsChange} />,
     toDocument: (name, scenario) => ({
       schemaVersion: 1,
@@ -216,8 +227,8 @@ export function createEdumonAuthoringAdapter(product: EdumonScenarioProduct, pro
           id: branch.id,
           fromStageId: branch.fromStageId,
           toStageId: branch.toStageId,
-          trigger: fromSharedTrigger(branch.trigger),
-          triggers: (branch.triggers?.length ? branch.triggers : [branch.trigger]).map(fromSharedTrigger),
+          trigger: fromSharedTrigger(branch.trigger, module),
+          triggers: (branch.triggers?.length ? branch.triggers : [branch.trigger]).map((trigger) => fromSharedTrigger(trigger, module)),
           triggerMode: branch.triggerMode === 'all' ? 'all' : 'any',
           priority: branch.priority,
           label: branch.label,
