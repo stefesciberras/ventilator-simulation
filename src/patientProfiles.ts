@@ -42,7 +42,26 @@ export const ARDS_PROFILES: Record<ArdsSeverity, PatientSettings> = {
 }
 
 export const PATIENT_PROFILES: Record<PatientProfileName, PatientSettings> = {
-  Normal: { ...normalPhysiology, shuntFraction: 0.03, compliance: 60, chestWallCompliance: normalAdultChestWallCompliance, resistance: 6, expiratoryResistance: 8, expiratoryFlowLimitation: 0, spontaneousRate: 12, effort: 5, neuralInspiratoryTime: 1, effortRisePercent: 50, effortRelaxationPercent: 50, endExpiratoryOesophagealPressure: -5 },
+  // Canonical reference adult for ventilator teaching. Keep disease presets independent
+  // while they are reviewed separately rather than inheriting these revised normal values.
+  Normal: {
+    ...normalPhysiology,
+    frc: 2300,
+    co2Production: 200,
+    vdVt: 0.3,
+    shuntFraction: 0.03,
+    compliance: 65,
+    chestWallCompliance: normalAdultChestWallCompliance,
+    resistance: 6,
+    expiratoryResistance: 6,
+    expiratoryFlowLimitation: 0,
+    spontaneousRate: 12,
+    effort: 5,
+    neuralInspiratoryTime: 1,
+    effortRisePercent: 50,
+    effortRelaxationPercent: 50,
+    endExpiratoryOesophagealPressure: -5,
+  },
   // Moderate remains the compatibility value for code/scenarios that refer to the generic ARDS profile.
   ARDS: { ...ARDS_PROFILES.moderate },
   COPD: { ...normalPhysiology, vdVt: 0.5, shuntFraction: 0.05, compliance: 80, chestWallCompliance: normalAdultChestWallCompliance, resistance: 16, expiratoryResistance: 28, expiratoryFlowLimitation: 0.8, spontaneousRate: 18, effort: 8, neuralInspiratoryTime: 0.9, effortRisePercent: 30, effortRelaxationPercent: 40, endExpiratoryOesophagealPressure: -5 },
