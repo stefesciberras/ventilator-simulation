@@ -4,7 +4,14 @@ import { isActionToggleRunning, subscribeToActionRuntime } from '../edusim/actio
 import './edumon-monitor-actions.css'
 import './edumon-monitor-row-alignment.css'
 
-export const EDUMON_MONITOR_DISPLAY_ACTION_IDS = MONITOR_DISPLAY_ACTION_IDS
+// Keep the established EDUMON aliases explicit for regression/backward compatibility,
+// while capnography shares the canonical product-neutral core capability ID.
+export const EDUMON_MONITOR_DISPLAY_ACTION_IDS = {
+  invasiveBloodPressure: 'monitor-inv-bp',
+  bis: 'monitor-bis',
+  temperature: 'monitor-temp',
+  capnography: MONITOR_DISPLAY_ACTION_IDS.capnography,
+} as const satisfies Record<string, MonitorDisplayActionId>
 
 export type EdumonMonitorDisplayActionId = MonitorDisplayActionId
 
