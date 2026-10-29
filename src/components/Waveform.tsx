@@ -20,6 +20,13 @@ interface WaveformProps {
   showPatientEffortMarkers?: boolean
 }
 
+interface DisplayPoint {
+  index: number
+  x: number
+  y: number
+  phase: Sample['phase']
+}
+
 function roundedDownToTen(value: number): number {
   return Math.floor(value / 10) * 10
 }
@@ -67,6 +74,110 @@ function autoscale(samples: Sample[], signal: Signal, fallbackMin: number, fallb
   }
 
   return { min: scaledMin, max: scaledMax }
+}
+
+/**
+ * Collapse the simulation history to the horizontal resolution of the canvas
+ * without averaging away brief clinical features. Every pixel bucket retains
+ * its minimum and maximum sample in their original time order.
+ */
+function buildDisplayPoints(
+  samples: Sample[],
+  signal: Signal,
+  width: number,
+  height: number,
+  toY: (value: number) => number,
+): DisplayPoint[] {
+  if (!samples.length) return []
+
+  const denominator = Math.max(1, samples.length - 1)
+  const toPoint = (index: number): DisplayPoint => ({
+    index,
+    x: (index / denominator) * width,
+    y: Math.max(1, Math.min(height - 1, toY(samples[index][signal]))),
+    phase: samples[index].phase,
+  })
+
+  // At roughly one sample per horizontal pixel (or less), retaining the raw
+  // samples gives the most faithful trace and avoids unnecessary resampling.
+  if (samples.length <= Math.max(2, Math.floor(width * 1.25))) {
+    return samples.map((_, index) => toPoint(index))
+  }
+
+  const bucketCount = Math.max(1, Math.floor(width))
+  const points: DisplayPoint[] = []
+  let lastIndex = -1
+
+  for (let bucket = 0; bucket < bucketCount; bucket += 1) {
+    const start = Math.floor((bucket / bucketCount) * samples.length)
+    const exclusiveEnd = Math.max(start + 1, Math.floor(((bucket + 1) / bucketCount) * samples.length))
+    const end = Math.min(samples.length, exclusiveEnd)
+
+    let minIndex = start
+    let maxIndex = start
+    let minValue = samples[start][signal]
+    let maxValue = minValue
+
+    for (let index = start + 1; index < end; index += 1) {
+      const value = samples[index][signal]
+      if (value < minValue) {
+        minValue = value
+        minIndex = index
+      }
+      if (value > maxValue) {
+        maxValue = value
+        maxIndex = index
+      }
+    }
+
+    // Min/max ordering matters: it preserves the actual temporal direction of
+    // narrow trigger notches, spikes and cycling transitions inside the pixel.
+    const indices = minIndex === maxIndex
+      ? [minIndex]
+      : minIndex < maxIndex
+        ? [minIndex, maxIndex]
+        : [maxIndex, minIndex]
+
+    for (const index of indices) {
+      if (index === lastIndex) continue
+      points.push(toPoint(index))
+      lastIndex = index
+    }
+  }
+
+  if (lastIndex !== samples.length - 1) points.push(toPoint(samples.length - 1))
+  if (points[0]?.index !== 0) points.unshift(toPoint(0))
+
+  return points
+}
+
+/**
+ * Draw a display-smooth trace while retaining true phase transitions as hard
+ * boundaries. Quadratic midpoint interpolation rounds sampling corners within
+ * a phase but does not invent extra extrema or alter the underlying data.
+ */
+function strokeDisplayTrace(ctx: CanvasRenderingContext2D, points: DisplayPoint[]) {
+  if (!points.length) return
+
+  ctx.beginPath()
+  ctx.moveTo(points[0].x, points[0].y)
+
+  for (let index = 1; index < points.length; index += 1) {
+    const current = points[index]
+    const previous = points[index - 1]
+    const next = points[index + 1]
+
+    if (!next || current.phase !== previous.phase || current.phase !== next.phase) {
+      ctx.lineTo(current.x, current.y)
+      continue
+    }
+
+    const midpointX = (current.x + next.x) / 2
+    const midpointY = (current.y + next.y) / 2
+    ctx.quadraticCurveTo(current.x, current.y, midpointX, midpointY)
+  }
+
+  ctx.stroke()
 }
 
 export function Waveform({ samples, signal, label, unit, min, max, accent, frozen = false, cursorIndex = 0, onCursorChange, showTime = false, showSimvSyncWindow = false, showPatientEffortMarkers = false }: WaveformProps) {
@@ -144,16 +255,8 @@ export function Waveform({ samples, signal, label, unit, min, max, accent, froze
     ctx.lineWidth = 2
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
-    ctx.beginPath()
-
-    samples.forEach((sample, index) => {
-      const x = (index / Math.max(1, samples.length - 1)) * width
-      const value = sample[signal]
-      const y = Math.max(1, Math.min(height - 1, toY(value)))
-      if (index === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    })
-    ctx.stroke()
+    const displayPoints = buildDisplayPoints(samples, signal, width, height, toY)
+    strokeDisplayTrace(ctx, displayPoints)
 
     if (signal === 'pressure') {
       if (showPatientEffortMarkers) {
