@@ -12,9 +12,11 @@ import {
   type SharedScenarioEditorAdapter,
   type SharedScenarioQuestionContent,
   type SharedScenarioTransition,
+  type SharedScenarioTriggerRegistryItem,
 } from '../teaching/scenario/authoringTypes'
 import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
 import type { ProductScenarioRow } from '../teaching/scenario/productLibrary'
+import { getStudioTriggerRegistry } from './modules/registry'
 
 interface SharedScenarioEditorFrameworkProps<TScenario, TSnapshot> {
   adapter: SharedScenarioEditorAdapter<TScenario, TSnapshot>
@@ -44,20 +46,65 @@ function questionDefault(): SharedScenarioQuestionContent {
   }
 }
 
-function triggerLabel(trigger: SharedScenarioAuthoringTrigger) {
-  if (trigger.type === 'manual') return 'Instructor choice'
-  if (trigger.type === 'time') return `Time ≥ ${trigger.seconds}s`
-  if (trigger.type === 'condition') return `${trigger.metric || 'Metric'} ${trigger.operator === 'lt' ? '<' : trigger.operator === 'gt' ? '>' : '='} ${trigger.value}`
-  if (trigger.type === 'action') return `${trigger.actor}: ${trigger.parameter || 'action'}`
-  if (trigger.type === 'edusim-action') return `${trigger.actor}: ${trigger.actionId || 'drug / event'}`
-  if (trigger.type === 'question-any') return 'Any answer submitted'
-  if (trigger.type === 'question-correct') return 'Correct answer submitted'
-  if (trigger.type === 'media-ended') return 'Video finished'
-  return 'Media acknowledged'
+function triggerFromRegistry(item: SharedScenarioTriggerRegistryItem): SharedScenarioAuthoringTrigger {
+  const id = authoringId('trigger')
+  if (item.kind === 'manual') return { id, type: 'manual' }
+  if (item.kind === 'time') return { id, type: 'time', seconds: 30 }
+  if (item.kind === 'measurement') return { id, type: 'condition', metric: item.metric, operator: 'gt', value: 0 }
+  if (item.kind === 'parameter-change') return { id, type: 'action', parameter: item.parameter, actor: 'either' }
+  return { id, type: 'edusim-action', actionId: item.actionId, actor: 'either' }
 }
 
-function pathTriggers(branch: SharedScenarioAuthoringBranch) {
-  return branch.triggers?.length ? branch.triggers : [branch.trigger]
+function paletteGroup(item: SharedScenarioTriggerRegistryItem) {
+  if (item.kind === 'measurement') return `Measurements · ${item.group}`
+  if (item.kind === 'parameter-change') return `Parameter changes · ${item.group}`
+  return item.group
+}
+
+function TriggerPalette({
+  items,
+  disabled,
+  onPick,
+}: {
+  items: readonly SharedScenarioTriggerRegistryItem[]
+  disabled: boolean
+  onPick: (item: SharedScenarioTriggerRegistryItem) => void
+}) {
+  const [query, setQuery] = useState('')
+  const filtered = items.filter((item) => {
+    const haystack = `${item.label} ${paletteGroup(item)} ${item.kind}`.toLowerCase()
+    return haystack.includes(query.trim().toLowerCase())
+  })
+  const groups = [...new Set(filtered.map(paletteGroup))]
+
+  return <aside className="shared-scenario-trigger-palette">
+    <div className="shared-scenario-trigger-palette-heading">
+      <span>Trigger palette</span>
+      <strong>Drag or tap to add a path</strong>
+      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search triggers…" />
+    </div>
+    <div className="shared-scenario-trigger-palette-list">
+      {groups.map((group) => <section key={group}>
+        <h4>{group}</h4>
+        {filtered.filter((item) => paletteGroup(item) === group).map((item) => <button
+          key={item.id}
+          type="button"
+          draggable={!disabled}
+          disabled={disabled}
+          className={`shared-scenario-trigger-chip kind-${item.kind}`}
+          onClick={() => onPick(item)}
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = 'copy'
+            event.dataTransfer.setData('application/x-loppjusim-trigger', item.id)
+          }}
+        >
+          <strong>{item.label}</strong>
+          <small>{item.kind === 'measurement' ? item.unit || 'measurement' : item.kind === 'parameter-change' ? 'change' : item.kind}</small>
+        </button>)}
+      </section>)}
+      {!filtered.length && <small>No triggers match this search.</small>}
+    </div>
+  </aside>
 }
 
 function TriggerEditor({
@@ -65,20 +112,18 @@ function TriggerEditor({
   adapter,
   edusimActionChoices,
   onChange,
-  onDelete,
 }: {
   trigger: SharedScenarioAuthoringTrigger
   adapter: SharedScenarioEditorAdapter<unknown, unknown>
   edusimActionChoices: readonly SharedScenarioActionChoice[]
   onChange: (trigger: SharedScenarioAuthoringTrigger) => void
-  onDelete?: () => void
 }) {
   const setType = (type: SharedScenarioAuthoringTrigger['type']) => {
     if (type === 'manual') onChange({ id: trigger.id, type })
     else if (type === 'time') onChange({ id: trigger.id, type, seconds: 30 })
     else if (type === 'condition') onChange({ id: trigger.id, type, metric: adapter.conditionMetrics[0]?.id ?? '', operator: 'gt', value: 0 })
-    else if (type === 'action') onChange({ id: trigger.id, type, parameter: adapter.actionParameters[0]?.id ?? '', actor: 'candidate' })
-    else if (type === 'edusim-action') onChange({ id: trigger.id, type, actionId: edusimActionChoices[0]?.id ?? '', actor: 'candidate' })
+    else if (type === 'action') onChange({ id: trigger.id, type, parameter: adapter.actionParameters[0]?.id ?? '', actor: 'either' })
+    else if (type === 'edusim-action') onChange({ id: trigger.id, type, actionId: edusimActionChoices[0]?.id ?? '', actor: 'either' })
     else onChange({ id: trigger.id, type })
   }
 
@@ -86,8 +131,8 @@ function TriggerEditor({
     <select value={trigger.type} onChange={(event) => setType(event.target.value as SharedScenarioAuthoringTrigger['type'])}>
       <option value="manual">Manual</option>
       <option value="time">Time passed</option>
-      <option value="condition">Physiological condition</option>
-      <option value="action">Candidate / instructor action</option>
+      <option value="condition">Measurement condition</option>
+      <option value="action">Parameter changed</option>
       {!!adapter.loadEdusimActionChoices && <option value="edusim-action">Drug / event action</option>}
       <option value="question-any">Any question answer</option>
       <option value="question-correct">Correct question answer</option>
@@ -96,12 +141,16 @@ function TriggerEditor({
     </select>
     {trigger.type === 'time' && <label><span>Seconds</span><input type="number" min={0} value={trigger.seconds} onChange={(event) => onChange({ ...trigger, seconds: Math.max(0, Number(event.target.value) || 0) })} /></label>}
     {trigger.type === 'condition' && <>
-      <select value={trigger.metric} onChange={(event) => onChange({ ...trigger, metric: event.target.value })}>{adapter.conditionMetrics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+      <select value={trigger.metric} onChange={(event) => onChange({ ...trigger, metric: event.target.value })}>
+        {[...new Set(adapter.conditionMetrics.map((item) => item.group ?? 'Measurements'))].map((group) => <optgroup key={group} label={group}>{adapter.conditionMetrics.filter((item) => (item.group ?? 'Measurements') === group).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}
+      </select>
       <select value={trigger.operator} onChange={(event) => onChange({ ...trigger, operator: event.target.value as 'lt' | 'eq' | 'gt' })}><option value="lt">&lt;</option><option value="eq">=</option><option value="gt">&gt;</option></select>
       <input type="number" value={trigger.value} onChange={(event) => onChange({ ...trigger, value: Number(event.target.value) || 0 })} />
     </>}
     {trigger.type === 'action' && <>
-      <select value={trigger.parameter} onChange={(event) => onChange({ ...trigger, parameter: event.target.value })}>{adapter.actionParameters.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+      <select value={trigger.parameter} onChange={(event) => onChange({ ...trigger, parameter: event.target.value })}>
+        {[...new Set(adapter.actionParameters.map((item) => item.group ?? 'Parameters'))].map((group) => <optgroup key={group} label={group}>{adapter.actionParameters.filter((item) => (item.group ?? 'Parameters') === group).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}
+      </select>
       <select value={trigger.actor} onChange={(event) => onChange({ ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="candidate">Candidate</option><option value="instructor">Instructor</option><option value="either">Either</option></select>
     </>}
     {trigger.type === 'edusim-action' && <>
@@ -111,7 +160,6 @@ function TriggerEditor({
       </select>
       <select value={trigger.actor} onChange={(event) => onChange({ ...trigger, actor: event.target.value as 'candidate' | 'instructor' | 'either' })}><option value="candidate">Candidate</option><option value="instructor">Instructor</option><option value="either">Either</option></select>
     </>}
-    {onDelete && <button type="button" className="scenario-builder-danger shared-scenario-trash-button" onClick={onDelete} aria-label="Remove condition" title="Remove condition"><TrashIcon /></button>}
   </div>
 }
 
@@ -219,6 +267,19 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
     if (selectedId && !library.items.some((row) => row.id === selectedId)) setSelectedId('')
   }, [library.items, selectedId])
 
+  const staticTriggerRegistry = useMemo(() => adapter.triggerRegistry ?? getStudioTriggerRegistry(adapter.product), [adapter.product, adapter.triggerRegistry])
+  const triggerRegistry = useMemo<SharedScenarioTriggerRegistryItem[]>(() => [
+    ...staticTriggerRegistry,
+    ...edusimActionChoices.map((action) => ({
+      id: `edusim-action:${action.id}`,
+      label: action.label,
+      group: action.kind === 'drug' ? 'Drugs' as const : 'Events' as const,
+      kind: action.kind,
+      actionId: action.id,
+      actors: ['candidate', 'instructor', 'either'] as const,
+    })),
+  ], [staticTriggerRegistry, edusimActionChoices])
+
   const newScenario = () => {
     const snapshot = adapter.emptySnapshot()
     const stage = createAuthoringStage('Stage 1', snapshot)
@@ -272,7 +333,6 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
   const addStage = () => {
     const source = selectedStage?.snapshot ?? adapter.emptySnapshot()
     const stage = createAuthoringStage(`Stage ${document.stages.length + 1}`, clone(source))
-    // New state stages inherit the visible values for authoring convenience but change nothing until explicitly enabled.
     stage.appliedVariableIds = []
     const trigger = defaultAuthoringTrigger()
     const path: SharedScenarioAuthoringBranch = { id: authoringId('path'), fromStageId: selectedStage.id, toStageId: stage.id, trigger, triggers: [trigger], triggerMode: 'any', priority: document.branches.filter((branch) => branch.fromStageId === selectedStage.id).length, label: 'Continue', enabled: true }
@@ -301,30 +361,17 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
     setSelectedStageId(stages[0]?.id ?? '')
   }
 
-  const addBranch = () => {
+  const addBranch = (initialTrigger: SharedScenarioAuthoringTrigger = defaultAuthoringTrigger()) => {
     if (document.stages.length < 2) return
     const fromStageId = selectedStage.id
     const toStageId = document.stages.find((stage) => stage.id !== fromStageId)?.id ?? fromStageId
-    const trigger = defaultAuthoringTrigger()
-    const branch: SharedScenarioAuthoringBranch = { id: authoringId('path'), fromStageId, toStageId, trigger, triggers: [trigger], triggerMode: 'any', priority: document.branches.filter((item) => item.fromStageId === fromStageId).length, label: '', enabled: true }
+    const branch: SharedScenarioAuthoringBranch = { id: authoringId('path'), fromStageId, toStageId, trigger: initialTrigger, triggers: [initialTrigger], triggerMode: 'any', priority: document.branches.filter((item) => item.fromStageId === fromStageId).length, label: '', enabled: true }
     setDocument((current) => ({ ...current, branches: [...current.branches, branch] }))
   }
 
   const updateBranch = (id: string, patch: Partial<SharedScenarioAuthoringBranch>) => setDocument((current) => ({ ...current, branches: current.branches.map((branch) => branch.id === id ? { ...branch, ...patch } : branch) }))
   const deleteBranch = (id: string) => setDocument((current) => ({ ...current, branches: current.branches.filter((branch) => branch.id !== id) }))
-  const addPathCondition = (branch: SharedScenarioAuthoringBranch) => {
-    const next = [...pathTriggers(branch), defaultAuthoringTrigger()]
-    updateBranch(branch.id, { trigger: next[0], triggers: next })
-  }
-  const updatePathCondition = (branch: SharedScenarioAuthoringBranch, triggerId: string, nextTrigger: SharedScenarioAuthoringTrigger) => {
-    const next = pathTriggers(branch).map((trigger) => trigger.id === triggerId ? nextTrigger : trigger)
-    updateBranch(branch.id, { trigger: next[0] ?? nextTrigger, triggers: next })
-  }
-  const removePathCondition = (branch: SharedScenarioAuthoringBranch, triggerId: string) => {
-    const next = pathTriggers(branch).filter((trigger) => trigger.id !== triggerId)
-    if (!next.length) return
-    updateBranch(branch.id, { trigger: next[0], triggers: next })
-  }
+  const setBranchTrigger = (branch: SharedScenarioAuthoringBranch, trigger: SharedScenarioAuthoringTrigger) => updateBranch(branch.id, { trigger, triggers: [trigger], triggerMode: 'any' })
 
   const exportScenario = () => {
     const blob = new Blob([JSON.stringify({ format: 'edusim-scenario', schemaVersion: 1, document }, null, 2)], { type: 'application/json' })
@@ -393,7 +440,7 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
         <label className="wide"><span>Description / learning objective</span><textarea rows={2} value={document.description} onChange={(event) => setDocument((current) => ({ ...current, description: event.target.value }))} /></label>
       </div>
 
-      <div className="shared-scenario-stage-layout">
+      <div className="shared-scenario-stage-layout shared-scenario-stage-layout-with-triggers">
         <nav className="shared-scenario-stage-list">
           <div className="shared-scenario-stage-list-heading"><strong>Stages</strong><button type="button" onClick={addStage}>+ Add</button></div>
           {document.stages.map((stage, index) => {
@@ -401,6 +448,8 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
             return <button key={stage.id} type="button" className={stage.id === selectedStageId ? 'selected' : ''} onClick={() => setSelectedStageId(stage.id)}><small>{index + 1} · {stage.kind}</small><strong>{stage.name}</strong><em>{outgoing.length ? `${outgoing.length} path${outgoing.length === 1 ? '' : 's'}` : 'End stage'}</em></button>
           })}
         </nav>
+
+        <TriggerPalette items={triggerRegistry} disabled={document.stages.length < 2} onPick={(item) => addBranch(triggerFromRegistry(item))} />
 
         {selectedStage && <div className="shared-scenario-stage-editor">
           <div className="shared-scenario-stage-toolbar">
@@ -449,36 +498,49 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
             <label><span>Explanation</span><textarea rows={2} value={selectedStage.question.explanation ?? ''} onChange={(event) => updateStage({ question: { ...selectedStage.question!, explanation: event.target.value || null } })} /></label>
           </div>}
 
-          <section className="shared-scenario-paths">
-            <div className="shared-scenario-section-heading"><div><span>Scenario flow</span><strong>Paths from this stage</strong><small>Each path has a destination and one or more conditions.</small>{edusimActionLoadError && <small>Drugs & Events unavailable: {edusimActionLoadError}</small>}</div><button type="button" disabled={document.stages.length < 2} onClick={addBranch}>+ Path</button></div>
-            {stageBranches.sort((a, b) => a.priority - b.priority).map((branch) => {
-              const conditions = pathTriggers(branch)
-              return <div key={branch.id} className="shared-scenario-path-card">
-                <div className="shared-scenario-path-header">
-                  <label><span>Path name</span><input value={branch.label ?? ''} onChange={(event) => updateBranch(branch.id, { label: event.target.value })} placeholder="e.g. Continue, Deteriorates, Responds" /></label>
-                  <label><span>Go to</span><select value={branch.toStageId} onChange={(event) => updateBranch(branch.id, { toStageId: event.target.value })}>{document.stages.filter((stage) => stage.id !== branch.fromStageId).map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></label>
-                  <label className="compact"><span>Priority</span><input type="number" min={0} value={branch.priority} onChange={(event) => updateBranch(branch.id, { priority: Number(event.target.value) || 0 })} /></label>
-                  <label className="compact"><span>Match</span><select value={branch.triggerMode === 'all' ? 'all' : 'any'} onChange={(event) => updateBranch(branch.id, { triggerMode: event.target.value as 'any' | 'all' })}><option value="any">ANY</option><option value="all">ALL</option></select></label>
-                  <label className="shared-scenario-check"><input type="checkbox" checked={branch.enabled !== false} onChange={(event) => updateBranch(branch.id, { enabled: event.target.checked })} /> Enabled</label>
-                  <button type="button" className="scenario-builder-danger shared-scenario-trash-button" onClick={() => deleteBranch(branch.id)} aria-label="Remove path" title="Remove path"><TrashIcon /></button>
-                </div>
-                <div className="shared-scenario-path-conditions">
-                  {conditions.map((trigger, conditionIndex) => <div className="shared-scenario-path-condition" key={trigger.id}>
-                    {conditionIndex > 0 && <span className="shared-scenario-path-join">{branch.triggerMode === 'all' ? 'AND' : 'OR'}</span>}
-                    <TriggerEditor trigger={trigger} adapter={adapter as SharedScenarioEditorAdapter<unknown, unknown>} edusimActionChoices={edusimActionChoices} onChange={(next) => updatePathCondition(branch, trigger.id, next)} onDelete={conditions.length > 1 ? () => removePathCondition(branch, trigger.id) : undefined} />
-                  </div>)}
-                  <button type="button" className="shared-scenario-add-condition" onClick={() => addPathCondition(branch)}>+ Condition</button>
-                </div>
+          <section
+            className="shared-scenario-paths"
+            onDragOver={(event) => { if (document.stages.length >= 2) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' } }}
+            onDrop={(event) => {
+              event.preventDefault()
+              const triggerId = event.dataTransfer.getData('application/x-loppjusim-trigger')
+              const item = triggerRegistry.find((candidate) => candidate.id === triggerId)
+              if (item) addBranch(triggerFromRegistry(item))
+            }}
+          >
+            <div className="shared-scenario-section-heading"><div><span>Scenario flow</span><strong>Paths from this stage</strong><small>Each path has one trigger, one destination and an explicit priority.</small>{edusimActionLoadError && <small>Drugs & Events unavailable: {edusimActionLoadError}</small>}</div><button type="button" disabled={document.stages.length < 2} onClick={() => addBranch()}>+ Path</button></div>
+            {stageBranches.slice().sort((a, b) => a.priority - b.priority).map((branch) => <div
+              key={branch.id}
+              className="shared-scenario-path-card"
+              onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' }}
+              onDrop={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                const triggerId = event.dataTransfer.getData('application/x-loppjusim-trigger')
+                const item = triggerRegistry.find((candidate) => candidate.id === triggerId)
+                if (item) setBranchTrigger(branch, triggerFromRegistry(item))
+              }}
+            >
+              <div className="shared-scenario-path-header">
+                <label><span>Path name</span><input value={branch.label ?? ''} onChange={(event) => updateBranch(branch.id, { label: event.target.value })} placeholder="e.g. Continue, Deteriorates, Responds" /></label>
+                <label><span>Go to</span><select value={branch.toStageId} onChange={(event) => updateBranch(branch.id, { toStageId: event.target.value })}>{document.stages.filter((stage) => stage.id !== branch.fromStageId).map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></label>
+                <label className="compact"><span>Priority</span><input type="number" min={0} value={branch.priority} onChange={(event) => updateBranch(branch.id, { priority: Number(event.target.value) || 0 })} /></label>
+                <label className="shared-scenario-check"><input type="checkbox" checked={branch.enabled !== false} onChange={(event) => updateBranch(branch.id, { enabled: event.target.checked })} /> Enabled</label>
+                <button type="button" className="scenario-builder-danger shared-scenario-trash-button" onClick={() => deleteBranch(branch.id)} aria-label="Remove path" title="Remove path"><TrashIcon /></button>
               </div>
-            })}
-            {!stageBranches.length && <div className="shared-scenario-end-stage"><strong>End stage</strong><span>No outgoing paths. Reaching this stage completes the scenario.</span></div>}
+              <div className="shared-scenario-path-conditions single-trigger">
+                <TriggerEditor trigger={branch.trigger} adapter={adapter as SharedScenarioEditorAdapter<unknown, unknown>} edusimActionChoices={edusimActionChoices} onChange={(next) => setBranchTrigger(branch, next)} />
+                <small className="shared-scenario-drop-hint">Drop a trigger here to replace this trigger.</small>
+              </div>
+            </div>)}
+            {!stageBranches.length && <div className="shared-scenario-end-stage"><strong>End stage</strong><span>No outgoing paths. Tap or drag a trigger from the palette to create one.</span></div>}
           </section>
         </div>}
       </div>
 
       <section className="shared-scenario-publish">
         <div><span>Self-directed assignment</span><strong>Publish an immutable product-aware copy</strong><small>Candidates entering the code will be routed to {adapter.productLabel} automatically.</small></div>
-        <label><span>Expires after</span><input type="number" min={1} max={365} value={expiryDays} onChange={(event) => setExpiryDays(Math.max(1, Math.min(365, Number(event.target.value) || 1)))} /> days</label>
+        <label><span>Expires after</span><input type="number" min={1} max={365} value={expiryDays} onChange={(event) => setExpiryDays(Math.max(1, Math.min(365, Number(event.target.value) || 1))} /> days</label>
         <button type="button" className="scenario-builder-primary" onClick={() => void publish()}>Publish</button>
         {publication && <div className="shared-scenario-publication-result"><strong>{publication.code}</strong><input readOnly value={publication.url} /><button type="button" onClick={() => void navigator.clipboard.writeText(publication.url)}>Copy link</button><small>Expires {new Date(publication.expiresAt).toLocaleString()}</small></div>}
       </section>
