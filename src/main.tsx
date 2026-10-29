@@ -4,6 +4,7 @@ import { EdusimLanding } from './EdusimLanding'
 import { EduventApp } from './eduvent/EduventApp'
 import { ScenarioBuilderApp } from './scenario-builder/ScenarioBuilderApp'
 import { ActionEditorApp } from './action-editor/ActionEditorApp'
+import { installActionEditorEffectsHelpRuntime } from './action-editor/actionEditorEffectsHelpRuntime'
 import { EdumonApp } from './edumon/EdumonApp'
 import { installTabletResponsiveMode } from './tabletResponsiveRuntime'
 import { installSelfDirectedScenarioPanelDrag } from './selfDirectedScenarioPanel'
@@ -23,6 +24,7 @@ import './edumon/mobile-display-fixes.css'
 import './edumon/action-level-indicator.css'
 import './edumon/footer-alignment.css'
 import './edumon/patient-control-cleanup.css'
+import './action-editor/actionEditorEnhancements.css'
 import './components/SharedAlarmMetricHighlight.css'
 import './components/collapsibleHeaderRuntime.css'
 import './scenario-builder/scenarioNavigation.css'
@@ -40,6 +42,8 @@ if (isEduventRoute || isEdumonRoute) {
   if (isEdumonRoute) installActionLevelIndicatorRuntime()
   if (isEduventRoute) installSelfDirectedScenarioPanelDrag()
 }
+
+if (isActionEditorRoute) installActionEditorEffectsHelpRuntime()
 
 function RoutedApp() {
   if (isActionEditorRoute) return <ActionEditorApp />
