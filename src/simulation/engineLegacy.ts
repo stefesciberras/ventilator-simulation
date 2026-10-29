@@ -1,7 +1,7 @@
 import type { Measurements, PatientSettings, Sample, VentilatorMode, VentilatorSettings } from './types'
 import { calculateEffectiveDeadSpace } from '../patientMetrics'
 import { applyExpiratoryFlowLimitation } from '../expiratoryFlowLimitation'
-import { patientMusclePressure, solvePressureDemand, spontaneousTriggerSignal } from './spontaneousBreathing'
+import { patientMusclePressure, solveFlowControlledPressure, solvePressureDemand, spontaneousTriggerSignal } from './spontaneousBreathing'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -897,15 +897,17 @@ export function stepSimulation(
     } else {
       const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)
       flowLs = Math.min(targetFlow, remainingVolume / Math.max(dt, 0.001))
-      const elasticPressure = state.volume / complianceL
-      const resistivePressure = patient.resistance * flowLs
-      const estimatedPatientFlowDemand = pmus / Math.max(patient.resistance, 0.5)
-      const excessDemand = Math.max(0, estimatedPatientFlowDemand - flowLs)
-      const starvationFraction = estimatedPatientFlowDemand > 0
-        ? clamp(excessDemand / estimatedPatientFlowDemand, 0, 1)
-        : 0
-      const flowStarvationPressure = pmus * starvationFraction
-      pressure = ventilator.peep + elasticPressure + resistivePressure - flowStarvationPressure
+      const vcPressure = solveFlowControlledPressure({
+        peepCmH2O: ventilator.peep,
+        commandedFlowLs: flowLs,
+        musclePressureCmH2O: pmus,
+        volumeAbovePeepL: state.volume,
+        complianceLPerCmH2O: complianceL,
+        airwayResistanceCmH2OPerLs: patient.resistance,
+      })
+      // Flow is authoritative in VC. Patient effort is expressed as a fall in
+      // Paw (including flow-starvation morphology) rather than extra flow/VT.
+      pressure = vcPressure.airwayPressureCmH2O
     }
   } else if (state.breathActive && state.activeBreathType === 'pc') {
     if (elapsed >= ventilator.inspiratoryTime) {
@@ -920,10 +922,16 @@ export function stepSimulation(
       }
     } else {
       const appliedDrivingPressure = ventilator.pressureControl * pressureRiseFraction(elapsed)
-      pressure = ventilator.peep + appliedDrivingPressure
-      const elasticPressure = state.volume / complianceL
-      const availableDrivingPressure = appliedDrivingPressure - elasticPressure + pmus
-      flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
+      const demand = solvePressureDemand({
+        peepCmH2O: ventilator.peep,
+        targetAssistPressureCmH2O: appliedDrivingPressure,
+        musclePressureCmH2O: pmus,
+        volumeAbovePeepL: state.volume,
+        complianceLPerCmH2O: complianceL,
+        airwayResistanceCmH2OPerLs: patient.resistance,
+      })
+      pressure = demand.airwayPressureCmH2O
+      flowLs = demand.flowLs
     }
   } else if (state.breathActive && state.activeBreathType === 'vg-pc') {
     const targetVolume = Math.max(ventilator.tidalVolume / 1000, 0.05)
