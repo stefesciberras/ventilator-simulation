@@ -29,6 +29,14 @@ export interface PressureDemandResult {
   sourcePressureDropCmH2O: number
 }
 
+export interface PressureLevelInteractionInput extends PressureDemandInput {
+  expiratoryResistanceCmH2OPerLs: number
+}
+
+export interface PressureLevelInteractionResult extends PressureDemandResult {
+  inspiratory: boolean
+}
+
 export interface FlowControlledPressureInput {
   peepCmH2O: number
   commandedFlowLs: number
@@ -109,6 +117,45 @@ export function solvePressureDemand(input: PressureDemandInput): PressureDemandR
     elasticPressureCmH2O: elasticPressure,
     idealInfiniteSourceFlowLs,
     sourcePressureDropCmH2O: sourcePressureDrop,
+  }
+}
+
+/**
+ * Solve spontaneous breathing around a maintained pressure level (APRV/BIPAP).
+ * Inspiratory demand uses the same finite-source controller as PSV/PC. If lung
+ * recoil exceeds pressure support + Pmus, flow is allowed to reverse through the
+ * expiratory resistance so release flow and spontaneous expiration are retained.
+ */
+export function solvePressureLevelInteraction(input: PressureLevelInteractionInput): PressureLevelInteractionResult {
+  const compliance = Math.max(input.complianceLPerCmH2O, 0.001)
+  const inspiratoryResistance = Math.max(input.airwayResistanceCmH2OPerLs, 0.5)
+  const expiratoryResistance = Math.max(input.expiratoryResistanceCmH2OPerLs, 0.5)
+  const sourceResistance = Math.max(input.sourceResistanceCmH2OPerLs ?? DEFAULT_PRESSURE_SOURCE_RESISTANCE, 0)
+  const elasticPressure = Math.max(input.volumeAbovePeepL, 0) / compliance
+  const netDrivingPressure = input.targetAssistPressureCmH2O + input.musclePressureCmH2O - elasticPressure
+  const inspiratory = netDrivingPressure >= 0
+
+  if (inspiratory) {
+    const idealInfiniteSourceFlowLs = netDrivingPressure / inspiratoryResistance
+    const flowLs = netDrivingPressure / (inspiratoryResistance + sourceResistance)
+    const sourcePressureDrop = sourceResistance * flowLs
+    return {
+      flowLs,
+      airwayPressureCmH2O: input.peepCmH2O + input.targetAssistPressureCmH2O - sourcePressureDrop,
+      elasticPressureCmH2O: elasticPressure,
+      idealInfiniteSourceFlowLs,
+      sourcePressureDropCmH2O: sourcePressureDrop,
+      inspiratory: true,
+    }
+  }
+
+  return {
+    flowLs: netDrivingPressure / expiratoryResistance,
+    airwayPressureCmH2O: input.peepCmH2O + input.targetAssistPressureCmH2O,
+    elasticPressureCmH2O: elasticPressure,
+    idealInfiniteSourceFlowLs: 0,
+    sourcePressureDropCmH2O: 0,
+    inspiratory: false,
   }
 }
 
