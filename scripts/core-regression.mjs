@@ -11,6 +11,7 @@ const assert = (condition, message) => {
 
 const eduvent = read('src/App.tsx')
 const eduventControls = read('src/components/Controls.tsx')
+const eflSeverityControl = read('src/components/EflSeverityControl.tsx')
 const eduventEngine = read('src/simulation/engine.ts')
 const eduventLegacyEngine = read('src/simulation/engineLegacy.ts')
 const respiratoryCore = read('src/core/physiology/respiratory/RespiratoryPhysiology.ts')
@@ -55,8 +56,9 @@ assert(expiratoryFlowLimitation.includes('const blendWidth = Math.max(ceilingLs 
 assert(expiratoryFlowLimitation.includes('const severityGain = Math.pow(severity, 1.4)'), 'EFL severity score must retain graded non-linear strength')
 assert(expiratoryFlowLimitation.includes('const airwayInvolvement = clamp'), 'EFL morphology must distinguish airway involvement from severity')
 assert(expiratoryFlowLimitation.includes('earlyFlowSpikeReliefLs'), 'airway-type EFL must retain the early dog-leg flow morphology')
-assert(eduventControls.includes('label="EFL severity"'), 'patient controls must present EFL as a severity score rather than a percentage')
-assert(eduventControls.includes('max={1} step={0.1}'), 'EFL severity control must use a 0.0-1.0 point scale')
+assert(eflSeverityControl.includes('EFL severity'), 'patient controls must present EFL as a severity score rather than a percentage')
+assert(eflSeverityControl.includes('max={1}') && eflSeverityControl.includes('step={0.25}'), 'EFL severity control must expose exactly five quarter-step positions from 0 to 1')
+assert(eduventControls.includes('<EflSeverityControl'), 'patient controls must render the dedicated EFL severity control')
 
 // PEEP/reference-state regression check.
 assert(eduventLegacyEngine.includes('peepReferenceShiftVolume'), 'MV engine must rebase trapped volume when external PEEP changes')
@@ -137,8 +139,8 @@ assert(edumon.includes('copySimulationDiagnostic'), 'monitor diagnostics must us
 
 // Continuous signal history belongs to shared core; waveform semantics remain product-owned.
 assert(rollingSignalHistory.includes('class RollingSignalHistory'), 'shared core must expose a reusable rolling signal history')
-assert(rollingSignalHistory.includes('append(sample: TSample)'), 'rolling signal history must append future samples rather than regenerate history')
-assert(rollingSignalHistory.includes('trim(endTime: number)'), 'rolling signal history must trim samples by simulation time')
+assert(rollingSignalHistory.includes('append(sample: TSample)'), 'shared rolling signal history must append future samples rather than regenerate history')
+assert(rollingSignalHistory.includes('trim(endTime: number)'), 'shared rolling signal history must trim samples by simulation time')
 assert(edumonMonitorEngine.includes("import { RollingSignalHistory } from '../core/RollingSignalHistory'"), 'monitor engine must use the shared rolling signal history')
 assert(edumonMonitorEngine.includes('runtime.history.append(generateNextSample'), 'monitor must generate and append only future monitor samples')
 assert(edumonMonitorEngine.includes('const nextPhase = runtime.phase +'), 'monitor must advance cardiac phase incrementally rather than recompute historical phase')
