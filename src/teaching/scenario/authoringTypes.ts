@@ -83,7 +83,8 @@ export type SharedScenarioTriggerRegistryItem =
   | { id: string; label: string; group: string; kind: 'measurement'; metric: string; unit?: string }
   | { id: string; label: string; group: string; kind: 'parameter-change'; parameter: string; actors: readonly SharedScenarioActor[] }
   | { id: string; label: string; group: 'Drugs' | 'Events'; kind: 'drug' | 'event'; actionId: string; actors: readonly SharedScenarioActor[] }
-  | { id: string; label: string; group: 'Runtime'; kind: 'manual' | 'time' }
+  | { id: string; label: string; group: 'Runtime'; kind: 'manual' }
+  | { id: string; label: string; group: 'Runtime'; kind: 'time' }
 
 export interface SharedScenarioEditorAdapter<TScenario, TSnapshot> {
   product: ScenarioProductId
