@@ -61,6 +61,16 @@
   border-color: rgba(255,152,152,.48) !important;
 }
 
+.effect-operation-stack {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.effect-operation-stack > label {
+  min-width: 0;
+}
+
 /* Eight desktop columns: target, operation, value, priority, onset, duration, recovery, trash. */
 @media (min-width: 1181px) {
   .action-editor-effect-row {
@@ -73,10 +83,13 @@
       minmax(82px, .58fr)
       minmax(82px, .58fr)
       36px;
+    align-items: start;
   }
 
   .action-editor-effect-remove {
     justify-self: end;
+    align-self: start;
+    margin-top: 24px;
   }
 }
 
