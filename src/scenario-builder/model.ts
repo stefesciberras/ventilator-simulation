@@ -13,6 +13,15 @@ export interface ScenarioVariableOption {
   label: string
 }
 
+export interface ScenarioVariableStudioMetadata {
+  /** Show this variable as an editable stage-state control in Studio. Defaults to writable settings. */
+  editable?: boolean
+  /** Expose changes to this variable as a branching trigger. Defaults to writable settings. */
+  triggerable?: boolean
+  /** Expose this variable as a threshold/equality measurement trigger. Defaults to measurement-role variables. */
+  measurable?: boolean
+}
+
 export interface ScenarioVariableDefinition {
   id: ScenarioVariableId
   label: string
@@ -30,6 +39,24 @@ export interface ScenarioVariableDefinition {
   snapshotPath?: string
   /** Numeric setting may interpolate while entering a stage. */
   transitionable?: boolean
+  /**
+   * Product-owned Studio exposure metadata. Omit to use the safe defaults:
+   * writable setting => editable + triggerable; measurement => measurable.
+   * Explicit false values let modules keep internal variables out of Studio.
+   */
+  studio?: ScenarioVariableStudioMetadata
+}
+
+export function isStudioEditable(variable: ScenarioVariableDefinition) {
+  return variable.studio?.editable ?? (variable.role === 'setting' && variable.writable === true)
+}
+
+export function isStudioTriggerable(variable: ScenarioVariableDefinition) {
+  return variable.studio?.triggerable ?? (variable.role === 'setting' && variable.writable === true)
+}
+
+export function isStudioMeasurable(variable: ScenarioVariableDefinition) {
+  return variable.studio?.measurable ?? variable.role === 'measurement'
 }
 
 export interface ScenarioTemplateDefinition {
