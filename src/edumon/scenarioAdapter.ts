@@ -30,6 +30,10 @@ function numericMetric(context: EdumonScenarioRuntimeContext, metric: EdumonScen
   }
   if (metric === 'spo2') return measurements.spo2
   if (metric === 'peripheralPerfusion') return state.patient.peripheralPerfusion
+  if (metric === 'totalRespiratoryRate') {
+    const rate = state.patient.respiratory?.respiratoryRate
+    return typeof rate === 'number' && Number.isFinite(rate) ? rate : null
+  }
   return null
 }
 
@@ -43,6 +47,15 @@ function conditionMatches(actual: number, operator: 'lt' | 'eq' | 'gt', target: 
 function changed(a: unknown, b: unknown) {
   if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) > 1e-6
   return a !== b
+}
+
+function readSnapshotPath(snapshot: unknown, path: string): unknown {
+  let current = snapshot
+  for (const part of path.split('.')) {
+    if (!current || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[part]
+  }
+  return current
 }
 
 /** Product adapter for the shared EDUSIM scenario sequencer. */
@@ -71,6 +84,12 @@ export function createEdumonScenarioRuntimeAdapter(
           event.actionId === trigger.actionId
           && event.sequence > (context.actionBaselines?.[event.sourceId] ?? 0)
           && (actor === 'either' || event.actor === actor),
+        )
+      }
+      if (trigger.type === 'parameter-change') {
+        return changed(
+          readSnapshotPath(context.state, trigger.snapshotPath),
+          readSnapshotPath(stage.stage.snapshot, trigger.snapshotPath),
         )
       }
       const baseline = context.stageBaselinePatient ?? stage.stage.snapshot.patient
