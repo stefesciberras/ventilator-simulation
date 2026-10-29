@@ -540,7 +540,7 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
 
       <section className="shared-scenario-publish">
         <div><span>Self-directed assignment</span><strong>Publish an immutable product-aware copy</strong><small>Candidates entering the code will be routed to {adapter.productLabel} automatically.</small></div>
-        <label><span>Expires after</span><input type="number" min={1} max={365} value={expiryDays} onChange={(event) => setExpiryDays(Math.max(1, Math.min(365, Number(event.target.value) || 1))} /> days</label>
+        <label><span>Expires after</span><input type="number" min={1} max={365} value={expiryDays} onChange={(event) => setExpiryDays(Math.max(1, Math.min(365, Number(event.target.value) || 1)))} /> days</label>
         <button type="button" className="scenario-builder-primary" onClick={() => void publish()}>Publish</button>
         {publication && <div className="shared-scenario-publication-result"><strong>{publication.code}</strong><input readOnly value={publication.url} /><button type="button" onClick={() => void navigator.clipboard.writeText(publication.url)}>Copy link</button><small>Expires {new Date(publication.expiresAt).toLocaleString()}</small></div>}
       </section>
