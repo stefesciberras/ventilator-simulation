@@ -2,6 +2,7 @@ import type { InstructorPresetRow } from '../../instructorAccount'
 import type { SharedScenarioTriggerRegistryItem } from '../../teaching/scenario/authoringTypes'
 import type { ScenarioProductId } from '../../teaching/scenario/products'
 import type { ScenarioModuleDefinition } from '../model'
+import '../triggerPalette.css'
 import { ANAESTH_SCENARIO_MODULE, ICU_SCENARIO_MODULE } from './edumon/definition'
 import { VENTILATOR_SCENARIO_MODULE } from './ventilator/definition'
 
