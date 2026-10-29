@@ -1,6 +1,7 @@
 import type { Measurements, PatientSettings, Sample, VentilatorMode, VentilatorSettings } from './types'
 import { calculateEffectiveDeadSpace } from '../patientMetrics'
 import { applyExpiratoryFlowLimitation } from '../expiratoryFlowLimitation'
+import { patientMusclePressure, solvePressureDemand, spontaneousTriggerSignal } from './spontaneousBreathing'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -106,39 +107,6 @@ export function createSimulationState(): SimulationState {
     alveolarOxygenFraction: 0.16,
     spo2: 98,
   }
-}
-
-function patientMusclePressure(t: number, patient: PatientSettings): number {
-  if (patient.spontaneousRate <= 0 || patient.effort <= 0) return 0
-  const cycle = 60 / patient.spontaneousRate
-  const phase = ((t % cycle) + cycle) % cycle
-  const neuralTi = Math.max(patient.neuralInspiratoryTime, 0.1)
-  if (phase >= neuralTi) return 0
-
-  // Active-breathing model: sinusoidal-family Pmus envelope with smooth
-  // rise, optional hold, and smooth release. Equal 50% rise / 50% release with
-  // zero hold is exactly sin^2(pi*t/Ti). Phase percentages scale with neural Ti.
-  let riseTime = neuralTi * clamp(patient.effortRisePercent ?? 30, 1, 95) / 100
-  let relaxationTime = neuralTi * clamp(patient.effortRelaxationPercent ?? 35, 1, 95) / 100
-  const edgeTime = riseTime + relaxationTime
-  if (edgeTime > neuralTi) {
-    const scale = neuralTi / edgeTime
-    riseTime *= scale
-    relaxationTime *= scale
-  }
-  const relaxationStart = neuralTi - relaxationTime
-
-  if (phase < riseTime) {
-    const x = phase / Math.max(riseTime, 0.001)
-    const shape = 0.5 - 0.5 * Math.cos(Math.PI * x)
-    return patient.effort * shape
-  }
-
-  if (phase < relaxationStart) return patient.effort
-
-  const x = (phase - relaxationStart) / Math.max(relaxationTime, 0.001)
-  const shape = 0.5 + 0.5 * Math.cos(Math.PI * clamp(x, 0, 1))
-  return patient.effort * shape
 }
 
 function effectiveRespiratoryRate(state: SimulationState, ventilator: VentilatorSettings, patient: PatientSettings, t: number): number {
@@ -753,18 +721,19 @@ export function stepSimulation(
   const pressureTriggerSensitivity = Math.max(0.1, ventilator.triggerSensitivity)
   const flowTriggerSensitivity = Math.max(0.1, ventilator.flowTriggerSensitivity ?? 2)
 
-  // Predict the patient-generated signal during expiration. Trapped elastic
-  // pressure (auto-PEEP) must be overcome before Paw can fall below set PEEP
-  // or inspiratory flow can become positive. Pressure sensitivity is therefore
-  // explicitly a gradient from set PEEP, not an absolute airway pressure.
-  const triggerElasticPressure = state.volume / complianceL
-  const triggerNetDrivingPressure = pmus - triggerElasticPressure
-  const triggerEffortResistance = triggerNetDrivingPressure >= 0
-    ? Math.max(patient.resistance, 0.5)
-    : Math.max(patient.expiratoryResistance, 0.5)
-  const predictedPatientFlowLs = triggerNetDrivingPressure / triggerEffortResistance
-  const predictedPatientFlowLmin = predictedPatientFlowLs * 60
-  const predictedAirwayPressure = ventilator.peep - Math.max(0, triggerNetDrivingPressure)
+  // Derive trigger flow and Paw deflection from the same spontaneous demand
+  // mechanics used after a CPAP/PS breath is triggered. Trapped elastic pressure
+  // must first be overcome, while the finite demand source creates a realistic
+  // pressure deflection rather than assuming an infinitely compliant valve.
+  const triggerSignal = spontaneousTriggerSignal(
+    ventilator.peep,
+    pmus,
+    state.volume,
+    complianceL,
+    patient.resistance,
+  )
+  const predictedPatientFlowLmin = triggerSignal.flowLs * 60
+  const predictedAirwayPressure = triggerSignal.airwayPressureCmH2O
   const pressureTriggerLevel = ventilator.peep - pressureTriggerSensitivity
   const supportTriggeringDisabled =
     mode === 'PSV' && ventilator.pressureSupport <= 0.001
@@ -1028,10 +997,16 @@ export function stepSimulation(
     }
   } else if (state.breathActive && state.activeBreathType === 'ps') {
     const appliedSupportPressure = ventilator.pressureSupport * pressureRiseFraction(elapsed)
-    pressure = ventilator.peep + appliedSupportPressure
-    const elasticPressure = state.volume / complianceL
-    const availableDrivingPressure = appliedSupportPressure - elasticPressure + pmus
-    flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
+    const demand = solvePressureDemand({
+      peepCmH2O: ventilator.peep,
+      targetAssistPressureCmH2O: appliedSupportPressure,
+      musclePressureCmH2O: pmus,
+      volumeAbovePeepL: state.volume,
+      complianceLPerCmH2O: complianceL,
+      airwayResistanceCmH2OPerLs: patient.resistance,
+    })
+    pressure = demand.airwayPressureCmH2O
+    flowLs = demand.flowLs
     state.peakInspiratoryFlow = Math.max(state.peakInspiratoryFlow, flowLs)
     const terminationFraction = clamp(ventilator.terminationSensitivity, 5, 80) / 100
     // At PS = 0 there is no elevated pressure-support level to cycle off.
