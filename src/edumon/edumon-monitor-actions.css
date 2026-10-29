@@ -3,6 +3,11 @@ html:not([data-edumon-monitor-inv-bp='true']) .edumon-value-art {
   display: none !important;
 }
 
+html:not([data-edumon-monitor-capnography='true']) .edumon-trace-capnography,
+html:not([data-edumon-monitor-capnography='true']) .edumon-value-capnography {
+  display: none !important;
+}
+
 html[data-edumon-monitor-inv-bp='false'] .edumon-waveform-area:not(.edumon-has-bis),
 html[data-edumon-monitor-inv-bp='false'] .edumon-measurements:not(.edumon-has-bis) {
   grid-template-rows: repeat(2, minmax(0, 1fr));
