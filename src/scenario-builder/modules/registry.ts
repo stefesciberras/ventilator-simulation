@@ -1,7 +1,11 @@
 import type { InstructorPresetRow } from '../../instructorAccount'
 import type { SharedScenarioTriggerRegistryItem } from '../../teaching/scenario/authoringTypes'
 import type { ScenarioProductId } from '../../teaching/scenario/products'
-import type { ScenarioModuleDefinition } from '../model'
+import {
+  isStudioMeasurable,
+  isStudioTriggerable,
+  type ScenarioModuleDefinition,
+} from '../model'
 import '../triggerPalette.css'
 import { ANAESTH_SCENARIO_MODULE, ICU_SCENARIO_MODULE } from './edumon/definition'
 import { VENTILATOR_SCENARIO_MODULE } from './ventilator/definition'
@@ -24,43 +28,29 @@ const RUNTIME_TRIGGER_REGISTRY: SharedScenarioTriggerRegistryItem[] = [
 ]
 
 /**
- * Builds the static trigger vocabulary directly from a product module.
- * Measurements become threshold conditions; writable settings become parameter-change events.
- * Drugs/Events are appended dynamically by products that use the shared action library.
+ * Builds Studio's static trigger vocabulary directly from product-owned variable metadata.
+ * Register a variable once in the module; Studio exposure follows its `studio` metadata
+ * (or the defaults defined in model.ts). Drugs/Events are appended dynamically.
  */
 export function buildModuleTriggerRegistry(module: ScenarioModuleDefinition<InstructorPresetRow>): SharedScenarioTriggerRegistryItem[] {
-  const byId = new Map(module.variables.map((variable) => [variable.id, variable]))
-  const measurementIds = [...new Set(module.triggerSources
-    .filter((source) => source.kind === 'measurement')
-    .map((source) => source.variableId))]
-  const parameterIds = [...new Set(module.triggerSources
-    .filter((source) => source.kind === 'candidate-action' || source.kind === 'instructor-action')
-    .map((source) => source.variableId))]
-
   return [
     ...RUNTIME_TRIGGER_REGISTRY,
-    ...measurementIds.flatMap((id) => {
-      const variable = byId.get(id)
-      return variable ? [{
-        id: `measurement:${id}`,
-        label: variable.label,
-        group: variable.group,
-        kind: 'measurement' as const,
-        metric: id.replace(/^measurement\./, ''),
-        unit: variable.unit,
-      }] : []
-    }),
-    ...parameterIds.flatMap((id) => {
-      const variable = byId.get(id)
-      return variable ? [{
-        id: `parameter-change:${id}`,
-        label: `${variable.label} changed`,
-        group: variable.group,
-        kind: 'parameter-change' as const,
-        parameter: id,
-        actors: ['candidate', 'instructor', 'either'] as const,
-      }] : []
-    }),
+    ...module.variables.filter(isStudioMeasurable).map((variable) => ({
+      id: `measurement:${variable.id}`,
+      label: variable.label,
+      group: variable.group,
+      kind: 'measurement' as const,
+      metric: variable.id.replace(/^measurement\./, ''),
+      unit: variable.unit,
+    })),
+    ...module.variables.filter(isStudioTriggerable).map((variable) => ({
+      id: `parameter-change:${variable.id}`,
+      label: `${variable.label} changed`,
+      group: variable.group,
+      kind: 'parameter-change' as const,
+      parameter: variable.id,
+      actors: ['candidate', 'instructor', 'either'] as const,
+    })),
   ]
 }
 
