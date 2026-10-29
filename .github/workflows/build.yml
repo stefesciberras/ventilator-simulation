@@ -3,7 +3,9 @@ name: Build
 on:
   pull_request:
   push:
-    branches: [main, chatgpt/v0.83.0.57-vgpc-shared-mechanics]
+    branches:
+      - main
+      - chatgpt/v0.83.0.57-vgpc-shared-mechanics
 
 permissions:
   contents: write
@@ -13,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'push' && github.ref_name || '' }}
       - name: Apply focused VG-PC refactor on feature branch
-        if: github.event_name == 'push' && github.ref_name == 'chatgpt/v0.83.0.57-vgpc-shared-mechanics'
         shell: bash
         run: |
+          if [ "$GITHUB_REF_NAME" != "chatgpt/v0.83.0.57-vgpc-shared-mechanics" ]; then
+            exit 0
+          fi
           python - <<'PY'
           from pathlib import Path
           path = Path('src/simulation/engineLegacy.ts')
@@ -76,9 +78,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Commit validated VG-PC refactor
-        if: github.event_name == 'push' && github.ref_name == 'chatgpt/v0.83.0.57-vgpc-shared-mechanics'
         shell: bash
         run: |
+          if [ "$GITHUB_REF_NAME" != "chatgpt/v0.83.0.57-vgpc-shared-mechanics" ]; then
+            exit 0
+          fi
           if git diff --quiet -- src/simulation/engineLegacy.ts; then
             echo 'VG-PC refactor already applied; nothing to commit.'
             exit 0
