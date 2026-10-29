@@ -1,7 +1,7 @@
 import type { Measurements, PatientSettings, Sample, VentilatorMode, VentilatorSettings } from './types'
 import { calculateEffectiveDeadSpace } from '../patientMetrics'
 import { applyExpiratoryFlowLimitation } from '../expiratoryFlowLimitation'
-import { patientMusclePressure, solveFlowControlledPressure, solvePressureDemand, spontaneousTriggerSignal } from './spontaneousBreathing'
+import { patientMusclePressure, solveFlowControlledPressure, solvePressureDemand, solvePressureLevelInteraction, spontaneousTriggerSignal } from './spontaneousBreathing'
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -493,13 +493,15 @@ function twoLevelSample(
     )
     const nominalTe = Math.max(0.2, nominalCycle - nominalTi)
     const phaseElapsed = Math.max(0, t - state.bipapPhaseStart)
-    const elasticPressure = state.volume / complianceL
-    const netPatientDrivingPressure = pmus - elasticPressure
-    const effortResistance = netPatientDrivingPressure >= 0
-      ? Math.max(patient.resistance, 0.5)
-      : Math.max(patient.expiratoryResistance, 0.5)
-    const patientFlowLmin = (netPatientDrivingPressure / effortResistance) * 60
-    const patientAirwayPressure = ventilator.peep - Math.max(0, netPatientDrivingPressure)
+    const triggerSignal = spontaneousTriggerSignal(
+      ventilator.peep,
+      pmus,
+      state.volume,
+      complianceL,
+      patient.resistance,
+    )
+    const patientFlowLmin = triggerSignal.flowLs * 60
+    const patientAirwayPressure = triggerSignal.airwayPressureCmH2O
     const pressureTriggerLevel = ventilator.peep - Math.max(0.1, ventilator.triggerSensitivity)
     const triggerSignalMet = ventilator.triggerType === 'flow'
       ? patientFlowLmin >= Math.max(0.1, ventilator.flowTriggerSensitivity ?? 2)
@@ -567,23 +569,22 @@ function twoLevelSample(
     else if (state.expiratoryHoldActive) high = false
   }
 
-  const targetPressure = high ? pHigh : pLow
   const elasticPressure = state.volume / complianceL
-  const spontaneousPressureDeflection = mode === 'BIPAP'
-    ? high
-      ? clamp(pmus * 0.35, 0, 6)
-      : Math.max(0, pmus - elasticPressure)
-    : high
-      ? clamp(pmus * 0.35, 0, 6)
-      : 0
-
-  const distendingPressure = high ? pHigh - pLow : 0
-  const drivingPressure = distendingPressure - elasticPressure + pmus
-  const resistance = drivingPressure >= 0
-    ? Math.max(patient.resistance, 0.5)
-    : Math.max(patient.expiratoryResistance, 0.5)
-  let flowLs = drivingPressure / resistance
-  let displayedPressure = targetPressure - spontaneousPressureDeflection
+  const fullDistendingPressure = high ? pHigh - pLow : 0
+  const appliedDistendingPressure = high
+    ? fullDistendingPressure * pressureRiseFraction(Math.max(0, t - state.breathStart))
+    : 0
+  const interaction = solvePressureLevelInteraction({
+    peepCmH2O: pLow,
+    targetAssistPressureCmH2O: appliedDistendingPressure,
+    musclePressureCmH2O: pmus,
+    volumeAbovePeepL: state.volume,
+    complianceLPerCmH2O: complianceL,
+    airwayResistanceCmH2OPerLs: patient.resistance,
+    expiratoryResistanceCmH2OPerLs: patient.expiratoryResistance,
+  })
+  let flowLs = interaction.flowLs
+  let displayedPressure = interaction.airwayPressureCmH2O
 
   if (mode === 'APRV' && (state.inspiratoryHoldActive || state.expiratoryHoldActive)) {
     flowLs = 0
