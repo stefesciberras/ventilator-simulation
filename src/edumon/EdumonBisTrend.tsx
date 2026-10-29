@@ -28,6 +28,28 @@ const BIS_TARGETS: Record<AnaestheticDepth, number> = {
   5: 100,
 }
 
+// Responsive/session shells can transiently mount more than one controller tree.
+// BIS is a single physical monitor capability, so exactly one mounted surface
+// may own its waveform/value portals at a time. Ownership transfers cleanly if
+// the current owner unmounts.
+let bisSurfaceOwner: symbol | null = null
+const bisSurfaceOwnerListeners = new Set<() => void>()
+
+function notifyBisSurfaceOwnerListeners(): void {
+  for (const listener of bisSurfaceOwnerListeners) listener()
+}
+
+function claimBisSurface(owner: symbol): boolean {
+  if (bisSurfaceOwner == null) bisSurfaceOwner = owner
+  return bisSurfaceOwner === owner
+}
+
+function releaseBisSurface(owner: symbol): void {
+  if (bisSurfaceOwner !== owner) return
+  bisSurfaceOwner = null
+  notifyBisSurfaceOwnerListeners()
+}
+
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 function findVisibleHost(selector: string): HTMLElement | null {
@@ -104,11 +126,13 @@ function BisTrendCanvas({ points }: { points: BisPoint[] }) {
 }
 
 export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
+  const ownerRef = useRef(Symbol('edumon-bis-surface'))
   const patientRef = useRef(patientState)
   const currentBisRef = useRef(100)
   const simulationTimeRef = useRef(0)
   const sampleAccumulatorRef = useRef(0)
   const jitterTargetRef = useRef(0)
+  const [ownsSurface, setOwnsSurface] = useState(false)
   const [waveformHost, setWaveformHost] = useState<HTMLElement | null>(null)
   const [measurementHost, setMeasurementHost] = useState<HTMLElement | null>(null)
   const [bis, setBis] = useState(100)
@@ -118,6 +142,22 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
   patientRef.current = patientState
 
   useEffect(() => {
+    const owner = ownerRef.current
+    const syncOwnership = () => setOwnsSurface(claimBisSurface(owner))
+    bisSurfaceOwnerListeners.add(syncOwnership)
+    syncOwnership()
+    return () => {
+      bisSurfaceOwnerListeners.delete(syncOwnership)
+      releaseBisSurface(owner)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!ownsSurface) {
+      setWaveformHost(null)
+      setMeasurementHost(null)
+      return
+    }
     const findHosts = () => {
       setWaveformHost(findVisibleHost('.edumon-waveform-area'))
       setMeasurementHost(findVisibleHost('.edumon-measurements'))
@@ -130,19 +170,20 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
       observer.disconnect()
       window.removeEventListener('resize', findHosts)
     }
-  }, [])
+  }, [ownsSurface])
 
   useEffect(() => {
-    if (!bisEnabled || !waveformHost || !measurementHost) return
+    if (!ownsSurface || !bisEnabled || !waveformHost || !measurementHost) return
     waveformHost.classList.add('edumon-has-bis')
     measurementHost.classList.add('edumon-has-bis')
     return () => {
       waveformHost.classList.remove('edumon-has-bis')
       measurementHost.classList.remove('edumon-has-bis')
     }
-  }, [bisEnabled, waveformHost, measurementHost])
+  }, [ownsSurface, bisEnabled, waveformHost, measurementHost])
 
   useEffect(() => {
+    if (!ownsSurface) return
     let frame = 0
     let previous = performance.now()
     const tick = (now: number) => {
@@ -184,9 +225,9 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [ownsSurface])
 
-  const trace = bisEnabled && waveformHost ? createPortal(
+  const trace = ownsSurface && bisEnabled && waveformHost ? createPortal(
     <div className="edumon-trace edumon-trace-bis waveform-card">
       <div className="edumon-trace-label waveform-label"><strong>BIS</strong><span>trend · 60 s</span></div>
       <BisTrendCanvas points={points} />
@@ -195,7 +236,7 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
     waveformHost,
   ) : null
 
-  const measurement = bisEnabled && measurementHost ? createPortal(
+  const measurement = ownsSurface && bisEnabled && measurementHost ? createPortal(
     <div className="edumon-value-panel edumon-value-bis metric">
       <span className="edumon-value-label">BIS</span>
       <strong className="edumon-value-main">{bis}</strong>
