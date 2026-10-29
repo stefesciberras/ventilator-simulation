@@ -61,6 +61,25 @@
   border-color: rgba(255,152,152,.48) !important;
 }
 
+/* Eight desktop columns: target, operation, value, priority, onset, duration, recovery, trash. */
+@media (min-width: 1181px) {
+  .action-editor-effect-row {
+    grid-template-columns:
+      minmax(170px, 1.45fr)
+      minmax(120px, .92fr)
+      minmax(96px, .72fr)
+      minmax(105px, .72fr)
+      minmax(82px, .58fr)
+      minmax(82px, .58fr)
+      minmax(82px, .58fr)
+      36px;
+  }
+
+  .action-editor-effect-remove {
+    justify-self: end;
+  }
+}
+
 .action-editor-help-dialog {
   width: min(900px, calc(100vw - 32px));
   max-height: min(86vh, 860px);
