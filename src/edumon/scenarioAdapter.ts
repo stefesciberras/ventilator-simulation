@@ -49,6 +49,15 @@ function changed(a: unknown, b: unknown) {
   return a !== b
 }
 
+function readSnapshotPath(snapshot: unknown, path: string): unknown {
+  let current = snapshot
+  for (const part of path.split('.')) {
+    if (!current || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[part]
+  }
+  return current
+}
+
 /** Product adapter for the shared EDUSIM scenario sequencer. */
 export function createEdumonScenarioRuntimeAdapter(
   applySnapshot: (
@@ -75,6 +84,12 @@ export function createEdumonScenarioRuntimeAdapter(
           event.actionId === trigger.actionId
           && event.sequence > (context.actionBaselines?.[event.sourceId] ?? 0)
           && (actor === 'either' || event.actor === actor),
+        )
+      }
+      if (trigger.type === 'parameter-change') {
+        return changed(
+          readSnapshotPath(context.state, trigger.snapshotPath),
+          readSnapshotPath(stage.stage.snapshot, trigger.snapshotPath),
         )
       }
       const baseline = context.stageBaselinePatient ?? stage.stage.snapshot.patient
