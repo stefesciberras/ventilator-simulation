@@ -37,11 +37,8 @@ export interface SharedScenarioAuthoringStage<TSnapshot> {
   notes: string
   kind: SharedScenarioStageKind
   snapshot: TSnapshot
-  /** Product variable IDs explicitly applied when this state stage is entered. */
   appliedVariableIds?: string[]
-  /** Default transition inherited by numeric values applied on stage entry. */
   transition?: SharedScenarioTransition
-  /** Optional product-variable transition overrides, keyed by product variable ID. */
   transitionOverrides?: Record<string, SharedScenarioTransition>
   triggers: SharedScenarioAuthoringTrigger[]
   media?: SharedScenarioMediaContent
@@ -52,11 +49,10 @@ export interface SharedScenarioAuthoringBranch {
   id: string
   fromStageId: string
   toStageId: string
-  /** Primary trigger for the branch. New Studio authoring uses one trigger per path. */
+  /** Primary trigger. New Studio authoring uses one trigger per path. */
   trigger: SharedScenarioAuthoringTrigger
-  /** Legacy multi-condition payload retained only while older test documents still exist. */
+  /** Legacy multi-condition payload retained while disposable test documents still exist. */
   triggers?: SharedScenarioAuthoringTrigger[]
-  /** Legacy trigger combination mode. New Studio authoring uses one trigger per path. */
   triggerMode?: ScenarioTriggerMode
   priority: number
   label?: string
@@ -68,10 +64,6 @@ export interface SharedScenarioAuthoringDocument<TSnapshot> {
   product: ScenarioProductId
   name: string
   description: string
-  /**
-   * User-facing runtime modes in which this scenario may be used. Omitted on
-   * legacy documents; omission is interpreted as all modes for compatibility.
-   */
   supportedModes?: LoppjuSimRuntimeMode[]
   stages: SharedScenarioAuthoringStage<TSnapshot>[]
   branches: SharedScenarioAuthoringBranch[]
@@ -80,7 +72,6 @@ export interface SharedScenarioAuthoringDocument<TSnapshot> {
 export interface SharedScenarioTriggerChoice {
   id: string
   label: string
-  /** Studio palette grouping supplied by the product module. */
   group?: string
 }
 
@@ -88,41 +79,11 @@ export interface SharedScenarioActionChoice extends SharedScenarioTriggerChoice 
   kind: 'drug' | 'event'
 }
 
-/**
- * Product-neutral description of something that can cause a scenario path to fire.
- * Studio renders these definitions; product modules own the clinical vocabulary.
- */
 export type SharedScenarioTriggerRegistryItem =
-  | {
-      id: string
-      label: string
-      group: string
-      kind: 'measurement'
-      metric: string
-      unit?: string
-    }
-  | {
-      id: string
-      label: string
-      group: string
-      kind: 'parameter-change'
-      parameter: string
-      actors: readonly SharedScenarioActor[]
-    }
-  | {
-      id: string
-      label: string
-      group: 'Drugs' | 'Events'
-      kind: 'drug' | 'event'
-      actionId: string
-      actors: readonly SharedScenarioActor[]
-    }
-  | {
-      id: string
-      label: string
-      group: 'Runtime'
-      kind: 'manual' | 'time'
-    }
+  | { id: string; label: string; group: string; kind: 'measurement'; metric: string; unit?: string }
+  | { id: string; label: string; group: string; kind: 'parameter-change'; parameter: string; actors: readonly SharedScenarioActor[] }
+  | { id: string; label: string; group: 'Drugs' | 'Events'; kind: 'drug' | 'event'; actionId: string; actors: readonly SharedScenarioActor[] }
+  | { id: string; label: string; group: 'Runtime'; kind: 'manual' | 'time' }
 
 export interface SharedScenarioEditorAdapter<TScenario, TSnapshot> {
   product: ScenarioProductId
@@ -136,13 +97,11 @@ export interface SharedScenarioEditorAdapter<TScenario, TSnapshot> {
     options?: { appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void },
   ) => ReactNode
   defaultAppliedVariableIds?: (snapshot: TSnapshot) => string[]
-  /** Numeric variables eligible for gradual stage transitions. Omit for products without transition runtime support. */
   transitionVariables?: (snapshot: TSnapshot) => readonly SharedScenarioTriggerChoice[]
   conditionMetrics: readonly SharedScenarioTriggerChoice[]
   actionParameters: readonly SharedScenarioTriggerChoice[]
-  /** Static product-owned trigger vocabulary used by the Studio palette. */
-  triggerRegistry: readonly SharedScenarioTriggerRegistryItem[]
-  /** Dynamically load the shared Drugs & Events library for products that support EDUSIM actions. */
+  /** Product-owned trigger vocabulary. Adapters can opt in while Studio migrates to the palette UI. */
+  triggerRegistry?: readonly SharedScenarioTriggerRegistryItem[]
   loadEdusimActionChoices?: () => Promise<readonly SharedScenarioActionChoice[]>
 }
 
