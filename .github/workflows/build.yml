@@ -3,96 +3,16 @@ name: Build
 on:
   pull_request:
   push:
-    branches:
-      - main
-      - chatgpt/v0.83.0.57-vgpc-shared-mechanics
-
-permissions:
-  contents: write
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply focused VG-PC refactor on feature branch
-        shell: bash
-        run: |
-          if [ "$GITHUB_REF_NAME" != "chatgpt/v0.83.0.57-vgpc-shared-mechanics" ]; then
-            exit 0
-          fi
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('src/simulation/engineLegacy.ts')
-          text = path.read_text()
-          old_test = (
-              "        const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)\n"
-              "        flowLs = Math.min(testFlow, remainingVolume / Math.max(dt, 0.001))\n"
-              "        const elasticPressure = state.volume / complianceL\n"
-              "        const resistivePressure = patient.resistance * flowLs\n"
-              "        pressure = ventilator.peep + elasticPressure + resistivePressure - pmus\n"
-          )
-          new_test = (
-              "        const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)\n"
-              "        flowLs = Math.min(testFlow, remainingVolume / Math.max(dt, 0.001))\n"
-              "        const testBreathPressure = solveFlowControlledPressure({\n"
-              "          peepCmH2O: ventilator.peep,\n"
-              "          commandedFlowLs: flowLs,\n"
-              "          musclePressureCmH2O: pmus,\n"
-              "          volumeAbovePeepL: state.volume,\n"
-              "          complianceLPerCmH2O: complianceL,\n"
-              "          airwayResistanceCmH2OPerLs: patient.resistance,\n"
-              "        })\n"
-              "        pressure = testBreathPressure.airwayPressureCmH2O\n"
-          )
-          old_pc = (
-              "      const appliedDrivingPressure = state.vgPressureControl * pressureRiseFraction(elapsed)\n"
-              "      pressure = ventilator.peep + appliedDrivingPressure\n"
-              "      const elasticPressure = state.volume / complianceL\n"
-              "      const availableDrivingPressure = appliedDrivingPressure - elasticPressure + pmus\n"
-              "      flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))\n"
-          )
-          new_pc = (
-              "      const appliedDrivingPressure = state.vgPressureControl * pressureRiseFraction(elapsed)\n"
-              "      const demand = solvePressureDemand({\n"
-              "        peepCmH2O: ventilator.peep,\n"
-              "        targetAssistPressureCmH2O: appliedDrivingPressure,\n"
-              "        musclePressureCmH2O: pmus,\n"
-              "        volumeAbovePeepL: state.volume,\n"
-              "        complianceLPerCmH2O: complianceL,\n"
-              "        airwayResistanceCmH2OPerLs: patient.resistance,\n"
-              "      })\n"
-              "      pressure = demand.airwayPressureCmH2O\n"
-              "      flowLs = demand.flowLs\n"
-          )
-          changed = False
-          if old_test in text:
-              text = text.replace(old_test, new_test, 1)
-              changed = True
-          if old_pc in text:
-              text = text.replace(old_pc, new_pc, 1)
-              changed = True
-          if changed:
-              path.write_text(text)
-          PY
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Commit validated VG-PC refactor
-        shell: bash
-        run: |
-          if [ "$GITHUB_REF_NAME" != "chatgpt/v0.83.0.57-vgpc-shared-mechanics" ]; then
-            exit 0
-          fi
-          if git diff --quiet -- src/simulation/engineLegacy.ts; then
-            echo 'VG-PC refactor already applied; nothing to commit.'
-            exit 0
-          fi
-          git config user.name 'stefesciberras'
-          git config user.email '43134239+stefesciberras@users.noreply.github.com'
-          git add src/simulation/engineLegacy.ts
-          git commit -m 'Apply VG-PC shared mechanics refactor'
-          git push origin HEAD:chatgpt/v0.83.0.57-vgpc-shared-mechanics
