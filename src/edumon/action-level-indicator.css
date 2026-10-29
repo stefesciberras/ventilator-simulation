@@ -25,12 +25,26 @@
   pointer-events: none;
 }
 
+/* Level controls belong inside the visual action button, beneath its label. */
+.edumon-action-button-wrap:has(.edumon-action-dose-trigger) .edumon-action-button {
+  padding-right: 9px;
+  padding-bottom: 16px;
+}
+
 .edumon-action-dose-trigger {
-  width: 25px;
-  min-width: 25px;
-  height: 20px;
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: 2px;
+  transform: translateX(-50%);
+  width: 31px;
+  min-width: 31px;
+  height: 12px;
   padding: 0;
   border-color: transparent;
+  border-radius: 4px;
   background: transparent;
 }
 
@@ -69,7 +83,6 @@
   --level-bar-3: #f0a03a;
 }
 
-/* The indicator is out of the flex row, so the action name retains the full button width. */
 .edumon-action-button > span:first-child {
   min-width: 0;
   max-width: 100%;
