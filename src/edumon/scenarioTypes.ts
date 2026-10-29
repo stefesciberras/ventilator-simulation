@@ -24,10 +24,8 @@ export type EdumonScenarioTrigger =
   | { type: 'manual' }
   | { type: 'time'; seconds: number }
   | { type: 'condition'; metric: EdumonScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
-  /** Legacy top-level patient trigger retained for test/older payload compatibility. */
   | { type: 'patient-change'; parameter: keyof MonitorPatientState; actor?: SharedScenarioActor }
-  /** Dot-separated path inside EdumonScenarioSnapshot, supplied by the product trigger registry. */
-  | { type: 'parameter-change'; snapshotPath: string; actor?: SharedScenarioActor }
+  | { type: 'parameter-change'; parameterId: string; snapshotPath: string; actor?: SharedScenarioActor }
   | { type: 'edusim-action'; actionId: string; actor?: SharedScenarioActor }
   | { type: 'question-any' }
   | { type: 'question-correct' }
@@ -38,7 +36,6 @@ export interface EdumonStoredScenario {
   schemaVersion: 1 | 2 | 3
   kind: 'static' | 'dynamic'
   description: string
-  /** Omitted by legacy scenarios; omission means compatible with all runtime modes. */
   supportedModes?: LoppjuSimRuntimeMode[]
   definition: TeachingScenarioDefinition<EdumonScenarioSnapshot, EdumonScenarioTrigger>
 }
