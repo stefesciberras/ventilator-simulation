@@ -961,9 +961,15 @@ export function stepSimulation(
       } else {
         const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)
         flowLs = Math.min(testFlow, remainingVolume / Math.max(dt, 0.001))
-        const elasticPressure = state.volume / complianceL
-        const resistivePressure = patient.resistance * flowLs
-        pressure = ventilator.peep + elasticPressure + resistivePressure - pmus
+        const testBreathPressure = solveFlowControlledPressure({
+          peepCmH2O: ventilator.peep,
+          commandedFlowLs: flowLs,
+          musclePressureCmH2O: pmus,
+          volumeAbovePeepL: state.volume,
+          complianceLPerCmH2O: complianceL,
+          airwayResistanceCmH2OPerLs: patient.resistance,
+        })
+        pressure = testBreathPressure.airwayPressureCmH2O
       }
     } else {
       // Subsequent breaths are pressure controlled, therefore inspiratory flow
@@ -971,10 +977,16 @@ export function stepSimulation(
       // Apply the same finite pneumatic rise as ordinary PC rather than stepping
       // instantaneously from PEEP to the AutoFlow pressure target.
       const appliedDrivingPressure = state.vgPressureControl * pressureRiseFraction(elapsed)
-      pressure = ventilator.peep + appliedDrivingPressure
-      const elasticPressure = state.volume / complianceL
-      const availableDrivingPressure = appliedDrivingPressure - elasticPressure + pmus
-      flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
+      const demand = solvePressureDemand({
+        peepCmH2O: ventilator.peep,
+        targetAssistPressureCmH2O: appliedDrivingPressure,
+        musclePressureCmH2O: pmus,
+        volumeAbovePeepL: state.volume,
+        complianceLPerCmH2O: complianceL,
+        airwayResistanceCmH2OPerLs: patient.resistance,
+      })
+      pressure = demand.airwayPressureCmH2O
+      flowLs = demand.flowLs
 
       const excessiveVolume = state.inspiredThisBreath >= targetVolume * 1.3
       if (excessiveVolume) {
