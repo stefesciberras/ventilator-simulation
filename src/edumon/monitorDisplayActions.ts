@@ -66,7 +66,9 @@ export function useMonitorDisplayEnabled(actionId: EdumonMonitorDisplayActionId)
 }
 
 function syncInstructorCapnographyButton(): void {
-  const host = document.querySelector<HTMLElement>('.edumon-instructor-monitor-class .edumon-action-grid')
+  const instructorHost = document.querySelector<HTMLElement>('.edumon-instructor-monitor-class .edumon-action-grid')
+  const standaloneHost = document.querySelector<HTMLElement>('.edumon-drug-class[aria-label="Monitors events"] .edumon-action-grid')
+  const host = instructorHost ?? standaloneHost
   const existing = document.getElementById(CAPNOGRAPHY_BUTTON_ID) as HTMLButtonElement | null
 
   if (!host) {
@@ -74,18 +76,20 @@ function syncInstructorCapnographyButton(): void {
     return
   }
 
+  const instructorOnly = host === instructorHost
   const button = existing ?? document.createElement('button')
   if (!existing) {
     button.id = CAPNOGRAPHY_BUTTON_ID
     button.type = 'button'
-    button.className = 'edumon-action-button toggle instructor-monitor'
-    button.title = 'Display only on the instructor monitor'
-    button.innerHTML = '<span>Capno</span><small class="edumon-action-local-badge">I</small>'
     button.addEventListener('click', () => toggleInstructorMonitorDisplay(EDUMON_MONITOR_DISPLAY_ACTION_IDS.capnography))
-    host.appendChild(button)
-  } else if (button.parentElement !== host) {
-    host.appendChild(button)
   }
+  button.className = `edumon-action-button toggle ${instructorOnly ? 'instructor-monitor' : ''}`.trim()
+  button.title = instructorOnly ? 'Display only on the instructor monitor' : 'Show or hide capnography on this monitor'
+  button.innerHTML = instructorOnly
+    ? '<span>Capno</span><small class="edumon-action-local-badge">I</small>'
+    : '<span>Capno</span>'
+
+  if (button.parentElement !== host) host.appendChild(button)
 
   const active = isInstructorMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.capnography)
   button.classList.toggle('active', active)

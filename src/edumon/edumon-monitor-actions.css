@@ -1,19 +1,21 @@
-html:not([data-edumon-monitor-inv-bp='true']) .edumon-trace-art,
-html:not([data-edumon-monitor-inv-bp='true']) .edumon-value-art {
+html[data-edumon-monitor-inv-bp='false'] .edumon-trace-art,
+html[data-edumon-monitor-inv-bp='false'] .edumon-value-art,
+html:not([data-edumon-monitor-inv-bp]) .edumon-trace-art,
+html:not([data-edumon-monitor-inv-bp]) .edumon-value-art {
   display: none !important;
 }
 
-html:not([data-edumon-monitor-capnography='true']) .edumon-trace-capnography,
-html:not([data-edumon-monitor-capnography='true']) .edumon-value-capnography {
+html[data-edumon-monitor-capnography='false'] .edumon-trace-capnography,
+html[data-edumon-monitor-capnography='false'] .edumon-value-capnography,
+html:not([data-edumon-monitor-capnography]) .edumon-trace-capnography,
+html:not([data-edumon-monitor-capnography]) .edumon-value-capnography {
   display: none !important;
 }
 
-html[data-edumon-monitor-inv-bp='false'] .edumon-waveform-area:not(.edumon-has-bis),
-html[data-edumon-monitor-inv-bp='false'] .edumon-measurements:not(.edumon-has-bis) {
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-}
-
-html[data-edumon-monitor-inv-bp='false'] .edumon-waveform-area.edumon-has-bis,
-html[data-edumon-monitor-inv-bp='false'] .edumon-measurements.edumon-has-bis {
+/* Keep the primary monitor on a stable three-slot waveform/value grid.
+   With only two visible waveforms, the third slot remains empty so enabling
+   capnography fills that slot without resizing the existing traces. */
+.edumon-waveform-area,
+.edumon-measurements {
   grid-template-rows: repeat(3, minmax(0, 1fr));
 }
