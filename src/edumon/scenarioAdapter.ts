@@ -30,6 +30,10 @@ function numericMetric(context: EdumonScenarioRuntimeContext, metric: EdumonScen
   }
   if (metric === 'spo2') return measurements.spo2
   if (metric === 'peripheralPerfusion') return state.patient.peripheralPerfusion
+  if (metric === 'totalRespiratoryRate') {
+    const rate = state.patient.respiratory?.respiratoryRate
+    return typeof rate === 'number' && Number.isFinite(rate) ? rate : null
+  }
   return null
 }
 
