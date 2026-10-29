@@ -1,10 +1,14 @@
-html:not([data-edumon-monitor-inv-bp='true']) .edumon-trace-art,
-html:not([data-edumon-monitor-inv-bp='true']) .edumon-value-art {
+html[data-edumon-monitor-inv-bp='false'] .edumon-trace-art,
+html[data-edumon-monitor-inv-bp='false'] .edumon-value-art,
+html:not([data-edumon-monitor-inv-bp]) .edumon-trace-art,
+html:not([data-edumon-monitor-inv-bp]) .edumon-value-art {
   display: none !important;
 }
 
-html:not([data-edumon-monitor-capnography='true']) .edumon-trace-capnography,
-html:not([data-edumon-monitor-capnography='true']) .edumon-value-capnography {
+html[data-edumon-monitor-capnography='false'] .edumon-trace-capnography,
+html[data-edumon-monitor-capnography='false'] .edumon-value-capnography,
+html:not([data-edumon-monitor-capnography]) .edumon-trace-capnography,
+html:not([data-edumon-monitor-capnography]) .edumon-value-capnography {
   display: none !important;
 }
 
