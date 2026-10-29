@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import {
   getInstructorAccount,
@@ -29,6 +29,8 @@ import {
   type EdusimActionEffectTarget,
 } from '../edusim/actions/ActionEffect'
 import './actionEditor.css'
+
+const ACTION_EDITOR_SELECTION_KEY = 'loppjusim.actionEditor.selectedId'
 
 const emptyDraft = (): EdusimActionDraft => ({
   id: '',
@@ -93,6 +95,7 @@ export function ActionEditorApp() {
   const [account, setAccount] = useState<User | null>(null)
   const [actions, setActions] = useState<EdusimActionDefinition[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selectedIdRef = useRef<string | null>(null)
   const [draft, setDraft] = useState<EdusimActionDraft>(emptyDraft)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -104,10 +107,26 @@ export function ActionEditorApp() {
 
   const selected = useMemo(() => actions.find((action) => action.id === selectedId) ?? null, [actions, selectedId])
 
+  useEffect(() => {
+    selectedIdRef.current = selectedId
+    try {
+      if (selectedId) sessionStorage.setItem(ACTION_EDITOR_SELECTION_KEY, selectedId)
+      else sessionStorage.removeItem(ACTION_EDITOR_SELECTION_KEY)
+    } catch {
+      // Session storage can be unavailable in restricted browser contexts.
+    }
+  }, [selectedId])
+
   const refresh = async (preferredId?: string) => {
     const rows = await listEdusimActions()
     setActions(rows)
-    const id = preferredId ?? selectedId ?? rows[0]?.id ?? null
+    let storedId: string | null = null
+    try { storedId = sessionStorage.getItem(ACTION_EDITOR_SELECTION_KEY) } catch { /* ignore */ }
+    const requestedId = preferredId ?? selectedIdRef.current ?? storedId
+    const id = requestedId && rows.some((action) => action.id === requestedId)
+      ? requestedId
+      : rows[0]?.id ?? null
+    selectedIdRef.current = id
     setSelectedId(id)
     const row = rows.find((action) => action.id === id)
     setDraft(row ? toDraft(row) : emptyDraft())
@@ -130,6 +149,7 @@ export function ActionEditorApp() {
       if (user) void refresh()
       else {
         setActions([])
+        selectedIdRef.current = null
         setSelectedId(null)
         setDraft(emptyDraft())
       }
@@ -165,6 +185,7 @@ export function ActionEditorApp() {
   }
 
   const beginNew = (kind: EdusimActionKind = 'drug') => {
+    selectedIdRef.current = null
     setSelectedId(null)
     setDraft({
       ...emptyDraft(),
@@ -229,6 +250,8 @@ export function ActionEditorApp() {
     setBusy(true); setError(null); setMessage(null)
     try {
       await deleteEdusimAction(selected.id)
+      selectedIdRef.current = null
+      setSelectedId(null)
       await refresh()
       setMessage(`Deleted “${selected.name}”.`)
     } catch (cause) {
@@ -331,8 +354,10 @@ export function ActionEditorApp() {
                     return (
                       <div className="action-editor-effect-row" key={effect.id}>
                         <label className="effect-target"><span>Target</span><select value={effect.target} onChange={(event) => changeEffectTarget(effect, event.target.value as EdusimActionEffectTarget)}>{EDUSIM_ACTION_EFFECT_TARGETS.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>
-                        <label><span>Operation</span><select value={effect.operation} onChange={(event) => changeEffectOperation(effect, event.target.value as EdusimActionEffectOperation)}>{targetDefinition.allowedOperations.map((operation) => <option key={operation} value={operation}>{operation}</option>)}</select></label>
-                        {effect.operation === 'constraint' && <label><span>Constraint</span><select value={effect.constraint ?? 'block-increase'} onChange={(event) => updateEffect(effect.id, { constraint: event.target.value as EdusimActionEffectConstraint })}>{EDUSIM_ACTION_EFFECT_CONSTRAINTS.map((constraint) => <option key={constraint} value={constraint}>{constraintLabel(constraint)}</option>)}</select></label>}
+                        <div className="effect-operation-stack">
+                          <label><span>Operation</span><select value={effect.operation} onChange={(event) => changeEffectOperation(effect, event.target.value as EdusimActionEffectOperation)}>{targetDefinition.allowedOperations.map((operation) => <option key={operation} value={operation}>{operation}</option>)}</select></label>
+                          {effect.operation === 'constraint' && <label className="effect-constraint"><span>Constraint</span><select value={effect.constraint ?? 'block-increase'} onChange={(event) => updateEffect(effect.id, { constraint: event.target.value as EdusimActionEffectConstraint })}>{EDUSIM_ACTION_EFFECT_CONSTRAINTS.map((constraint) => <option key={constraint} value={constraint}>{constraintLabel(constraint)}</option>)}</select></label>}
+                        </div>
                         <label><span>Value{targetDefinition.unit ? ` (${targetDefinition.unit})` : ''}</span><input type="number" step="any" value={effect.value} onChange={(event) => updateEffect(effect.id, { value: Number(event.target.value) || 0 })} /></label>
                         <label><span>Priority override</span><input type="number" step="1" placeholder={`inherit ${draft.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY}`} value={effect.priority ?? ''} onChange={(event) => updateEffect(effect.id, { priority: event.target.value === '' ? undefined : Number(event.target.value) })} /></label>
                         <label><span>Onset (s)</span><input type="number" min="0" step="0.1" value={effect.onsetSeconds} onChange={(event) => updateEffect(effect.id, { onsetSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label>
