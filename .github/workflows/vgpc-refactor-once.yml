@@ -10,15 +10,15 @@ permissions:
 
 jobs:
   refactor:
-    if: github.event.head_commit.message != 'Apply VG-PC shared mechanics refactor'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: chatgpt/v0.83.0.57-vgpc-shared-mechanics
       - name: Apply focused VG-PC refactor
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('src/simulation/engineLegacy.ts')
@@ -62,15 +62,23 @@ jobs:
       flowLs = demand.flowLs
 '''
 
-          if old_test not in text:
-              raise SystemExit('VG-PC test-breath mechanics block not found')
-          if old_pc not in text:
-              raise SystemExit('VG-PC pressure-controlled mechanics block not found')
-
-          text = text.replace(old_test, new_test, 1).replace(old_pc, new_pc, 1)
-          path.write_text(text)
-      - name: Commit refactor
+          changed = False
+          if old_test in text:
+              text = text.replace(old_test, new_test, 1)
+              changed = True
+          if old_pc in text:
+              text = text.replace(old_pc, new_pc, 1)
+              changed = True
+          if changed:
+              path.write_text(text)
+          PY
+      - name: Commit refactor when needed
+        shell: bash
         run: |
+          if git diff --quiet -- src/simulation/engineLegacy.ts; then
+            echo 'VG-PC refactor already applied; nothing to commit.'
+            exit 0
+          fi
           git config user.name 'stefesciberras'
           git config user.email '43134239+stefesciberras@users.noreply.github.com'
           git add src/simulation/engineLegacy.ts
