@@ -1,0 +1,34 @@
+name: Temporary v0.83.0.53 spontaneous mechanics transform
+
+on:
+  push:
+    branches:
+      - chatgpt/v0.83.0.53-spontaneous-mechanics
+    paths:
+      - scripts/tmp-v053-spontaneous.mjs
+
+permissions:
+  contents: write
+
+jobs:
+  transform-build-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.83.0.53-spontaneous-mechanics
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: node scripts/tmp-v053-spontaneous.mjs
+      - run: npm ci
+      - run: npm run build
+      - name: Commit generated source changes
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/simulation/engineLegacy.ts src/appVersion.ts
+          git diff --cached --quiet || git commit -m "Refactor spontaneous pressure-assist mechanics"
+          git push origin HEAD:chatgpt/v0.83.0.53-spontaneous-mechanics
