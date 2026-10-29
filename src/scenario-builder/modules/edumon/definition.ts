@@ -39,18 +39,21 @@ const variables: ScenarioVariableDefinition[] = [
   { id: 'depthOfAnaesthesia', label: 'Depth of anaesthesia', group: 'Anaesthesia', type: 'number', role: 'setting', min: 1, max: 5, step: 1, defaultValue: 5, writable: true, snapshotPath: 'patient.anaestheticPhysiology.depthOfAnaesthesia' },
   { id: 'simulationPaused', label: 'Simulation paused', group: 'Simulation', type: 'boolean', role: 'setting', writable: true, snapshotPath: 'simulationPaused' },
   { id: 'simulationSpeed', label: 'Simulation speed', group: 'Simulation', type: 'select', role: 'setting', options: [0.5, 1, 1.5, 2, 4].map((value) => ({ value: String(value), label: `×${value}` })), writable: true, snapshotPath: 'simulationSpeed' },
-  { id: 'meanPressure', label: 'Mean arterial pressure', group: 'Measurements', type: 'number', role: 'measurement', unit: 'mmHg' },
-  { id: 'pulsePressure', label: 'Pulse pressure', group: 'Measurements', type: 'number', role: 'measurement', unit: 'mmHg' },
+  { id: 'meanPressure', label: 'Mean arterial pressure', group: 'Cardiovascular', type: 'number', role: 'measurement', unit: 'mmHg' },
+  { id: 'pulsePressure', label: 'Pulse pressure', group: 'Cardiovascular', type: 'number', role: 'measurement', unit: 'mmHg' },
+  { id: 'totalRespiratoryRate', label: 'Total respiratory rate', group: 'Respiratory', type: 'number', role: 'measurement', unit: '/min' },
 ]
 
-const measurementIds = ['heartRate', 'systolicPressure', 'diastolicPressure', 'meanPressure', 'pulsePressure', 'spo2', 'peripheralPerfusion'] as const
-const patientActionIds = ['rhythm', 'heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion'] as const
+const measurementIds = ['heartRate', 'systolicPressure', 'diastolicPressure', 'meanPressure', 'pulsePressure', 'spo2', 'peripheralPerfusion', 'totalRespiratoryRate'] as const
+const parameterActionIds = variables
+  .filter((variable) => variable.role === 'setting' && variable.writable)
+  .map((variable) => variable.id)
 
 const byId = new Map(variables.map((variable) => [variable.id, variable]))
 
 const triggerSources: ScenarioTriggerSourceDefinition[] = [
   ...measurementIds.map((id) => ({ id: `measurement:${id}`, label: byId.get(id)?.label ?? id, kind: 'measurement' as const, variableId: id })),
-  ...patientActionIds.flatMap((id) => [
+  ...parameterActionIds.flatMap((id) => [
     { id: `candidate-action:${id}`, label: byId.get(id)?.label ?? id, kind: 'candidate-action' as const, variableId: id },
     { id: `instructor-action:${id}`, label: byId.get(id)?.label ?? id, kind: 'instructor-action' as const, variableId: id },
   ]),
@@ -59,7 +62,7 @@ const triggerSources: ScenarioTriggerSourceDefinition[] = [
 function createModule(id: 'anaesth' | 'icu', label: string, shortLabel: string, description: string): ScenarioModuleDefinition<InstructorPresetRow> {
   return {
     id,
-    schemaVersion: 2,
+    schemaVersion: 3,
     label,
     shortLabel,
     description,
