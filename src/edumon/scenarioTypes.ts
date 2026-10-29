@@ -26,8 +26,8 @@ export type EdumonScenarioTrigger =
   | { type: 'condition'; metric: EdumonScenarioMetric; operator: 'lt' | 'eq' | 'gt'; value: number }
   /** Legacy top-level patient trigger retained for test/older payload compatibility. */
   | { type: 'patient-change'; parameter: keyof MonitorPatientState; actor?: SharedScenarioActor }
-  /** Product-registry variable ID. Runtime resolves it to the registered snapshot path. */
-  | { type: 'parameter-change'; parameterId: string; actor?: SharedScenarioActor }
+  /** Dot-separated path inside EdumonScenarioSnapshot, supplied by the product trigger registry. */
+  | { type: 'parameter-change'; snapshotPath: string; actor?: SharedScenarioActor }
   | { type: 'edusim-action'; actionId: string; actor?: SharedScenarioActor }
   | { type: 'question-any' }
   | { type: 'question-correct' }
