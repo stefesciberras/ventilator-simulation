@@ -1,22 +1,25 @@
 name: Temporary v0.83.0.53 spontaneous mechanics transform
 
 on:
-  push:
+  pull_request:
     branches:
-      - chatgpt/v0.83.0.53-spontaneous-mechanics
+      - main
     paths:
       - scripts/tmp-v053-spontaneous.mjs
+      - .github/workflows/tmp-v053-spontaneous.yml
+      - src/simulation/spontaneousBreathing.ts
 
 permissions:
   contents: write
 
 jobs:
   transform-build-commit:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: chatgpt/v0.83.0.53-spontaneous-mechanics
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -31,4 +34,4 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add src/simulation/engineLegacy.ts src/appVersion.ts
           git diff --cached --quiet || git commit -m "Refactor spontaneous pressure-assist mechanics"
-          git push origin HEAD:chatgpt/v0.83.0.53-spontaneous-mechanics
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
