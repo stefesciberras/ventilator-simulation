@@ -25,42 +25,46 @@ jobs:
           from pathlib import Path
           path = Path('src/simulation/engineLegacy.ts')
           text = path.read_text()
-          old_test = '''        const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)
-        flowLs = Math.min(testFlow, remainingVolume / Math.max(dt, 0.001))
-        const elasticPressure = state.volume / complianceL
-        const resistivePressure = patient.resistance * flowLs
-        pressure = ventilator.peep + elasticPressure + resistivePressure - pmus
-'''
-          new_test = '''        const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)
-        flowLs = Math.min(testFlow, remainingVolume / Math.max(dt, 0.001))
-        const testBreathPressure = solveFlowControlledPressure({
-          peepCmH2O: ventilator.peep,
-          commandedFlowLs: flowLs,
-          musclePressureCmH2O: pmus,
-          volumeAbovePeepL: state.volume,
-          complianceLPerCmH2O: complianceL,
-          airwayResistanceCmH2OPerLs: patient.resistance,
-        })
-        pressure = testBreathPressure.airwayPressureCmH2O
-'''
-          old_pc = '''      const appliedDrivingPressure = state.vgPressureControl * pressureRiseFraction(elapsed)
-      pressure = ventilator.peep + appliedDrivingPressure
-      const elasticPressure = state.volume / complianceL
-      const availableDrivingPressure = appliedDrivingPressure - elasticPressure + pmus
-      flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))
-'''
-          new_pc = '''      const appliedDrivingPressure = state.vgPressureControl * pressureRiseFraction(elapsed)
-      const demand = solvePressureDemand({
-        peepCmH2O: ventilator.peep,
-        targetAssistPressureCmH2O: appliedDrivingPressure,
-        musclePressureCmH2O: pmus,
-        volumeAbovePeepL: state.volume,
-        complianceLPerCmH2O: complianceL,
-        airwayResistanceCmH2OPerLs: patient.resistance,
-      })
-      pressure = demand.airwayPressureCmH2O
-      flowLs = demand.flowLs
-'''
+          old_test = (
+              "        const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)\n"
+              "        flowLs = Math.min(testFlow, remainingVolume / Math.max(dt, 0.001))\n"
+              "        const elasticPressure = state.volume / complianceL\n"
+              "        const resistivePressure = patient.resistance * flowLs\n"
+              "        pressure = ventilator.peep + elasticPressure + resistivePressure - pmus\n"
+          )
+          new_test = (
+              "        const remainingVolume = Math.max(0, targetVolume - state.inspiredThisBreath)\n"
+              "        flowLs = Math.min(testFlow, remainingVolume / Math.max(dt, 0.001))\n"
+              "        const testBreathPressure = solveFlowControlledPressure({\n"
+              "          peepCmH2O: ventilator.peep,\n"
+              "          commandedFlowLs: flowLs,\n"
+              "          musclePressureCmH2O: pmus,\n"
+              "          volumeAbovePeepL: state.volume,\n"
+              "          complianceLPerCmH2O: complianceL,\n"
+              "          airwayResistanceCmH2OPerLs: patient.resistance,\n"
+              "        })\n"
+              "        pressure = testBreathPressure.airwayPressureCmH2O\n"
+          )
+          old_pc = (
+              "      const appliedDrivingPressure = state.vgPressureControl * pressureRiseFraction(elapsed)\n"
+              "      pressure = ventilator.peep + appliedDrivingPressure\n"
+              "      const elasticPressure = state.volume / complianceL\n"
+              "      const availableDrivingPressure = appliedDrivingPressure - elasticPressure + pmus\n"
+              "      flowLs = Math.max(0, availableDrivingPressure / Math.max(patient.resistance, 0.5))\n"
+          )
+          new_pc = (
+              "      const appliedDrivingPressure = state.vgPressureControl * pressureRiseFraction(elapsed)\n"
+              "      const demand = solvePressureDemand({\n"
+              "        peepCmH2O: ventilator.peep,\n"
+              "        targetAssistPressureCmH2O: appliedDrivingPressure,\n"
+              "        musclePressureCmH2O: pmus,\n"
+              "        volumeAbovePeepL: state.volume,\n"
+              "        complianceLPerCmH2O: complianceL,\n"
+              "        airwayResistanceCmH2OPerLs: patient.resistance,\n"
+              "      })\n"
+              "      pressure = demand.airwayPressureCmH2O\n"
+              "      flowLs = demand.flowLs\n"
+          )
           changed = False
           if old_test in text:
               text = text.replace(old_test, new_test, 1)
