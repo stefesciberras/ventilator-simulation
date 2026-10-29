@@ -18,6 +18,7 @@ export type EdumonScenarioMetric =
   | 'pulsePressure'
   | 'spo2'
   | 'peripheralPerfusion'
+  | 'totalRespiratoryRate'
 
 export type EdumonScenarioTrigger =
   | { type: 'manual' }
