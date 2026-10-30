@@ -497,6 +497,7 @@ export default function App() {
     pressure: null,
     co2Low: null,
     co2High: null,
+    spo2Low: null,
     minuteVentilationLow: null,
     minuteVentilationHigh: null,
     tidalVolumeLow: null,
@@ -985,6 +986,7 @@ export default function App() {
   const respiratoryRateAvailable = eventMeasures.respiratoryRate > 0 || currentSimulationTime >= 5
   const respiratoryRateLowAlarmActive = respiratoryRateAvailable && eventMeasures.respiratoryRate < alarmLimits.respiratoryRateMin
   const respiratoryRateHighAlarmActive = respiratoryRateAvailable && eventMeasures.respiratoryRate > alarmLimits.respiratoryRateMax
+  const spo2LowAlarmActive = latestSample?.spo2 != null && latestSample.spo2 < 85
   // Reserved for upcoming scenario/instructor controls.
   const oxygenFailureActive = false
 
@@ -1002,6 +1004,7 @@ export default function App() {
     tidalVolumeHigh: !suppressSecondaryAlarmsForApnea && tidalVolumeHighAlarmActive,
     respiratoryRateLow: !suppressSecondaryAlarmsForApnea && respiratoryRateLowAlarmActive,
     respiratoryRateHigh: !suppressSecondaryAlarmsForApnea && respiratoryRateHighAlarmActive,
+    spo2Low: spo2LowAlarmActive,
     oxygenFailure: oxygenFailureActive,
   }
 
@@ -1015,8 +1018,9 @@ export default function App() {
     { key: 'tidalVolumeHigh', label: 'HIGH TIDAL VOLUME', active: tidalVolumeHighAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
     { key: 'respiratoryRateLow', label: 'LOW RESPIRATORY RATE', active: respiratoryRateLowAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
     { key: 'respiratoryRateHigh', label: 'HIGH RESPIRATORY RATE', active: respiratoryRateHighAlarmActive, visible: !suppressSecondaryAlarmsForApnea },
+    { key: 'spo2Low', label: 'LOW SpO₂', active: spo2LowAlarmActive, priority: 'critical', immediateCritical: true },
     { key: 'oxygenFailure', label: 'OXYGEN FAILURE', active: oxygenFailureActive, priority: 'critical' },
-  ], [apneaAlarmActive, pressureLimitAlarmActive, pressureAlarmActive, minuteVentilationLowAlarmActive, minuteVentilationHighAlarmActive, tidalVolumeLowAlarmActive, tidalVolumeHighAlarmActive, respiratoryRateLowAlarmActive, respiratoryRateHighAlarmActive, oxygenFailureActive, suppressSecondaryAlarmsForApnea])
+  ], [apneaAlarmActive, pressureLimitAlarmActive, pressureAlarmActive, minuteVentilationLowAlarmActive, minuteVentilationHighAlarmActive, tidalVolumeLowAlarmActive, tidalVolumeHighAlarmActive, respiratoryRateLowAlarmActive, respiratoryRateHighAlarmActive, spo2LowAlarmActive, oxygenFailureActive, suppressSecondaryAlarmsForApnea])
 
   useEffect(() => {
     setAlarmOnsets((current) => {
@@ -1038,7 +1042,7 @@ export default function App() {
       }
       return changed ? next : current
     })
-  }, [apneaAlarmActive, pressureLimitAlarmActive, pressureAlarmActive, minuteVentilationLowAlarmActive, minuteVentilationHighAlarmActive, tidalVolumeLowAlarmActive, tidalVolumeHighAlarmActive, respiratoryRateLowAlarmActive, respiratoryRateHighAlarmActive, oxygenFailureActive, currentSimulationTime])
+  }, [apneaAlarmActive, pressureLimitAlarmActive, pressureAlarmActive, minuteVentilationLowAlarmActive, minuteVentilationHighAlarmActive, tidalVolumeLowAlarmActive, tidalVolumeHighAlarmActive, respiratoryRateLowAlarmActive, respiratoryRateHighAlarmActive, spo2LowAlarmActive, oxygenFailureActive, currentSimulationTime])
 
   const alarmController = useSharedAlarmController({
     role: teachingSession.role,
@@ -1065,7 +1069,7 @@ export default function App() {
   const respiratoryRateMetricAlarm: MetricAlarmLevel = apneaAlarmActive && !alarmLifecycle.apnea?.acknowledged
     ? 'red'
     : measurementAlarmNeedsAttention('respiratoryRateLow', 'respiratoryRateHigh') ? 'yellow' : null
-  const spo2MetricAlarm: MetricAlarmLevel = latestSample?.spo2 != null && latestSample.spo2 < 85 ? 'red' : null
+  const spo2MetricAlarm: MetricAlarmLevel = spo2LowAlarmActive ? 'red' : null
 
   useEffect(() => () => {
     if (alarmSilenceLongPressTimeoutRef.current != null) window.clearTimeout(alarmSilenceLongPressTimeoutRef.current)
