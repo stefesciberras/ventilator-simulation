@@ -154,18 +154,7 @@
 
 /* Clinical groups should read as light-theme panels rather than remnants of
    the dark simulator theme. Accent borders/headings still identify groups. */
-.scenario-builder-app .shared-scenario-control-group,
-.scenario-builder-app .shared-scenario-control-group.vent,
-.scenario-builder-app .shared-scenario-control-group.patient,
-.scenario-builder-app .shared-scenario-control-group.physio,
-.scenario-builder-app .shared-scenario-control-group.monitor,
-.scenario-builder-app .shared-scenario-edumon-snapshot .shared-scenario-control-group.monitor,
-.scenario-builder-app .shared-scenario-edumon-snapshot .shared-scenario-control-group.patient,
-.scenario-builder-app .shared-scenario-edumon-snapshot .shared-scenario-control-group.card cardiovascular,
-.scenario-builder-app .shared-scenario-edumon-snapshot .shared-scenario-control-group.cardiovascular,
-.scenario-builder-app .shared-scenario-edumon-snapshot .shared-scenario-control-group.respiratory,
-.scenario-builder-app .shared-scenario-edumon-snapshot .shared-scenario-control-group.metabolism,
-.scenario-builder-app .shared-scenario-edumon-snapshot .shared-scenario-control-group.anaesthesia {
+.scenario-builder-app .shared-scenario-control-group {
   background: #d5d8dc !important;
 }
 
