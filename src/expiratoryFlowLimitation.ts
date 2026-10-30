@@ -53,29 +53,25 @@ export function applyExpiratoryFlowLimitation(
   const volumeSlopePerSecond = Math.max(0.22, (1.40 - 1.13 * severityGain) * sizeScale)
   const airwayCollapseFactor = clamp(1 - 1.8 * airwayInvolvement * severityGain, 0.35, 1)
 
-  // Preserve a physiologic early expiratory spike/elbow at all EFL severities.
-  // Spike prominence is deliberately not proportional to EFL severity. At the
-  // most severe setting the choke point dominates earlier, so the opening spike
-  // remains visible but is smaller than at intermediate/marked EFL.
   const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
   const airwayElbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
   const airwayVolumeAboveElbowL = Math.max(0, volumeL - airwayElbowVolumeL)
 
-  // For low-Rexp EFL, use a steep high-volume weighting instead of a hard
-  // threshold. This allows a visible opening spike in pressure-controlled breaths
-  // even after auto-PEEP has altered steady-state volume, but makes the extra flow
-  // allowance collapse rapidly as expiration proceeds. The cubic weighting keeps
-  // its contribution negligible through the mid/late expiratory limb, preserving
-  // severe-EFL trapping and the flat choke-flow morphology.
+  // Low-Rexp EFL receives a brief, high-volume opening spike. The contribution
+  // falls cubically as volume falls, so it shapes only the early expiratory elbow
+  // and does not wash out the flat, flow-limited limb or severe-EFL air trapping.
   const genericElbowVolumeL = referenceTidalVolumeL * 0.65
   const genericVolumeAboveElbowL = Math.max(0, volumeL - genericElbowVolumeL)
   const genericHighVolumeWidthL = Math.max(referenceTidalVolumeL * 0.35, 0.06)
   const genericHighVolumeFraction = clamp(genericVolumeAboveElbowL / genericHighVolumeWidthL, 0, 1)
   const genericHighVolumeWeight = genericHighVolumeFraction ** 3
 
+  // Spike prominence is not proportional to EFL severity. At EFL 1.0 the choke
+  // point dominates earlier, so the initial spike remains visible but is smaller
+  // than at intermediate/marked EFL.
   const genericSpikeGain = severityGain * (1 - 0.8 * severityGain)
   const genericEarlySpikeReliefLs =
-    (1 - airwayInvolvement) * genericSpikeGain * 3.0 * genericVolumeAboveElbowL * genericHighVolumeWeight
+    (1 - airwayInvolvement) * genericSpikeGain * 2.8 * genericVolumeAboveElbowL * genericHighVolumeWeight
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
   const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
@@ -88,8 +84,6 @@ export function applyExpiratoryFlowLimitation(
     return { flowLs: requestedFlowLs, limited: false, ceilingLs }
   }
 
-  // Retain the monotone soft cap introduced in v0.83.0.63 so the early elbow
-  // cannot reintroduce the artificial mid-expiratory hump/shoulder.
   const blendWidth = Math.max(ceilingLs * 0.15, 0.015)
   const relativeBlendWidth = clamp(blendWidth / Math.max(ceilingLs, 1e-6), 0.08, 0.4)
   const softCapPower = clamp(2 / relativeBlendWidth, 8, 20)
