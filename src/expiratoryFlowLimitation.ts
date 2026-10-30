@@ -68,10 +68,13 @@ export function applyExpiratoryFlowLimitation(
 
   // Spike prominence is not proportional to EFL severity. At EFL 1.0 the choke
   // point dominates earlier, so the initial spike remains visible but is smaller
-  // than at intermediate/marked EFL.
+  // than at intermediate/marked EFL. The generic low-Rexp component falls off
+  // cubically with airway involvement so COPD/asthma remain governed by their
+  // airway-specific dog-leg mechanics rather than receiving both spike models.
   const genericSpikeGain = severityGain * (1 - 0.8 * severityGain)
+  const lowAirwayWeight = (1 - airwayInvolvement) ** 3
   const genericEarlySpikeReliefLs =
-    (1 - airwayInvolvement) * genericSpikeGain * 2.8 * genericVolumeAboveElbowL * genericHighVolumeWeight
+    lowAirwayWeight * genericSpikeGain * 2.8 * genericVolumeAboveElbowL * genericHighVolumeWeight
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
   const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
