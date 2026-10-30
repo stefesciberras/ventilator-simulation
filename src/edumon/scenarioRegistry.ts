@@ -33,13 +33,19 @@ export function buildEdumonScenarioStageTarget(
     simulationSpeed: current.simulationSpeed,
   }
 
+  const desiredValueFor = (variable: Parameters<typeof readScenarioSnapshotValue>[1]) => readScenarioSnapshotValue(desired, variable)
+  const shouldApply = (variable: Parameters<typeof readScenarioSnapshotValue>[1]) => {
+    if (applied && !applied.has(variable.id)) return false
+    return desiredValueFor(variable) !== undefined
+  }
+
   for (const variable of writableScenarioVariables(module)) {
-    if (applied && !applied.has(variable.id)) continue
-    target = writeScenarioSnapshotValue(target, variable, readScenarioSnapshotValue(desired, variable))
+    if (!shouldApply(variable)) continue
+    target = writeScenarioSnapshotValue(target, variable, desiredValueFor(variable))
   }
 
   const transitionPatientKeys = transitionScenarioVariables(module)
-    .filter((variable) => !applied || applied.has(variable.id))
+    .filter(shouldApply)
     .filter((variable) => variable.snapshotPath?.startsWith('patient.'))
     .map((variable) => variable.snapshotPath!.slice('patient.'.length))
     .filter((key): key is EdumonTransitionPatientKey => ['heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion'].includes(key))
