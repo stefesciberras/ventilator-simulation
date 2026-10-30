@@ -12,7 +12,8 @@ import { InstructorWorkspace } from '../teaching/instructor/InstructorWorkspace'
 import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
 import { InstructorScenarioLibraryController } from '../teaching/instructor/InstructorScenarioLibraryController'
 import { useEduventInstructorScenarioRuntime, type EduventDynamicScenarioDiagnosticContext } from '../eduvent/useEduventInstructorScenarioRuntime'
-import { configureSessionLogRuntime, diffSessionState, recordSessionLogEvent, settingChangesLabel } from '../teaching/session/sessionLog'
+import { clearStandaloneSessionLog, configureSessionLogRuntime, diffSessionState, recordSessionLogEvent, settingChangesLabel } from '../teaching/session/sessionLog'
+import { clearScenarioLogs } from '../scenario-logger'
 import '../account.css'
 
 export type DynamicScenarioDiagnosticContext = EduventDynamicScenarioDiagnosticContext
@@ -34,6 +35,20 @@ interface InstructorAccountControlsProps {
   onStaticScenarioLoaded?: (name: string) => void
   onScenarioDiagnosticChange?: (context: DynamicScenarioDiagnosticContext | null) => void
   scenarioActionEvent?: { action: DynamicScenarioActionId; sequence: number } | null
+}
+
+const PENDING_TEACHING_DYNAMIC_SCENARIO_KEY = 'loppjusim.mv.pendingTeachingDynamicScenario'
+
+function clearMvPersistedSimulatorState() {
+  try {
+    const prefixes = ['edusim.mv.', 'edusim.eduvent.', 'eduvent.']
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index)
+      if (key && prefixes.some((prefix) => key.startsWith(prefix))) window.localStorage.removeItem(key)
+    }
+  } catch {
+    // Persistence is optional; a fresh React/engine mount still resets transient runtime state.
+  }
 }
 
 function summaryItems(scenario: InstructorScenarioSnapshot) {
@@ -148,6 +163,23 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const dynamicPresets = useMemo(() => library.items.filter((preset) => preset.scenario.kind === 'dynamic'), [library.items])
 
   useEffect(() => {
+    if (!account || role !== 'instructor') return
+    let pendingScenarioId: string | null = null
+    try { pendingScenarioId = window.sessionStorage.getItem(PENDING_TEACHING_DYNAMIC_SCENARIO_KEY) } catch { /* optional */ }
+    if (!pendingScenarioId) return
+    const preset = dynamicPresets.find((item) => item.id === pendingScenarioId)
+    if (!preset) return
+    try { window.sessionStorage.removeItem(PENDING_TEACHING_DYNAMIC_SCENARIO_KEY) } catch { /* optional */ }
+    void scenarioRuntime.start(preset).then(() => recordSessionLogEvent({
+      sessionId: sessionId ?? undefined,
+      category: 'scenario',
+      eventType: 'instructor.scenario.started',
+      label: `Started scenario “${preset.name}”`,
+      details: { scenarioId: preset.id, scenarioName: preset.name, freshStart: true },
+    })).catch(() => undefined)
+  }, [account, role, sessionId, dynamicPresets, scenarioRuntime])
+
+  useEffect(() => {
     if (!account || role === 'candidate') return
     const url = new URL(window.location.href)
     const requested = url.searchParams.get('scenario')
@@ -166,8 +198,32 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     onStaticScenarioLoaded?.(preset.name)
   }
 
+  const requestTeachingDynamicFreshStart = async (preset: InstructorPresetRow) => {
+    if (!sessionId) return scenarioRuntime.start(preset)
+    try {
+      await recordSessionLogEvent({
+        sessionId,
+        category: 'session',
+        eventType: 'session.log.cleared',
+        label: `Session log cleared before “${preset.name}”`,
+        details: { reason: 'dynamic-scenario-fresh-start', scenarioId: preset.id, scenarioName: preset.name },
+      })
+    } catch {
+      // A log reset must not prevent the simulator from starting a scenario.
+    }
+    clearScenarioLogs()
+    clearStandaloneSessionLog('mv')
+    clearStandaloneSessionLog('eduvent')
+    clearMvPersistedSimulatorState()
+    try { window.sessionStorage.setItem(PENDING_TEACHING_DYNAMIC_SCENARIO_KEY, preset.id) } catch { return scenarioRuntime.start(preset) }
+    window.location.reload()
+  }
+
   const startItem = async (preset: InstructorPresetRow) => {
-    if (preset.scenario.kind === 'dynamic') return scenarioRuntime.start(preset)
+    if (preset.scenario.kind === 'dynamic') {
+      if (role === 'instructor') return requestTeachingDynamicFreshStart(preset)
+      return scenarioRuntime.start(preset)
+    }
     if (role === 'standalone') {
       await onStartInstructorSession(preset.scenario)
       onStaticScenarioLoaded?.(preset.name)
@@ -208,6 +264,7 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     onSignIn={() => accountAuth.setOpen(true)}
     builderHref="/scenarios?product=mv"
     productLabel="LoppjuSIM-MV"
+    initialTab={role === 'instructor' ? 'dynamic' : 'static'}
   />
 
   const runtimeError = scenarioRuntime.selfDirectedError && runtimeHost
