@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createCaseMediaSignedUrl, listCaseMediaByIds } from '../../caseMedia'
+import { SharedDraggableModal } from '../SharedDraggableModal'
 import type { TeachingScenarioStageContent } from './runtimeCore'
 import './SharedScenarioRuntimePanel.css'
 
@@ -69,10 +70,6 @@ export function SharedScenarioRuntimePanel({
   const question = content?.kind === 'question' ? content.question : null
   const media = content?.kind === 'media' ? content.media : null
   const instructionText = instructions ?? notes
-  // In an instructor/candidate session, direct stage navigation belongs to the
-  // instructor. Self-directed scenarios remain locally navigable because there is
-  // deliberately no instructor authority in that mode. Automatic/time/condition/
-  // action triggers are not affected by this UI gate.
   const sessionRole = typeof document === 'undefined' ? 'standalone' : document.documentElement.dataset.loppjusimSessionRole
   const manualControlsAllowed = selfDirected || sessionRole !== 'candidate'
 
@@ -102,11 +99,7 @@ export function SharedScenarioRuntimePanel({
   const safeStageCount = Math.max(1, stageCount)
   const progress = Math.max(0, Math.min(100, (stageNumber / safeStageCount) * 100))
 
-  return <aside className={`shared-scenario-runtime-panel ${selfDirected ? 'self-directed' : ''} ${complete ? 'complete' : ''}`} aria-label="Active scenario stage">
-    <header>
-      <div><span>{scenarioName}</span><strong>{stageNumber}/{stageCount} · {stageName}</strong></div>
-      {onClose && <button type="button" onClick={onClose} aria-label={selfDirected ? 'Exit scenario' : 'Close scenario'}>×</button>}
-    </header>
+  const panelBody = <>
     <div className="shared-scenario-runtime-progress" aria-label={`Scenario progress: stage ${stageNumber} of ${stageCount}`}><i style={{ width: `${progress}%` }} /></div>
     {instructionText && <p className="shared-scenario-runtime-instructions">{instructionText}</p>}
     {media && <div className="shared-scenario-runtime-media">
@@ -127,5 +120,19 @@ export function SharedScenarioRuntimePanel({
         {manualAdvanceAvailable && <button type="button" className="scenario-builder-primary" onClick={() => void onAdvance?.()}>{selfDirected ? 'Continue' : 'Next stage'}</button>}
       </div>}
     </>}
+  </>
+
+  if (!selfDirected) {
+    return <SharedDraggableModal ariaLabel="Active scenario stage" eyebrow={scenarioName} title={`${stageNumber}/${stageCount} · ${stageName}`} onClose={onClose} closeLabel="Close scenario" className={`shared-scenario-runtime-modal ${complete ? 'complete' : ''}`}>
+      <div className={`shared-scenario-runtime-panel modal-runtime ${complete ? 'complete' : ''}`}>{panelBody}</div>
+    </SharedDraggableModal>
+  }
+
+  return <aside className={`shared-scenario-runtime-panel self-directed ${complete ? 'complete' : ''}`} aria-label="Active scenario stage">
+    <header>
+      <div><span>{scenarioName}</span><strong>{stageNumber}/{stageCount} · {stageName}</strong></div>
+      {onClose && <button type="button" onClick={onClose} aria-label="Exit scenario">×</button>}
+    </header>
+    {panelBody}
   </aside>
 }
