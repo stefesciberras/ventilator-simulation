@@ -9,6 +9,7 @@ const tempDirectory = await mkdtemp(path.join(tmpdir(), 'eduvent-mechanics-regre
 const regressions = [
   'scripts/respiratory-mechanics-regression.ts',
   'scripts/simv-mechanics-regression.ts',
+  'scripts/two-level-mechanics-regression.ts',
 ]
 
 try {
