@@ -60,16 +60,21 @@ export function applyExpiratoryFlowLimitation(
   const airwayCollapseFactor = clamp(1 - 1.8 * airwayInvolvement * severityGain, 0.35, 1)
 
   // Preserve a physiologic early expiratory spike/elbow at all EFL severities.
-  // The generic component fills in the missing spike when Rexp is low, but it
-  // fades out as airway involvement rises so established COPD/asthma dog-leg
-  // morphology remains governed by the airway-specific component.
+  // For low-Rexp EFL, the generic spike is deliberately confined to the highest
+  // lung-volume opening segment: once ~10% of the reference VT has emptied, the
+  // extra allowance disappears and the severe choke-flow envelope again governs
+  // expiration. This gives the reference-like sharp peak/elbow without washing
+  // out dynamic hyperinflation. High-Rexp disease keeps its established broader
+  // airway-specific dog-leg morphology.
   const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
-  const elbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
-  const volumeAboveElbowL = Math.max(0, volumeL - elbowVolumeL)
+  const airwayElbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
+  const genericElbowVolumeL = referenceTidalVolumeL * 0.90
+  const genericVolumeAboveElbowL = Math.max(0, volumeL - genericElbowVolumeL)
+  const airwayVolumeAboveElbowL = Math.max(0, volumeL - airwayElbowVolumeL)
   const genericEarlySpikeReliefLs =
-    (1 - airwayInvolvement) * severityGain * 0.85 * volumeAboveElbowL
+    (1 - airwayInvolvement) * severityGain * 1.60 * genericVolumeAboveElbowL
   const airwayEarlySpikeReliefLs =
-    airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * volumeAboveElbowL
+    airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
   const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
 
   const baseCeilingLs = (lowVolumeCeilingLs + volumeSlopePerSecond * volumeL) * airwayCollapseFactor
