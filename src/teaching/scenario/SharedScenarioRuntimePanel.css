@@ -35,27 +35,41 @@
 }
 
 .shared-scenario-runtime-modal .shared-draggable-modal-body {
+  position: static !important;
+  display: block !important;
+  width: 100% !important;
   height: auto !important;
   min-height: 0 !important;
-  overflow: visible;
+  max-height: none !important;
+  overflow: visible !important;
+  box-sizing: border-box;
 }
 
 .shared-scenario-runtime-panel.self-directed .shared-scenario-runtime-triggers > strong { display: block; margin-bottom: .45rem; }
 
-/* The shared runtime sits inside a constrained draggable surface. Do not let
-   legacy instructor-workspace sizing rules make actions wider than it. */
+/* Keep the runtime panel in normal document flow even when product-specific
+   legacy .modal-runtime rules are present. The outer draggable modal is the
+   only element allowed to scroll. */
 .shared-scenario-runtime-panel.modal-runtime {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  height: auto;
-  min-height: 0;
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  float: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  overflow: visible !important;
   box-sizing: border-box;
 }
 
 .shared-scenario-runtime-panel.modal-runtime > *,
 .shared-scenario-runtime-panel.modal-runtime .shared-scenario-runtime-triggers,
 .shared-scenario-runtime-panel.modal-runtime .shared-scenario-manual-paths {
+  position: static;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
@@ -98,6 +112,11 @@
 .shared-scenario-trigger-row:not(:disabled),
 .shared-scenario-manual-paths button {
   cursor: pointer;
+}
+
+.shared-scenario-trigger-row.informational {
+  cursor: default;
+  background: #101b21;
 }
 
 .shared-scenario-trigger-row:disabled {
