@@ -826,12 +826,25 @@ export default function App() {
     pressureLimit: alarmLimits.pressureLimit,
   }), [inspiratoryHoldRequestTime, inspiratoryHoldReleaseTime, expiratoryHoldRequestTime, expiratoryHoldReleaseTime, alarmLimits.pressureLimit])
 
+  // Keep the engine timer independent from React setting updates. Dynamic scenario
+  // transitions deliberately update patient/ventilator state several times per
+  // second; those renders must not tear down and recreate the 100 ms engine loop.
+  const enginePatientRef = useRef(patient)
+  const engineVentilatorRef = useRef(effectiveVentilator)
+  const engineHoldOptionsRef = useRef(holdOptions)
+  const engineSimulationSpeedRef = useRef(simulationSpeed)
+  enginePatientRef.current = patient
+  engineVentilatorRef.current = effectiveVentilator
+  engineHoldOptionsRef.current = holdOptions
+  engineSimulationSpeedRef.current = simulationSpeed
+
   useEffect(() => {
     if (simulationPaused) return
     const timer = window.setInterval(() => {
       const startTime = simulationTimeRef.current
       const transition = patientTransitionRef.current
-      let simulationPatient = patient
+      const targetPatient = enginePatientRef.current
+      let simulationPatient = targetPatient
       if (transition) {
         const progress = (startTime - transition.start) / Math.max(transition.duration, 0.001)
         simulationPatient = interpolatePatientSettings(transition.from, transition.to, progress)
@@ -842,17 +855,17 @@ export default function App() {
           patientTransitionRef.current = null
         }
       } else {
-        effectivePatientRef.current = { ...patient }
+        effectivePatientRef.current = { ...targetPatient }
       }
-      const tickSteps = Math.max(1, Math.round(TICK_STEPS * simulationSpeed))
+      const tickSteps = Math.max(1, Math.round(TICK_STEPS * engineSimulationSpeedRef.current))
       const nextSamples = advanceSimulation(
         simulationStateRef.current,
-        effectiveVentilator,
+        engineVentilatorRef.current,
         simulationPatient,
         startTime,
         tickSteps,
         DT,
-        holdOptions,
+        engineHoldOptionsRef.current,
       )
       simulationTimeRef.current = startTime + tickSteps * DT
       setTimeline((current) => {
@@ -861,7 +874,7 @@ export default function App() {
       })
     }, 100)
     return () => window.clearInterval(timer)
-  }, [effectiveVentilator, patient, simulationPaused, holdOptions, simulationSpeed])
+  }, [simulationPaused])
 
   const movingSamples = useMemo(() => timeline.slice(-WINDOW_SAMPLES), [timeline])
   const displayControls = useSimulationDisplayControls<Sample[]>({
