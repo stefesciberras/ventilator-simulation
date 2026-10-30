@@ -126,9 +126,10 @@ function refreshSectionApplyControls() {
 
     const appliedCount = itemCheckboxes.filter((checkbox) => checkbox.checked).length
     const allApplied = appliedCount === itemCheckboxes.length
+    const nextText = allApplied ? 'Unapply all' : 'Apply all'
     bulk.checked = allApplied
     bulk.indeterminate = appliedCount > 0 && !allApplied
-    text.textContent = allApplied ? 'Unapply all' : 'Apply all'
+    if (text.textContent !== nextText) text.textContent = nextText
     bulk.setAttribute('aria-label', allApplied ? 'Unapply all controls in this section' : 'Apply all controls in this section')
   })
 }
