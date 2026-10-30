@@ -1,1 +1,92 @@
-.shared-scenario-runtime-progress{height:4px;background:rgba(255,255,255,.08);overflow:hidden}.shared-scenario-runtime-progress>i{display:block;height:100%;background:currentColor;opacity:.75;transition:width .2s ease}.shared-scenario-runtime-instructions{white-space:pre-wrap}.shared-scenario-runtime-complete{display:grid;gap:.35rem;padding:.85rem 1rem;border:1px solid rgba(126,231,135,.4);border-radius:.7rem;background:rgba(126,231,135,.08)}.shared-scenario-runtime-complete strong{font-size:1rem}.shared-scenario-runtime-complete span{opacity:.8}.shared-scenario-runtime-panel.self-directed .instructor-scenario-branches strong{display:block;margin-bottom:.45rem}
+.shared-scenario-runtime-progress {
+  height: 4px;
+  overflow: hidden;
+  background: rgba(255,255,255,.08);
+}
+
+.shared-scenario-runtime-progress > i {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  opacity: .75;
+  transition: width .2s ease;
+}
+
+.shared-scenario-runtime-instructions { white-space: pre-wrap; }
+
+.shared-scenario-runtime-complete {
+  display: grid;
+  gap: .35rem;
+  padding: .85rem 1rem;
+  border: 1px solid rgba(126,231,135,.4);
+  border-radius: .7rem;
+  background: rgba(126,231,135,.08);
+}
+
+.shared-scenario-runtime-complete strong { font-size: 1rem; }
+.shared-scenario-runtime-complete span { opacity: .8; }
+.shared-scenario-runtime-panel.self-directed .instructor-scenario-branches strong { display: block; margin-bottom: .45rem; }
+
+/* The shared runtime sits inside a constrained draggable surface. Do not let
+   legacy instructor-workspace sizing rules make branch/actions wider than it. */
+.shared-scenario-runtime-panel.modal-runtime {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.shared-scenario-runtime-panel.modal-runtime > *,
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-branches,
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-flow-actions {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-branches {
+  width: 100%;
+  overflow: hidden;
+}
+
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-branches > strong {
+  display: block;
+  margin-bottom: .45rem;
+}
+
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-branches button {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  white-space: normal;
+}
+
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-branches button span,
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-branches button em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-branches button em {
+  flex: 0 1 auto;
+  text-align: right;
+}
+
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-flow-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .5rem;
+}
+
+.shared-scenario-runtime-panel.modal-runtime .instructor-scenario-flow-actions button {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
