@@ -1,77 +1,79 @@
 .shared-draggable-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 4998;
+  z-index: 10000;
   pointer-events: none;
 }
 
 .shared-draggable-modal {
-  position: fixed;
-  top: auto;
-  right: 18px;
-  bottom: 18px;
-  left: auto;
-  width: min(620px, 48vw);
-  max-height: calc(100dvh - 104px);
-  overflow: hidden;
-  box-sizing: border-box;
-  border: 1px solid rgba(114, 174, 204, .32);
-  border-radius: 16px;
-  background: #0a151b;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, .48);
   pointer-events: auto;
-  transform-origin: center;
-  margin-left: 0;
 }
 
 .shared-draggable-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,.08);
-  background: #0f2028;
   cursor: grab;
   touch-action: none;
   user-select: none;
 }
 
 .shared-draggable-modal-header:active { cursor: grabbing; }
-.shared-draggable-modal-header > div { display: grid; gap: 2px; min-width: 0; }
-.shared-draggable-modal-header span { color: #7898a7; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.shared-draggable-modal-header strong { color: #edf8fc; font-size: 14px; line-height: 1.25; }
-.shared-draggable-modal-header button {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.05);
-  color: #d7e7ee;
-  font-size: 20px;
-  line-height: 1;
+
+.shared-draggable-modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shared-draggable-modal-header-actions button {
+  min-width: 0;
 }
 
 .shared-draggable-modal-body {
-  max-height: calc(100dvh - 160px);
   overflow: auto;
   padding: 12px;
+  background: #071014;
+}
+
+.shared-draggable-modal-reopen {
+  z-index: 10001;
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+}
+
+.shared-draggable-modal-reopen span {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shared-scenario-runtime-modal {
+  width: min(430px, 38vw);
+  max-height: calc(100dvh - 104px);
+}
+
+.shared-scenario-runtime-modal .shared-draggable-modal-body {
+  padding: 14px;
+}
+
+.shared-scenario-manual-next {
+  width: 100%;
+  min-height: 46px;
+  font-size: 1rem;
 }
 
 @media (max-width: 899px) {
-  .shared-draggable-modal {
-    top: auto;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    left: 12px;
-    right: 12px;
-    width: auto;
-    max-height: min(76vh, 680px);
-    margin-left: 0;
-    transform: none !important;
-  }
   .shared-draggable-modal-header { cursor: default; touch-action: auto; }
+}
+
+@media (max-width: 640px) {
+  .shared-draggable-modal-reopen {
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .shared-scenario-runtime-modal {
+    width: 100% !important;
+    max-height: 78dvh !important;
+  }
 }
