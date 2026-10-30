@@ -57,14 +57,16 @@ export function applyExpiratoryFlowLimitation(
   const airwayElbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
   const airwayVolumeAboveElbowL = Math.max(0, volumeL - airwayElbowVolumeL)
 
-  // Low-Rexp EFL receives a brief, high-volume opening spike. The contribution
-  // falls cubically as volume falls, so it shapes only the early expiratory elbow
-  // and does not wash out the flat, flow-limited limb or severe-EFL air trapping.
-  const genericElbowVolumeL = referenceTidalVolumeL * 0.65
+  // Low-Rexp EFL receives a brief, high-volume opening spike. The high-volume
+  // gate is deliberately steep: after only the first few tens of millilitres
+  // have emptied, the extra allowance collapses and the choke-flow envelope
+  // governs the rest of expiration. This creates the reference-like rapid
+  // spike -> elbow -> flatter limb without materially increasing total emptying.
+  const genericElbowVolumeL = referenceTidalVolumeL * 0.78
+  const genericHighVolumeWidthL = Math.max(referenceTidalVolumeL * 0.36, 0.07)
   const genericVolumeAboveElbowL = Math.max(0, volumeL - genericElbowVolumeL)
-  const genericHighVolumeWidthL = Math.max(referenceTidalVolumeL * 0.35, 0.06)
   const genericHighVolumeFraction = clamp(genericVolumeAboveElbowL / genericHighVolumeWidthL, 0, 1)
-  const genericHighVolumeWeight = genericHighVolumeFraction ** 3
+  const genericHighVolumeWeight = genericHighVolumeFraction ** 6
 
   // Spike prominence is not proportional to EFL severity. At EFL 1.0 the choke
   // point dominates earlier, so the initial spike remains visible but is smaller
