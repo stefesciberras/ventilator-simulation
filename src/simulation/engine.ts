@@ -169,6 +169,19 @@ export function stepSimulation(
   const effectiveOptions = aprvBoundaryHoldOptions(state, ventilator, t, dt, options)
 
   const sample = legacyStepSimulation(state, ventilator, patient, t, dt, effectiveOptions)
+
+  // The mature two-level path currently calls its ventilation tracker once in
+  // `twoLevelSample()` and once again before returning from legacyStepSimulation.
+  // That second pass only duplicates expiratory-volume integration; phase-entry
+  // bookkeeping is naturally idempotent because previousPhase is already set.
+  // Remove the duplicated increment here at the public engine boundary so APRV
+  // and BIPAP expose the same one-sample/one-integration semantics as every other
+  // mode. This also prevents shared gas exchange from receiving a doubled VT.
+  if ((sample.mode === 'APRV' || sample.mode === 'BIPAP') && sample.phase === 'expiration') {
+    const duplicatedExpiredVolumeL = Math.max(0, -sample.flow / 60) * dt
+    state.expiredVolumeThisCycle = Math.max(0, state.expiredVolumeThisCycle - duplicatedExpiredVolumeL)
+  }
+
   const shared = stepEduventRespiratoryPhysiology(
     previousSharedState,
     ventilator,
