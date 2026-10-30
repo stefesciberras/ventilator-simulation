@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import './teaching.css'
+import './TeachingMediaPresentation.css'
 import './SharedDraggableModal.css'
 
 interface SharedDraggableModalProps {
@@ -10,11 +12,19 @@ interface SharedDraggableModalProps {
   onClose?: () => void
   closeLabel?: string
   className?: string
+  collapsible?: boolean
+  reopenLabel?: string
 }
 
-export function SharedDraggableModal({ ariaLabel, eyebrow, title, children, onClose, closeLabel = 'Close', className = '' }: SharedDraggableModalProps) {
+export function SharedDraggableModal({ ariaLabel, eyebrow, title, children, onClose, closeLabel = 'Close', className = '', collapsible = true, reopenLabel = 'Show' }: SharedDraggableModalProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [collapsed, setCollapsed] = useState(false)
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; baseLeft: number; baseTop: number; width: number; height: number } | null>(null)
+
+  useEffect(() => {
+    setCollapsed(false)
+    setPosition({ x: 0, y: 0 })
+  }, [title])
 
   const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
     if (window.innerWidth < 900 || (event.target as HTMLElement).closest('button, input, select, textarea, video, a')) return
@@ -54,13 +64,22 @@ export function SharedDraggableModal({ ariaLabel, eyebrow, title, children, onCl
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture?.(event.pointerId)
   }
 
+  if (collapsed) {
+    return <button type="button" className="teaching-prompt-reopen teaching-media-reopen shared-draggable-modal-reopen" onClick={() => setCollapsed(false)}>
+      <span>{title}</span><strong>{reopenLabel}</strong>
+    </button>
+  }
+
   return (
-    <div className="shared-draggable-modal-overlay" role="presentation">
-      <section className={`shared-draggable-modal ${className}`.trim()} role="dialog" aria-modal="false" aria-label={ariaLabel} style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
-        <header className="shared-draggable-modal-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title="Drag to move on wide screens">
+    <div className="teaching-media-overlay shared-draggable-modal-overlay" role="presentation">
+      <section className={`teaching-media-modal shared-draggable-modal ${className}`.trim()} role="dialog" aria-modal="false" aria-label={ariaLabel} style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
+        <div className="teaching-media-header shared-draggable-modal-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title="Drag to move on wide screens">
           <div>{eyebrow && <span>{eyebrow}</span>}<strong>{title}</strong></div>
-          {onClose && <button type="button" onClick={onClose} aria-label={closeLabel}>×</button>}
-        </header>
+          <div className="shared-draggable-modal-header-actions">
+            {collapsible && <button type="button" onClick={() => setCollapsed(true)}>Hide</button>}
+            {onClose && <button type="button" onClick={onClose} aria-label={closeLabel}>×</button>}
+          </div>
+        </div>
         <div className="shared-draggable-modal-body">{children}</div>
       </section>
     </div>
