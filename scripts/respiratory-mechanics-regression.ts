@@ -1,4 +1,5 @@
 import { generateWaveforms } from '../src/simulation/engine'
+import { PATIENT_PROFILES } from '../src/patientProfiles'
 import type { PatientSettings, Sample, VentilatorSettings } from '../src/simulation/types'
 
 const assert = (condition: boolean, message: string) => {
@@ -7,27 +8,10 @@ const assert = (condition: boolean, message: string) => {
 
 const approx = (value: number, target: number, tolerance: number) => Math.abs(value - target) <= tolerance
 
-const basePatient: PatientSettings = {
-  sex: 'male',
-  heightCm: 170,
-  oxygenConsumption: 250,
-  frc: 2500,
-  shuntFraction: 0.03,
-  maxSpO2: 100,
-  compliance: 50,
-  chestWallCompliance: 180,
-  resistance: 8,
-  expiratoryResistance: 10,
-  expiratoryFlowLimitation: 0,
-  spontaneousRate: 12,
-  effort: 8,
-  neuralInspiratoryTime: 1,
-  effortRisePercent: 30,
-  effortRelaxationPercent: 35,
-  endExpiratoryOesophagealPressure: -5,
-  co2Production: 250,
-  vdVt: 0.4,
-}
+// Use the same canonical Normal profile as the application. The previous
+// regression used a synthetic lower-compliance / higher-effort patient and was
+// therefore not a valid calibration reference for PSV synchrony.
+const basePatient: PatientSettings = { ...PATIENT_PROFILES.Normal }
 
 const baseVentilator: VentilatorSettings = {
   mode: 'PSV',
@@ -41,7 +25,7 @@ const baseVentilator: VentilatorSettings = {
   pressureControl: 12,
   volumeGuaranteePressureLimit: 40,
   pressureSupport: 10,
-  triggerType: 'pressure',
+  triggerType: 'flow',
   triggerSensitivity: 1,
   flowTriggerSensitivity: 2,
   terminationSensitivity: 25,
@@ -55,19 +39,24 @@ const baseVentilator: VentilatorSettings = {
 
 interface BreathMetrics {
   effortStart: number
+  neuralEffortEnd: number
   triggerDetected: number
   inspirationStart: number
   inspirationEnd: number
   triggerDelay: number
   mechanicalTi: number
-  neuralTi: number
+  measuredNeuralTi: number
+  remainingNeuralTiAfterTrigger: number
+  cyclingOffsetFromNeuralEnd: number
   peakFlow: number
   tidalVolume: number
   minimumPreTriggerPaw: number
   peakAssistedPaw: number
+  pmusAtCycle: number
+  pmusFractionAtCycle: number
 }
 
-function firstPatientBreathMetrics(samples: Sample[], neuralTiSetting: number, peep: number): BreathMetrics {
+function firstPatientBreathMetrics(samples: Sample[], peep: number): BreathMetrics {
   const effortIndex = samples.findIndex((sample) => sample.patientEffortStart)
   assert(effortIndex >= 0, 'reference PSV scenario must contain a patient effort start')
   const effortStart = samples[effortIndex].time
@@ -85,23 +74,36 @@ function firstPatientBreathMetrics(samples: Sample[], neuralTiSetting: number, p
   assert(endIndex < samples.length, 'reference PSV breath must cycle back to expiration')
   const inspirationEnd = samples[endIndex].time
 
+  let neuralEndIndex = Math.max(endIndex, effortIndex + 1)
+  while (neuralEndIndex < samples.length && samples[neuralEndIndex].musclePressure > 0.1) neuralEndIndex += 1
+  assert(neuralEndIndex < samples.length, 'reference PSV neural effort must end within the sampled window')
+  const neuralEffortEnd = samples[neuralEndIndex].time
+
   const breath = samples.slice(inspirationIndex, endIndex)
+  const neuralEffort = samples.slice(effortIndex, neuralEndIndex + 1)
   const baselineVolume = samples[Math.max(0, inspirationIndex - 1)].volume
   const maximumVolume = Math.max(...breath.map((sample) => sample.volume))
   const preTrigger = samples.slice(effortIndex, Math.max(triggerIndex + 1, effortIndex + 1))
+  const peakPmus = Math.max(...neuralEffort.map((sample) => sample.musclePressure), 0.001)
+  const pmusAtCycle = samples[Math.max(inspirationIndex, endIndex - 1)].musclePressure
 
   return {
     effortStart,
+    neuralEffortEnd,
     triggerDetected,
     inspirationStart,
     inspirationEnd,
     triggerDelay: inspirationStart - effortStart,
     mechanicalTi: inspirationEnd - inspirationStart,
-    neuralTi: neuralTiSetting,
+    measuredNeuralTi: neuralEffortEnd - effortStart,
+    remainingNeuralTiAfterTrigger: neuralEffortEnd - inspirationStart,
+    cyclingOffsetFromNeuralEnd: inspirationEnd - neuralEffortEnd,
     peakFlow: Math.max(...breath.map((sample) => sample.flow)),
     tidalVolume: maximumVolume - baselineVolume,
     minimumPreTriggerPaw: Math.min(...preTrigger.map((sample) => sample.pressure)),
     peakAssistedPaw: Math.max(...breath.map((sample) => sample.pressure)),
+    pmusAtCycle,
+    pmusFractionAtCycle: pmusAtCycle / peakPmus,
   }
 }
 
@@ -120,17 +122,36 @@ function measureFirstMandatoryBreath(samples: Sample[]) {
   }
 }
 
-// Normal calibration reference: PS 10 / PEEP 5, RR 12, neural Ti 1 s.
-const psvSamples = generateWaveforms(baseVentilator, basePatient, 8, 0.01)
-const psv = firstPatientBreathMetrics(psvSamples, basePatient.neuralInspiratoryTime, baseVentilator.peep)
+function psvAtEts(terminationSensitivity: number): BreathMetrics {
+  const ventilator = { ...baseVentilator, terminationSensitivity }
+  return firstPatientBreathMetrics(generateWaveforms(ventilator, basePatient, 8, 0.01), ventilator.peep)
+}
 
-assert(psv.triggerDelay >= 0.05 && psv.triggerDelay <= 0.4, `PSV trigger delay ${psv.triggerDelay.toFixed(3)} s is outside 0.05-0.40 s`)
+// Canonical Normal calibration reference: PS 10 / PEEP 5, RR 12, neural Ti 1 s,
+// flow trigger 2 L/min, ETS 25%.
+const psv = psvAtEts(25)
+
+assert(psv.triggerDelay >= 0.05 && psv.triggerDelay <= 0.25, `PSV trigger delay ${psv.triggerDelay.toFixed(3)} s is outside 0.05-0.25 s`)
 assert(psv.peakFlow > 15 && psv.peakFlow < 100, `PSV peak flow ${psv.peakFlow.toFixed(1)} L/min must remain physiologic and below 100 L/min`)
-assert(psv.mechanicalTi >= 0.5 && psv.mechanicalTi <= 1.5, `PSV mechanical Ti ${psv.mechanicalTi.toFixed(2)} s is implausible for neural Ti 1.0 s`)
-assert(Math.abs(psv.mechanicalTi - psv.neuralTi) <= 0.6, `PSV mechanical Ti ${psv.mechanicalTi.toFixed(2)} s is too far from neural Ti ${psv.neuralTi.toFixed(2)} s`)
+assert(psv.mechanicalTi >= 0.45 && psv.mechanicalTi <= 1.2, `PSV mechanical Ti ${psv.mechanicalTi.toFixed(2)} s is implausible`)
+assert(psv.measuredNeuralTi >= 0.9 && psv.measuredNeuralTi <= 1.05, `measured neural Ti ${psv.measuredNeuralTi.toFixed(2)} s must remain close to the Normal 1.0 s setting`)
+// Synchrony is judged against neural effort END, not against the full neural Ti.
+// A triggered breath necessarily starts after some patient effort has already occurred.
+assert(psv.cyclingOffsetFromNeuralEnd >= -0.3 && psv.cyclingOffsetFromNeuralEnd <= 0.2, `PSV cycling offset ${psv.cyclingOffsetFromNeuralEnd.toFixed(2)} s is outside the -0.30 to +0.20 s synchrony envelope`)
+assert(psv.pmusFractionAtCycle <= 0.55, `PSV cycled with ${(psv.pmusFractionAtCycle * 100).toFixed(0)}% of peak Pmus still active`)
 assert(psv.tidalVolume >= 250 && psv.tidalVolume <= 900, `PSV VT ${psv.tidalVolume.toFixed(0)} mL is outside the calibration envelope`)
 assert(psv.minimumPreTriggerPaw < baseVentilator.peep - 0.15, 'Pmus must create a visible pre-trigger Paw deflection below PEEP')
 assert(psv.peakAssistedPaw > baseVentilator.peep + 5, 'Paw must rise into the assisted pressure range after PSV triggering')
+
+// ETS calibration: a lower percentage should prolong inspiratory support, while
+// a higher percentage should cycle earlier. This preserves ETS as a real teaching
+// control rather than secretly coupling the ventilator to the patient's neural Ti.
+const psvEts10 = psvAtEts(10)
+const psvEts50 = psvAtEts(50)
+assert(psvEts10.mechanicalTi > psv.mechanicalTi + 0.05, `ETS 10% should lengthen Ti beyond ETS 25% (${psvEts10.mechanicalTi.toFixed(2)} vs ${psv.mechanicalTi.toFixed(2)} s)`)
+assert(psvEts50.mechanicalTi < psv.mechanicalTi - 0.05, `ETS 50% should shorten Ti below ETS 25% (${psvEts50.mechanicalTi.toFixed(2)} vs ${psv.mechanicalTi.toFixed(2)} s)`)
+assert(psvEts10.cyclingOffsetFromNeuralEnd > psv.cyclingOffsetFromNeuralEnd, 'lower ETS must move cycling later relative to neural effort end')
+assert(psvEts50.cyclingOffsetFromNeuralEnd < psv.cyclingOffsetFromNeuralEnd, 'higher ETS must move cycling earlier relative to neural effort end')
 
 // VC authority regression: patient effort may alter Paw, but not commanded flow or VT.
 const vcVentilator: VentilatorSettings = {
@@ -160,10 +181,28 @@ console.log(JSON.stringify({
     triggerDelay: Number(psv.triggerDelay.toFixed(3)),
     peakFlowLMin: Number(psv.peakFlow.toFixed(1)),
     mechanicalTi: Number(psv.mechanicalTi.toFixed(2)),
-    neuralTi: psv.neuralTi,
+    measuredNeuralTi: Number(psv.measuredNeuralTi.toFixed(2)),
+    remainingNeuralTiAfterTrigger: Number(psv.remainingNeuralTiAfterTrigger.toFixed(2)),
+    cyclingOffsetFromNeuralEnd: Number(psv.cyclingOffsetFromNeuralEnd.toFixed(2)),
+    pmusAtCycleCmH2O: Number(psv.pmusAtCycle.toFixed(2)),
+    pmusFractionAtCycle: Number(psv.pmusFractionAtCycle.toFixed(2)),
     tidalVolumeMl: Number(psv.tidalVolume.toFixed(0)),
     minimumPreTriggerPaw: Number(psv.minimumPreTriggerPaw.toFixed(1)),
     peakAssistedPaw: Number(psv.peakAssistedPaw.toFixed(1)),
+  },
+  etsSweep: {
+    ets10: {
+      mechanicalTi: Number(psvEts10.mechanicalTi.toFixed(2)),
+      cyclingOffsetFromNeuralEnd: Number(psvEts10.cyclingOffsetFromNeuralEnd.toFixed(2)),
+    },
+    ets25: {
+      mechanicalTi: Number(psv.mechanicalTi.toFixed(2)),
+      cyclingOffsetFromNeuralEnd: Number(psv.cyclingOffsetFromNeuralEnd.toFixed(2)),
+    },
+    ets50: {
+      mechanicalTi: Number(psvEts50.mechanicalTi.toFixed(2)),
+      cyclingOffsetFromNeuralEnd: Number(psvEts50.cyclingOffsetFromNeuralEnd.toFixed(2)),
+    },
   },
   vc: {
     passivePeakFlowLMin: Number(vcPassive.peakFlow.toFixed(1)),

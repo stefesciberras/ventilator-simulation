@@ -1,4 +1,5 @@
 import { generateWaveforms } from '../src/simulation/engine'
+import { PATIENT_PROFILES } from '../src/patientProfiles'
 import type { PatientSettings, Sample, VentilatorSettings } from '../src/simulation/types'
 
 const assert = (condition: boolean, message: string) => {
@@ -7,27 +8,7 @@ const assert = (condition: boolean, message: string) => {
 
 const approx = (value: number, target: number, tolerance: number) => Math.abs(value - target) <= tolerance
 
-const basePatient: PatientSettings = {
-  sex: 'male',
-  heightCm: 170,
-  oxygenConsumption: 250,
-  frc: 2500,
-  shuntFraction: 0.03,
-  maxSpO2: 100,
-  compliance: 50,
-  chestWallCompliance: 180,
-  resistance: 8,
-  expiratoryResistance: 10,
-  expiratoryFlowLimitation: 0,
-  spontaneousRate: 18,
-  effort: 8,
-  neuralInspiratoryTime: 1,
-  effortRisePercent: 30,
-  effortRelaxationPercent: 35,
-  endExpiratoryOesophagealPressure: -5,
-  co2Production: 250,
-  vdVt: 0.4,
-}
+const basePatient: PatientSettings = { ...PATIENT_PROFILES.Normal }
 
 const baseVentilator: VentilatorSettings = {
   mode: 'SIMV-VC',
@@ -41,7 +22,7 @@ const baseVentilator: VentilatorSettings = {
   pressureControl: 12,
   volumeGuaranteePressureLimit: 40,
   pressureSupport: 10,
-  triggerType: 'pressure',
+  triggerType: 'flow',
   triggerSensitivity: 1,
   flowTriggerSensitivity: 2,
   terminationSensitivity: 25,
@@ -108,6 +89,26 @@ function countBreathsInWindow(samples: Sample[], from: number, to: number): numb
   return breathStarts(samples).filter((index) => samples[index].time >= from && samples[index].time <= to).length
 }
 
+function cyclingSynchrony(samples: Sample[], breath: BreathWindow) {
+  let effortStartIndex = breath.startIndex
+  while (effortStartIndex > 0 && !samples[effortStartIndex].patientEffortStart) effortStartIndex -= 1
+  assert(samples[effortStartIndex].patientEffortStart, `pressure-supported breath at ${breath.startTime.toFixed(2)} s must follow a neural effort start`)
+
+  let neuralEndIndex = Math.max(breath.endIndex, effortStartIndex + 1)
+  while (neuralEndIndex < samples.length && samples[neuralEndIndex].musclePressure > 0.1) neuralEndIndex += 1
+  assert(neuralEndIndex < samples.length, `neural effort after ${breath.startTime.toFixed(2)} s must end within the sampled window`)
+
+  const effort = samples.slice(effortStartIndex, neuralEndIndex + 1)
+  const peakPmus = Math.max(...effort.map((sample) => sample.musclePressure), 0.001)
+  const pmusAtCycle = samples[Math.max(breath.startIndex, breath.endIndex - 1)].musclePressure
+  return {
+    effortStart: samples[effortStartIndex].time,
+    neuralEnd: samples[neuralEndIndex].time,
+    cyclingOffset: breath.endTime - samples[neuralEndIndex].time,
+    pmusFractionAtCycle: pmusAtCycle / peakPmus,
+  }
+}
+
 function assertDeceleratingPressureBreath(breath: BreathWindow, label: string) {
   const positiveFlows = breath.samples.map((sample) => sample.flow).filter((flow) => flow > 1)
   assert(positiveFlows.length >= 8, `${label} must contain enough positive-flow samples`)
@@ -122,6 +123,8 @@ interface ModeSummary {
   outsidePsStart: number
   outsidePsTi: number
   outsidePsPeakFlow: number
+  outsidePsCyclingOffset: number
+  outsidePsPmusFractionAtCycle: number
   nextMandatoryStart: number
   synchronizedStart: number
   synchronizedTi: number
@@ -137,10 +140,13 @@ function runSimvMode(mode: 'SIMV-VC' | 'SIMV-PC'): ModeSummary {
   const outsidePatient = { ...basePatient, spontaneousRate: 18 }
   const outside = generateWaveforms(ventilator, outsidePatient, 7.5, 0.01)
   const psBreath = findBreathInWindow(outside, 3.15, 3.75)
+  const psSynchrony = cyclingSynchrony(outside, psBreath)
   assert(psBreath.trigger === 'patient', `${mode} spontaneous breath outside sync window must be patient-triggered`)
   assert(!psBreath.syncWindow, `${mode} spontaneous breath at ~3.3 s must be outside the SIMV sync window`)
-  assert(psBreath.mechanicalTi >= 0.35 && psBreath.mechanicalTi <= 1.2, `${mode} pressure-supported breath Ti ${psBreath.mechanicalTi.toFixed(2)} s is implausible`)
+  assert(psBreath.mechanicalTi >= 0.4 && psBreath.mechanicalTi <= 1.2, `${mode} pressure-supported breath Ti ${psBreath.mechanicalTi.toFixed(2)} s is implausible`)
   assert(psBreath.peakFlow > 15 && psBreath.peakFlow < 100, `${mode} pressure-supported peak flow ${psBreath.peakFlow.toFixed(1)} L/min is implausible`)
+  assert(psSynchrony.cyclingOffset >= -0.3 && psSynchrony.cyclingOffset <= 0.2, `${mode} spontaneous PS cycling offset ${psSynchrony.cyclingOffset.toFixed(2)} s is outside the -0.30 to +0.20 s synchrony envelope`)
+  assert(psSynchrony.pmusFractionAtCycle <= 0.55, `${mode} spontaneous PS cycled with ${(psSynchrony.pmusFractionAtCycle * 100).toFixed(0)}% of peak Pmus still active`)
   assert(countBreathsInWindow(outside, 3.0, 4.5) === 1, `${mode} one neural effort outside the sync window must not double-trigger`)
 
   const nextMandatory = findBreathInWindow(outside, 5.85, 6.15)
@@ -178,6 +184,8 @@ function runSimvMode(mode: 'SIMV-VC' | 'SIMV-PC'): ModeSummary {
     outsidePsStart: Number(psBreath.startTime.toFixed(2)),
     outsidePsTi: Number(psBreath.mechanicalTi.toFixed(2)),
     outsidePsPeakFlow: Number(psBreath.peakFlow.toFixed(1)),
+    outsidePsCyclingOffset: Number(psSynchrony.cyclingOffset.toFixed(2)),
+    outsidePsPmusFractionAtCycle: Number(psSynchrony.pmusFractionAtCycle.toFixed(2)),
     nextMandatoryStart: Number(nextMandatory.startTime.toFixed(2)),
     synchronizedStart: Number(syncBreath.startTime.toFixed(2)),
     synchronizedTi: Number(syncBreath.mechanicalTi.toFixed(2)),
