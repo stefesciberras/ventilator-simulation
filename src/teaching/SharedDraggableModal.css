@@ -1,77 +1,134 @@
 .shared-draggable-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 4998;
+  z-index: 4999;
   pointer-events: none;
 }
 
 .shared-draggable-modal {
   position: fixed;
-  top: auto;
+  top: 86px;
   right: 18px;
-  bottom: 18px;
+  bottom: auto;
   left: auto;
   width: min(620px, 48vw);
   max-height: calc(100dvh - 104px);
-  overflow: hidden;
+  overflow: auto;
   box-sizing: border-box;
-  border: 1px solid rgba(114, 174, 204, .32);
+  border: 2px solid #ef8a27;
   border-radius: 16px;
-  background: #0a151b;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, .48);
+  background: #101b21;
+  color: #eef5f7;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .5);
   pointer-events: auto;
   transform-origin: center;
   margin-left: 0;
 }
 
 .shared-draggable-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,.08);
-  background: #0f2028;
-  cursor: grab;
-  touch-action: none;
+  border-bottom: 1px solid #344751;
+  background: #101b21;
   user-select: none;
 }
 
-.shared-draggable-modal-header:active { cursor: grabbing; }
-.shared-draggable-modal-header > div { display: grid; gap: 2px; min-width: 0; }
-.shared-draggable-modal-header span { color: #7898a7; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.shared-draggable-modal-header strong { color: #edf8fc; font-size: 14px; line-height: 1.25; }
-.shared-draggable-modal-header button {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  padding: 0;
+.shared-draggable-modal-header > div {
   display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.05);
-  color: #d7e7ee;
-  font-size: 20px;
-  line-height: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shared-draggable-modal-header span {
+  color: #f0b06e;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.shared-draggable-modal-header strong {
+  overflow: hidden;
+  color: #eef5f7;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shared-draggable-modal-header button {
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid #4a5d66;
+  border-radius: 999px;
+  background: #1b2a31;
+  color: #dfeaec;
+  cursor: pointer;
 }
 
 .shared-draggable-modal-body {
-  max-height: calc(100dvh - 160px);
-  overflow: auto;
+  overflow: visible;
   padding: 12px;
+  background: #071014;
+}
+
+@media (min-width: 900px) {
+  .shared-draggable-modal {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .shared-draggable-modal.dragging {
+    cursor: grabbing;
+  }
+
+  .shared-draggable-modal button,
+  .shared-draggable-modal input,
+  .shared-draggable-modal select,
+  .shared-draggable-modal textarea,
+  .shared-draggable-modal video,
+  .shared-draggable-modal audio,
+  .shared-draggable-modal a,
+  .shared-draggable-modal label {
+    cursor: auto;
+    touch-action: auto;
+  }
+
+  .shared-draggable-modal button,
+  .shared-draggable-modal a,
+  .shared-draggable-modal label {
+    cursor: pointer;
+  }
 }
 
 @media (max-width: 899px) {
   .shared-draggable-modal {
-    top: auto;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    left: 12px;
-    right: 12px;
-    width: auto;
-    max-height: min(76vh, 680px);
-    margin-left: 0;
+    top: 74px;
+    right: 10px;
+    bottom: auto;
+    left: auto;
+    width: min(560px, calc(100vw - 20px));
+    max-height: calc(100dvh - 92px);
     transform: none !important;
   }
-  .shared-draggable-modal-header { cursor: default; touch-action: auto; }
+}
+
+@media (max-width: 640px) {
+  .shared-draggable-modal {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: 100%;
+    max-height: 78dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+    transform: none !important;
+  }
 }

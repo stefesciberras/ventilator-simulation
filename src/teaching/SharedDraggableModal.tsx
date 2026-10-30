@@ -17,9 +17,8 @@ export function SharedDraggableModal({ ariaLabel, eyebrow, title, children, onCl
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; baseLeft: number; baseTop: number; width: number; height: number } | null>(null)
 
   const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (window.innerWidth < 900 || (event.target as HTMLElement).closest('button, input, select, textarea, video, a')) return
-    const panel = event.currentTarget.closest('.shared-draggable-modal') as HTMLElement | null
-    if (!panel) return
+    if (window.innerWidth < 900 || (event.target as HTMLElement).closest('button, input, select, textarea, video, audio, a, label')) return
+    const panel = event.currentTarget as HTMLElement
     const rect = panel.getBoundingClientRect()
     dragRef.current = {
       pointerId: event.pointerId,
@@ -32,7 +31,8 @@ export function SharedDraggableModal({ ariaLabel, eyebrow, title, children, onCl
       width: rect.width,
       height: rect.height,
     }
-    event.currentTarget.setPointerCapture?.(event.pointerId)
+    panel.setPointerCapture?.(event.pointerId)
+    panel.classList.add('dragging')
     event.preventDefault()
   }
 
@@ -51,13 +51,25 @@ export function SharedDraggableModal({ ariaLabel, eyebrow, title, children, onCl
 
   const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
+    event.currentTarget.classList.remove('dragging')
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture?.(event.pointerId)
   }
 
   return (
     <div className="shared-draggable-modal-overlay" role="presentation">
-      <section className={`shared-draggable-modal ${className}`.trim()} role="dialog" aria-modal="false" aria-label={ariaLabel} style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
-        <header className="shared-draggable-modal-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title="Drag to move on wide screens">
+      <section
+        className={`shared-draggable-modal ${className}`.trim()}
+        role="dialog"
+        aria-modal="false"
+        aria-label={ariaLabel}
+        style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        title="Drag to move on wide screens"
+      >
+        <header className="shared-draggable-modal-header">
           <div>{eyebrow && <span>{eyebrow}</span>}<strong>{title}</strong></div>
           {onClose && <button type="button" onClick={onClose} aria-label={closeLabel}>×</button>}
         </header>
