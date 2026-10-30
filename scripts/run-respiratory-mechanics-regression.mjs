@@ -13,6 +13,7 @@ const regressions = [
   'scripts/efl-mechanics-regression.ts',
   'scripts/efl-morphology-regression.ts',
   'scripts/efl-early-spike-regression.ts',
+  'scripts/active-obstructive-waveform-regression.ts',
 ]
 
 try {

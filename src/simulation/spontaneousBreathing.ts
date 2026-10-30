@@ -19,6 +19,13 @@ export interface PressureDemandInput {
   complianceLPerCmH2O: number
   airwayResistanceCmH2OPerLs: number
   sourceResistanceCmH2OPerLs?: number
+  /**
+   * True for an actual pressure-targeted ventilator breath: finite source
+   * impedance limits demand flow, but displayed Paw follows the commanded
+   * pressure target. False for pre-trigger sensing, where the demand-valve
+   * pressure deflection is itself the clinical signal.
+   */
+  preserveTargetAirwayPressure?: boolean
 }
 
 export interface PressureDemandResult {
@@ -105,6 +112,11 @@ export function patientMusclePressure(t: number, patient: PatientSettings): numb
  * The same controller is used by spontaneous pressure support and mandatory
  * pressure-controlled breaths so patient effort interacts with the pressure
  * source consistently across modes.
+ *
+ * Flow remains finite-source limited. During an actual supported/controlled
+ * breath the ventilator pressure waveform remains the commanded pressure target,
+ * matching the pre-refactor EDUVENT morphology. Pre-trigger sensing explicitly
+ * opts out so patient effort can still create a clinically visible Paw notch.
  */
 export function solvePressureDemand(input: PressureDemandInput): PressureDemandResult {
   const compliance = Math.max(input.complianceLPerCmH2O, 0.001)
@@ -115,7 +127,11 @@ export function solvePressureDemand(input: PressureDemandInput): PressureDemandR
   const idealInfiniteSourceFlowLs = Math.max(0, netDrivingPressure / airwayResistance)
   const flowLs = Math.max(0, netDrivingPressure / (airwayResistance + sourceResistance))
   const sourcePressureDrop = sourceResistance * flowLs
-  const airwayPressure = input.peepCmH2O + input.targetAssistPressureCmH2O - sourcePressureDrop
+  const commandedPressure = input.peepCmH2O + input.targetAssistPressureCmH2O
+  const preserveTargetAirwayPressure = input.preserveTargetAirwayPressure ?? true
+  const airwayPressure = preserveTargetAirwayPressure
+    ? commandedPressure
+    : commandedPressure - sourcePressureDrop
 
   return {
     flowLs,
@@ -206,5 +222,6 @@ export function spontaneousTriggerSignal(
     volumeAbovePeepL,
     complianceLPerCmH2O,
     airwayResistanceCmH2OPerLs: inspiratoryResistanceCmH2OPerLs,
+    preserveTargetAirwayPressure: false,
   })
 }
