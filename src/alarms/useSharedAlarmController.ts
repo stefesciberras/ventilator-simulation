@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TeachingRole } from '../teaching/types'
 import { deriveAlarmSessionSemantics, useTeachingAlarmSync, type AlarmPermissionPolicy } from '../teaching/session/useTeachingAlarmSync'
 import { recordSessionLogEvent } from '../teaching/session/sessionLog'
+import { selectDisplayedAlarmKey } from './alarmDisplayPriority'
 
 export type SharedAlarmPriority = 'warning' | 'critical'
 export type SharedAlarmDisplayLevel = 'grey' | 'yellow' | 'red' | null
@@ -167,7 +168,12 @@ export function useSharedAlarmController({
   const audibleLevel: SharedAlarmAudibleLevel = activeKeys.length || resolvedYellowKeys.length ? (criticalEscalated ? 'red' : 'yellow') : null
   const level: SharedAlarmDisplayLevel = audibleLevel ?? (greyKeys.length ? 'grey' : null)
   const visibleKeys = useMemo(() => new Set([...activeKeys, ...resolvedYellowKeys, ...greyKeys]), [activeKeys, greyKeys, resolvedYellowKeys])
-  const labels = evaluations.filter((evaluation) => visibleKeys.has(evaluation.key)).map((evaluation) => evaluation.label)
+  const displayedAlarmKey = useMemo(
+    () => selectDisplayedAlarmKey(evaluations, lifecycle, visibleKeys),
+    [evaluations, lifecycle, visibleKeys],
+  )
+  const displayedAlarm = displayedAlarmKey == null ? null : evaluationByKey.get(displayedAlarmKey)
+  const labels = displayedAlarm ? [displayedAlarm.label] : []
 
   useEffect(() => { onAudibleLevelChange?.(audibleLevel) }, [audibleLevel, onAudibleLevelChange])
 
@@ -267,6 +273,7 @@ export function useSharedAlarmController({
     resolvedYellowKeys,
     greyKeys,
     visibleKeys,
+    displayedAlarmKey,
     labels,
     audibleLevel,
     level,
