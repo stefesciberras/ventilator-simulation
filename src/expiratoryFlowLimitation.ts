@@ -76,7 +76,7 @@ export function applyExpiratoryFlowLimitation(
   const genericSpikeGain = severityGain * (1 - 0.8 * severityGain)
   const lowAirwayWeight = (1 - airwayInvolvement) ** 3
   const genericEarlySpikeReliefLs =
-    lowAirwayWeight * genericSpikeGain * 2.8 * genericVolumeAboveElbowL * genericHighVolumeWeight
+    lowAirwayWeight * genericSpikeGain * 3.2 * genericVolumeAboveElbowL * genericHighVolumeWeight
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
   const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
