@@ -57,6 +57,12 @@ export interface FlowControlledPressureResult {
  * pressure-targeted ventilation. This keeps ordinary flow close to the ideal
  * equation-of-motion solution, but prevents an infinitely stiff pressure source
  * from generating very large instantaneous flow when patient demand is high.
+ *
+ * In two-level modes the same circuit is present during exhalation, so the
+ * pressure-level solver also adds this impedance to the patient's expiratory
+ * resistance. Keeping circuit impedance bidirectional avoids an unphysiologic
+ * discontinuity where the inspiratory limb is finite-impedance but the release
+ * limb behaves as if the circuit had zero resistance.
  */
 export const DEFAULT_PRESSURE_SOURCE_RESISTANCE = 2
 
@@ -124,7 +130,9 @@ export function solvePressureDemand(input: PressureDemandInput): PressureDemandR
  * Solve spontaneous breathing around a maintained pressure level (APRV/BIPAP).
  * Inspiratory demand uses the same finite-source controller as PSV/PC. If lung
  * recoil exceeds pressure support + Pmus, flow is allowed to reverse through the
- * expiratory resistance so release flow and spontaneous expiration are retained.
+ * expiratory airway plus the same circuit/source impedance seen on inspiration,
+ * so release flow remains brisk without treating the expiratory limb as a
+ * zero-resistance pressure sink.
  */
 export function solvePressureLevelInteraction(input: PressureLevelInteractionInput): PressureLevelInteractionResult {
   const compliance = Math.max(input.complianceLPerCmH2O, 0.001)
@@ -149,12 +157,16 @@ export function solvePressureLevelInteraction(input: PressureLevelInteractionInp
     }
   }
 
+  const totalExpiratoryResistance = expiratoryResistance + sourceResistance
+  const flowLs = netDrivingPressure / totalExpiratoryResistance
+  const circuitPressureDrop = sourceResistance * Math.abs(flowLs)
+
   return {
-    flowLs: netDrivingPressure / expiratoryResistance,
+    flowLs,
     airwayPressureCmH2O: input.peepCmH2O + input.targetAssistPressureCmH2O,
     elasticPressureCmH2O: elasticPressure,
     idealInfiniteSourceFlowLs: 0,
-    sourcePressureDropCmH2O: 0,
+    sourcePressureDropCmH2O: circuitPressureDrop,
     inspiratory: false,
   }
 }
