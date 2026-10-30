@@ -55,19 +55,16 @@ export function applyExpiratoryFlowLimitation(
   const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
   const volumeFractionOfReference = volumeL / Math.max(referenceTidalVolumeL, 0.05)
 
-  // Generic EFL morphology: preserve a short opening expiratory spike at high
-  // lung volume, then collapse rapidly onto the choke-flow limb. The previous
-  // 12th-power gate only activated when volume was unrealistically close to the
-  // top of its configured range, so ordinary PC breaths around 400-500 mL could
-  // be clipped onto the low-flow limb immediately. This gate is deliberately
-  // reachable at a normal end-inspiratory volume but decays steeply once roughly
-  // the first 50-100 mL have left the lung.
-  const genericOpeningFraction = clamp((volumeFractionOfReference - 0.55) / 0.45, 0, 1)
-  const genericOpeningWeight = genericOpeningFraction ** 4
+  // Generic EFL morphology: a strong but very brief opening spike at high lung
+  // volume. The steep 10th-power gate makes the relief disappear over the first
+  // few tens of millilitres, so the waveform shows spike -> elbow -> choke-flow
+  // limb without allowing enough extra integrated flow to erase auto-PEEP.
+  const genericOpeningFraction = clamp((volumeFractionOfReference - 0.50) / 0.50, 0, 1)
+  const genericOpeningWeight = genericOpeningFraction ** 10
   const lowAirwayWeight = (1 - airwayInvolvement) ** 3
   const genericSpikeGain = severityGain * (1 - 0.65 * severityGain)
   const genericEarlySpikeReliefLs =
-    0.35 * sizeScale * lowAirwayWeight * genericSpikeGain * genericOpeningWeight
+    2.0 * sizeScale * lowAirwayWeight * genericSpikeGain * genericOpeningWeight
 
   // Airway-disease phenotype: higher Rexp adds an early dog-leg component but
   // remains distinct from EFL severity itself. This term disappears as volume
