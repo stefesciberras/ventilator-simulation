@@ -13,6 +13,8 @@ import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenar
 import { EDUVENT_SCENARIO_CODEC } from './scenarioCodec'
 import { getSimulationProduct } from '../core/products'
 
+const PENDING_TEACHING_DYNAMIC_SCENARIO_KEY = 'loppjusim.mv.pendingTeachingDynamicScenario'
+
 interface EduventSessionPanelProps {
   role: SessionRole
   instructorAuthenticated: boolean
@@ -67,10 +69,10 @@ function summaryFor(scenario: InstructorScenarioSnapshot) {
 
 export function EduventSessionPanel(props: EduventSessionPanelProps) {
   const library = useProductScenarioLibrary<InstructorScenarioSnapshot>('mv', props.instructorAuthenticated, EDUVENT_SCENARIO_CODEC)
-  const staticPresets = useMemo(() => library.items.filter((preset) => (preset.scenario.kind ?? 'static') === 'static'), [library.items])
+  const presets = library.items
   const [selectedId, setSelectedId] = useState('')
   const [launchMode, setLaunchMode] = useState<LocalSessionRuntimeMode>(() => getPreferredLocalSessionRuntimeMode())
-  useEffect(() => { setSelectedId((current) => staticPresets.some((row) => row.id === current) ? current : (staticPresets[0]?.id ?? '')) }, [staticPresets])
+  useEffect(() => { setSelectedId((current) => presets.some((row) => row.id === current) ? current : (presets[0]?.id ?? '')) }, [presets])
   useEffect(() => {
     if (launchMode === 'simulation' && !props.localRuntimeUrl) setLaunchMode('teaching')
   }, [launchMode, props.localRuntimeUrl])
@@ -95,6 +97,15 @@ export function EduventSessionPanel(props: EduventSessionPanelProps) {
   const startWithSelectedMode = async (scenario?: InstructorScenarioSnapshot) => {
     savePreferredLocalSessionRuntimeMode(launchMode)
     await props.onStartInstructor(scenario)
+  }
+
+  const startSavedScenario = async (id: string) => {
+    const preset = presets.find((row) => row.id === id)
+    if (!preset) return
+    if (preset.scenario.kind === 'dynamic') {
+      try { window.sessionStorage.setItem(PENDING_TEACHING_DYNAMIC_SCENARIO_KEY, preset.id) } catch { /* optional handoff */ }
+    }
+    await startWithSelectedMode(preset.scenario)
   }
 
   const modeSelector = props.role === 'standalone' ? <section className="session-panel standalone-session-panel">
@@ -140,14 +151,14 @@ export function EduventSessionPanel(props: EduventSessionPanelProps) {
         currentTitle: `${props.currentScenario.ventilator.mode} · FiO₂ ${Math.round(props.currentScenario.ventilator.fio2 * 100)}% · PEEP ${props.currentScenario.ventilator.peep}`,
         currentSummary: `Configure the patient and ventilator before opening the ${launchMode === 'simulation' ? 'shared simulation' : 'teaching room'}.`,
         currentChips: summaryFor(props.currentScenario),
-        savedOptions: staticPresets.map((preset) => ({ id: preset.id, title: preset.name, summary: summaryFor(preset.scenario).slice(0, 3).join(' · '), chips: summaryFor(preset.scenario) })),
+        savedOptions: presets.map((preset) => ({ id: preset.id, title: preset.name, kind: preset.scenario.kind === 'dynamic' ? 'dynamic' : 'static', summary: preset.scenario.description || summaryFor(preset.scenario).slice(0, 3).join(' · '), chips: summaryFor(preset.scenario) })),
         selectedSavedId: selectedId,
         onSelectedSavedIdChange: setSelectedId,
         savedBusy: library.busy,
-        savedMessage: library.message ?? (!library.busy && props.instructorAuthenticated && !staticPresets.length ? 'No static scenarios are saved yet. You can start from the current setup.' : null),
+        savedMessage: library.message ?? (!library.busy && props.instructorAuthenticated && !presets.length ? 'No scenarios are saved yet. You can start from the current setup.' : null),
         onStartCurrent: () => startWithSelectedMode(),
-        onStartSaved: async (id) => { const preset = staticPresets.find((row) => row.id === id); if (preset) await startWithSelectedMode(preset.scenario) },
-        onLoadSaved: (id) => { const preset = staticPresets.find((row) => row.id === id); if (preset) props.onLoadScenario(preset.scenario) },
+        onStartSaved: startSavedScenario,
+        onLoadSaved: (id) => { const preset = presets.find((row) => row.id === id); if (preset && preset.scenario.kind !== 'dynamic') props.onLoadScenario(preset.scenario) },
       }}
       renderCandidateTelemetry={(member) => <ProductCandidateTelemetry product={product} member={member} />}
     />
