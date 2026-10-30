@@ -31,11 +31,6 @@ export interface ExpiratoryFlowLimitResult {
  * zero rather than a secondary artificial shoulder.
  *
  * We do not claim that the 0-1 score is clinically calibrated to either study.
- * Instead, severity controls how restrictive/flat the maximum-expiratory-flow
- * envelope becomes, while the existing expiratory-resistance setting provides
- * a continuous airway-involvement signal. High Rexp therefore biases the
- * envelope toward the early-airway/dog-leg phenotype without conflating airway
- * resistance itself with EFL severity.
  */
 export function applyExpiratoryFlowLimitation(
   requestedFlowLs: number,
@@ -51,38 +46,38 @@ export function applyExpiratoryFlowLimitation(
   const sizeScale = clamp(Math.sqrt(pbw / 66), 0.55, 1.35)
   const volumeL = Math.max(volumeAboveSetPeepL, 0)
 
-  // Separate airway calibre from EFL severity. The paper found early EFL mainly
-  // in patients with airway involvement and late EFL mainly in non-airway
-  // disease. Rexp therefore biases morphology, while the EFL score retains its
-  // own independent effect on the choke-flow envelope.
   const airwayInvolvement = clamp((Math.max(patient.expiratoryResistance, 0) - 10) / 30, 0, 1)
 
-  // Preserve a genuinely mild lower end of the five-position control. The
-  // previous envelope approached only ~0.73 L/s at 500 mL even as severity
-  // approached zero, so the first non-zero step behaved like substantial EFL.
-  // The revised high-flow endpoint starts above normal passive expiratory demand
-  // and converges non-linearly onto the same severe envelope at severity 1.0.
   const severityGain = Math.pow(severity, 1.4)
   const lowVolumeCeilingLs = Math.max(0.04, (0.55 - 0.50 * severityGain) * sizeScale)
   const volumeSlopePerSecond = Math.max(0.22, (1.40 - 1.13 * severityGain) * sizeScale)
-
-  // In airway disease, dynamic compression should remain distinct from the
-  // linear expiratory-resistance term. Otherwise high Rexp can reduce requested
-  // flow below the EFL ceiling and make even a severe EFL setting do nothing.
-  // Reduce the post-spike envelope as airway involvement and severity increase,
-  // while retaining a floor so the simulator never collapses to zero flow.
   const airwayCollapseFactor = clamp(1 - 1.8 * airwayInvolvement * severityGain, 0.35, 1)
 
-  // Airway-type early EFL: permit a brief high-volume flow spike, then lose that
-  // extra flow rapidly as lung volume falls through the elbow. This creates the
-  // clinically recognisable spike -> flatter low-flow ('dog-leg') morphology
-  // described for severe early EFL, while low-Rexp patients retain a smoother
-  // late-EFL pattern.
   const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
-  const elbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
-  const volumeAboveElbowL = Math.max(0, volumeL - elbowVolumeL)
-  const earlyFlowSpikeReliefLs =
-    airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * volumeAboveElbowL
+  const airwayElbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
+  const airwayVolumeAboveElbowL = Math.max(0, volumeL - airwayElbowVolumeL)
+
+  // Low-Rexp EFL receives a brief, high-volume opening spike. The high-volume
+  // gate is deliberately very steep: it is strong at expiration onset but
+  // collapses over the first few tens of millilitres, so the visible waveform
+  // shows the classic rapid spike -> elbow -> flatter flow-limited limb.
+  const genericElbowVolumeL = referenceTidalVolumeL * 0.78
+  const genericHighVolumeWidthL = Math.max(referenceTidalVolumeL * 0.36, 0.07)
+  const genericVolumeAboveElbowL = Math.max(0, volumeL - genericElbowVolumeL)
+  const genericHighVolumeFraction = clamp(genericVolumeAboveElbowL / genericHighVolumeWidthL, 0, 1)
+  const genericHighVolumeWeight = genericHighVolumeFraction ** 12
+
+  // Spike prominence is not proportional to EFL severity. At EFL 1.0 the choke
+  // point dominates earlier, so the opening spike remains visible but does not
+  // erase the severe low-flow limb. The generic component falls away cubically
+  // with airway involvement so COPD/asthma retain their airway-specific dog-leg.
+  const genericSpikeGain = severityGain * (1 - 0.8 * severityGain)
+  const lowAirwayWeight = (1 - airwayInvolvement) ** 3
+  const genericEarlySpikeReliefLs =
+    lowAirwayWeight * genericSpikeGain * 5.0 * genericVolumeAboveElbowL * genericHighVolumeWeight
+  const airwayEarlySpikeReliefLs =
+    airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
+  const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
 
   const baseCeilingLs = (lowVolumeCeilingLs + volumeSlopePerSecond * volumeL) * airwayCollapseFactor
   const ceilingLs = baseCeilingLs + earlyFlowSpikeReliefLs
@@ -92,17 +87,6 @@ export function applyExpiratoryFlowLimitation(
     return { flowLs: requestedFlowLs, limited: false, ceilingLs }
   }
 
-  // Smoothly approach the maximum-expiratory-flow envelope with a monotone
-  // generalised soft minimum. The old finite smoothstep band was S-shaped:
-  // while requested flow and the ceiling were both falling, its interpolation
-  // could first flatten and then re-accelerate the displayed expiratory limb,
-  // producing a small non-physiological hump/shoulder. This formulation is
-  // monotone in both requested flow and the choke-flow ceiling, so it cannot
-  // create that secondary curvature reversal.
-  //
-  // Keep the transition narrow (~15% of the ceiling) so mild EFL remains close
-  // to unrestricted flow until it approaches the envelope, while severe EFL
-  // still develops the characteristic flattened expiratory limb.
   const blendWidth = Math.max(ceilingLs * 0.15, 0.015)
   const relativeBlendWidth = clamp(blendWidth / Math.max(ceilingLs, 1e-6), 0.08, 0.4)
   const softCapPower = clamp(2 / relativeBlendWidth, 8, 20)
