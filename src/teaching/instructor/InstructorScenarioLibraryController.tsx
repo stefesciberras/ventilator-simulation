@@ -25,6 +25,7 @@ export interface InstructorScenarioLibraryControllerProps<TScenario> {
   onSignIn: () => void
   builderHref?: string
   productLabel: string
+  initialTab?: 'static' | 'dynamic'
 }
 
 function ScenarioIcon() {
@@ -33,17 +34,21 @@ function ScenarioIcon() {
 
 export function InstructorScenarioLibraryController<TScenario>(props: InstructorScenarioLibraryControllerProps<TScenario>) {
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<'static' | 'dynamic'>('static')
+  const [tab, setTab] = useState<'static' | 'dynamic'>(props.initialTab ?? 'static')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const counts = useMemo(() => props.items.reduce((current, item) => {
+    current[props.scenarioKind(item.scenario)] += 1
+    return current
+  }, { static: 0, dynamic: 0 }), [props.items, props.scenarioKind])
   const filtered = useMemo(() => props.items.filter((item) => props.scenarioKind(item.scenario) === tab), [props.items, props.scenarioKind, tab])
-  const openLibrary = () => { setOpen(true); void props.onRefresh() }
+  const openLibrary = () => { setTab(props.initialTab ?? 'static'); setOpen(true); void props.onRefresh() }
   return <>
     <button type="button" className="top-account-button scenario-top-button" title="Instructor scenarios" aria-label="Open instructor scenarios" onClick={openLibrary}><ScenarioIcon /></button>
     {open && <div className="account-dialog-backdrop" onMouseDown={() => setOpen(false)}>
       <section className="account-dialog scenario-manager-dialog" role="dialog" aria-modal="true" aria-label="Instructor scenarios" onMouseDown={(event) => event.stopPropagation()}>
         <div className="account-dialog-heading"><div><span>Instructor tools</span><h2>Scenarios</h2></div><button type="button" className="account-close-button" onClick={() => setOpen(false)}>×</button></div>
-        <div className="scenario-type-tabs" role="tablist"><button type="button" role="tab" aria-selected={tab === 'static'} className={tab === 'static' ? 'selected' : ''} onClick={() => setTab('static')}>Static presets</button><button type="button" role="tab" aria-selected={tab === 'dynamic'} className={tab === 'dynamic' ? 'selected' : ''} onClick={() => setTab('dynamic')}>Dynamic scenarios</button></div>
+        <div className="scenario-type-tabs" role="tablist"><button type="button" role="tab" aria-selected={tab === 'static'} className={tab === 'static' ? 'selected' : ''} onClick={() => setTab('static')}>Static presets ({counts.static})</button><button type="button" role="tab" aria-selected={tab === 'dynamic'} className={tab === 'dynamic' ? 'selected' : ''} onClick={() => setTab('dynamic')}>Dynamic scenarios ({counts.dynamic})</button></div>
         {!props.authenticated ? <div className="scenario-signin-card"><strong>Cloud account required</strong><p>Scenarios are saved privately to your instructor account and are available on any device.</p><button type="button" className="account-primary-button" onClick={() => { setOpen(false); props.onSignIn() }}>Sign in to instructor account</button></div> : <>
           {tab === 'static' ? <section className="scenario-create-card"><div className="scenario-settings-heading"><div><span>New static preset</span><h3>Capture current simulator state</h3></div><small>{props.accountLabel}</small></div><div className="scenario-create-fields"><label><span>Name</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="e.g. Initial state" /></label><label><span>Instructor notes</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} rows={3} /></label></div><button type="button" className="account-primary-button scenario-save-current" disabled={props.busy || !name.trim()} onClick={() => { void Promise.resolve(props.onSaveCurrent(name.trim(), description.trim())).then(() => { setName(''); setDescription('') }) }}>Save current state as preset</button></section> : <section className="scenario-create-card"><div className="scenario-settings-heading"><div><span>Dynamic scenario authoring</span><h3>Use LoppjuSIM-Studio</h3></div></div><p className="scenario-description">Stages, branches, triggers, media, questions, import/export and publishing are maintained in the product-aware LoppjuSIM-Studio workspace.</p>{props.builderHref && <a className="account-primary-button scenario-save-current" href={props.builderHref}>Open LoppjuSIM-Studio</a>}</section>}
           <div className="scenario-library-heading"><div><span>Library</span><strong>{filtered.length} {tab === 'static' ? 'static preset' : 'dynamic scenario'}{filtered.length === 1 ? '' : 's'}</strong></div><small>Most recently updated first</small></div>
