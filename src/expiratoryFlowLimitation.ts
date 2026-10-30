@@ -59,13 +59,23 @@ export function applyExpiratoryFlowLimitation(
   // remains visible but is smaller than at intermediate/marked EFL.
   const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
   const airwayElbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
-  const genericElbowVolumeL = referenceTidalVolumeL * 0.90
-  const genericVolumeAboveElbowL = Math.max(0, volumeL - genericElbowVolumeL)
   const airwayVolumeAboveElbowL = Math.max(0, volumeL - airwayElbowVolumeL)
+
+  // For low-Rexp EFL, use a steep high-volume weighting instead of a hard
+  // threshold. This allows a visible opening spike in pressure-controlled breaths
+  // even after auto-PEEP has altered steady-state volume, but makes the extra flow
+  // allowance collapse rapidly as expiration proceeds. The cubic weighting keeps
+  // its contribution negligible through the mid/late expiratory limb, preserving
+  // severe-EFL trapping and the flat choke-flow morphology.
+  const genericElbowVolumeL = referenceTidalVolumeL * 0.65
+  const genericVolumeAboveElbowL = Math.max(0, volumeL - genericElbowVolumeL)
+  const genericHighVolumeWidthL = Math.max(referenceTidalVolumeL * 0.35, 0.06)
+  const genericHighVolumeFraction = clamp(genericVolumeAboveElbowL / genericHighVolumeWidthL, 0, 1)
+  const genericHighVolumeWeight = genericHighVolumeFraction ** 3
 
   const genericSpikeGain = severityGain * (1 - 0.8 * severityGain)
   const genericEarlySpikeReliefLs =
-    (1 - airwayInvolvement) * genericSpikeGain * 1.60 * genericVolumeAboveElbowL
+    (1 - airwayInvolvement) * genericSpikeGain * 3.0 * genericVolumeAboveElbowL * genericHighVolumeWeight
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
   const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
