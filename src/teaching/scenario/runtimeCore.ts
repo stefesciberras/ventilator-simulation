@@ -11,6 +11,7 @@ import type {
   ScenarioStageContext,
   ScenarioTransition,
 } from './domain'
+import { setScenarioRuntimeTriggerInfo, type ScenarioRuntimeTriggerInfo } from './runtimeUiState'
 
 export type TeachingScenarioMediaContent = ScenarioMediaContent
 export type TeachingScenarioQuestionContent = ScenarioQuestionContent
@@ -45,6 +46,69 @@ export type TeachingScenarioTransitionResolution =
 const runtimePersistenceKey = () => {
   if (typeof window === 'undefined') return null
   return `loppjusim.scenario-runtime:${window.location.pathname}`
+}
+
+function humaniseIdentifier(value: unknown) {
+  return String(value ?? '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^./, (letter) => letter.toUpperCase())
+}
+
+function actorSuffix(trigger: Record<string, unknown>) {
+  const actor = trigger.actor
+  if (typeof actor !== 'string' || !actor) return ''
+  return ` · ${humaniseIdentifier(actor)}`
+}
+
+function describeTrigger(trigger: unknown, id: string, targetLabel?: string): ScenarioRuntimeTriggerInfo | null {
+  if (!trigger || typeof trigger !== 'object') return null
+  const value = trigger as Record<string, unknown>
+  const type = String(value.type ?? '')
+  if (!type || type === 'manual') return null
+
+  let label = humaniseIdentifier(type)
+  let detail = ''
+  if (type === 'time') {
+    label = 'Time elapsed'
+    detail = `${Number(value.seconds ?? 0)} s`
+  } else if (type === 'condition') {
+    label = 'Measurement condition'
+    const operator = value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='
+    detail = `${humaniseIdentifier(value.metric)} ${operator} ${String(value.value ?? '')}`
+  } else if (type === 'patient-change') {
+    label = 'Patient parameter changed'
+    detail = `${humaniseIdentifier(value.parameter)}${actorSuffix(value)}`
+  } else if (type === 'parameter-change') {
+    label = 'Parameter changed'
+    detail = `${humaniseIdentifier(value.parameterId ?? value.snapshotPath)}${actorSuffix(value)}`
+  } else if (type === 'action') {
+    label = 'Ventilator parameter changed'
+    detail = `${humaniseIdentifier(value.parameter)}${actorSuffix(value)}`
+  } else if (type === 'device-action') {
+    label = 'Device action'
+    detail = `${humaniseIdentifier(value.action)}${actorSuffix(value)}`
+  } else if (type === 'edusim-action') {
+    label = 'Drug / event action'
+    detail = `${humaniseIdentifier(value.actionId)}${actorSuffix(value)}`
+  } else if (type === 'question-any') {
+    label = 'Question answered'
+    detail = 'Any answer'
+  } else if (type === 'question-correct') {
+    label = 'Question answered'
+    detail = 'Correct answer'
+  } else if (type === 'media-ended') {
+    label = 'Media finished'
+    detail = 'Playback ended'
+  } else if (type === 'media-acknowledged') {
+    label = 'Media acknowledged'
+    detail = 'Acknowledgement received'
+  }
+
+  if (targetLabel) detail = detail ? `${detail} → ${targetLabel}` : `→ ${targetLabel}`
+  return { id, label, detail }
 }
 
 /** Branches take priority over linear advancement; product adapters own trigger semantics. */
@@ -119,6 +183,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     setStageStartedSimulationTime(0)
     setStatus('idle')
     transitionBusyRef.current = false
+    setScenarioRuntimeTriggerInfo([])
     const key = runtimePersistenceKey()
     if (key) {
       try { window.localStorage.removeItem(key) } catch { /* optional persistence */ }
@@ -183,6 +248,31 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     if (!scenario || status === 'idle') return null
     return { scenarioId: scenario.id, stageIndex, stageStartedSimulationTime, status }
   }, [scenario, stageIndex, stageStartedSimulationTime, status])
+
+  useEffect(() => {
+    if (!scenario || !stage || status === 'idle') {
+      setScenarioRuntimeTriggerInfo([])
+      return
+    }
+    const info: ScenarioRuntimeTriggerInfo[] = []
+    stage.triggers.forEach((trigger, index) => {
+      const described = describeTrigger(trigger, `stage:${stage.id}:${index}`)
+      if (described) info.push(described)
+    })
+    ;(scenario.branches ?? [])
+      .filter((branch) => branch.enabled !== false && (!branch.fromStageId || branch.fromStageId === stage.id))
+      .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+      .forEach((branch, branchIndex) => {
+        const branchTriggers = branch.triggers?.length ? branch.triggers : branch.trigger != null ? [branch.trigger] : []
+        const targetLabel = scenario.stages.find((candidate) => candidate.id === branch.toStageId)?.name
+        branchTriggers.forEach((trigger, triggerIndex) => {
+          const described = describeTrigger(trigger, `branch:${branch.id ?? branchIndex}:${triggerIndex}`, targetLabel)
+          if (described) info.push(described)
+        })
+      })
+    setScenarioRuntimeTriggerInfo(info)
+    return () => setScenarioRuntimeTriggerInfo([])
+  }, [scenario, stage, status])
 
   useEffect(() => {
     if (restoreAttemptedRef.current) return
