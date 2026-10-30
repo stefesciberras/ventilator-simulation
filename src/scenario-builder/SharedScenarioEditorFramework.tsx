@@ -24,8 +24,46 @@ interface SharedScenarioEditorFrameworkProps<TScenario, TSnapshot> {
   onStartScenario?: (row: ProductScenarioRow<TScenario>) => void
 }
 
+type ScenarioSaveState = 'saved' | 'dirty' | 'saving' | 'error'
+
+const AUTOSAVE_DELAY_MS = 1500
+const AUTOSAVE_RETRY_MS = 5000
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function localDraftKey(product: string, id: string) {
+  return `loppjusim:scenario-studio:draft:${product}:${id || 'new'}`
+}
+
+function storeLocalDraft<TSnapshot>(product: string, id: string, document: SharedScenarioAuthoringDocument<TSnapshot>) {
+  try {
+    window.localStorage.setItem(localDraftKey(product, id), JSON.stringify({ savedAt: Date.now(), document }))
+  } catch {
+    // Browser storage is a safety net only; cloud autosave can continue if it is unavailable.
+  }
+}
+
+function removeLocalDraft(product: string, id: string) {
+  try {
+    window.localStorage.removeItem(localDraftKey(product, id))
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readLocalDraft<TSnapshot>(product: string, id: string): SharedScenarioAuthoringDocument<TSnapshot> | null {
+  try {
+    const raw = window.localStorage.getItem(localDraftKey(product, id))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { document?: SharedScenarioAuthoringDocument<TSnapshot> }
+    const document = parsed.document
+    if (!document || document.product !== product || !Array.isArray(document.stages) || !document.stages.length) return null
+    return document
+  } catch {
+    return null
+  }
 }
 
 function TrashIcon() {
@@ -244,7 +282,16 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
   const [message, setMessage] = useState<string | null>(null)
   const [expiryDays, setExpiryDays] = useState(30)
   const [publication, setPublication] = useState<{ code: string; url: string; expiresAt: string } | null>(null)
+  const [saveState, setSaveState] = useState<ScenarioSaveState>('saved')
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const importRef = useRef<HTMLInputElement | null>(null)
+  const currentDocumentRef = useRef(document)
+  const selectedIdRef = useRef(selectedId)
+  const lastSavedDocumentRef = useRef(JSON.stringify(document))
+  const savingRef = useRef(false)
+  const autosaveTimerRef = useRef<number | null>(null)
+  const retryTimerRef = useRef<number | null>(null)
+  const restoredDraftProductRef = useRef<string | null>(null)
 
   const selectedRow = library.items.find((row) => row.id === selectedId) ?? null
   const selectedStage = document.stages.find((stage) => stage.id === selectedStageId) ?? document.stages[0]
@@ -267,6 +314,123 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
     if (selectedId && !library.items.some((row) => row.id === selectedId)) setSelectedId('')
   }, [library.items, selectedId])
 
+  useEffect(() => {
+    selectedIdRef.current = selectedId
+  }, [selectedId])
+
+  useEffect(() => {
+    if (restoredDraftProductRef.current === adapter.product) return
+    restoredDraftProductRef.current = adapter.product
+    const recovered = readLocalDraft<TSnapshot>(adapter.product, '')
+    if (!recovered) return
+    lastSavedDocumentRef.current = JSON.stringify(document)
+    currentDocumentRef.current = recovered
+    setDocument(recovered)
+    setSelectedStageId(recovered.stages[0]?.id ?? '')
+    setSaveState('dirty')
+    setMessage('Recovered locally saved changes. Autosave will retry.')
+  }, [adapter.product])
+
+  const persistDocument = async (nextDocument: SharedScenarioAuthoringDocument<TSnapshot>, manual: boolean) => {
+    const serialized = JSON.stringify(nextDocument)
+    if (!nextDocument.name.trim()) {
+      setSaveState('dirty')
+      if (manual) setMessage('Enter a scenario name.')
+      return
+    }
+    if (!nextDocument.stages.length) {
+      setSaveState('dirty')
+      if (manual) setMessage('Add at least one stage.')
+      return
+    }
+    if (savingRef.current) return
+
+    savingRef.current = true
+    setSaveState('saving')
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+    if (manual) setMessage(null)
+
+    const targetId = selectedIdRef.current
+    try {
+      const scenario = adapter.fromDocument(nextDocument)
+      let resultingId = targetId
+      if (targetId) {
+        await library.update(targetId, { name: nextDocument.name.trim(), scenario })
+      } else {
+        const created = await library.create(nextDocument.name.trim(), scenario)
+        resultingId = created.id
+        selectedIdRef.current = created.id
+        setSelectedId(created.id)
+      }
+
+      lastSavedDocumentRef.current = serialized
+      setLastSavedAt(new Date())
+      removeLocalDraft(adapter.product, targetId)
+      if (!targetId && resultingId) removeLocalDraft(adapter.product, resultingId)
+
+      const currentSerialized = JSON.stringify(currentDocumentRef.current)
+      if (currentSerialized === serialized) {
+        setSaveState('saved')
+      } else {
+        setSaveState('dirty')
+        autosaveTimerRef.current = window.setTimeout(() => {
+          void persistDocument(currentDocumentRef.current, false)
+        }, AUTOSAVE_DELAY_MS)
+      }
+
+      if (manual) setMessage(targetId ? 'Scenario updated.' : 'Scenario saved.')
+    } catch (cause) {
+      setSaveState('error')
+      storeLocalDraft(adapter.product, selectedIdRef.current, currentDocumentRef.current)
+      if (manual) setMessage(cause instanceof Error ? cause.message : 'Unable to save scenario.')
+      retryTimerRef.current = window.setTimeout(() => {
+        void persistDocument(currentDocumentRef.current, false)
+      }, AUTOSAVE_RETRY_MS)
+    } finally {
+      savingRef.current = false
+    }
+  }
+
+  useEffect(() => {
+    currentDocumentRef.current = document
+    const serialized = JSON.stringify(document)
+    if (serialized === lastSavedDocumentRef.current) return
+
+    storeLocalDraft(adapter.product, selectedId, document)
+    if (!savingRef.current) setSaveState('dirty')
+
+    if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current)
+    if (!enabled || !document.name.trim() || !document.stages.length || savingRef.current) return
+
+    autosaveTimerRef.current = window.setTimeout(() => {
+      void persistDocument(document, false)
+    }, AUTOSAVE_DELAY_MS)
+
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+    }
+  }, [document, selectedId, enabled])
+
+  useEffect(() => {
+    const persistLocalBeforeExit = () => {
+      const current = currentDocumentRef.current
+      if (JSON.stringify(current) !== lastSavedDocumentRef.current) storeLocalDraft(adapter.product, selectedIdRef.current, current)
+    }
+    window.addEventListener('beforeunload', persistLocalBeforeExit)
+    return () => {
+      persistLocalBeforeExit()
+      window.removeEventListener('beforeunload', persistLocalBeforeExit)
+      if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current)
+      if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current)
+    }
+  }, [adapter.product])
+
   const staticTriggerRegistry = useMemo(() => adapter.triggerRegistry ?? getStudioTriggerRegistry(adapter.product), [adapter.product, adapter.triggerRegistry])
   const triggerRegistry = useMemo<SharedScenarioTriggerRegistryItem[]>(() => [
     ...staticTriggerRegistry,
@@ -284,44 +448,55 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
     const snapshot = adapter.emptySnapshot()
     const stage = createAuthoringStage('Stage 1', snapshot)
     stage.appliedVariableIds = adapter.defaultAppliedVariableIds?.(snapshot)
+    const next = { schemaVersion: 1 as const, product: adapter.product, name: 'New scenario', description: '', stages: [stage], branches: [] }
+    if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current)
+    if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current)
+    selectedIdRef.current = ''
+    currentDocumentRef.current = next
+    lastSavedDocumentRef.current = JSON.stringify(next)
     setSelectedId('')
-    setDocument({ schemaVersion: 1, product: adapter.product, name: 'New scenario', description: '', stages: [stage], branches: [] })
+    setDocument(next)
     setSelectedStageId(stage.id)
     setPublication(null)
     setMessage(null)
+    setSaveState('saved')
+    setLastSavedAt(null)
   }
 
   const openRow = (row: ProductScenarioRow<TScenario>) => {
-    const next = adapter.toDocument(row.name, row.scenario)
+    if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current)
+    if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current)
+    const cloudDocument = adapter.toDocument(row.name, row.scenario)
+    const recovered = readLocalDraft<TSnapshot>(adapter.product, row.id)
+    const next = recovered ?? cloudDocument
+    selectedIdRef.current = row.id
+    currentDocumentRef.current = next
+    lastSavedDocumentRef.current = JSON.stringify(cloudDocument)
     setSelectedId(row.id)
     setDocument(next)
     setSelectedStageId(next.stages[0]?.id ?? '')
     setPublication(null)
-    setMessage(null)
+    setLastSavedAt(new Date(row.updated_at))
+    setSaveState(recovered ? 'dirty' : 'saved')
+    setMessage(recovered ? 'Recovered locally saved changes. Autosave will retry.' : null)
   }
 
   const save = async () => {
-    if (!document.name.trim()) return setMessage('Enter a scenario name.')
-    if (!document.stages.length) return setMessage('Add at least one stage.')
-    setMessage(null)
-    try {
-      const scenario = adapter.fromDocument(document)
-      if (selectedRow) {
-        await library.update(selectedRow.id, { name: document.name.trim(), scenario })
-        setMessage('Scenario updated.')
-      } else {
-        const created = await library.create(document.name.trim(), scenario)
-        setSelectedId(created.id)
-        setMessage('Scenario saved.')
-      }
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : 'Unable to save scenario.')
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
     }
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+    await persistDocument(currentDocumentRef.current, true)
   }
 
   const remove = async () => {
     if (!selectedRow) return
     if (!window.confirm(`Delete “${selectedRow.name}”?`)) return
+    removeLocalDraft(adapter.product, selectedRow.id)
     await library.remove(selectedRow.id)
     newScenario()
   }
@@ -388,11 +563,14 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
       const parsed = JSON.parse(await file.text()) as { format?: string; document?: SharedScenarioAuthoringDocument<TSnapshot> } | SharedScenarioAuthoringDocument<TSnapshot>
       const imported = 'document' in parsed && parsed.document ? parsed.document : parsed as SharedScenarioAuthoringDocument<TSnapshot>
       if (!imported || imported.product !== adapter.product || !Array.isArray(imported.stages) || !imported.stages.length) throw new Error(`This file is not a ${adapter.productLabel} EDUSIM scenario.`)
+      selectedIdRef.current = ''
+      currentDocumentRef.current = imported
       setSelectedId('')
       setDocument({ ...imported, schemaVersion: 1, product: adapter.product })
       setSelectedStageId(imported.stages[0].id)
       setPublication(null)
-      setMessage('Scenario imported. Save it to add it to your library.')
+      setSaveState('dirty')
+      setMessage('Scenario imported. It will be autosaved as a new draft.')
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Unable to import scenario.')
     }
@@ -410,11 +588,20 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
   }
 
   const stageBranches = useMemo(() => document.branches.filter((branch) => branch.fromStageId === selectedStage?.id), [document.branches, selectedStage?.id])
+  const saveStatusText = saveState === 'saving'
+    ? 'Saving…'
+    : saveState === 'dirty'
+      ? 'Unsaved changes'
+      : saveState === 'error'
+        ? 'Saved locally · retrying'
+        : lastSavedAt
+          ? `Saved ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          : 'Saved'
 
   return <div className="shared-scenario-editor">
     <aside className="shared-scenario-library">
       <div className="shared-scenario-library-heading"><strong>{adapter.productLabel} scenarios</strong><button type="button" onClick={newScenario}>New</button></div>
-      {library.busy && <small>Loading…</small>}
+      {library.busy && <small>Saving…</small>}
       {library.message && <small>{library.message}</small>}
       <div className="shared-scenario-library-list">
         {library.items.map((row) => <button key={row.id} type="button" className={selectedId === row.id ? 'selected' : ''} onClick={() => openRow(row)}><strong>{row.name}</strong><small>{new Date(row.updated_at).toLocaleString()}</small></button>)}
@@ -426,9 +613,10 @@ export function SharedScenarioEditorFramework<TScenario, TSnapshot>({ adapter, e
       <header className="shared-scenario-authoring-header">
         <div><span>Shared EDUSIM scenario framework</span><h2>{document.name || 'Untitled scenario'}</h2></div>
         <div className="scenario-builder-editor-actions">
+          <span className={`shared-scenario-save-status ${saveState}`} role="status" aria-live="polite">{saveStatusText}</span>
           <button type="button" onClick={() => importRef.current?.click()}>Import</button>
           <button type="button" onClick={exportScenario}>Export</button>
-          <button type="button" onClick={() => void save()}>{selectedRow ? 'Save changes' : 'Save scenario'}</button>
+          <button type="button" disabled={saveState === 'saving'} onClick={() => void save()}>{selectedRow ? 'Save changes' : 'Save scenario'}</button>
           {onStartScenario && selectedRow && <button type="button" className="scenario-builder-primary" onClick={() => onStartScenario(selectedRow)}>Open in simulator</button>}
           {selectedRow && <button type="button" className="scenario-builder-danger" onClick={() => void remove()}>Delete</button>}
           <input ref={importRef} type="file" accept="application/json,.json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importScenario(file); event.currentTarget.value = '' }} />
