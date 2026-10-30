@@ -98,6 +98,23 @@ export function SharedScenarioRuntimePanel({
 
   const safeStageCount = Math.max(1, stageCount)
   const progress = Math.max(0, Math.min(100, (stageNumber / safeStageCount) * 100))
+  const manualSessionAction = !selfDirected && manualControlsAllowed && !complete && !question && !media
+    ? (branchActions[0]?.onSelect ?? (manualAdvanceAvailable ? onAdvance : undefined))
+    : undefined
+
+  if (manualSessionAction) {
+    return <SharedDraggableModal
+      ariaLabel={`Scenario stage: ${stageName}`}
+      title={stageName}
+      className="shared-scenario-runtime-modal"
+      collapsible
+      reopenLabel="Show"
+    >
+      <button type="button" className="teaching-prompt-primary shared-scenario-manual-next" onClick={() => void manualSessionAction()}>
+        Move to next
+      </button>
+    </SharedDraggableModal>
+  }
 
   const panelBody = <>
     <div className="shared-scenario-runtime-progress" aria-label={`Scenario progress: stage ${stageNumber} of ${stageCount}`}><i style={{ width: `${progress}%` }} /></div>
@@ -123,7 +140,7 @@ export function SharedScenarioRuntimePanel({
   </>
 
   if (!selfDirected) {
-    return <SharedDraggableModal ariaLabel="Active scenario stage" eyebrow={scenarioName} title={`${stageNumber}/${stageCount} · ${stageName}`} onClose={onClose} closeLabel="Close scenario" className={`shared-scenario-runtime-modal ${complete ? 'complete' : ''}`}>
+    return <SharedDraggableModal ariaLabel="Active scenario stage" eyebrow={scenarioName} title={stageName} onClose={onClose} closeLabel="Close scenario" className={`shared-scenario-runtime-modal ${complete ? 'complete' : ''}`}>
       <div className={`shared-scenario-runtime-panel modal-runtime ${complete ? 'complete' : ''}`}>{panelBody}</div>
     </SharedDraggableModal>
   }
