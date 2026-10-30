@@ -1,0 +1,74 @@
+.shared-draggable-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1450;
+  pointer-events: none;
+}
+
+.shared-draggable-modal {
+  position: absolute;
+  top: clamp(72px, 14vh, 150px);
+  left: 50%;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(72vh, 680px);
+  overflow: hidden;
+  border: 1px solid rgba(114, 174, 204, .32);
+  border-radius: 14px;
+  background: #0a151b;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .48);
+  pointer-events: auto;
+  transform-origin: center;
+  margin-left: min(-260px, calc((100vw - 32px) / -2));
+}
+
+.shared-draggable-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: #0f2028;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.shared-draggable-modal-header:active { cursor: grabbing; }
+.shared-draggable-modal-header > div { display: grid; gap: 2px; min-width: 0; }
+.shared-draggable-modal-header span { color: #7898a7; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.shared-draggable-modal-header strong { color: #edf8fc; font-size: 14px; line-height: 1.25; }
+.shared-draggable-modal-header button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  color: #d7e7ee;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.shared-draggable-modal-body {
+  max-height: calc(min(72vh, 680px) - 56px);
+  overflow: auto;
+  padding: 12px;
+}
+
+@media (max-width: 899px) {
+  .shared-draggable-modal {
+    top: auto;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: min(76vh, 680px);
+    margin-left: 0;
+    transform: none !important;
+  }
+  .shared-draggable-modal-header { cursor: default; touch-action: auto; }
+}
