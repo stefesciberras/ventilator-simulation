@@ -189,7 +189,17 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
     setError(null)
     try {
       const created = await repository.createSession(input)
-      const clientId = crypto.randomUUID()
+      let storedSessionId: string | null = null
+      let storedClientId: string | null = null
+      if (typeof window !== 'undefined') {
+        try {
+          storedSessionId = window.sessionStorage.getItem(instructorSessionKey(storageNamespace))
+          storedClientId = window.sessionStorage.getItem(instructorClientKey(storageNamespace))
+        } catch { /* optional */ }
+      }
+      const clientId = storedSessionId === created.sessionId && storedClientId
+        ? storedClientId
+        : crypto.randomUUID()
       await repository.claimInstructorSession(created.sessionId, clientId)
       let row = await repository.fetchSession(created.sessionId)
       const prepared = await hostRef.current?.prepareInstructorSession?.(row, input, 'start')
