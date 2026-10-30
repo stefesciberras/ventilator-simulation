@@ -15,4 +15,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --include=dev
+      - run: npm install --no-save @vitejs/plugin-react@6.1.2
       - run: npm run build
