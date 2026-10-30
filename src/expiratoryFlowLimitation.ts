@@ -76,9 +76,10 @@ export function applyExpiratoryFlowLimitation(
   const airwayVolumeAboveElbowL = Math.max(0, volumeL - airwayElbowVolumeL)
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
+  const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
 
   const baseCeilingLs = (lowVolumeCeilingLs + volumeSlopePerSecond * volumeL) * airwayCollapseFactor
-  const ceilingLs = baseCeilingLs + genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
+  const ceilingLs = baseCeilingLs + earlyFlowSpikeReliefLs
 
   const requestedMagnitude = -requestedFlowLs
   if (requestedMagnitude <= 1e-9) {
