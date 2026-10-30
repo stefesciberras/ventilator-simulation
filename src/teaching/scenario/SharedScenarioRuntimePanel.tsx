@@ -23,7 +23,9 @@ interface SharedScenarioRuntimePanelProps {
   content?: TeachingScenarioStageContent
   manualAdvanceAvailable?: boolean
   onAdvance?: () => void | Promise<void>
+  /** Retained for caller compatibility; previous-stage navigation is no longer shown. */
   previousAvailable?: boolean
+  /** Retained for caller compatibility; previous-stage navigation is no longer shown. */
   onPrevious?: () => void | Promise<void>
   branchActions?: SharedScenarioBranchAction[]
   complete?: boolean
@@ -45,8 +47,6 @@ export function SharedScenarioRuntimePanel({
   content,
   manualAdvanceAvailable,
   onAdvance,
-  previousAvailable,
-  onPrevious,
   branchActions = [],
   complete = false,
   completionTitle = 'Scenario complete',
@@ -110,6 +110,15 @@ export function SharedScenarioRuntimePanel({
     onQuestionResult?.(true, correct)
   }
 
+  const runSingleManualAction = () => {
+    if (!manualAvailable) return
+    if (branchActions.length === 1) {
+      void branchActions[0].onSelect()
+      return
+    }
+    if (branchActions.length === 0 && manualAdvanceAvailable) void onAdvance?.()
+  }
+
   const safeStageCount = Math.max(1, stageCount)
   const progress = Math.max(0, Math.min(100, (stageNumber / safeStageCount) * 100))
 
@@ -127,13 +136,23 @@ export function SharedScenarioRuntimePanel({
       <div>{question.options.map((option) => <label key={option.id}><input type="radio" name={`scenario-runtime-question-${stageNumber}`} checked={answerId === option.id} disabled={submitted} onChange={() => setAnswerId(option.id)} /><span>{option.text}</span></label>)}</div>
       {!submitted ? <button type="button" disabled={!answerId} onClick={submit}>Submit answer</button> : <div className="shared-scenario-runtime-answer">Answer submitted.{question.explanation ? ` ${question.explanation}` : ''}</div>}
     </div>}
-    {complete ? <div className="shared-scenario-runtime-complete"><strong>{completionTitle}</strong><span>{completionMessage}</span></div> : <>
-      {manualControlsAllowed && branchActions.length > 0 && <div className="instructor-scenario-branches"><strong>{selfDirected ? 'Choose a path' : 'Available paths'}</strong>{branchActions.map((branch) => <button type="button" key={branch.id} className="manual" onClick={() => void branch.onSelect()}><span>{branch.label}</span>{branch.targetLabel && <em>→ {branch.targetLabel}</em>}</button>)}</div>}
-      {manualControlsAllowed && (previousAvailable || manualAdvanceAvailable) && <div className="instructor-scenario-flow-actions">
-        {previousAvailable && <button type="button" onClick={() => void onPrevious?.()}>Previous</button>}
-        {manualAdvanceAvailable && <button type="button" className="scenario-builder-primary" onClick={() => void onAdvance?.()}>{selfDirected ? 'Continue' : 'Next stage'}</button>}
+    {complete ? <div className="shared-scenario-runtime-complete"><strong>{completionTitle}</strong><span>{completionMessage}</span></div> : manualControlsAllowed && <div className="shared-scenario-runtime-triggers">
+      <strong>Triggers</strong>
+      <button
+        type="button"
+        className="shared-scenario-trigger-row manual"
+        disabled={!manualAvailable}
+        onClick={branchActions.length <= 1 ? runSingleManualAction : undefined}
+      >
+        <span>Manual</span>
+        <em>{!manualAvailable ? 'Not available' : branchActions.length > 1 ? 'Choose a path below' : 'Available'}</em>
+      </button>
+      {branchActions.length > 1 && <div className="shared-scenario-manual-paths">
+        {branchActions.map((branch) => <button type="button" key={branch.id} onClick={() => void branch.onSelect()}>
+          <span>{branch.label}</span>{branch.targetLabel && <em>→ {branch.targetLabel}</em>}
+        </button>)}
       </div>}
-    </>}
+    </div>}
   </>
 
   if (!selfDirected) {
