@@ -1,0 +1,65 @@
+.session-scenario-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, .5);
+}
+
+.session-scenario-modal {
+  width: min(620px, 100%);
+  max-height: min(78vh, 720px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(111, 180, 213, .34);
+  border-radius: 14px;
+  background: #0a151b;
+  box-shadow: 0 28px 80px rgba(0,0,0,.56);
+}
+
+.session-scenario-modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.session-scenario-modal-heading span { display:block; color:#718e9b; font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+.session-scenario-modal-heading strong { display:block; margin-top:2px; color:#eff9fc; font-size:15px; }
+
+.session-scenario-kind-tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.session-scenario-kind-tabs button { min-height:36px; }
+.session-scenario-kind-tabs button.selected { color:#e7f9ff; border-color:#5eb9d7; background:#173746; }
+
+.session-scenario-modal-list { display:grid; gap:7px; min-height:0; overflow:auto; padding-right:2px; }
+.session-scenario-modal-option {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px 12px;
+  width:100%;
+  padding:10px 11px;
+  text-align:left;
+  border:1px solid #2c424c;
+  border-radius:9px;
+  background:#0d1a20;
+  color:#dceaf0;
+}
+.session-scenario-modal-option.selected { border-color:#e18a36; box-shadow:inset 0 0 0 1px rgba(225,138,54,.25); }
+.session-scenario-modal-option > div { min-width:0; display:grid; gap:3px; }
+.session-scenario-modal-option strong { font-size:12px; }
+.session-scenario-modal-option small { color:#8198a2; font-size:10px; line-height:1.35; }
+.session-scenario-kind-badge { align-self:start; padding:3px 6px; border-radius:999px; background:rgba(255,255,255,.06); color:#89a9b7; font-size:8px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+.session-scenario-modal-empty { padding:22px 12px; color:#78909b; text-align:center; font-size:11px; }
+.session-scenario-modal-actions { display:flex; justify-content:flex-end; gap:8px; }
+
+.session-start-wizard .session-start-source-tabs button:last-child { border-color:rgba(225,138,54,.46); }
+
+@media (max-width: 680px) {
+  .session-scenario-modal-backdrop { align-items:end; padding:10px 10px max(10px, env(safe-area-inset-bottom)); }
+  .session-scenario-modal { width:100%; max-height:82vh; border-radius:16px; }
+  .session-scenario-modal-actions { display:grid; grid-template-columns:1fr; }
+  .session-scenario-modal-actions button { width:100%; min-height:44px; }
+}
