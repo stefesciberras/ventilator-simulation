@@ -7,7 +7,7 @@
 }
 
 /* Restore the authoring workspace to two useful columns now that the trigger
-   palette is an overlay rather than a permanent third column. */
+   palette is a floating window rather than a permanent third column. */
 .scenario-builder-app .shared-scenario-stage-layout-with-triggers {
   grid-template-columns: 210px minmax(0, 1fr) !important;
 }
@@ -20,44 +20,41 @@
   grid-column: 2 !important;
 }
 
-/* Trigger palette dialog. The normal palette is hidden until + Path is used. */
+/* Trigger palette: non-modal floating window launched by + Path. */
 .scenario-builder-app .shared-scenario-trigger-palette {
   display: none;
 }
 
 .scenario-builder-app .shared-scenario-trigger-palette.studio-trigger-dialog-open {
   position: fixed !important;
-  inset: 50% auto auto 50% !important;
-  transform: translate(-50%, -50%);
   z-index: 1001;
   display: flex;
-  width: min(680px, calc(100vw - 48px));
-  max-height: min(76vh, 720px);
+  width: min(620px, calc(100vw - 40px));
+  max-height: min(74vh, 700px);
   border: 1px solid #aeb8c0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #f7f8fa;
   color: #1f2933;
-  box-shadow: 0 24px 70px rgba(28, 39, 49, .28);
+  box-shadow: 0 18px 48px rgba(28, 39, 49, .22);
   overflow: hidden;
 }
 
-.studio-trigger-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  width: 100vw;
-  height: 100vh;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: rgba(32, 41, 50, .36);
-  cursor: default;
-}
-
 .scenario-builder-app .shared-scenario-trigger-palette-heading {
-  padding: 14px 16px 12px;
+  padding: 11px 14px 10px;
   border-bottom: 1px solid #d5dbe0;
   background: #eef1f4;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.scenario-builder-app .shared-scenario-trigger-palette-heading.dragging {
+  cursor: grabbing;
+}
+
+.scenario-builder-app .shared-scenario-trigger-palette-heading input {
+  cursor: text;
+  user-select: text;
 }
 
 .scenario-builder-app .shared-scenario-trigger-palette-heading > span,
@@ -88,7 +85,9 @@
 }
 
 .scenario-builder-app .shared-scenario-trigger-chip:hover {
-  background: #eef4f7;
+  border-color: #9eb0bb;
+  background: #edf4f7 !important;
+  color: #17252d !important;
 }
 
 .scenario-builder-app .shared-scenario-trigger-chip small,
@@ -152,19 +151,44 @@
   width: auto;
 }
 
-/* Clinical groups should read as light-theme panels rather than remnants of
-   the dark simulator theme. Accent borders/headings still identify groups. */
+/* Clinical groups use a light neutral panel across Vent, Anaesth and ITU.
+   Accent borders/headings still identify groups. */
 .scenario-builder-app .shared-scenario-control-group {
-  background: #d5d8dc !important;
+  background: #e8eaed !important;
 }
 
 .scenario-builder-app .shared-scenario-variable-row {
-  background: rgba(255, 255, 255, .42) !important;
-  border-color: rgba(75, 89, 101, .16) !important;
+  background: rgba(255, 255, 255, .62) !important;
+  border-color: rgba(75, 89, 101, .14) !important;
 }
 
 .scenario-builder-app .shared-scenario-variable-label {
   color: #3f4b55 !important;
+}
+
+/* Light-theme hover states. Prevent inherited dark simulator hover styling
+   from obscuring labels in Studio. */
+.scenario-builder-app button:not(.scenario-builder-primary):not(.scenario-builder-danger):not(.shared-scenario-trash-button):not(.studio-profile-delete):hover:not(:disabled) {
+  border-color: #8fa6b2 !important;
+  background: #e9f0f4 !important;
+  color: #17252d !important;
+}
+
+.scenario-builder-app .scenario-builder-primary:hover:not(:disabled) {
+  border-color: #095b72 !important;
+  background: #0f6078 !important;
+  color: #fff !important;
+}
+
+.scenario-builder-app .scenario-builder-resourcebar button.selected:hover,
+.scenario-builder-app .shared-scenario-library-list > button.selected:hover,
+.scenario-builder-app .shared-scenario-stage-list > button.selected:hover,
+.scenario-builder-app .studio-profile-list > button.selected:hover,
+.scenario-builder-app .studio-organisation-sidebar > button.selected:hover,
+.scenario-builder-app .studio-profile-scope-tabs button.selected:hover {
+  border-color: var(--studio-accent) !important;
+  background: var(--studio-accent-soft) !important;
+  color: #0b5064 !important;
 }
 
 /* Destructive controls: one consistent red trash-can affordance. Existing
@@ -198,6 +222,14 @@
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
+.scenario-builder-app .scenario-builder-danger:not(.shared-scenario-trash-button):hover:not(:disabled),
+.scenario-builder-app .studio-profile-delete:hover:not(:disabled),
+.scenario-builder-app .shared-scenario-question-options > div > button:hover:not(:disabled),
+.scenario-builder-app .shared-scenario-trash-button:hover:not(:disabled) {
+  border-color: #b52f2f !important;
+  background: #ffe4e4 !important;
+}
+
 .scenario-builder-app .shared-scenario-trash-button {
   border-color: #c84444 !important;
   background: #fff1f1 !important;
@@ -206,6 +238,10 @@
 
 .scenario-builder-app .shared-scenario-trash-button svg {
   color: #c62828;
+}
+
+.scenario-builder-app .studio-delete-scenario {
+  flex: 0 0 34px;
 }
 
 @media (max-width: 1180px) {
