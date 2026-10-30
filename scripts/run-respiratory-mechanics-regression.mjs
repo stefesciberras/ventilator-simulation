@@ -12,6 +12,7 @@ const regressions = [
   'scripts/two-level-mechanics-regression.ts',
   'scripts/efl-mechanics-regression.ts',
   'scripts/efl-morphology-regression.ts',
+  'scripts/efl-early-spike-regression.ts',
 ]
 
 try {
