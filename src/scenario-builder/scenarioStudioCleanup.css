@@ -29,7 +29,7 @@
   position: fixed !important;
   z-index: 1001;
   display: flex;
-  width: min(620px, calc(100vw - 40px));
+  width: min(460px, calc(100vw - 40px));
   max-height: min(74vh, 700px);
   border: 1px solid #aeb8c0;
   border-radius: 12px;
@@ -40,7 +40,8 @@
 }
 
 .scenario-builder-app .shared-scenario-trigger-palette-heading {
-  padding: 11px 14px 10px;
+  position: relative;
+  padding: 11px 46px 10px 14px;
   border-bottom: 1px solid #d5dbe0;
   background: #eef1f4;
   cursor: grab;
@@ -55,6 +56,32 @@
 .scenario-builder-app .shared-scenario-trigger-palette-heading input {
   cursor: text;
   user-select: text;
+}
+
+.scenario-builder-app .studio-trigger-close-button {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #bac4ca;
+  border-radius: 7px;
+  background: #fff;
+  color: #45535d;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.scenario-builder-app .studio-trigger-close-button:hover {
+  border-color: #8fa0aa !important;
+  background: #e7edf1 !important;
+  color: #17252d !important;
 }
 
 .scenario-builder-app .shared-scenario-trigger-palette-heading > span,

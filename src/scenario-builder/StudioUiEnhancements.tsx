@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 const PALETTE_OPEN_CLASS = 'studio-trigger-dialog-open'
+const CLOSE_BUTTON_CLASS = 'studio-trigger-close-button'
 
 function closeTriggerPalette() {
   document.querySelector<HTMLElement>('.shared-scenario-trigger-palette')?.classList.remove(PALETTE_OPEN_CLASS)
@@ -8,7 +9,7 @@ function closeTriggerPalette() {
 
 function placeTriggerPalette(palette: HTMLElement) {
   if (palette.dataset.studioPositioned === 'true') return
-  const width = Math.min(620, Math.max(420, window.innerWidth * 0.42))
+  const width = Math.min(460, Math.max(360, window.innerWidth * 0.34))
   const left = Math.max(16, window.innerWidth - width - 28)
   const top = Math.max(90, Math.min(150, window.innerHeight * 0.14))
   palette.style.left = `${left}px`
@@ -18,10 +19,25 @@ function placeTriggerPalette(palette: HTMLElement) {
   palette.dataset.studioPositioned = 'true'
 }
 
+function ensureCloseButton() {
+  const heading = document.querySelector<HTMLElement>('.shared-scenario-trigger-palette-heading')
+  if (!heading || heading.querySelector(`.${CLOSE_BUTTON_CLASS}`)) return
+
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = CLOSE_BUTTON_CLASS
+  button.setAttribute('aria-label', 'Close trigger palette')
+  button.setAttribute('title', 'Close')
+  button.textContent = '×'
+  button.addEventListener('click', closeTriggerPalette)
+  heading.appendChild(button)
+}
+
 function openTriggerPalette() {
   const palette = document.querySelector<HTMLElement>('.shared-scenario-trigger-palette')
   if (!palette) return
 
+  ensureCloseButton()
   palette.classList.add(PALETTE_OPEN_CLASS)
   placeTriggerPalette(palette)
 
@@ -107,16 +123,25 @@ export function StudioUiEnhancements() {
 
     const observer = new MutationObserver(() => {
       labelScenarioDeleteControl()
+      ensureCloseButton()
       releaseDrag()
       releaseDrag = makeTriggerPaletteDraggable()
     })
     observer.observe(document.body, { childList: true, subtree: true })
     labelScenarioDeleteControl()
+    ensureCloseButton()
 
     const captureClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
       const button = target?.closest<HTMLButtonElement>('.shared-scenario-paths .shared-scenario-section-heading button')
       if (!button || button.disabled || button.textContent?.trim() !== '+ Path') return
+
+      const palette = document.querySelector<HTMLElement>('.shared-scenario-trigger-palette')
+      if (palette?.classList.contains(PALETTE_OPEN_CLASS)) {
+        // Palette already visible: allow the framework's native + Path handler
+        // to create another branch with the default trigger.
+        return
+      }
 
       event.preventDefault()
       event.stopPropagation()
