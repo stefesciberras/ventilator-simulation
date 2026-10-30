@@ -25,7 +25,12 @@ export interface ExpiratoryFlowLimitResult {
  *   - late EFL, in which expiration initially resembles the unrestricted
  *     resistance curve and becomes flow-limited later in expiration.
  *
- * We do not claim that the 0-1 score is clinically calibrated to that study.
+ * The displayed morphology also follows the classic ventilator-waveform pattern
+ * illustrated by Flynn et al. (Anesthesiology 2022;137:85-92): rapid early
+ * expiratory flow followed by a smooth, flattened flow-limited return toward
+ * zero rather than a secondary artificial shoulder.
+ *
+ * We do not claim that the 0-1 score is clinically calibrated to either study.
  * Instead, severity controls how restrictive/flat the maximum-expiratory-flow
  * envelope becomes, while the existing expiratory-resistance setting provides
  * a continuous airway-involvement signal. High Rexp therefore biases the
@@ -83,24 +88,27 @@ export function applyExpiratoryFlowLimitation(
   const ceilingLs = baseCeilingLs + earlyFlowSpikeReliefLs
 
   const requestedMagnitude = -requestedFlowLs
-
-  // Smooth convergence onto the maximum-expiratory-flow envelope. Never allow
-  // the smoothing band to increase requested flow: below the envelope flow is
-  // unchanged; above it, the waveform progressively compresses onto the ceiling.
-  const blendWidth = Math.max(ceilingLs * 0.15, 0.015)
-  const blendHigh = ceilingLs + blendWidth
-  let limitedMagnitude = requestedMagnitude
-  let limited = false
-
-  if (requestedMagnitude >= blendHigh) {
-    limitedMagnitude = ceilingLs
-    limited = true
-  } else if (requestedMagnitude > ceilingLs) {
-    const x = clamp((requestedMagnitude - ceilingLs) / Math.max(blendHigh - ceilingLs, 1e-6), 0, 1)
-    const smooth = x * x * (3 - 2 * x)
-    limitedMagnitude = requestedMagnitude + (ceilingLs - requestedMagnitude) * smooth
-    limited = smooth > 0.01
+  if (requestedMagnitude <= 1e-9) {
+    return { flowLs: requestedFlowLs, limited: false, ceilingLs }
   }
+
+  // Smoothly approach the maximum-expiratory-flow envelope with a monotone
+  // generalised soft minimum. The old finite smoothstep band was S-shaped:
+  // while requested flow and the ceiling were both falling, its interpolation
+  // could first flatten and then re-accelerate the displayed expiratory limb,
+  // producing a small non-physiological hump/shoulder. This formulation is
+  // monotone in both requested flow and the choke-flow ceiling, so it cannot
+  // create that secondary curvature reversal.
+  //
+  // Keep the transition narrow (~15% of the ceiling) so mild EFL remains close
+  // to unrestricted flow until it approaches the envelope, while severe EFL
+  // still develops the characteristic flattened expiratory limb.
+  const blendWidth = Math.max(ceilingLs * 0.15, 0.015)
+  const relativeBlendWidth = clamp(blendWidth / Math.max(ceilingLs, 1e-6), 0.08, 0.4)
+  const softCapPower = clamp(2 / relativeBlendWidth, 8, 20)
+  const ratio = requestedMagnitude / Math.max(ceilingLs, 1e-9)
+  const limitedMagnitude = ceilingLs * Math.pow(Math.pow(ratio, -softCapPower) + 1, -1 / softCapPower)
+  const limited = limitedMagnitude < requestedMagnitude * 0.995
 
   return {
     flowLs: -limitedMagnitude,

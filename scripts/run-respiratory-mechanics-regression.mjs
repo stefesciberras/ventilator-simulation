@@ -11,6 +11,7 @@ const regressions = [
   'scripts/simv-mechanics-regression.ts',
   'scripts/two-level-mechanics-regression.ts',
   'scripts/efl-mechanics-regression.ts',
+  'scripts/efl-morphology-regression.ts',
 ]
 
 try {
