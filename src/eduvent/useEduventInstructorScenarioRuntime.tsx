@@ -117,6 +117,47 @@ function definitionFor(preset: InstructorPresetRow): TeachingScenarioDefinition<
   }
 }
 
+function presetForRestoredDefinition(
+  definition: TeachingScenarioDefinition<DynamicScenarioStage, DynamicScenarioTrigger>,
+): InstructorPresetRow | null {
+  const firstStageSnapshot = definition.stages[0]?.snapshot?.snapshot
+  if (!firstStageSnapshot) return null
+
+  const branches = (definition.branches ?? []).flatMap((branch, index) => {
+    if (!branch.fromStageId) return []
+    return [{
+      id: branch.id ?? `${definition.id}:branch:${index}`,
+      fromStageId: branch.fromStageId,
+      toStageId: branch.toStageId,
+      trigger: branch.trigger,
+      triggers: branch.triggers,
+      triggerMode: branch.triggerMode,
+      priority: branch.priority ?? index,
+      label: branch.label,
+      enabled: branch.enabled,
+    }]
+  })
+
+  const inferredSchemaVersion = firstStageSnapshot.schemaVersion
+    ?? (branches.length > 0 ? 9 : undefined)
+
+  return {
+    id: definition.id,
+    instructor_id: '',
+    name: definition.name,
+    scenario: {
+      ...firstStageSnapshot,
+      schemaVersion: inferredSchemaVersion,
+      kind: 'dynamic',
+      description: definition.description ?? firstStageSnapshot.description,
+      stages: definition.stages.map((stage) => stage.snapshot),
+      branches,
+    },
+    created_at: '',
+    updated_at: '',
+  }
+}
+
 export interface EduventScenarioRuntimeOptions {
   role: SessionRole
   sessionId: string | null
@@ -239,6 +280,17 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
   }), [options.onLoadScenario, options.scenarioActionEvent?.sequence, prompts.responses])
 
   const runtime = useTeachingScenarioRuntime<DynamicScenarioStage, DynamicScenarioTrigger, RuntimeContext>(adapter)
+
+  useEffect(() => {
+    if (activePreset || selfDirectedRun || runtime.status === 'idle' || !runtime.scenario) return
+    if (typeof window !== 'undefined' && new URL(window.location.href).searchParams.has('assignment')) return
+    const restoredPreset = presetForRestoredDefinition(runtime.scenario)
+    if (!restoredPreset) return
+    selfDirectedRef.current = false
+    setQuestionState({ answered: false, correct: false })
+    setMediaState({ ended: false, acknowledged: false })
+    setActivePreset(restoredPreset)
+  }, [activePreset, selfDirectedRun, runtime.scenario, runtime.status])
 
   const start = async (preset: InstructorPresetRow) => {
     const definition = definitionFor(preset)
