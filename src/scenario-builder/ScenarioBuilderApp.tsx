@@ -14,6 +14,7 @@ import { VentilatorScenarioEditor } from './modules/ventilator/VentilatorScenari
 import { EdumonScenarioEditor } from './modules/edumon/EdumonScenarioEditor'
 import { ProfileEditor } from './ProfileEditor'
 import { OrganisationManager } from './OrganisationManager'
+import { StudioUiEnhancements } from './StudioUiEnhancements'
 import type { EdumonStoredScenario } from '../edumon/scenarioTypes'
 import type { ProductScenarioRow } from '../teaching/scenario/productLibrary'
 import { SCENARIO_PRODUCTS, type ScenarioProductId } from '../teaching/scenario/products'
@@ -22,6 +23,7 @@ import { SCENARIO_BUILDER_VERSION } from './version'
 import './scenarioBuilder.css'
 import './clinicalSections.css'
 import './scenarioStudioLight.css'
+import './scenarioStudioCleanup.css'
 
 type StudioResource = 'scenarios' | 'profiles' | 'organisation'
 
@@ -139,6 +141,7 @@ export function ScenarioBuilderApp() {
 
   return (
     <main className="scenario-builder-app">
+      <StudioUiEnhancements />
       <SimulationAboutDialog
         open={aboutOpen}
         productLabel="LoppjuSIM-Studio"
@@ -150,7 +153,6 @@ export function ScenarioBuilderApp() {
       />
       <header className="scenario-builder-appbar">
         <div>
-          <span className="scenario-builder-eyebrow">Simulation authoring workspace</span>
           <h1>LoppjuSIM-Studio</h1>
           <small>Studio v{SCENARIO_BUILDER_VERSION} · LoppjuSIM shared authoring framework</small>
         </div>
