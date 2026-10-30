@@ -1,5 +1,6 @@
 import { generateWaveforms } from '../src/simulation/engine'
 import { PATIENT_PROFILES } from '../src/patientProfiles'
+import { applyExpiratoryFlowLimitation } from '../src/expiratoryFlowLimitation'
 import type { PatientSettings, Sample, VentilatorSettings } from '../src/simulation/types'
 
 const assert = (condition: boolean, message: string) => {
@@ -101,22 +102,84 @@ function measure(level: number): EflMetrics {
   }
 }
 
+function referenceDiseaseEfl(profileName: 'COPD' | 'Asthma') {
+  const patient = PATIENT_PROFILES[profileName]
+  const complianceL = patient.compliance / 1000
+  const referenceVolumeL = 0.5
+  const requestedFlowLs = -referenceVolumeL / Math.max(patient.expiratoryResistance * complianceL, 0.05)
+  const result = applyExpiratoryFlowLimitation(requestedFlowLs, referenceVolumeL, patient)
+  return {
+    requestedFlowLMin: requestedFlowLs * 60,
+    limitedFlowLMin: result.flowLs * 60,
+    limited: result.limited,
+  }
+}
+
 const sweep = levels.map(measure)
 
 assert(sweep.length === 5, 'five discrete EFL levels must be measured')
 assert(sweep[0].peakExpiratoryFlowLMin < -20, 'EFL 0 must allow substantial passive expiratory flow')
 assert(sweep[0].residualVolumeMl < 25, `EFL 0 residual volume ${sweep[0].residualVolumeMl.toFixed(0)} mL should approach zero before the next breath`)
 
-console.log('EFL baseline calibration sweep completed')
-console.log(JSON.stringify(sweep.map((metrics) => ({
-  level: metrics.level,
-  peakExpiratoryFlowLMin: Number(metrics.peakExpiratoryFlowLMin.toFixed(1)),
-  flow250msLMin: Number(metrics.flow250msLMin.toFixed(1)),
-  flow500msLMin: Number(metrics.flow500msLMin.toFixed(1)),
-  flow1000msLMin: Number(metrics.flow1000msLMin.toFixed(1)),
-  expiredVtMl: Number(metrics.expiredVtMl.toFixed(0)),
-  endExpiratoryFlowLMin: Number(metrics.endExpiratoryFlowLMin.toFixed(1)),
-  residualVolumeMl: Number(metrics.residualVolumeMl.toFixed(0)),
-  intrinsicElasticPressureCmH2O: Number(metrics.intrinsicElasticPressureCmH2O.toFixed(2)),
-  timeTo90PercentEmptyingS: metrics.timeTo90PercentEmptyingS == null ? null : Number(metrics.timeTo90PercentEmptyingS.toFixed(2)),
-})), null, 2))
+// Each quarter-step must be mechanically distinct. Peak expiratory flow should
+// become progressively more constrained as the EFL severity setting increases.
+for (let index = 1; index < sweep.length; index += 1) {
+  const previous = sweep[index - 1]
+  const current = sweep[index]
+  assert(
+    current.peakExpiratoryFlowLMin > previous.peakExpiratoryFlowLMin + 5,
+    `EFL ${current.level} peak flow ${current.peakExpiratoryFlowLMin.toFixed(1)} L/min must be at least 5 L/min less negative than EFL ${previous.level} (${previous.peakExpiratoryFlowLMin.toFixed(1)} L/min)`,
+  )
+  assert(
+    current.residualVolumeMl + 2 >= previous.residualVolumeMl,
+    `EFL ${current.level} must not empty to less residual volume than EFL ${previous.level}`,
+  )
+}
+
+assert(sweep[1].peakExpiratoryFlowLMin < -50, `EFL 0.25 peak ${sweep[1].peakExpiratoryFlowLMin.toFixed(1)} L/min should remain a mild limitation rather than severe clipping`)
+assert(sweep[2].timeTo90PercentEmptyingS != null && sweep[0].timeTo90PercentEmptyingS != null && sweep[2].timeTo90PercentEmptyingS >= sweep[0].timeTo90PercentEmptyingS + 0.05, 'EFL 0.5 must measurably prolong expiratory emptying')
+assert(sweep[3].timeTo90PercentEmptyingS != null && sweep[2].timeTo90PercentEmptyingS != null && sweep[3].timeTo90PercentEmptyingS >= sweep[2].timeTo90PercentEmptyingS + 0.2, 'EFL 0.75 must further prolong expiratory emptying')
+assert(sweep[4].timeTo90PercentEmptyingS == null, 'EFL 1.0 should fail to reach 90% emptying before the next breath in the calibration scenario')
+assert(sweep[4].residualVolumeMl > 200, `EFL 1.0 residual volume ${sweep[4].residualVolumeMl.toFixed(0)} mL should demonstrate dynamic hyperinflation`)
+assert(sweep[4].intrinsicElasticPressureCmH2O > 3, `EFL 1.0 intrinsic elastic pressure ${sweep[4].intrinsicElasticPressureCmH2O.toFixed(1)} cmH2O should demonstrate auto-PEEP`)
+assert(sweep[4].endExpiratoryFlowLMin < -3, `EFL 1.0 end-expiratory flow ${sweep[4].endExpiratoryFlowLMin.toFixed(1)} L/min should remain active at the next breath`)
+
+// Disease-profile guard: EFL must remain a distinct dynamic-compression effect
+// even when ordinary expiratory resistance is already high. Previously the COPD
+// and asthma requested flows sat below the EFL ceiling, making their EFL settings
+// effectively inert.
+const copdReference = referenceDiseaseEfl('COPD')
+const asthmaReference = referenceDiseaseEfl('Asthma')
+for (const [profile, reference] of [['COPD', copdReference], ['Asthma', asthmaReference]] as const) {
+  assert(reference.limited, `${profile} default EFL must actively constrain the 500 mL reference expiration`)
+  assert(
+    Math.abs(reference.limitedFlowLMin) < Math.abs(reference.requestedFlowLMin) * 0.98,
+    `${profile} EFL must reduce reference expiratory flow independently of linear Rexp`,
+  )
+}
+
+console.log('EFL five-level calibration regression checks passed')
+console.log(JSON.stringify({
+  sweep: sweep.map((metrics) => ({
+    level: metrics.level,
+    peakExpiratoryFlowLMin: Number(metrics.peakExpiratoryFlowLMin.toFixed(1)),
+    flow250msLMin: Number(metrics.flow250msLMin.toFixed(1)),
+    flow500msLMin: Number(metrics.flow500msLMin.toFixed(1)),
+    flow1000msLMin: Number(metrics.flow1000msLMin.toFixed(1)),
+    expiredVtMl: Number(metrics.expiredVtMl.toFixed(0)),
+    endExpiratoryFlowLMin: Number(metrics.endExpiratoryFlowLMin.toFixed(1)),
+    residualVolumeMl: Number(metrics.residualVolumeMl.toFixed(0)),
+    intrinsicElasticPressureCmH2O: Number(metrics.intrinsicElasticPressureCmH2O.toFixed(2)),
+    timeTo90PercentEmptyingS: metrics.timeTo90PercentEmptyingS == null ? null : Number(metrics.timeTo90PercentEmptyingS.toFixed(2)),
+  })),
+  diseaseReferences: {
+    copd: {
+      requestedFlowLMin: Number(copdReference.requestedFlowLMin.toFixed(1)),
+      limitedFlowLMin: Number(copdReference.limitedFlowLMin.toFixed(1)),
+    },
+    asthma: {
+      requestedFlowLMin: Number(asthmaReference.requestedFlowLMin.toFixed(1)),
+      limitedFlowLMin: Number(asthmaReference.limitedFlowLMin.toFixed(1)),
+    },
+  },
+}, null, 2))
