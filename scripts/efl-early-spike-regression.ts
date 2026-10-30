@@ -69,17 +69,10 @@ const flow50 = at(0.05)
 const flow100 = at(0.1)
 const flow250 = at(0.25)
 const flow500 = at(0.5)
-
-assert(initial < -20, `severe EFL must retain a visible initial expiratory spike; got ${initial.toFixed(1)} L/min`)
-assert(flow100 > initial + 5, `flow must recover rapidly during the first 100 ms; initial ${initial.toFixed(1)}, 100 ms ${flow100.toFixed(1)} L/min`)
-assert(flow250 > flow100, `flow must continue recovering toward zero after the early elbow; 100 ms ${flow100.toFixed(1)}, 250 ms ${flow250.toFixed(1)}`)
-assert(flow500 > flow250, `post-elbow flow-limited limb must continue toward zero without a secondary hump; 250 ms ${flow250.toFixed(1)}, 500 ms ${flow500.toFixed(1)}`)
-
 const earlyRecovery = flow100 - initial
 const lateRecovery = flow500 - flow250
-assert(earlyRecovery > lateRecovery * 1.25, `early 0-100 ms recovery (${earlyRecovery.toFixed(1)} L/min) should be steeper than later 250-500 ms recovery (${lateRecovery.toFixed(1)} L/min)`)
 
-console.log('EFL early-spike regression checks passed')
+console.log('EFL early-spike morphology metrics')
 console.log(JSON.stringify({
   initialFlowLMin: Number(initial.toFixed(1)),
   flow50msLMin: Number(flow50.toFixed(1)),
@@ -89,3 +82,11 @@ console.log(JSON.stringify({
   earlyRecoveryLMin: Number(earlyRecovery.toFixed(1)),
   lateRecoveryLMin: Number(lateRecovery.toFixed(1)),
 }, null, 2))
+
+assert(initial < -20, `severe EFL must retain a visible initial expiratory spike; got ${initial.toFixed(1)} L/min`)
+assert(flow100 > initial + 5, `flow must recover rapidly during the first 100 ms; initial ${initial.toFixed(1)}, 100 ms ${flow100.toFixed(1)} L/min`)
+assert(flow250 > flow100, `flow must continue recovering toward zero after the early elbow; 100 ms ${flow100.toFixed(1)}, 250 ms ${flow250.toFixed(1)}`)
+assert(flow500 > flow250, `post-elbow flow-limited limb must continue toward zero without a secondary hump; 250 ms ${flow250.toFixed(1)}, 500 ms ${flow500.toFixed(1)}`)
+assert(earlyRecovery > lateRecovery * 1.25, `early 0-100 ms recovery (${earlyRecovery.toFixed(1)} L/min) should be steeper than later 250-500 ms recovery (${lateRecovery.toFixed(1)} L/min)`)
+
+console.log('EFL early-spike regression checks passed')
