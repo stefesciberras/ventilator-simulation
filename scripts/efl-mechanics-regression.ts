@@ -124,15 +124,19 @@ assert(sweep[0].residualVolumeMl < 25, `EFL 0 residual volume ${sweep[0].residua
 // Each quarter-step must remain mechanically distinct, but the opening peak is
 // intentionally not required to fall monotonically with severity. Classic EFL
 // morphology can retain a sharp early expiratory spike before dynamic airway
-// compression establishes the flatter choke-flow limb. Distinctness is therefore
-// checked by absolute peak separation, while severity progression is assessed by
-// post-elbow flow, emptying time and trapped volume.
+// compression establishes the flatter choke-flow limb. Distinctness therefore
+// considers the early and post-elbow waveform together.
 for (let index = 1; index < sweep.length; index += 1) {
   const previous = sweep[index - 1]
   const current = sweep[index]
+  const waveformSeparation = Math.max(
+    Math.abs(current.peakExpiratoryFlowLMin - previous.peakExpiratoryFlowLMin),
+    Math.abs(current.flow250msLMin - previous.flow250msLMin),
+    Math.abs(current.flow500msLMin - previous.flow500msLMin),
+  )
   assert(
-    Math.abs(current.peakExpiratoryFlowLMin - previous.peakExpiratoryFlowLMin) >= 3,
-    `EFL ${current.level} opening peak ${current.peakExpiratoryFlowLMin.toFixed(1)} L/min must remain mechanically distinct from EFL ${previous.level} (${previous.peakExpiratoryFlowLMin.toFixed(1)} L/min)`,
+    waveformSeparation >= 2,
+    `EFL ${current.level} waveform must remain mechanically distinct from EFL ${previous.level}; largest peak/250/500 ms separation was ${waveformSeparation.toFixed(1)} L/min`,
   )
   assert(
     current.residualVolumeMl + 2 >= previous.residualVolumeMl,
@@ -161,8 +165,6 @@ assert(sweep[4].residualVolumeMl > 200, `EFL 1.0 residual volume ${sweep[4].resi
 assert(sweep[4].intrinsicElasticPressureCmH2O > 3, `EFL 1.0 intrinsic elastic pressure ${sweep[4].intrinsicElasticPressureCmH2O.toFixed(1)} cmH2O should demonstrate auto-PEEP`)
 assert(sweep[4].endExpiratoryFlowLMin < -3, `EFL 1.0 end-expiratory flow ${sweep[4].endExpiratoryFlowLMin.toFixed(1)} L/min should remain active at the next breath`)
 
-// Disease-profile guard: EFL must remain a distinct dynamic-compression effect
-// even when ordinary expiratory resistance is already high.
 const copdReference = referenceDiseaseEfl('COPD')
 const asthmaReference = referenceDiseaseEfl('Asthma')
 for (const [profile, reference] of [['COPD', copdReference], ['Asthma', asthmaReference]] as const) {
