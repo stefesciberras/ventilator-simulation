@@ -52,12 +52,14 @@ export function applyExpiratoryFlowLimitation(
   // the EFL severity score itself.
   const airwayInvolvement = clamp((Math.max(patient.expiratoryResistance, 0) - 10) / 30, 0, 1)
 
-  // Make the lower half of the severity scale genuinely mild/moderate instead
-  // of behaving almost like severe clipping. At 1.0 the envelope remains close
-  // to the previous severe-obstruction ceiling.
+  // Preserve a genuinely mild lower end of the five-position control. The
+  // previous envelope approached only ~0.73 L/s at 500 mL even as severity
+  // approached zero, so the first non-zero step behaved like substantial EFL.
+  // The revised high-flow endpoint starts above normal passive expiratory demand
+  // and converges non-linearly onto the same severe envelope at severity 1.0.
   const severityGain = Math.pow(severity, 1.4)
-  const lowVolumeCeilingLs = Math.max(0.04, (0.30 - 0.25 * severityGain) * sizeScale)
-  const volumeSlopePerSecond = Math.max(0.22, (0.85 - 0.58 * severityGain) * sizeScale)
+  const lowVolumeCeilingLs = Math.max(0.04, (0.55 - 0.50 * severityGain) * sizeScale)
+  const volumeSlopePerSecond = Math.max(0.22, (1.40 - 1.13 * severityGain) * sizeScale)
 
   // Airway-type early EFL: permit a brief high-volume flow spike, then lose that
   // extra flow rapidly as lung volume falls through the elbow. This creates the
