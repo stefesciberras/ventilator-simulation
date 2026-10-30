@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 
 const PALETTE_OPEN_CLASS = 'studio-trigger-dialog-open'
 const CLOSE_BUTTON_CLASS = 'studio-trigger-close-button'
+const SECTION_APPLY_CLASS = 'studio-section-apply-all'
 
 function closeTriggerPalette() {
   document.querySelector<HTMLElement>('.shared-scenario-trigger-palette')?.classList.remove(PALETTE_OPEN_CLASS)
@@ -112,6 +113,70 @@ function labelScenarioDeleteControl() {
   button.classList.add('studio-delete-scenario')
 }
 
+function applyCheckboxesInSection(section: HTMLElement) {
+  return [...section.querySelectorAll<HTMLInputElement>('.shared-scenario-apply-toggle input[type="checkbox"]')]
+}
+
+function refreshSectionApplyControls() {
+  document.querySelectorAll<HTMLElement>('.shared-scenario-control-group').forEach((section) => {
+    const bulk = section.querySelector<HTMLInputElement>(`.${SECTION_APPLY_CLASS} input[type="checkbox"]`)
+    const text = section.querySelector<HTMLElement>(`.${SECTION_APPLY_CLASS} span`)
+    const itemCheckboxes = applyCheckboxesInSection(section)
+    if (!bulk || !text || !itemCheckboxes.length) return
+
+    const appliedCount = itemCheckboxes.filter((checkbox) => checkbox.checked).length
+    const allApplied = appliedCount === itemCheckboxes.length
+    bulk.checked = allApplied
+    bulk.indeterminate = appliedCount > 0 && !allApplied
+    text.textContent = allApplied ? 'Unapply all' : 'Apply all'
+    bulk.setAttribute('aria-label', allApplied ? 'Unapply all controls in this section' : 'Apply all controls in this section')
+  })
+}
+
+function ensureSectionApplyControls() {
+  document.querySelectorAll<HTMLElement>('.shared-scenario-control-group').forEach((section) => {
+    const heading = section.querySelector<HTMLElement>(':scope > h3')
+    const itemCheckboxes = applyCheckboxesInSection(section)
+    if (!heading || !itemCheckboxes.length) return
+
+    let control = section.querySelector<HTMLLabelElement>(`:scope > .${SECTION_APPLY_CLASS}`)
+    if (!control) {
+      control = document.createElement('label')
+      control.className = SECTION_APPLY_CLASS
+      control.style.display = 'inline-flex'
+      control.style.alignItems = 'center'
+      control.style.gap = '6px'
+      control.style.margin = '0 0 8px 2px'
+      control.style.fontSize = '11px'
+      control.style.fontWeight = '700'
+      control.style.color = '#45535d'
+      control.style.cursor = 'pointer'
+      control.style.userSelect = 'none'
+
+      const checkbox = document.createElement('input')
+      checkbox.type = 'checkbox'
+      checkbox.style.width = 'auto'
+      checkbox.style.margin = '0'
+
+      const text = document.createElement('span')
+      text.textContent = 'Apply all'
+
+      checkbox.addEventListener('change', () => {
+        const targetState = checkbox.checked
+        applyCheckboxesInSection(section).forEach((itemCheckbox) => {
+          if (itemCheckbox.checked !== targetState) itemCheckbox.click()
+        })
+        window.setTimeout(refreshSectionApplyControls, 0)
+      })
+
+      control.append(checkbox, text)
+      heading.insertAdjacentElement('afterend', control)
+    }
+  })
+
+  refreshSectionApplyControls()
+}
+
 /**
  * Studio-only UI behaviour layered over the shared scenario authoring
  * framework. It changes presentation and interaction only, never scenario
@@ -124,12 +189,14 @@ export function StudioUiEnhancements() {
     const observer = new MutationObserver(() => {
       labelScenarioDeleteControl()
       ensureCloseButton()
+      ensureSectionApplyControls()
       releaseDrag()
       releaseDrag = makeTriggerPaletteDraggable()
     })
     observer.observe(document.body, { childList: true, subtree: true })
     labelScenarioDeleteControl()
     ensureCloseButton()
+    ensureSectionApplyControls()
 
     const captureClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
@@ -154,12 +221,18 @@ export function StudioUiEnhancements() {
       window.setTimeout(closeTriggerPalette, 0)
     }
 
+    const change = (event: Event) => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('.shared-scenario-apply-toggle')) window.setTimeout(refreshSectionApplyControls, 0)
+    }
+
     const keyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeTriggerPalette()
     }
 
     document.addEventListener('click', captureClick, true)
     document.addEventListener('click', bubbleClick)
+    document.addEventListener('change', change)
     document.addEventListener('keydown', keyDown)
 
     return () => {
@@ -167,6 +240,7 @@ export function StudioUiEnhancements() {
       releaseDrag()
       document.removeEventListener('click', captureClick, true)
       document.removeEventListener('click', bubbleClick)
+      document.removeEventListener('change', change)
       document.removeEventListener('keydown', keyDown)
       closeTriggerPalette()
     }
