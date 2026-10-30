@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { EdusimBackLink } from './EdusimBackLink'
 import { LoppjuSimPlatformMenu, type LoppjuSimRunMode } from './LoppjuSimPlatformMenu'
+import { useScenarioRuntimeIndicator } from '../teaching/scenario/runtimeUiState'
 import './SimulationTopBar.css'
 
 export type SharedSimulationSpeed = 0.5 | 1 | 1.5 | 2 | 4
@@ -82,6 +83,7 @@ export function SimulationTopBar({
     : localPauseLabel
   const speedLabel = controlsControlledByInstructor ? 'Simulation speed controlled by instructor' : 'Simulation speed'
   const publicBrandKicker = PUBLIC_PRODUCT_LABELS[brandKicker] ?? brandKicker
+  const scenarioIndicator = useScenarioRuntimeIndicator()
 
   return (
     <header className={`topbar simulation-topbar ${className}`.trim()}>
@@ -117,6 +119,19 @@ export function SimulationTopBar({
             {speedOptions.map((speed) => <option key={speed} value={speed}>×{speed}</option>)}
           </select>
         </label>
+        {scenarioIndicator && (
+          <button
+            type="button"
+            className="simulation-stage-control"
+            disabled={!scenarioIndicator.manualAvailable}
+            onClick={() => scenarioIndicator.open()}
+            title={scenarioIndicator.manualAvailable ? 'Open current scenario stage controls' : 'Current stage has no manual trigger'}
+            aria-label={`Current scenario stage ${scenarioIndicator.label}`}
+          >
+            <span>STAGE</span>
+            <strong>{scenarioIndicator.label}</strong>
+          </button>
+        )}
       </div>
 
       <div className={`status-cluster simulation-topbar-status ${statusClassName}`.trim()}>

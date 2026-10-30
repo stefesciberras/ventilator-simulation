@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ScenarioBranch,
   ScenarioDefinition,
@@ -32,10 +32,20 @@ export interface TeachingScenarioRuntimeSnapshot {
   status: Exclude<TeachingScenarioRuntimeStatus, 'idle'>
 }
 
+interface PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> {
+  scenario: TeachingScenarioDefinition<TSnapshot, TTrigger>
+  snapshot: TeachingScenarioRuntimeSnapshot
+}
+
 export type TeachingScenarioTransitionResolution =
   | { kind: 'branch'; toStageId: string }
   | { kind: 'advance' }
   | null
+
+const runtimePersistenceKey = () => {
+  if (typeof window === 'undefined') return null
+  return `loppjusim.scenario-runtime:${window.location.pathname}`
+}
 
 /** Branches take priority over linear advancement; product adapters own trigger semantics. */
 export function resolveTeachingScenarioTransition<TTrigger>({
@@ -71,7 +81,9 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
   const [stageIndex, setStageIndex] = useState(0)
   const [stageStartedSimulationTime, setStageStartedSimulationTime] = useState(0)
   const [status, setStatus] = useState<TeachingScenarioRuntimeStatus>('idle')
+  const [persistenceReady, setPersistenceReady] = useState(false)
   const transitionBusyRef = useRef(false)
+  const restoreAttemptedRef = useRef(false)
 
   const stage = scenario?.stages[stageIndex] ?? null
 
@@ -107,6 +119,10 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     setStageStartedSimulationTime(0)
     setStatus('idle')
     transitionBusyRef.current = false
+    const key = runtimePersistenceKey()
+    if (key) {
+      try { window.localStorage.removeItem(key) } catch { /* optional persistence */ }
+    }
   }, [])
 
   const advance = useCallback(async (simulationTime: number) => {
@@ -167,6 +183,47 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     if (!scenario || status === 'idle') return null
     return { scenarioId: scenario.id, stageIndex, stageStartedSimulationTime, status }
   }, [scenario, stageIndex, stageStartedSimulationTime, status])
+
+  useEffect(() => {
+    if (restoreAttemptedRef.current) return
+    restoreAttemptedRef.current = true
+    const key = runtimePersistenceKey()
+    if (!key) { setPersistenceReady(true); return }
+    let persisted: PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> | null = null
+    try {
+      const raw = window.localStorage.getItem(key)
+      persisted = raw ? JSON.parse(raw) as PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> : null
+    } catch {
+      persisted = null
+    }
+    if (!persisted?.scenario?.stages?.length || !persisted.snapshot) {
+      setPersistenceReady(true)
+      return
+    }
+    let cancelled = false
+    void restore(persisted.scenario, persisted.snapshot)
+      .catch(() => {
+        try { window.localStorage.removeItem(key) } catch { /* optional persistence */ }
+      })
+      .finally(() => { if (!cancelled) setPersistenceReady(true) })
+    return () => { cancelled = true }
+  }, [restore])
+
+  useEffect(() => {
+    if (!persistenceReady) return
+    const key = runtimePersistenceKey()
+    if (!key) return
+    if (!scenario || !runtimeSnapshot) {
+      try { window.localStorage.removeItem(key) } catch { /* optional persistence */ }
+      return
+    }
+    try {
+      const persisted: PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> = { scenario, snapshot: runtimeSnapshot }
+      window.localStorage.setItem(key, JSON.stringify(persisted))
+    } catch {
+      // Runtime persistence is best-effort; simulation must continue if storage is unavailable.
+    }
+  }, [persistenceReady, runtimeSnapshot, scenario])
 
   return {
     scenario,

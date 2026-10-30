@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createCaseMediaSignedUrl, listCaseMediaByIds } from '../../caseMedia'
 import { SharedDraggableModal } from '../SharedDraggableModal'
 import type { TeachingScenarioStageContent } from './runtimeCore'
+import { setScenarioRuntimeIndicator } from './runtimeUiState'
 import './SharedScenarioRuntimePanel.css'
 
 export interface SharedScenarioBranchAction {
@@ -59,11 +60,13 @@ export function SharedScenarioRuntimePanel({
   const [submitted, setSubmitted] = useState(false)
   const [resolvedMediaUrl, setResolvedMediaUrl] = useState<string | null>(null)
   const [mediaAcknowledged, setMediaAcknowledged] = useState(false)
+  const [hidden, setHidden] = useState(false)
 
   useEffect(() => {
     setAnswerId(null)
     setSubmitted(false)
     setMediaAcknowledged(false)
+    setHidden(false)
     onQuestionResult?.(false, false)
   }, [stageNumber])
 
@@ -72,6 +75,17 @@ export function SharedScenarioRuntimePanel({
   const instructionText = instructions ?? notes
   const sessionRole = typeof document === 'undefined' ? 'standalone' : document.documentElement.dataset.loppjusimSessionRole
   const manualControlsAllowed = selfDirected || sessionRole !== 'candidate'
+  const manualAvailable = manualControlsAllowed && !complete && (Boolean(manualAdvanceAvailable) || branchActions.length > 0)
+
+  useEffect(() => {
+    if (selfDirected) return
+    setScenarioRuntimeIndicator({
+      label: `${stageNumber}/${stageCount} · ${stageName}`,
+      manualAvailable,
+      open: () => setHidden(false),
+    })
+    return () => setScenarioRuntimeIndicator(null)
+  }, [selfDirected, stageNumber, stageCount, stageName, manualAvailable])
 
   useEffect(() => {
     setResolvedMediaUrl(null)
@@ -123,7 +137,8 @@ export function SharedScenarioRuntimePanel({
   </>
 
   if (!selfDirected) {
-    return <SharedDraggableModal ariaLabel="Active scenario stage" eyebrow={scenarioName} title={`${stageNumber}/${stageCount} · ${stageName}`} onClose={onClose} closeLabel="Close scenario" className={`shared-scenario-runtime-modal ${complete ? 'complete' : ''}`}>
+    if (hidden) return null
+    return <SharedDraggableModal ariaLabel="Active scenario stage" eyebrow={scenarioName} title={`${stageNumber}/${stageCount} · ${stageName}`} onClose={() => setHidden(true)} closeLabel="Hide stage controls" className={`shared-scenario-runtime-modal ${complete ? 'complete' : ''}`}>
       <div className={`shared-scenario-runtime-panel modal-runtime ${complete ? 'complete' : ''}`}>{panelBody}</div>
     </SharedDraggableModal>
   }

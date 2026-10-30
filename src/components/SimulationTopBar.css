@@ -20,8 +20,52 @@
   background: rgba(255,255,255,.06);
 }
 
+.simulation-stage-control {
+  min-width: 0;
+  max-width: 190px;
+  display: grid;
+  gap: 1px;
+  align-content: center;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  border: 1px solid rgba(239,138,39,.65);
+  border-radius: 8px;
+  background: rgba(239,138,39,.08);
+  color: #eef5f7;
+  cursor: pointer;
+}
+
+.simulation-stage-control span {
+  color: #f0b06e;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  line-height: 1.05;
+}
+
+.simulation-stage-control strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.simulation-stage-control:disabled {
+  opacity: .42;
+  cursor: default;
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.03);
+}
+
 .simulation-topbar-status .simulation-status-text {
   white-space: nowrap;
+}
+
+@media (max-width: 899px) {
+  .simulation-stage-control { max-width: 150px; }
 }
 
 @media (max-width: 680px) {
@@ -35,4 +79,11 @@
   .simulation-topbar .simulation-status-text {
     display: inline;
   }
+
+  .simulation-stage-control {
+    max-width: 130px;
+    padding: 5px 8px;
+  }
+
+  .simulation-stage-control strong { font-size: .72rem; }
 }
