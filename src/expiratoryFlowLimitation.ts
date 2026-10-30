@@ -48,8 +48,8 @@ export function applyExpiratoryFlowLimitation(
 
   // Separate airway calibre from EFL severity. The paper found early EFL mainly
   // in patients with airway involvement and late EFL mainly in non-airway
-  // disease. Rexp is therefore used only to bias morphology/onset, not to define
-  // the EFL severity score itself.
+  // disease. Rexp therefore biases morphology, while the EFL score retains its
+  // own independent effect on the choke-flow envelope.
   const airwayInvolvement = clamp((Math.max(patient.expiratoryResistance, 0) - 10) / 30, 0, 1)
 
   // Preserve a genuinely mild lower end of the five-position control. The
@@ -60,6 +60,13 @@ export function applyExpiratoryFlowLimitation(
   const severityGain = Math.pow(severity, 1.4)
   const lowVolumeCeilingLs = Math.max(0.04, (0.55 - 0.50 * severityGain) * sizeScale)
   const volumeSlopePerSecond = Math.max(0.22, (1.40 - 1.13 * severityGain) * sizeScale)
+
+  // In airway disease, dynamic compression should remain distinct from the
+  // linear expiratory-resistance term. Otherwise high Rexp can reduce requested
+  // flow below the EFL ceiling and make even a severe EFL setting do nothing.
+  // Reduce the post-spike envelope as airway involvement and severity increase,
+  // while retaining a floor so the simulator never collapses to zero flow.
+  const airwayCollapseFactor = clamp(1 - 1.8 * airwayInvolvement * severityGain, 0.35, 1)
 
   // Airway-type early EFL: permit a brief high-volume flow spike, then lose that
   // extra flow rapidly as lung volume falls through the elbow. This creates the
@@ -72,19 +79,15 @@ export function applyExpiratoryFlowLimitation(
   const earlyFlowSpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * volumeAboveElbowL
 
-  const ceilingLs =
-    lowVolumeCeilingLs +
-    volumeSlopePerSecond * volumeL +
-    earlyFlowSpikeReliefLs
+  const baseCeilingLs = (lowVolumeCeilingLs + volumeSlopePerSecond * volumeL) * airwayCollapseFactor
+  const ceilingLs = baseCeilingLs + earlyFlowSpikeReliefLs
 
   const requestedMagnitude = -requestedFlowLs
 
-  // Smooth convergence onto the maximum-expiratory-flow envelope. This mirrors
-  // the physiological idea that reducing downstream pressure does not increase
-  // flow once the choke-flow envelope is reached, but avoids a numerical corner
-  // on the displayed waveform.
+  // Smooth convergence onto the maximum-expiratory-flow envelope. Never allow
+  // the smoothing band to increase requested flow: below the envelope flow is
+  // unchanged; above it, the waveform progressively compresses onto the ceiling.
   const blendWidth = Math.max(ceilingLs * 0.15, 0.015)
-  const blendLow = Math.max(0, ceilingLs - blendWidth)
   const blendHigh = ceilingLs + blendWidth
   let limitedMagnitude = requestedMagnitude
   let limited = false
@@ -92,8 +95,8 @@ export function applyExpiratoryFlowLimitation(
   if (requestedMagnitude >= blendHigh) {
     limitedMagnitude = ceilingLs
     limited = true
-  } else if (requestedMagnitude > blendLow) {
-    const x = clamp((requestedMagnitude - blendLow) / Math.max(blendHigh - blendLow, 1e-6), 0, 1)
+  } else if (requestedMagnitude > ceilingLs) {
+    const x = clamp((requestedMagnitude - ceilingLs) / Math.max(blendHigh - ceilingLs, 1e-6), 0, 1)
     const smooth = x * x * (3 - 2 * x)
     limitedMagnitude = requestedMagnitude + (ceilingLs - requestedMagnitude) * smooth
     limited = smooth > 0.01
