@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { clearAllLocalSimulationLogs } from '../core/SimulationLogs'
 import type { SimulationDiagnosticAction } from './SimulationDiagnosticsMenu'
 
 export interface SimulationAboutDialogProps {
@@ -48,6 +49,13 @@ export function SimulationAboutDialog({
   const publicProductLabel = PUBLIC_PRODUCT_LABELS[productLabel] ?? productLabel
   const publicDescription = description.replaceAll('EDUSIM', 'LoppjuSIM').replaceAll('EDUVENT', 'LoppjuSIM-MV').replaceAll('EDUMON-Ana', 'LoppjuSIM-Anaesth').replaceAll('EDUMON-ICU', 'LoppjuSIM-ICU')
 
+  const clearLocalLogs = () => {
+    const confirmed = typeof window === 'undefined' || window.confirm('Clear all local LoppjuSIM logs on this device? Shared Teaching/Simulation session history stored on the server will be kept.')
+    if (!confirmed) return
+    clearAllLocalSimulationLogs()
+    if (typeof window !== 'undefined') window.alert('Local LoppjuSIM logs cleared.')
+  }
+
   return (
     <div className="about-backdrop" onMouseDown={onClose}>
       <section className="about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -71,6 +79,13 @@ export function SimulationAboutDialog({
             </div>
           </div>
         )}
+        <div className="about-diagnostics">
+          <span className="about-section-label">Local data</span>
+          <div className="about-diagnostic-actions">
+            <button type="button" onClick={clearLocalLogs}>Clear all local logs</button>
+          </div>
+          <p className="about-disclaimer">Clears browser-local scenario, standalone session and action-runtime logs on this device. Shared Teaching/Simulation session history stored on the server is not deleted.</p>
+        </div>
         {extraContent}
         <div className="about-legal" aria-label="Legal and safety information">
           <span className="about-section-label">Important safety information</span>
