@@ -67,7 +67,7 @@ export function applyExpiratoryFlowLimitation(
   const elbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
   const volumeAboveElbowL = Math.max(0, volumeL - elbowVolumeL)
   const genericEarlySpikeReliefLs =
-    (1 - airwayInvolvement) * severityGain * 1.25 * volumeAboveElbowL
+    (1 - airwayInvolvement) * severityGain * 0.85 * volumeAboveElbowL
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * volumeAboveElbowL
   const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
