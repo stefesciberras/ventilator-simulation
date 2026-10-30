@@ -10,6 +10,7 @@ const regressions = [
   'scripts/respiratory-mechanics-regression.ts',
   'scripts/simv-mechanics-regression.ts',
   'scripts/two-level-mechanics-regression.ts',
+  'scripts/efl-mechanics-regression.ts',
 ]
 
 try {
