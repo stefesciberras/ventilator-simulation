@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createCaseMediaSignedUrl, listCaseMediaByIds } from '../../caseMedia'
 import { SharedDraggableModal } from '../SharedDraggableModal'
 import type { TeachingScenarioStageContent } from './runtimeCore'
-import { setScenarioRuntimeIndicator } from './runtimeUiState'
+import { setScenarioRuntimeIndicator, useScenarioRuntimeTriggerInfo } from './runtimeUiState'
 import './SharedScenarioRuntimePanel.css'
 
 export interface SharedScenarioBranchAction {
@@ -61,6 +61,7 @@ export function SharedScenarioRuntimePanel({
   const [resolvedMediaUrl, setResolvedMediaUrl] = useState<string | null>(null)
   const [mediaAcknowledged, setMediaAcknowledged] = useState(false)
   const [hidden, setHidden] = useState(false)
+  const triggerInfo = useScenarioRuntimeTriggerInfo()
 
   useEffect(() => {
     setAnswerId(null)
@@ -152,6 +153,10 @@ export function SharedScenarioRuntimePanel({
           <span>{branch.label}</span>{branch.targetLabel && <em>→ {branch.targetLabel}</em>}
         </button>)}
       </div>}
+      {triggerInfo.map((trigger) => <div className="shared-scenario-trigger-row informational" key={trigger.id}>
+        <span>{trigger.label}</span>
+        <em>{trigger.detail}</em>
+      </div>)}
     </div>}
   </>
 
