@@ -1,0 +1,289 @@
+/* LoppjuSIM Scenario Studio — dedicated light authoring theme.
+   Scoped to the Studio root so simulator products retain their dark clinical UI. */
+.scenario-builder-app {
+  --studio-bg: #f3f6f8;
+  --studio-surface: #ffffff;
+  --studio-surface-soft: #f8fafb;
+  --studio-surface-selected: #e8f4f8;
+  --studio-border: #cbd6dc;
+  --studio-border-strong: #9fb2bc;
+  --studio-text: #17252d;
+  --studio-muted: #61747e;
+  --studio-accent: #16718c;
+  --studio-accent-soft: #e1f1f6;
+  --studio-danger: #a23642;
+  min-height: 100vh;
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  color-scheme: light;
+}
+
+.scenario-builder-app .scenario-builder-appbar,
+.scenario-builder-app .scenario-builder-modulebar > *,
+.scenario-builder-app .scenario-builder-signin,
+.scenario-builder-app .scenario-builder-state,
+.scenario-builder-app .shared-scenario-library,
+.scenario-builder-app .shared-scenario-authoring,
+.scenario-builder-app .shared-scenario-stage-list,
+.scenario-builder-app .shared-scenario-snapshot-editor,
+.scenario-builder-app .shared-scenario-content-card,
+.scenario-builder-app .shared-scenario-paths,
+.scenario-builder-app .shared-scenario-publish,
+.scenario-builder-app .studio-profile-list,
+.scenario-builder-app .studio-profile-detail,
+.scenario-builder-app .studio-profile-scopebar,
+.scenario-builder-app .studio-organisation-sidebar,
+.scenario-builder-app .studio-organisation-detail,
+.scenario-builder-app .studio-organisation-card {
+  background: var(--studio-surface);
+  border-color: var(--studio-border);
+  color: var(--studio-text);
+}
+
+.scenario-builder-app .scenario-builder-appbar {
+  box-shadow: 0 1px 3px rgba(31, 48, 58, .08);
+}
+
+.scenario-builder-app .scenario-builder-resourcebar {
+  background: #e9eef1;
+  border-color: var(--studio-border);
+}
+
+.scenario-builder-app .scenario-builder-resourcebar button,
+.scenario-builder-app .scenario-builder-appbar button,
+.scenario-builder-app .scenario-builder-signin button,
+.scenario-builder-app .shared-scenario-library button,
+.scenario-builder-app .shared-scenario-authoring button,
+.scenario-builder-app .studio-profile-scope-tabs button,
+.scenario-builder-app .studio-organisation-create button,
+.scenario-builder-app .studio-organisation-card button {
+  border-color: var(--studio-border-strong);
+  background: var(--studio-surface-soft);
+  color: var(--studio-text);
+}
+
+.scenario-builder-app .scenario-builder-resourcebar button.selected,
+.scenario-builder-app .shared-scenario-library-list > button.selected,
+.scenario-builder-app .shared-scenario-stage-list > button.selected,
+.scenario-builder-app .studio-profile-list > button.selected,
+.scenario-builder-app .studio-organisation-sidebar > button.selected,
+.scenario-builder-app .studio-profile-scope-tabs button.selected {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent-soft);
+  color: #0b5064;
+}
+
+.scenario-builder-app .scenario-builder-primary {
+  border-color: #0e6f8b !important;
+  background: #16718c !important;
+  color: #ffffff !important;
+}
+
+.scenario-builder-app .scenario-builder-eyebrow,
+.scenario-builder-app .scenario-builder-appbar small,
+.scenario-builder-app .scenario-builder-account,
+.scenario-builder-app .scenario-builder-modulebar span,
+.scenario-builder-app .scenario-builder-modulebar small,
+.scenario-builder-app .scenario-builder-modulebar p,
+.scenario-builder-app .scenario-builder-signin p,
+.scenario-builder-app .scenario-builder-state,
+.scenario-builder-app .scenario-builder-message,
+.scenario-builder-app .shared-scenario-library-list small,
+.scenario-builder-app .shared-scenario-authoring-header span,
+.scenario-builder-app .shared-scenario-meta-grid span,
+.scenario-builder-app .shared-scenario-stage-toolbar span,
+.scenario-builder-app .shared-scenario-notes span,
+.scenario-builder-app .shared-scenario-publish span,
+.scenario-builder-app .shared-scenario-stage-list em,
+.scenario-builder-app .shared-scenario-section-heading small,
+.scenario-builder-app .shared-scenario-path-header label > span,
+.scenario-builder-app .studio-profile-list-heading span,
+.scenario-builder-app .studio-profile-detail header span,
+.scenario-builder-app .studio-profile-detail > header p,
+.scenario-builder-app .studio-profile-name span,
+.scenario-builder-app .studio-profile-list > button small,
+.scenario-builder-app .studio-profile-scopebar p,
+.scenario-builder-app .studio-profile-scopebar label span,
+.scenario-builder-app .studio-organisation-card p,
+.scenario-builder-app .studio-organisation-card span,
+.scenario-builder-app .studio-organisation-sidebar small,
+.scenario-builder-app .studio-organisation-row small {
+  color: var(--studio-muted);
+}
+
+.scenario-builder-app input:not([type='range']):not([type='checkbox']):not([type='radio']),
+.scenario-builder-app select,
+.scenario-builder-app textarea,
+.scenario-builder-app .scenario-builder-signin input,
+.scenario-builder-app .scenario-builder-modulebar select,
+.scenario-builder-app .shared-scenario-authoring input:not([type='range']):not([type='checkbox']):not([type='radio']),
+.scenario-builder-app .shared-scenario-authoring select,
+.scenario-builder-app .shared-scenario-authoring textarea,
+.scenario-builder-app .studio-profile-name input,
+.scenario-builder-app .studio-profile-scopebar select,
+.scenario-builder-app .studio-organisation-create input,
+.scenario-builder-app .studio-organisation-inline-form input,
+.scenario-builder-app .studio-organisation-inline-form select,
+.scenario-builder-app .studio-organisation-row select {
+  border-color: var(--studio-border-strong);
+  background: #ffffff;
+  color: var(--studio-text);
+}
+
+.scenario-builder-app input::placeholder,
+.scenario-builder-app textarea::placeholder {
+  color: #8b9aa2;
+}
+
+.scenario-builder-app .shared-scenario-authoring-header,
+.scenario-builder-app .shared-scenario-path-conditions,
+.scenario-builder-app .studio-profile-list-heading,
+.scenario-builder-app .studio-organisation-row {
+  border-color: #d8e0e4;
+}
+
+.scenario-builder-app .shared-scenario-path-card,
+.scenario-builder-app .shared-scenario-variable-row,
+.scenario-builder-app .shared-scenario-transition-override-row {
+  background: var(--studio-surface-soft);
+  border-color: #d3dde2;
+}
+
+.scenario-builder-app .shared-scenario-end-stage {
+  border-color: #aebdc5;
+  color: var(--studio-muted);
+  background: #fafcfd;
+}
+
+.scenario-builder-app .shared-scenario-end-stage strong,
+.scenario-builder-app .shared-scenario-variable-heading strong {
+  color: var(--studio-text);
+}
+
+.scenario-builder-app .shared-scenario-control-group {
+  background: #fbfcfd;
+}
+
+.scenario-builder-app .shared-scenario-control-group.vent {
+  background: #f1f9fc;
+}
+
+.scenario-builder-app .shared-scenario-control-group.patient {
+  background: #f2faf4;
+}
+
+.scenario-builder-app .shared-scenario-control-group.physio {
+  background: #f8f4fb;
+}
+
+.scenario-builder-app .shared-scenario-variable-heading span {
+  color: #536872;
+}
+
+.scenario-builder-app .shared-scenario-control-slider::-webkit-slider-runnable-track,
+.scenario-builder-app .shared-scenario-control-slider::-moz-range-track {
+  background: #cbd7dd;
+}
+
+.scenario-builder-app .shared-scenario-transition-card {
+  border-color: #b9d9e3;
+  background: #eef8fb;
+}
+
+.scenario-builder-app .shared-scenario-transition-card span,
+.scenario-builder-app .shared-scenario-transition-card small,
+.scenario-builder-app .shared-scenario-transition-effective,
+.scenario-builder-app .shared-scenario-duration-input em {
+  color: var(--studio-muted);
+}
+
+.scenario-builder-app .shared-scenario-transition-advanced {
+  border-color: #d7e1e6;
+}
+
+.scenario-builder-app .scenario-builder-danger,
+.scenario-builder-app .studio-profile-delete {
+  border-color: #c98d95 !important;
+  background: #fff4f5 !important;
+  color: var(--studio-danger) !important;
+}
+
+.scenario-builder-app .shared-scenario-trash-button {
+  border-color: #c98d95 !important;
+  background: #fff4f5 !important;
+  color: var(--studio-danger) !important;
+}
+
+.scenario-builder-app .studio-profile-list > button,
+.scenario-builder-app .studio-organisation-sidebar > button {
+  color: var(--studio-text);
+  border-color: #e2e8eb;
+}
+
+.scenario-builder-app .studio-profile-readonly {
+  border-color: #d7c58c;
+  background: #fff9e8;
+  color: #705f28;
+}
+
+.scenario-builder-app .shared-scenario-runtime-panel {
+  border-color: var(--studio-border-strong);
+  background: rgba(255, 255, 255, .98);
+  color: var(--studio-text);
+  box-shadow: 0 14px 36px rgba(49, 67, 77, .22);
+}
+
+.scenario-builder-app .shared-scenario-runtime-panel header span {
+  color: var(--studio-muted);
+}
+
+.scenario-builder-app .shared-scenario-runtime-panel header button,
+.scenario-builder-app .shared-scenario-runtime-answer {
+  border-color: var(--studio-border);
+  background: var(--studio-surface-soft);
+  color: var(--studio-text);
+}
+
+.scenario-builder-app .shared-scenario-save-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--studio-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.scenario-builder-app .shared-scenario-save-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #85969f;
+}
+
+.scenario-builder-app .shared-scenario-save-status.saving::before,
+.scenario-builder-app .shared-scenario-save-status.dirty::before {
+  background: #c58a18;
+}
+
+.scenario-builder-app .shared-scenario-save-status.saved::before {
+  background: #2c8a55;
+}
+
+.scenario-builder-app .shared-scenario-save-status.error {
+  color: #9b3c45;
+}
+
+.scenario-builder-app .shared-scenario-save-status.error::before {
+  background: #b94a55;
+}
+
+@media (max-width: 999px) {
+  .scenario-builder-app::before {
+    background: var(--studio-surface);
+    border-color: var(--studio-border);
+    color: var(--studio-text);
+  }
+}
