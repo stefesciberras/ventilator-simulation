@@ -21,6 +21,7 @@ import { DEFAULT_SCENARIO_MODULE_ID, SCENARIO_MODULES } from './modules/registry
 import { SCENARIO_BUILDER_VERSION } from './version'
 import './scenarioBuilder.css'
 import './clinicalSections.css'
+import './scenarioStudioLight.css'
 
 type StudioResource = 'scenarios' | 'profiles' | 'organisation'
 
