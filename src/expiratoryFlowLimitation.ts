@@ -31,11 +31,6 @@ export interface ExpiratoryFlowLimitResult {
  * zero rather than a secondary artificial shoulder.
  *
  * We do not claim that the 0-1 score is clinically calibrated to either study.
- * Instead, severity controls how restrictive/flat the maximum-expiratory-flow
- * envelope becomes, while the existing expiratory-resistance setting provides
- * a continuous airway-involvement signal. High Rexp therefore biases the
- * envelope toward the early-airway/dog-leg phenotype without conflating airway
- * resistance itself with EFL severity.
  */
 export function applyExpiratoryFlowLimitation(
   requestedFlowLs: number,
@@ -56,23 +51,21 @@ export function applyExpiratoryFlowLimitation(
   const severityGain = Math.pow(severity, 1.4)
   const lowVolumeCeilingLs = Math.max(0.04, (0.55 - 0.50 * severityGain) * sizeScale)
   const volumeSlopePerSecond = Math.max(0.22, (1.40 - 1.13 * severityGain) * sizeScale)
-
   const airwayCollapseFactor = clamp(1 - 1.8 * airwayInvolvement * severityGain, 0.35, 1)
 
   // Preserve a physiologic early expiratory spike/elbow at all EFL severities.
-  // For low-Rexp EFL, the generic spike is deliberately confined to the highest
-  // lung-volume opening segment: once ~10% of the reference VT has emptied, the
-  // extra allowance disappears and the severe choke-flow envelope again governs
-  // expiration. This gives the reference-like sharp peak/elbow without washing
-  // out dynamic hyperinflation. High-Rexp disease keeps its established broader
-  // airway-specific dog-leg morphology.
+  // Spike prominence is deliberately not proportional to EFL severity. At the
+  // most severe setting the choke point dominates earlier, so the opening spike
+  // remains visible but is smaller than at intermediate/marked EFL.
   const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
   const airwayElbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
   const genericElbowVolumeL = referenceTidalVolumeL * 0.90
   const genericVolumeAboveElbowL = Math.max(0, volumeL - genericElbowVolumeL)
   const airwayVolumeAboveElbowL = Math.max(0, volumeL - airwayElbowVolumeL)
+
+  const genericSpikeGain = severityGain * (1 - 0.8 * severityGain)
   const genericEarlySpikeReliefLs =
-    (1 - airwayInvolvement) * severityGain * 1.60 * genericVolumeAboveElbowL
+    (1 - airwayInvolvement) * genericSpikeGain * 1.60 * genericVolumeAboveElbowL
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
   const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
