@@ -306,7 +306,7 @@ export function ActionEditorApp() {
               <div key={kind} className="action-editor-group">
                 <h2>{kind === 'drug' ? 'Drugs' : 'Events'}</h2>
                 {actions.filter((action) => action.kind === kind).map((action) => (
-                  <button key={action.id} type="button" className={selectedId === action.id ? 'selected' : ''} onClick={() => setSelectedId(action.id)}>
+                  <button key={action.id} type="button" className={selectedId === action.id ? 'selected' : ''} onClick={() => { setMessage(null); setSelectedId(action.id) }}>
                     <strong>{action.name}</strong><small>{action.id} · {action.short_press_action} · {action.setting.toUpperCase()} · {action.candidate_access ?? 'instructor-only'} · P{action.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY}</small>
                   </button>
                 ))}
@@ -328,7 +328,6 @@ export function ActionEditorApp() {
               <label><span>Candidate access</span><select value={draft.candidate_access ?? 'instructor-only'} onChange={(event) => setDraft({ ...draft, candidate_access: event.target.value as EdusimCandidateActionAccess })}><option value="allowed">Allowed</option><option value="instructor-only">Instructor only</option><option value="scenario">Scenario controlled</option></select></label>
               <label><span>Short press</span><select value={draft.short_press_action} onChange={(event) => setDraft({ ...draft, short_press_action: event.target.value as EdusimShortPressAction })}><option value="momentary">Momentary</option><option value="toggle">Toggle</option></select></label>
               <label><span>Long press</span><input value="Not configured yet" disabled /></label>
-              <label><span>Duration of action</span><div className="action-editor-number"><input type="number" min="0" step="0.1" value={draft.duration_seconds} onChange={(event) => setDraft({ ...draft, duration_seconds: Math.max(0, Number(event.target.value) || 0) })} /><small>seconds</small></div></label>
               <label><span>Priority</span><input type="number" step="1" value={draft.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY} onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) || 0 })} /><small>Higher resolves later; ordinary default is 30</small></label>
               <label><span>Order</span><input type="number" step="1" value={draft.sort_order} onChange={(event) => setDraft({ ...draft, sort_order: Number(event.target.value) || 0 })} /></label>
             </div>
