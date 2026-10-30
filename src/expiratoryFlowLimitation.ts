@@ -53,18 +53,32 @@ export function applyExpiratoryFlowLimitation(
   const airwayCollapseFactor = clamp(1 - 1.8 * airwayInvolvement * severityGain, 0.35, 1)
 
   const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
-  const volumeFractionOfReference = volumeL / Math.max(referenceTidalVolumeL, 0.05)
-
-  // Generic EFL morphology: a strong but very brief opening spike at high lung
-  // volume. The steep 10th-power gate makes the relief disappear over the first
-  // few tens of millilitres, so the waveform shows spike -> elbow -> choke-flow
-  // limb without allowing enough extra integrated flow to erase auto-PEEP.
-  const genericOpeningFraction = clamp((volumeFractionOfReference - 0.50) / 0.50, 0, 1)
-  const genericOpeningWeight = genericOpeningFraction ** 10
   const lowAirwayWeight = (1 - airwayInvolvement) ** 3
-  const genericSpikeGain = severityGain * (1 - 0.65 * severityGain)
+
+  // Mild-to-marked EFL (including the common 0.75 teaching setting): make the
+  // opening spike reachable at ordinary 400-500 mL end-inspiratory volumes, but
+  // let it collapse steeply over the first part of expiration.
+  const markedOpeningFraction = clamp((volumeL / Math.max(referenceTidalVolumeL, 0.05) - 0.55) / 0.45, 0, 1)
+  const markedOpeningWeight = markedOpeningFraction ** 4
+  const markedSpikeGain = severityGain * (1 - 0.45 * severityGain)
+  const markedGenericReliefLs =
+    0.35 * sizeScale * lowAirwayWeight * markedSpikeGain * markedOpeningWeight
+
+  // Very severe EFL retains the v0.83.0.64 calibration that already passed the
+  // dedicated severe-spike, incomplete-emptying and auto-PEEP regressions. This
+  // branch prevents the marked-EFL morphology fix from erasing severe trapping.
+  const severeElbowVolumeL = referenceTidalVolumeL * 0.78
+  const severeHighVolumeWidthL = Math.max(referenceTidalVolumeL * 0.36, 0.07)
+  const severeVolumeAboveElbowL = Math.max(0, volumeL - severeElbowVolumeL)
+  const severeHighVolumeFraction = clamp(severeVolumeAboveElbowL / severeHighVolumeWidthL, 0, 1)
+  const severeHighVolumeWeight = severeHighVolumeFraction ** 12
+  const severeSpikeGain = severityGain * (1 - 0.8 * severityGain)
+  const severeGenericReliefLs =
+    lowAirwayWeight * severeSpikeGain * 5.0 * severeVolumeAboveElbowL * severeHighVolumeWeight
+
+  const severeBlend = clamp((severity - 0.85) / 0.15, 0, 1)
   const genericEarlySpikeReliefLs =
-    2.0 * sizeScale * lowAirwayWeight * genericSpikeGain * genericOpeningWeight
+    markedGenericReliefLs * (1 - severeBlend) + severeGenericReliefLs * severeBlend
 
   // Airway-disease phenotype: higher Rexp adds an early dog-leg component but
   // remains distinct from EFL severity itself. This term disappears as volume
