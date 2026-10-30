@@ -65,7 +65,7 @@ export function applyExpiratoryFlowLimitation(
   const genericOpeningFraction = clamp((volumeFractionOfReference - 0.55) / 0.45, 0, 1)
   const genericOpeningWeight = genericOpeningFraction ** 4
   const lowAirwayWeight = (1 - airwayInvolvement) ** 3
-  const genericSpikeGain = severityGain * (1 - 0.45 * severityGain)
+  const genericSpikeGain = severityGain * (1 - 0.65 * severityGain)
   const genericEarlySpikeReliefLs =
     0.35 * sizeScale * lowAirwayWeight * genericSpikeGain * genericOpeningWeight
 
