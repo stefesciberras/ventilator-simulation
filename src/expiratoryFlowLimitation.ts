@@ -58,25 +58,23 @@ export function applyExpiratoryFlowLimitation(
   const airwayVolumeAboveElbowL = Math.max(0, volumeL - airwayElbowVolumeL)
 
   // Low-Rexp EFL receives a brief, high-volume opening spike. The high-volume
-  // gate is deliberately steep: after only the first few tens of millilitres
-  // have emptied, the extra allowance collapses and the choke-flow envelope
-  // governs the rest of expiration. This creates the reference-like rapid
-  // spike -> elbow -> flatter limb without materially increasing total emptying.
+  // gate is deliberately very steep: it is strong at expiration onset but
+  // collapses over the first few tens of millilitres, so the visible waveform
+  // shows the classic rapid spike -> elbow -> flatter flow-limited limb.
   const genericElbowVolumeL = referenceTidalVolumeL * 0.78
   const genericHighVolumeWidthL = Math.max(referenceTidalVolumeL * 0.36, 0.07)
   const genericVolumeAboveElbowL = Math.max(0, volumeL - genericElbowVolumeL)
   const genericHighVolumeFraction = clamp(genericVolumeAboveElbowL / genericHighVolumeWidthL, 0, 1)
-  const genericHighVolumeWeight = genericHighVolumeFraction ** 6
+  const genericHighVolumeWeight = genericHighVolumeFraction ** 12
 
   // Spike prominence is not proportional to EFL severity. At EFL 1.0 the choke
-  // point dominates earlier, so the initial spike remains visible but is smaller
-  // than at intermediate/marked EFL. The generic low-Rexp component falls off
-  // cubically with airway involvement so COPD/asthma remain governed by their
-  // airway-specific dog-leg mechanics rather than receiving both spike models.
+  // point dominates earlier, so the opening spike remains visible but does not
+  // erase the severe low-flow limb. The generic component falls away cubically
+  // with airway involvement so COPD/asthma retain their airway-specific dog-leg.
   const genericSpikeGain = severityGain * (1 - 0.8 * severityGain)
   const lowAirwayWeight = (1 - airwayInvolvement) ** 3
   const genericEarlySpikeReliefLs =
-    lowAirwayWeight * genericSpikeGain * 3.2 * genericVolumeAboveElbowL * genericHighVolumeWeight
+    lowAirwayWeight * genericSpikeGain * 5.0 * genericVolumeAboveElbowL * genericHighVolumeWeight
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * airwayVolumeAboveElbowL
   const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
