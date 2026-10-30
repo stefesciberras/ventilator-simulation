@@ -51,50 +51,37 @@ export function applyExpiratoryFlowLimitation(
   const sizeScale = clamp(Math.sqrt(pbw / 66), 0.55, 1.35)
   const volumeL = Math.max(volumeAboveSetPeepL, 0)
 
-  // Separate airway calibre from EFL severity. The paper found early EFL mainly
-  // in patients with airway involvement and late EFL mainly in non-airway
-  // disease. Rexp therefore biases morphology, while the EFL score retains its
-  // own independent effect on the choke-flow envelope.
   const airwayInvolvement = clamp((Math.max(patient.expiratoryResistance, 0) - 10) / 30, 0, 1)
 
-  // Preserve a genuinely mild lower end of the five-position control. The
-  // previous envelope approached only ~0.73 L/s at 500 mL even as severity
-  // approached zero, so the first non-zero step behaved like substantial EFL.
-  // The revised high-flow endpoint starts above normal passive expiratory demand
-  // and converges non-linearly onto the same severe envelope at severity 1.0.
   const severityGain = Math.pow(severity, 1.4)
   const lowVolumeCeilingLs = Math.max(0.04, (0.55 - 0.50 * severityGain) * sizeScale)
   const volumeSlopePerSecond = Math.max(0.22, (1.40 - 1.13 * severityGain) * sizeScale)
 
-  // In airway disease, dynamic compression should remain distinct from the
-  // linear expiratory-resistance term. Otherwise high Rexp can reduce requested
-  // flow below the EFL ceiling and make even a severe EFL setting do nothing.
   const airwayCollapseFactor = clamp(1 - 1.8 * airwayInvolvement * severityGain, 0.35, 1)
 
-  // Preserve the physiologic early expiratory spike/elbow at all EFL severities,
-  // not only when Rexp is high. Dynamic airway compression is not instantaneous:
-  // at high lung volume the opening phase of expiration can briefly carry more
-  // flow before the choke point dominates. As volume falls through the elbow,
-  // this relief disappears rapidly and the breath settles onto the flatter
-  // maximum-expiratory-flow envelope. Airway involvement accentuates the effect.
+  // Preserve a physiologic early expiratory spike/elbow at all EFL severities.
+  // The generic component fills in the missing spike when Rexp is low, but it
+  // fades out as airway involvement rises so established COPD/asthma dog-leg
+  // morphology remains governed by the airway-specific component.
   const referenceTidalVolumeL = clamp((pbw * 7) / 1000, 0.18, 0.75)
   const elbowVolumeL = referenceTidalVolumeL * (0.65 + 0.20 * airwayInvolvement)
   const volumeAboveElbowL = Math.max(0, volumeL - elbowVolumeL)
-  const genericEarlySpikeReliefLs = severityGain * 1.25 * volumeAboveElbowL
+  const genericEarlySpikeReliefLs =
+    (1 - airwayInvolvement) * severityGain * 1.25 * volumeAboveElbowL
   const airwayEarlySpikeReliefLs =
     airwayInvolvement * severityGain * (0.75 + 0.35 * airwayInvolvement) * volumeAboveElbowL
+  const earlyFlowSpikeReliefLs = genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
 
   const baseCeilingLs = (lowVolumeCeilingLs + volumeSlopePerSecond * volumeL) * airwayCollapseFactor
-  const ceilingLs = baseCeilingLs + genericEarlySpikeReliefLs + airwayEarlySpikeReliefLs
+  const ceilingLs = baseCeilingLs + earlyFlowSpikeReliefLs
 
   const requestedMagnitude = -requestedFlowLs
   if (requestedMagnitude <= 1e-9) {
     return { flowLs: requestedFlowLs, limited: false, ceilingLs }
   }
 
-  // Smoothly approach the maximum-expiratory-flow envelope with a monotone
-  // generalised soft minimum. This preserves the v0.83.0.63 fix that removed
-  // the non-physiological mid-expiratory hump created by the old smoothstep band.
+  // Retain the monotone soft cap introduced in v0.83.0.63 so the early elbow
+  // cannot reintroduce the artificial mid-expiratory hump/shoulder.
   const blendWidth = Math.max(ceilingLs * 0.15, 0.015)
   const relativeBlendWidth = clamp(blendWidth / Math.max(ceilingLs, 1e-6), 0.08, 0.4)
   const softCapPower = clamp(2 / relativeBlendWidth, 8, 20)
