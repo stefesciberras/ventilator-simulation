@@ -37,6 +37,13 @@ interface SharedScenarioRuntimePanelProps {
   onClose?: () => void
 }
 
+function formatCountdown(seconds: number | undefined) {
+  const safe = Math.max(0, Math.ceil(seconds ?? 0))
+  const minutes = Math.floor(safe / 60)
+  const remainder = safe % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
 export function SharedScenarioRuntimePanel({
   scenarioName,
   stageName,
@@ -153,7 +160,14 @@ export function SharedScenarioRuntimePanel({
           <span>{branch.label}</span>{branch.targetLabel && <em>→ {branch.targetLabel}</em>}
         </button>)}
       </div>}
-      {triggerInfo.map((trigger) => <div className="shared-scenario-trigger-row informational" key={trigger.id}>
+      {triggerInfo.map((trigger) => trigger.kind === 'time' ? <div className={`shared-scenario-trigger-row informational time ${trigger.paused ? 'paused' : ''}`} key={trigger.id}>
+        <span>{trigger.label}</span>
+        <div className="shared-scenario-time-trigger-controls">
+          <time aria-label={`${formatCountdown(trigger.remainingSeconds)} remaining`}>{formatCountdown(trigger.remainingSeconds)}</time>
+          {trigger.detail && <em>{trigger.detail}</em>}
+          {trigger.onTogglePause && <button type="button" onClick={trigger.onTogglePause}>{trigger.paused ? 'Continue' : 'Pause'}</button>}
+        </div>
+      </div> : <div className="shared-scenario-trigger-row informational" key={trigger.id}>
         <span>{trigger.label}</span>
         <em>{trigger.detail}</em>
       </div>)}
