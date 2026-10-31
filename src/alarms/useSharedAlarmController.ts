@@ -7,11 +7,17 @@ import { selectDisplayedAlarmKey } from './alarmDisplayPriority'
 export type SharedAlarmPriority = 'warning' | 'critical'
 export type SharedAlarmDisplayLevel = 'grey' | 'yellow' | 'red' | null
 export type SharedAlarmAudibleLevel = 'yellow' | 'red' | null
+export type SharedAlarmPredicate = boolean | (() => boolean)
 
 export interface SharedAlarmEvaluation {
   key: string
   label: string
-  active: boolean
+  active: SharedAlarmPredicate
+  /**
+   * Product/device eligibility gate. Use this when physiology may exist even
+   * though the corresponding monitor/sensor is not currently displayed.
+   */
+  eligible?: SharedAlarmPredicate
   priority?: SharedAlarmPriority
   immediateCritical?: boolean
   visible?: boolean
@@ -41,6 +47,11 @@ function formatRemaining(seconds: number) {
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`
 }
 
+function resolveAlarmPredicate(predicate: SharedAlarmPredicate | undefined, fallback: boolean): boolean {
+  if (predicate == null) return fallback
+  return typeof predicate === 'function' ? predicate() : predicate
+}
+
 export function useSharedAlarmController({
   role,
   sessionId,
@@ -66,16 +77,31 @@ export function useSharedAlarmController({
     return () => window.clearInterval(timer)
   }, [])
 
+  /**
+   * Resolve dynamic alarm predicates on the shared alarm clock. This lets a
+   * product gate an alarm against live device/display state without coupling
+   * the shared controller to product-specific monitor controls.
+   */
+  const resolvedEvaluations = useMemo(() => evaluations.map((evaluation) => {
+    const eligible = resolveAlarmPredicate(evaluation.eligible, true)
+    const visible = evaluation.visible !== false && eligible
+    return {
+      ...evaluation,
+      active: visible && resolveAlarmPredicate(evaluation.active, false),
+      visible,
+    }
+  }), [clock, evaluations])
+
   useEffect(() => {
     const now = Date.now()
     setLifecycle((current) => {
       let changed = false
       const next = { ...current }
-      const currentKeys = new Set(evaluations.map((evaluation) => evaluation.key))
+      const currentKeys = new Set(resolvedEvaluations.map((evaluation) => evaluation.key))
       for (const key of Object.keys(next)) {
         if (!currentKeys.has(key)) { delete next[key]; changed = true }
       }
-      for (const evaluation of evaluations) {
+      for (const evaluation of resolvedEvaluations) {
         if (evaluation.visible === false) {
           if (next[evaluation.key]) { delete next[evaluation.key]; changed = true }
           continue
@@ -93,19 +119,19 @@ export function useSharedAlarmController({
       }
       return changed ? next : current
     })
-  }, [evaluations])
+  }, [resolvedEvaluations])
 
   useEffect(() => {
     if (role !== 'standalone' && !sessionId) {
       loggedActiveAlarmsRef.current = new Map(
-        evaluations.filter((evaluation) => evaluation.visible !== false && evaluation.active).map((evaluation) => [evaluation.key, evaluation.label]),
+        resolvedEvaluations.filter((evaluation) => evaluation.visible !== false && evaluation.active).map((evaluation) => [evaluation.key, evaluation.label]),
       )
       return
     }
 
     const previous = loggedActiveAlarmsRef.current
     const next = new Map<string, string>()
-    for (const evaluation of evaluations) {
+    for (const evaluation of resolvedEvaluations) {
       if (evaluation.visible === false) continue
       if (evaluation.active) {
         next.set(evaluation.key, evaluation.label)
@@ -129,7 +155,7 @@ export function useSharedAlarmController({
       }
     }
     for (const [key, label] of previous) {
-      if (!evaluations.some((evaluation) => evaluation.key === key && evaluation.visible !== false)) {
+      if (!resolvedEvaluations.some((evaluation) => evaluation.key === key && evaluation.visible !== false)) {
         void recordSessionLogEvent({
           sessionId: sessionId ?? undefined,
           category: 'alarm',
@@ -140,7 +166,7 @@ export function useSharedAlarmController({
       }
     }
     loggedActiveAlarmsRef.current = next
-  }, [evaluations, role, sessionId])
+  }, [resolvedEvaluations, role, sessionId])
 
   useEffect(() => {
     setLifecycle((current) => {
@@ -153,12 +179,12 @@ export function useSharedAlarmController({
     })
   }, [clock, retainedMs])
 
-  const evaluationByKey = useMemo(() => new Map(evaluations.map((evaluation) => [evaluation.key, evaluation])), [evaluations])
-  const activeKeys = useMemo(() => evaluations.filter((evaluation) => evaluation.visible !== false && evaluation.active).map((evaluation) => evaluation.key), [evaluations])
+  const evaluationByKey = useMemo(() => new Map(resolvedEvaluations.map((evaluation) => [evaluation.key, evaluation])), [resolvedEvaluations])
+  const activeKeys = useMemo(() => resolvedEvaluations.filter((evaluation) => evaluation.visible !== false && evaluation.active).map((evaluation) => evaluation.key), [resolvedEvaluations])
   const resolvedYellowKeys = useMemo(() => Object.entries(lifecycle).filter(([key, entry]) => evaluationByKey.get(key)?.visible !== false && entry.resolvedAt != null && clock - entry.resolvedAt < resolvedWarningMs).map(([key]) => key), [clock, evaluationByKey, lifecycle, resolvedWarningMs])
   const greyKeys = useMemo(() => Object.entries(lifecycle).filter(([key, entry]) => evaluationByKey.get(key)?.visible !== false && entry.resolvedAt != null && clock - entry.resolvedAt >= resolvedWarningMs && clock - entry.resolvedAt < retainedMs && !entry.acknowledged).map(([key]) => key), [clock, evaluationByKey, lifecycle, resolvedWarningMs, retainedMs])
 
-  const criticalEscalated = evaluations.some((evaluation) => {
+  const criticalEscalated = resolvedEvaluations.some((evaluation) => {
     if (!evaluation.active || evaluation.visible === false || evaluation.priority !== 'critical') return false
     if (evaluation.immediateCritical) return true
     const entry = lifecycle[evaluation.key]
@@ -169,8 +195,8 @@ export function useSharedAlarmController({
   const level: SharedAlarmDisplayLevel = audibleLevel ?? (greyKeys.length ? 'grey' : null)
   const visibleKeys = useMemo(() => new Set([...activeKeys, ...resolvedYellowKeys, ...greyKeys]), [activeKeys, greyKeys, resolvedYellowKeys])
   const displayedAlarmKey = useMemo(
-    () => selectDisplayedAlarmKey(evaluations, lifecycle, visibleKeys),
-    [evaluations, lifecycle, visibleKeys],
+    () => selectDisplayedAlarmKey(resolvedEvaluations, lifecycle, visibleKeys),
+    [resolvedEvaluations, lifecycle, visibleKeys],
   )
   const displayedAlarm = displayedAlarmKey == null ? null : evaluationByKey.get(displayedAlarmKey)
   const labels = displayedAlarm ? [displayedAlarm.label] : []
