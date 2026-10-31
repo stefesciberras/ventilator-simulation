@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { LOPPJUSIM_OPEN_SCENARIOS_EVENT } from '../../core/platformEvents'
 
 export interface InstructorScenarioLibraryItem<TScenario> {
   id: string
@@ -28,10 +29,6 @@ export interface InstructorScenarioLibraryControllerProps<TScenario> {
   initialTab?: 'static' | 'dynamic'
 }
 
-function ScenarioIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /><path d="M8 9h8M8 12h5M8 15h7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M8 3.5h8v4H8z" fill="#0e171c" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg>
-}
-
 export function InstructorScenarioLibraryController<TScenario>(props: InstructorScenarioLibraryControllerProps<TScenario>) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'static' | 'dynamic'>(props.initialTab ?? 'static')
@@ -43,8 +40,14 @@ export function InstructorScenarioLibraryController<TScenario>(props: Instructor
   }, { static: 0, dynamic: 0 }), [props.items, props.scenarioKind])
   const filtered = useMemo(() => props.items.filter((item) => props.scenarioKind(item.scenario) === tab), [props.items, props.scenarioKind, tab])
   const openLibrary = () => { setTab(props.initialTab ?? 'static'); setOpen(true); void props.onRefresh() }
+
+  useEffect(() => {
+    const handleOpen = () => openLibrary()
+    window.addEventListener(LOPPJUSIM_OPEN_SCENARIOS_EVENT, handleOpen)
+    return () => window.removeEventListener(LOPPJUSIM_OPEN_SCENARIOS_EVENT, handleOpen)
+  })
+
   return <>
-    <button type="button" className="top-account-button scenario-top-button" title="Instructor scenarios" aria-label="Open instructor scenarios" onClick={openLibrary}><ScenarioIcon /></button>
     {open && <div className="account-dialog-backdrop" onMouseDown={() => setOpen(false)}>
       <section className="account-dialog scenario-manager-dialog" role="dialog" aria-modal="true" aria-label="Instructor scenarios" onMouseDown={(event) => event.stopPropagation()}>
         <div className="account-dialog-heading"><div><span>Instructor tools</span><h2>Scenarios</h2></div><button type="button" className="account-close-button" onClick={() => setOpen(false)}>×</button></div>
