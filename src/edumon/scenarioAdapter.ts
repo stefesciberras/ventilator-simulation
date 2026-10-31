@@ -1,4 +1,6 @@
+import { activateAction } from '../edusim/actions/ActionRuntime'
 import type { MonitorMeasurements } from './types'
+import { resolveEdusimActionDefinition, type EdusimActionEnvironment } from './actionLibrary'
 import type { EdumonScenarioMetric, EdumonScenarioSnapshot, EdumonScenarioTrigger } from './scenarioTypes'
 import type {
   TeachingScenarioRuntimeAdapter,
@@ -58,6 +60,11 @@ function readSnapshotPath(snapshot: unknown, path: string): unknown {
   return current
 }
 
+function currentActionEnvironment(): EdusimActionEnvironment {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/edumon/icu')) return 'edumon-icu'
+  return 'edumon-ana'
+}
+
 /** Product adapter for the shared EDUSIM scenario sequencer. */
 export function createEdumonScenarioRuntimeAdapter(
   applySnapshot: (
@@ -67,6 +74,16 @@ export function createEdumonScenarioRuntimeAdapter(
 ): TeachingScenarioRuntimeAdapter<EdumonScenarioSnapshot, EdumonScenarioTrigger, EdumonScenarioRuntimeContext> {
   return {
     applyStage: applySnapshot,
+    forceTrigger: async (trigger, context) => {
+      // Executable Drugs / Events must go through the exact same ActionRuntime
+      // path as the normal ACTIONS control so physiology and event logging are
+      // identical. Other trigger types are observational and need no domain
+      // mutation before the core performs the forced transition.
+      if (trigger.type !== 'edusim-action') return
+      const definition = await resolveEdusimActionDefinition(trigger.actionId, currentActionEnvironment())
+      if (!definition) throw new Error(`Action ${trigger.actionId} is not available in the local action library.`)
+      activateAction(definition, context.simulationTime)
+    },
     triggerMatches: (trigger, context, stage) => {
       if (trigger.type === 'manual') return false
       if (trigger.type === 'question-any') return context.questionAnswered === true
