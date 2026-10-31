@@ -15,7 +15,8 @@ interface SharedTeachingTabProps {
   host: TeachingHostAdapter
   sessionId: string | null
   candidateCount: number
-  sessionPanel: ReactNode
+  /** @deprecated Session management now belongs in the dedicated Sessions menu. */
+  sessionPanel?: ReactNode
   scenarioMediaIds: string[]
   onScenarioMediaIdsChange: (ids: string[]) => void
   prompts: TeachingPromptsController
@@ -32,7 +33,6 @@ export function SharedTeachingTab({
   host,
   sessionId,
   candidateCount,
-  sessionPanel,
   scenarioMediaIds,
   onScenarioMediaIdsChange,
   prompts,
@@ -44,7 +44,6 @@ export function SharedTeachingTab({
 }: SharedTeachingTabProps) {
   return (
     <div className="shared-teaching-tab">
-      {sessionPanel}
       {role !== 'candidate' && activeScenario}
       {role !== 'candidate' && !instructorAuthenticated ? (
         <div className="teaching-more-features-note">Instructor account needed for more features</div>
