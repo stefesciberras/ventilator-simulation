@@ -40,13 +40,31 @@ function clearLaunchParameters() {
   url.searchParams.delete('session')
   url.searchParams.delete('mode')
   url.searchParams.delete('scenario')
+  url.searchParams.delete('assignment')
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
+async function endVisibleSession() {
+  const endButton = [...document.querySelectorAll<HTMLButtonElement>('.session-danger-button')]
+    .find((button) => /end session/i.test(button.textContent ?? ''))
+  if (endButton && !endButton.disabled) {
+    endButton.click()
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 700))
+    return
+  }
+  const leaveButton = [...document.querySelectorAll<HTMLButtonElement>('.candidate-session-panel .session-secondary-button')]
+    .find((button) => /leave session/i.test(button.textContent ?? ''))
+  if (leaveButton && !leaveButton.disabled) {
+    leaveButton.click()
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 400))
+  }
 }
 
 export async function resetSimulation(productLabel: string) {
   if (resetInProgress || typeof window === 'undefined') return
   resetInProgress = true
   try {
+    await endVisibleSession()
     await Promise.allSettled([...handlers].map((handler) => Promise.resolve(handler())))
     try {
       const actionRuntime = await import('../edusim/actions/ActionRuntime')
