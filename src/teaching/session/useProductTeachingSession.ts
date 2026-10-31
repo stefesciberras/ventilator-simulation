@@ -385,7 +385,11 @@ export function useProductTeachingSession<TState>({
     if (simulationMutationTimerRef.current != null) window.clearTimeout(simulationMutationTimerRef.current)
   }, [])
 
-  const startInstructor = () => core.startInstructor({ productId, state: withRuntimeMode(stateRef.current, preferredRuntimeMode) })
+  const startInstructor = (runtimeModeOverride?: ProductSessionRuntimeMode) => {
+    const nextMode = runtimeModeOverride ?? preferredRuntimeMode
+    if (runtimeModeOverride && runtimeModeOverride !== preferredRuntimeMode) setPreferredRuntimeMode(runtimeModeOverride)
+    return core.startInstructor({ productId, state: withRuntimeMode(stateRef.current, nextMode) })
+  }
 
   return { ...core, startInstructor, runtimeMode, preferredRuntimeMode, setPreferredRuntimeMode, localRuntimeConnection }
 }

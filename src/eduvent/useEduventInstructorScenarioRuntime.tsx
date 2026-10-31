@@ -292,14 +292,14 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
     setActivePreset(restoredPreset)
   }, [activePreset, selfDirectedRun, runtime.scenario, runtime.status])
 
-  const start = async (preset: InstructorPresetRow) => {
+  const start = async (preset: InstructorPresetRow, launchOptions?: { createInstructorSession?: boolean }) => {
     const definition = definitionFor(preset)
     if (!definition.stages.length) return
     setActivePreset(preset)
     setSelfDirectedRun(null)
     selfDirectedRef.current = false
     setQuestionState({ answered: false, correct: false })
-    if (options.role === 'standalone') {
+    if (options.role === 'standalone' && launchOptions?.createInstructorSession !== false) {
       await options.onStartInstructorSession(applyDynamicStage(options.currentScenario, definition.stages[0].snapshot))
     }
     await runtime.start(definition, options.role === 'standalone' ? 0 : options.scenarioElapsedSeconds)

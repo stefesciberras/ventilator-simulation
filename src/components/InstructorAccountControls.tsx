@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import type { SessionRole } from '../session/useTeachingSession'
+import { savePreferredLocalSessionRuntimeMode } from '../session/localRuntimeTransport'
 import type { PhysiologicalMeasurements } from '../physiologyMeasurements'
 import type { SessionMemberRow } from '../session/supabase'
 import { asStaticScenario, type DynamicScenarioActionId, type InstructorPresetRow, type InstructorScenarioSnapshot } from '../instructorAccount'
@@ -162,6 +163,11 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const scenarioRuntime = useEduventInstructorScenarioRuntime({ role, sessionId, currentScenario, onLoadScenario, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onDynamicScenarioStarted, onScenarioDiagnosticChange, scenarioActionEvent })
   const dynamicPresets = useMemo(() => library.items.filter((preset) => preset.scenario.kind === 'dynamic'), [library.items])
 
+  const loadStatic = (preset: InstructorPresetRow) => {
+    onLoadScenario(preset.scenario)
+    onStaticScenarioLoaded?.(preset.name)
+  }
+
   useEffect(() => {
     if (!account || role !== 'instructor') return
     let pendingScenarioId: string | null = null
@@ -184,19 +190,32 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
     const url = new URL(window.location.href)
     const requested = url.searchParams.get('scenario')
     if (!requested || requestedScenarioHandledRef.current === requested) return
-    const preset = dynamicPresets.find((item) => item.id === requested)
+    const preset = library.items.find((item) => item.id === requested)
     if (!preset) return
+
+    const requestedMode = url.searchParams.get('mode')
+    const launchMode = requestedMode === 'standalone' || requestedMode === 'simulation' || requestedMode === 'teaching' ? requestedMode : null
     requestedScenarioHandledRef.current = requested
-    void scenarioRuntime.start(preset).finally(() => {
+
+    const launch = async () => {
+      if (launchMode === 'simulation' || launchMode === 'teaching') savePreferredLocalSessionRuntimeMode(launchMode)
+
+      if (preset.scenario.kind === 'dynamic') {
+        await scenarioRuntime.start(preset, { createInstructorSession: launchMode !== 'standalone' })
+      } else if (launchMode === 'simulation' || launchMode === 'teaching') {
+        await onStartInstructorSession(preset.scenario)
+        onStaticScenarioLoaded?.(preset.name)
+      } else {
+        loadStatic(preset)
+      }
+    }
+
+    void launch().finally(() => {
       url.searchParams.delete('scenario')
+      url.searchParams.delete('mode')
       window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
     })
-  }, [account, role, dynamicPresets, scenarioRuntime])
-
-  const loadStatic = (preset: InstructorPresetRow) => {
-    onLoadScenario(preset.scenario)
-    onStaticScenarioLoaded?.(preset.name)
-  }
+  }, [account, role, library.items, scenarioRuntime, onStartInstructorSession])
 
   const requestTeachingDynamicFreshStart = async (preset: InstructorPresetRow) => {
     if (!sessionId) return scenarioRuntime.start(preset)

@@ -9,6 +9,11 @@ import {
   type InstructorPresetRow,
 } from '../instructorAccount'
 import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
+import {
+  LOPPJUSIM_RUNTIME_MODE_CONTRACTS,
+  normalizeSupportedRuntimeModes,
+  type LoppjuSimRuntimeMode,
+} from '../core/runtimeModes'
 import { createDefaultVentilatorScenario } from './modules/ventilator/defaultScenario'
 import { VentilatorScenarioEditor } from './modules/ventilator/VentilatorScenarioEditor'
 import { EdumonScenarioEditor } from './modules/edumon/EdumonScenarioEditor'
@@ -24,8 +29,16 @@ import './scenarioBuilder.css'
 import './clinicalSections.css'
 import './scenarioStudioLight.css'
 import './scenarioStudioCleanup.css'
+import './scenarioLaunch.css'
 
 type StudioResource = 'scenarios' | 'profiles' | 'organisation'
+
+type PendingScenarioLaunch = {
+  product: ScenarioProductId
+  id: string
+  name: string
+  modes: LoppjuSimRuntimeMode[]
+}
 
 function moduleIdFromProduct(product: string | null) {
   if (product === 'anaesth') return 'anaesth'
@@ -40,6 +53,12 @@ function productFromModuleId(moduleId: string): ScenarioProductId {
   return 'mv'
 }
 
+function supportedModesForScenario(scenario: unknown) {
+  if (!scenario || typeof scenario !== 'object') return normalizeSupportedRuntimeModes()
+  const modes = (scenario as { supportedModes?: readonly unknown[] }).supportedModes
+  return normalizeSupportedRuntimeModes(modes)
+}
+
 export function ScenarioBuilderApp() {
   const [account, setAccount] = useState<User | null>(null)
   const [presets, setPresets] = useState<InstructorPresetRow[]>([])
@@ -51,6 +70,7 @@ export function ScenarioBuilderApp() {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [pendingLaunch, setPendingLaunch] = useState<PendingScenarioLaunch | null>(null)
   const defaultScenario = useMemo(() => createDefaultVentilatorScenario(), [])
   const requestedScenarioId = useMemo(() => new URLSearchParams(window.location.search).get('scenario'), [])
 
@@ -116,14 +136,24 @@ export function ScenarioBuilderApp() {
     }
   }
 
-  const startProductScenario = (product: ScenarioProductId, id: string) => {
+  const startProductScenario = (product: ScenarioProductId, id: string, mode: LoppjuSimRuntimeMode) => {
     const url = new URL(SCENARIO_PRODUCTS[product].route, window.location.origin)
     url.searchParams.set('scenario', id)
+    url.searchParams.set('mode', mode)
     window.open(url.toString(), '_blank', 'noopener,noreferrer')
   }
 
-  const startScenario = (preset: InstructorPresetRow) => startProductScenario(preset.product ?? 'mv', preset.id)
-  const startEdumonScenario = (row: ProductScenarioRow<EdumonStoredScenario>) => startProductScenario(row.product, row.id)
+  const requestProductScenarioLaunch = (product: ScenarioProductId, id: string, name: string, scenario: unknown) => {
+    const modes = supportedModesForScenario(scenario)
+    if (modes.length === 1) {
+      startProductScenario(product, id, modes[0])
+      return
+    }
+    setPendingLaunch({ product, id, name, modes })
+  }
+
+  const startScenario = (preset: InstructorPresetRow) => requestProductScenarioLaunch(preset.product ?? 'mv', preset.id, preset.name, preset.scenario)
+  const startEdumonScenario = (row: ProductScenarioRow<EdumonStoredScenario>) => requestProductScenarioLaunch(row.product, row.id, row.name, row.scenario)
 
   const selectModule = (nextModuleId: string) => {
     setModuleId(nextModuleId)
@@ -139,6 +169,26 @@ export function ScenarioBuilderApp() {
   return (
     <main className="scenario-builder-app">
       <StudioUiEnhancements />
+      {pendingLaunch && <div className="scenario-builder-launch-menu" role="dialog" aria-modal="false" aria-label="Choose simulator mode">
+        <div className="scenario-builder-launch-menu-heading">
+          <div><span>Open in simulator</span><strong>{pendingLaunch.name}</strong></div>
+          <button type="button" onClick={() => setPendingLaunch(null)} aria-label="Close mode chooser">×</button>
+        </div>
+        <small>Choose how this scenario should run.</small>
+        <div className="scenario-builder-launch-mode-list">
+          {pendingLaunch.modes.map((mode) => {
+            const contract = LOPPJUSIM_RUNTIME_MODE_CONTRACTS[mode]
+            return <button key={mode} type="button" onClick={() => {
+              const launch = pendingLaunch
+              setPendingLaunch(null)
+              startProductScenario(launch.product, launch.id, mode)
+            }}>
+              <strong>{contract.label}</strong>
+              <span>{contract.description}</span>
+            </button>
+          })}
+        </div>
+      </div>}
       <SimulationAboutDialog
         open={aboutOpen}
         productLabel="LoppjuSIM-Studio"

@@ -1,0 +1,86 @@
+.scenario-builder-launch-menu {
+  position: fixed;
+  top: 92px;
+  right: 28px;
+  z-index: 1200;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid #cfd4dc;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.18);
+  color: #20242b;
+}
+
+.scenario-builder-launch-menu > small {
+  display: block;
+  margin: 3px 0 10px;
+  color: #687080;
+}
+
+.scenario-builder-launch-menu-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scenario-builder-launch-menu-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.scenario-builder-launch-menu-heading span {
+  color: #737b88;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scenario-builder-launch-menu-heading strong {
+  font-size: 0.98rem;
+}
+
+.scenario-builder-launch-menu-heading > button {
+  border: 0;
+  background: transparent;
+  color: #687080;
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.scenario-builder-launch-mode-list {
+  display: grid;
+  gap: 7px;
+}
+
+.scenario-builder-launch-mode-list > button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #d7dbe2;
+  border-radius: 8px;
+  background: #f8f9fb;
+  color: #20242b;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scenario-builder-launch-mode-list > button:hover {
+  border-color: #9ca6b6;
+  background: #f0f2f5;
+}
+
+.scenario-builder-launch-mode-list > button strong {
+  font-size: 0.9rem;
+}
+
+.scenario-builder-launch-mode-list > button span {
+  color: #687080;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}

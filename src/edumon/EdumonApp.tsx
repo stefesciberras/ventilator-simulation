@@ -15,7 +15,7 @@ import { SimulationWorkspaceShell } from '../components/SimulationWorkspaceShell
 import { SimulationConsoleShell } from '../components/SimulationConsoleShell'
 import { useSimulationDisplayControls } from '../components/useSimulationDisplayControls'
 import { useScreenWakeLock } from '../useScreenWakeLock'
-import { SharedBasicSessionPanel, ProductCandidateTelemetry, buildProductInstructorDashboard, useProductTeachingSession } from '../teaching/session'
+import { SharedBasicSessionPanel, ProductCandidateTelemetry, buildProductInstructorDashboard, useProductTeachingSession, type ProductSessionRuntimeMode } from '../teaching/session'
 import { useSharedAlarmController } from '../alarms/useSharedAlarmController'
 import { SharedAlarmBanner } from '../alarms/SharedAlarmBanner'
 import { DEFAULT_EDUMON_ALARM_LIMITS, evaluateEdumonAlarms, type EdumonAlarmLimits } from './alarmDefinitions'
@@ -244,6 +244,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [topPanel, setTopPanel] = useState<'scenario' | 'about' | null>(null)
   const [selectedSavedScenarioId, setSelectedSavedScenarioId] = useState('')
   const launchedScenarioRef = useRef<string | null>(null)
+  const [pendingStudioSessionMode, setPendingStudioSessionMode] = useState<ProductSessionRuntimeMode | null>(null)
   const [scenarioQuestionState, setScenarioQuestionState] = useState({ answered: false, correct: false })
   const [scenarioMediaState, setScenarioMediaState] = useState({ ended: false, acknowledged: false })
   const [scenarioActionEvent, setScenarioActionEvent] = useState<{ actionId: string; sequence: number; simulationTime: number } | null>(null)
@@ -424,12 +425,45 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   }
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('scenario')
+    const params = new URLSearchParams(window.location.search)
+    const requested = params.get('scenario')
     if (!requested || !instructorAuthenticated || teachingSession.role !== 'standalone' || launchedScenarioRef.current === requested) return
     if (!savedScenarios.some((row) => row.id === requested)) return
+    const requestedMode = params.get('mode')
+    const sessionMode: ProductSessionRuntimeMode | null = requestedMode === 'simulation' || requestedMode === 'teaching' ? requestedMode : null
     launchedScenarioRef.current = requested
-    void loadSavedScenario(requested)
+    if (sessionMode) teachingSession.setPreferredRuntimeMode(sessionMode)
+    void loadSavedScenario(requested).then((loaded) => {
+      if (!loaded) return
+      if (sessionMode) {
+        setPendingStudioSessionMode(sessionMode)
+        return
+      }
+      const url = new URL(window.location.href)
+      url.searchParams.delete('scenario')
+      url.searchParams.delete('mode')
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+    })
   }, [instructorAuthenticated, teachingSession.role, savedScenarios])
+
+  useEffect(() => {
+    if (!pendingStudioSessionMode || teachingSession.role !== 'standalone' || scenarioRuntime.status !== 'running') return
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      void teachingSession.startInstructor(pendingStudioSessionMode).then((row) => {
+        if (cancelled || !row) return
+        setPendingStudioSessionMode(null)
+        const url = new URL(window.location.href)
+        url.searchParams.delete('scenario')
+        url.searchParams.delete('mode')
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+      })
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [pendingStudioSessionMode, teachingSession.role, scenarioRuntime.status])
 
   const selfDirected = useSharedSelfDirectedScenario<EdumonStoredScenario>({
     product: scenarioProduct,
