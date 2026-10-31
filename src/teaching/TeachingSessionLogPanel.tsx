@@ -19,9 +19,10 @@ import type { TeachingRole } from './types'
 import './TeachingSessionLogPanel.css'
 
 interface TeachingSessionLogPanelProps { productId: string; sessionId: string | null; role: TeachingRole }
-interface DisplayRow { key: string; entry: SessionLogEntry; subject: string; message: string }
+interface DisplayRow { key: string; entry: SessionLogEntry; subject: string; message: string; settingChange?: SessionLogStateChange; settingGroupKey?: string }
 interface DragState { pointerId: number; startX: number; startY: number; originX: number; originY: number; baseLeft: number; baseTop: number; width: number; height: number }
 
+const CONTINUOUS_SETTING_SETTLE_MS = 800
 const FRIENDLY_SETTING_NAMES: Record<string, string> = {
   fio2: 'FiO₂', peep: 'PEEP', rate: 'rate', tidalVolume: 'tidal volume', inspiratoryTime: 'inspiratory time', inspiratoryFlow: 'inspiratory flow', pressureControl: 'pressure control', pressureSupport: 'pressure support', mode: 'mode', heartRate: 'heart rate', systolicPressure: 'systolic pressure', diastolicPressure: 'diastolic pressure', spo2: 'SpO₂', temperatureC: 'temperature', simulationPaused: 'simulation pause', simulationSpeed: 'simulation speed', ventilatorMode: 'ventilator mode', ventilatorSetRate: 'ventilator rate', ventilatorSetTidalVolumeMl: 'tidal volume', peepCmH2O: 'PEEP',
 }
@@ -29,8 +30,10 @@ const FRIENDLY_SETTING_NAMES: Record<string, string> = {
 function safeFilePart(value: string) { return value.replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'edusim' }
 function csvCell(value: unknown): string { const text = typeof value === 'string' ? value : JSON.stringify(value ?? ''); return `"${text.replace(/"/g, '""')}"` }
 function mergeEntries(current: SessionLogEntry[], incoming: SessionLogEntry[]): SessionLogEntry[] { const byId = new Map<number, SessionLogEntry>(); for (const entry of current) byId.set(entry.id, entry); for (const entry of incoming) byId.set(entry.id, entry); return [...byId.values()].sort((a, b) => a.id - b.id) }
+function entryTimeMs(entry: SessionLogEntry): number { const value = new Date(entry.client_occurred_at || entry.created_at).getTime(); return Number.isFinite(value) ? value : 0 }
 function displayTime(entry: SessionLogEntry): string { const date = new Date(entry.client_occurred_at || entry.created_at); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) }
 function shortValue(value: unknown): string { if (typeof value === 'number') return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100); if (typeof value === 'boolean') return value ? 'on' : 'off'; if (value == null) return '—'; if (typeof value === 'string') return value; try { return JSON.stringify(value) } catch { return String(value) } }
+function sameSettingValue(a: unknown, b: unknown): boolean { if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) <= 1e-6; if (Object.is(a, b)) return true; try { return JSON.stringify(a) === JSON.stringify(b) } catch { return false } }
 function settingName(change: SessionLogStateChange): string { const leaf = change.path.split('.').pop() ?? change.path; return FRIENDLY_SETTING_NAMES[leaf] ?? leaf.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase() }
 function logicalActorRole(entry: SessionLogEntry): SessionLogActorRole {
   const explicit = entry.details?._originRole
@@ -76,6 +79,36 @@ function dedupeReplicatedActions(entries: SessionLogEntry[]): SessionLogEntry[] 
   }
   return [...passthrough, ...byKey.values()].sort((a, b) => a.id - b.id)
 }
+function coalesceContinuousSettingRows(rows: DisplayRow[]): DisplayRow[] {
+  const output: DisplayRow[] = []
+  const active = new Map<string, number>()
+  for (const row of rows) {
+    if (!row.settingChange || !row.settingGroupKey) {
+      active.clear()
+      output.push(row)
+      continue
+    }
+    const previousIndex = active.get(row.settingGroupKey)
+    const previous = previousIndex == null ? undefined : output[previousIndex]
+    const continuous = Boolean(previous?.settingChange)
+      && entryTimeMs(row.entry) - entryTimeMs(previous!.entry) <= CONTINUOUS_SETTING_SETTLE_MS
+      && sameSettingValue(previous!.settingChange!.to, row.settingChange.from)
+    if (continuous && previousIndex != null && previous?.settingChange) {
+      const mergedChange: SessionLogStateChange = { path: row.settingChange.path, from: previous.settingChange.from, to: row.settingChange.to }
+      output[previousIndex] = {
+        ...row,
+        key: previous.key,
+        settingChange: mergedChange,
+        settingGroupKey: row.settingGroupKey,
+        message: humanSettingMessage(row.entry, mergedChange),
+      }
+      continue
+    }
+    active.set(row.settingGroupKey, output.length)
+    output.push(row)
+  }
+  return output
+}
 function displayRows(entries: SessionLogEntry[], simulationMode: boolean): DisplayRow[] {
   const rows: DisplayRow[] = []
   for (const entry of dedupeReplicatedActions(afterLatestClear(entries))) {
@@ -86,13 +119,21 @@ function displayRows(entries: SessionLogEntry[], simulationMode: boolean): Displ
       if (before != null && after != null) {
         const changes = filterSessionStateChanges(before, after, diffSessionState(before, after))
         if (!changes.length) continue
-        changes.forEach((change, index) => rows.push({ key: `${entry.id}:setting:${index}`, entry, subject: subjectFor(entry, simulationMode), message: humanSettingMessage(entry, change) }))
+        const subject = subjectFor(entry, simulationMode)
+        changes.forEach((change, index) => rows.push({
+          key: `${entry.id}:setting:${index}`,
+          entry,
+          subject,
+          message: humanSettingMessage(entry, change),
+          settingChange: change,
+          settingGroupKey: `${subject}|${actorFor(entry)}|${entry.event_type}|${change.path}`,
+        }))
         continue
       }
     }
     rows.push({ key: `${entry.id}:event`, entry, subject: subjectFor(entry, simulationMode), message: humanEventMessage(entry) })
   }
-  return rows.reverse()
+  return coalesceContinuousSettingRows(rows).reverse()
 }
 
 function LogRows({ rows, viewer = false }: { rows: DisplayRow[]; viewer?: boolean }) {
