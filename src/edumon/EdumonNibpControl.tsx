@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { recordSessionLogEvent } from '../teaching/session/sessionLog'
+import { recordNibpMeasurementForAlarms } from './alarmSources'
 import type { MonitorPatientState } from './types'
 import { measurementsFor } from './monitorEngine'
 import './edumon-nibp.css'
@@ -196,6 +197,7 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
       setPhase('idle')
       setCuffPressure(0)
       setReading(target)
+      recordNibpMeasurementForAlarms(target.mean)
       void recordSessionLogEvent({
         category: 'device',
         eventType: 'nibp.measured',
