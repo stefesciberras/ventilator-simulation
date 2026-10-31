@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import {
   getInstructorAccount,
@@ -51,7 +51,6 @@ export function ScenarioBuilderApp() {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
-  const launchingScenarioRef = useRef(false)
   const defaultScenario = useMemo(() => createDefaultVentilatorScenario(), [])
   const requestedScenarioId = useMemo(() => new URLSearchParams(window.location.search).get('scenario'), [])
 
@@ -118,10 +117,9 @@ export function ScenarioBuilderApp() {
   }
 
   const startProductScenario = (product: ScenarioProductId, id: string) => {
-    launchingScenarioRef.current = true
     const url = new URL(SCENARIO_PRODUCTS[product].route, window.location.origin)
     url.searchParams.set('scenario', id)
-    window.location.assign(url.toString())
+    window.open(url.toString(), '_blank', 'noopener,noreferrer')
   }
 
   const startScenario = (preset: InstructorPresetRow) => startProductScenario(preset.product ?? 'mv', preset.id)
@@ -135,7 +133,6 @@ export function ScenarioBuilderApp() {
   }
 
   const closeBuilder = () => {
-    if (launchingScenarioRef.current) return
     window.location.assign('/')
   }
 
