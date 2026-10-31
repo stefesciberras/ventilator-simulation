@@ -3,20 +3,11 @@ import type { EdumonModuleDefinition } from './modules'
 import { SimulationTopBar, type SharedSimulationSpeed } from '../components/SimulationTopBar'
 import { InstructorSettingsController } from '../teaching/instructor/InstructorSettingsController'
 import { useInstructorAccountAuth } from '../components/InstructorAccountAuth'
+import { LOPPJUSIM_OPEN_SCENARIOS_EVENT } from '../core/platformEvents'
 import { EDUMON_APP_VERSION } from './appVersion'
 import './EdumonTopBar.css'
 
 export type EdumonSimulationSpeed = SharedSimulationSpeed
-
-function ScenarioIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 5.5h14v13H5z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-      <path d="M8 9h8M8 12h5M8 15h7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M8 3.5h8v4H8z" fill="#0e171c" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
 interface EdumonTopBarProps {
   module: EdumonModuleDefinition
@@ -46,6 +37,12 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    const openScenarios = () => onScenario()
+    window.addEventListener(LOPPJUSIM_OPEN_SCENARIOS_EVENT, openScenarios)
+    return () => window.removeEventListener(LOPPJUSIM_OPEN_SCENARIOS_EVENT, openScenarios)
+  }, [onScenario])
+
   return (
     <>
       <SimulationTopBar
@@ -57,7 +54,7 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
         onPausedChange={onPausedChange}
         onSpeedChange={onSpeedChange}
         controlsControlledByInstructor={simulationControlsLocked}
-        rightActions={<><button type="button" className="top-account-button scenario-top-button" onClick={onScenario} title="Scenarios and sessions" aria-label="Open scenarios and sessions"><ScenarioIcon /></button>{diagnosticsAction}</>}
+        rightActions={diagnosticsAction}
         statusText={simulationPaused ? 'SIMULATION PAUSED' : 'SIMULATION ACTIVE'}
         version={EDUMON_APP_VERSION}
         onAbout={onAbout}
