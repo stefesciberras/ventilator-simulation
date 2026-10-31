@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { SecondaryMonitorSurface } from '../components/SecondaryMonitorSurface'
 import { LOPPJUSIM_OPEN_SESSIONS_EVENT } from '../core/platformEvents'
 import { TeachingInstructorWorkspace } from './TeachingWorkspace'
@@ -54,6 +55,20 @@ export function SharedTeachingTab({
     return () => window.removeEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
   }, [sessionPanel])
 
+  const sessionSurface = sessionPanel && sessionPanelOpen && typeof document !== 'undefined'
+    ? createPortal(
+        <SecondaryMonitorSurface
+          title="Sessions"
+          eyebrow="LOPPJUSIM SESSION"
+          onClose={() => setSessionPanelOpen(false)}
+          ariaModal
+        >
+          {sessionPanel}
+        </SecondaryMonitorSurface>,
+        document.body,
+      )
+    : null
+
   return (
     <div className="shared-teaching-tab">
       {role !== 'candidate' && activeScenario}
@@ -93,16 +108,7 @@ export function SharedTeachingTab({
       {runtimeHost}
       {liveRoom}
       {footer}
-      {sessionPanel && sessionPanelOpen && (
-        <SecondaryMonitorSurface
-          title="Sessions"
-          eyebrow="LOPPJUSIM SESSION"
-          onClose={() => setSessionPanelOpen(false)}
-          ariaModal
-        >
-          {sessionPanel}
-        </SecondaryMonitorSurface>
-      )}
+      {sessionSurface}
     </div>
   )
 }
