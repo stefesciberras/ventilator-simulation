@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createCaseMediaSignedUrl, listCaseMediaByIds } from '../../caseMedia'
-import { LOPPJUSIM_SESSION_ENDED_EVENT } from '../../core/platformEvents'
+import { LOPPJUSIM_SESSION_ENDED_EVENT, LOPPJUSIM_SIMULATION_RESET_EVENT } from '../../core/platformEvents'
 import { SharedDraggableModal } from '../SharedDraggableModal'
 import type { TeachingScenarioStageContent } from './runtimeCore'
 import { setScenarioRuntimeIndicator, useScenarioRuntimeTriggerInfo } from './runtimeUiState'
@@ -108,8 +108,13 @@ export function SharedScenarioRuntimePanel({
   useEffect(() => {
     if (selfDirected || !onClose) return
     const stopForEndedSession = () => onClose()
+    const stopForSimulationReset = () => onClose()
     window.addEventListener(LOPPJUSIM_SESSION_ENDED_EVENT, stopForEndedSession)
-    return () => window.removeEventListener(LOPPJUSIM_SESSION_ENDED_EVENT, stopForEndedSession)
+    window.addEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, stopForSimulationReset)
+    return () => {
+      window.removeEventListener(LOPPJUSIM_SESSION_ENDED_EVENT, stopForEndedSession)
+      window.removeEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, stopForSimulationReset)
+    }
   }, [selfDirected, onClose])
 
   const question = content?.kind === 'question' ? content.question : null
