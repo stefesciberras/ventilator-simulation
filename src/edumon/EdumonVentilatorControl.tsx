@@ -4,6 +4,8 @@ import type { VentilatorMode } from '../simulation/types'
 import { InteractiveSettingControls, type InteractiveSettingSpec } from '../components/InteractiveSettingControls'
 import { resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
 import type { MonitorPatientState, MonitorRespiratorySettings } from './types'
+import { EDUMON_PATIENT_PROFILES } from './patientProfiles'
+import { registerSimulationResetHandler } from '../core/simulationReset'
 import './edumon-ventilator.css'
 
 type EdumonVentilatorMode = 'MANUAL' | Exclude<VentilatorMode, 'APRV' | 'BIPAP'>
@@ -152,6 +154,21 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
 
   const [host, setHost] = useState<HTMLElement | null>(null)
   const [ventilator, setVentilator] = useState<VentilatorState>(() => ventilatorFromRespiratory(respiratory))
+
+  useEffect(() => registerSimulationResetHandler(() => {
+    if (typeof document !== 'undefined' && document.documentElement.dataset.loppjusimSessionRole === 'candidate') return
+    const baseline = EDUMON_PATIENT_PROFILES.Awake
+    const nextPatient: MonitorPatientState = {
+      ...baseline,
+      respiratory: { ...(baseline.respiratory ?? {}) },
+      anaestheticGases: undefined,
+      anaestheticPhysiology: { ...(baseline.anaestheticPhysiology ?? {}) },
+    }
+    patientRef.current = nextPatient
+    const nextVentilator = ventilatorFromRespiratory(resolvedMonitorRespiratorySettings(nextPatient))
+    setVentilator(nextVentilator)
+    onPatientStateChange(nextPatient)
+  }), [onPatientStateChange])
 
   useEffect(() => {
     const findHost = () => setHost((current) => {
