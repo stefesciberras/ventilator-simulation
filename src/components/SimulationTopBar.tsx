@@ -125,6 +125,8 @@ export function SimulationTopBar({
     await resetSimulation(publicBrandKicker)
   }
 
+  const sessionPreserved = runMode === 'instructor'
+
   return <>
     <header className={`topbar simulation-topbar ${className}`.trim()}>
       <div className={`brand-block ${brandClassName}`.trim()}>
@@ -144,7 +146,7 @@ export function SimulationTopBar({
           onContextMenu={(event) => event.preventDefault()}
           disabled={controlsControlledByInstructor}
           aria-label={pauseLabel}
-          title={`${pauseLabel}. Press and hold to stop and reset the simulation.`}
+          title={`${pauseLabel}. Press and hold to reset the simulator.`}
         >
           <PauseIcon paused={simulationPaused} />
           <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
@@ -190,12 +192,14 @@ export function SimulationTopBar({
     </header>
 
     {resetOpen && <div className="simulation-reset-backdrop" role="presentation" onMouseDown={() => { if (!resetting) setResetOpen(false) }}>
-      <section className="simulation-reset-dialog" role="dialog" aria-modal="true" aria-label="Stop and reset simulation" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="simulation-reset-heading"><div><span>Simulation control</span><strong>Stop and reset simulation?</strong></div><button type="button" disabled={resetting} onClick={() => setResetOpen(false)} aria-label="Close">×</button></div>
-        <p>This will end any active Simulation or Teaching session, stop the current scenario, clear its saved stage and local simulator state, and restart in Standalone mode.</p>
+      <section className="simulation-reset-dialog" role="dialog" aria-modal="true" aria-label="Reset simulation" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="simulation-reset-heading"><div><span>Simulation control</span><strong>Reset simulation?</strong></div><button type="button" disabled={resetting} onClick={() => setResetOpen(false)} aria-label="Close">×</button></div>
+        <p>{sessionPreserved
+          ? 'This will stop the current scenario, clear its saved stage and transient simulator state, and restore the simulator defaults. The active session, session key and connected candidates will be preserved.'
+          : 'This will stop the current scenario, clear its saved stage and transient simulator state, and restore the simulator defaults.'}</p>
         <div className="simulation-reset-actions">
           <button type="button" disabled={resetting} onClick={() => setResetOpen(false)}>Cancel</button>
-          <button type="button" className="danger" disabled={resetting} onClick={() => void confirmReset()}>{resetting ? 'Resetting…' : 'Stop & reset'}</button>
+          <button type="button" className="danger" disabled={resetting} onClick={() => void confirmReset()}>{resetting ? 'Resetting…' : 'Reset simulation'}</button>
         </div>
       </section>
     </div>}
