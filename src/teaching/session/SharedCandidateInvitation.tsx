@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '../../session/supabase'
 import '../../candidate-invitation.css'
@@ -32,6 +33,15 @@ export function SharedCandidateInvitation({ sessionId, sessionKey, joinUrl, prod
     const timeout = window.setTimeout(() => setToast(null), toast.kind === 'error' ? 8000 : 5500)
     return () => window.clearTimeout(timeout)
   }, [toast])
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
 
   const invitationText = useMemo(() => [
     `You have been invited to join a ${productLabel} teaching session.`,
@@ -72,26 +82,40 @@ export function SharedCandidateInvitation({ sessionId, sessionKey, joinUrl, prod
 
   if (!sessionId || !sessionKey || !joinUrl) return null
 
+  const inviteDialog = open && typeof document !== 'undefined'
+    ? createPortal(
+        <div className="candidate-invite-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>
+          <section className="candidate-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="candidate-invite-title">
+            <div className="candidate-invite-heading"><div><span>Candidate invitation</span><h3 id="candidate-invite-title">Share session {sessionKey}</h3></div><button type="button" aria-label="Close invitation" onClick={() => setOpen(false)}>×</button></div>
+            <div className="candidate-invite-share-card">
+              <div className="candidate-invite-qr" title={joinUrl}><QRCodeSVG value={joinUrl} size={156} level="M" bgColor="#ffffff" fgColor="#071a24" marginSize={1} /></div>
+              <div className="candidate-invite-link-card"><span>Direct join link</span><strong>{joinUrl}</strong><small>Candidates can scan the QR code or open this direct link.</small></div>
+            </div>
+            <textarea readOnly value={invitationText} aria-label="Invitation text" rows={7} />
+            <div className="candidate-invite-actions"><button type="button" className="session-secondary-button" onClick={() => void copyInvitation()}>Copy invitation</button></div>
+            <div className="candidate-invite-email">
+              <label htmlFor="candidate-invite-emails">Email candidates</label>
+              <textarea id="candidate-invite-emails" value={emails} onChange={(event) => setEmails(event.target.value)} placeholder="candidate1@example.com, candidate2@example.com" rows={3} />
+              <small>Separate multiple addresses with commas, spaces, semicolons or new lines. Maximum {MAX_RECIPIENTS} recipients per send.</small>
+              <button type="button" className="session-primary-button" disabled={sending} onClick={() => void emailInvitation()}>{sending ? 'Sending…' : 'Email invitation'}</button>
+            </div>
+            {status && <div className="candidate-invite-status" role="status">{status}</div>}
+          </section>
+        </div>,
+        document.body,
+      )
+    : null
+
+  const toastPortal = toast && typeof document !== 'undefined'
+    ? createPortal(
+        <div className={`candidate-invite-toast ${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}><div><strong>{toast.kind === 'success' ? 'Invitation sent' : 'Invitation not sent'}</strong><span>{toast.message}</span></div><button type="button" onClick={() => setToast(null)}>×</button></div>,
+        document.body,
+      )
+    : null
+
   return <div className="candidate-invitation">
     <button type="button" className="session-primary-button candidate-invite-trigger" onClick={() => { setOpen(true); setStatus(null) }}>Share / Invite candidates</button>
-    {open && <div className="candidate-invite-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>
-      <section className="candidate-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="candidate-invite-title">
-        <div className="candidate-invite-heading"><div><span>Candidate invitation</span><h3 id="candidate-invite-title">Share session {sessionKey}</h3></div><button type="button" aria-label="Close invitation" onClick={() => setOpen(false)}>×</button></div>
-        <div className="candidate-invite-share-card">
-          <div className="candidate-invite-qr" title={joinUrl}><QRCodeSVG value={joinUrl} size={156} level="M" bgColor="#ffffff" fgColor="#071a24" marginSize={1} /></div>
-          <div className="candidate-invite-link-card"><span>Direct join link</span><strong>{joinUrl}</strong><small>Candidates can scan the QR code or open this direct link.</small></div>
-        </div>
-        <textarea readOnly value={invitationText} aria-label="Invitation text" rows={7} />
-        <div className="candidate-invite-actions"><button type="button" className="session-secondary-button" onClick={() => void copyInvitation()}>Copy invitation</button></div>
-        <div className="candidate-invite-email">
-          <label htmlFor="candidate-invite-emails">Email candidates</label>
-          <textarea id="candidate-invite-emails" value={emails} onChange={(event) => setEmails(event.target.value)} placeholder="candidate1@example.com, candidate2@example.com" rows={3} />
-          <small>Separate multiple addresses with commas, spaces, semicolons or new lines. Maximum {MAX_RECIPIENTS} recipients per send.</small>
-          <button type="button" className="session-primary-button" disabled={sending} onClick={() => void emailInvitation()}>{sending ? 'Sending…' : 'Email invitation'}</button>
-        </div>
-        {status && <div className="candidate-invite-status" role="status">{status}</div>}
-      </section>
-    </div>}
-    {toast && <div className={`candidate-invite-toast ${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}><div><strong>{toast.kind === 'success' ? 'Invitation sent' : 'Invitation not sent'}</strong><span>{toast.message}</span></div><button type="button" onClick={() => setToast(null)}>×</button></div>}
+    {inviteDialog}
+    {toastPortal}
   </div>
 }
