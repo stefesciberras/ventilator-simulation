@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SharedAlarmLimitsDialog, type SharedAlarmLimitPairDefinition } from '../alarms/SharedAlarmLimits'
 import { SharedAlarmLimitsControl } from '../alarms/SharedAlarmLimitsControl'
-import type { EdumonAlarmLimits } from './alarmDefinitions'
+import { DEFAULT_EDUMON_ALARM_LIMITS, type EdumonAlarmLimits } from './alarmDefinitions'
+import { registerSimulationResetHandler } from '../core/simulationReset'
 
 interface Props {
   open: boolean
@@ -28,6 +29,13 @@ export function EdumonAlarmLimitsDialog({
 }: Props) {
   const [openedFromSharedControl, setOpenedFromSharedControl] = useState(false)
   const dialogOpen = open || openedFromSharedControl
+
+  useEffect(() => registerSimulationResetHandler(() => {
+    if (disabled) return
+    setOpenedFromSharedControl(false)
+    onClose()
+    onChange({ ...DEFAULT_EDUMON_ALARM_LIMITS })
+  }), [disabled, onChange, onClose])
 
   const close = () => {
     setOpenedFromSharedControl(false)
