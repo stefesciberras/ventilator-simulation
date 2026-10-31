@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { InstructorAccountDialog, InstructorCloudIcon, useInstructorAccountAuth } from './InstructorAccountAuth'
 import { getSessionLogRuntimeContext } from '../teaching/session/sessionLog'
+import { LOPPJUSIM_OPEN_SCENARIOS_EVENT } from '../core/platformEvents'
 import './LoppjuSimPlatformMenu.css'
 
 export type LoppjuSimRunMode = 'standalone' | 'instructor' | 'candidate'
@@ -12,6 +13,10 @@ interface LoppjuSimPlatformMenuProps {
 
 function MenuIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></svg>
+}
+
+function ScenarioIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /><path d="M8 9h8M8 12h5M8 15h7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M8 3.5h8v4H8z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg>
 }
 
 function StudioIcon() {
@@ -77,6 +82,12 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
     auth.setOpen(true)
   }
 
+  const openScenarios = () => {
+    if (effectiveRole === 'candidate') return
+    setOpen(false)
+    window.dispatchEvent(new Event(LOPPJUSIM_OPEN_SCENARIOS_EVENT))
+  }
+
   const openSettings = () => {
     if (!platformUnlocked) return
     setOpen(false)
@@ -120,6 +131,9 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
           <button type="button" role="menuitem" disabled title="Registration will be enabled later">
             <span className="loppjusim-menu-icon-text">+</span><span>Register</span><small>Coming soon</small>
           </button>
+          <button type="button" role="menuitem" disabled={effectiveRole === 'candidate'} onClick={openScenarios}>
+            <ScenarioIcon /><span>Scenarios</span><small>{effectiveRole === 'instructor' ? 'Switch scenario' : 'Open library'}</small>
+          </button>
           <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate(`/scenarios?product=${scenarioProduct}`)}>
             <StudioIcon /><span>Scenario Studio</span>
           </button>
@@ -136,7 +150,7 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
             <SettingsIcon /><span>Settings</span>
           </button>
         </div>
-        {!authenticated && <p className="loppjusim-menu-hint">Sign in to enable authoring tools and settings. Standalone simulation remains available without an account.</p>}
+        {!authenticated && <p className="loppjusim-menu-hint">Sign in to enable cloud libraries, authoring tools and settings. Standalone simulation remains available without an account.</p>}
         {effectiveRole !== 'standalone' && <p className="loppjusim-menu-hint">Session mode is active. Account changes and standalone authoring tools are locked until the session ends.</p>}
       </section>}
     </div>
