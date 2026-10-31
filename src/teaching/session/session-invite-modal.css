@@ -104,6 +104,17 @@
   font-size: 0.9rem;
 }
 
+/* Active instructor sessions keep scenario selection in the platform menu and
+   simulation pause/resume in the shared top bar. The dashboard action row is
+   reserved for ending the room so it does not duplicate controls. */
+.instructor-session-panel .session-action-row > :not(.session-danger-button) {
+  display: none !important;
+}
+
+.instructor-session-panel .session-action-row {
+  justify-content: flex-end;
+}
+
 @media (max-width: 600px) {
   .session-invite-modal-backdrop {
     align-items: end;
