@@ -48,6 +48,7 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
   const auth = useInstructorAccountAuth({ locked: effectiveRole !== 'standalone' })
   const authenticated = Boolean(auth.account)
   const platformUnlocked = authenticated && effectiveRole === 'standalone'
+  const scenarioLibraryAvailable = authenticated && effectiveRole !== 'candidate'
   const scenarioProduct = scenarioProductForLabel(productLabel)
   const drugEventLibraryAvailable = productLabel !== 'LoppjuSIM-MV'
 
@@ -92,7 +93,7 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
   }
 
   const openScenarios = () => {
-    if (effectiveRole === 'candidate') return
+    if (!scenarioLibraryAvailable) return
     setOpen(false)
     window.dispatchEvent(new Event(LOPPJUSIM_OPEN_SCENARIOS_EVENT))
   }
@@ -140,8 +141,14 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
           <button type="button" role="menuitem" disabled title="Registration will be enabled later">
             <span className="loppjusim-menu-icon-text">+</span><span>Register</span><small>Coming soon</small>
           </button>
-          <button type="button" role="menuitem" disabled={effectiveRole === 'candidate'} onClick={openScenarios}>
-            <ScenarioIcon /><span>Scenarios</span><small>{effectiveRole === 'instructor' ? 'Switch scenario' : 'Open library'}</small>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!scenarioLibraryAvailable}
+            title={!authenticated ? 'Sign in as an instructor to access the scenario library' : effectiveRole === 'candidate' ? 'Candidates receive scenarios through their active session' : undefined}
+            onClick={openScenarios}
+          >
+            <ScenarioIcon /><span>Scenarios</span><small>{effectiveRole === 'instructor' ? 'Switch scenario' : authenticated ? 'Open library' : 'Instructor sign-in required'}</small>
           </button>
           <button type="button" role="menuitem" disabled={!platformUnlocked} onClick={() => navigate(`/scenarios?product=${scenarioProduct}`)}>
             <StudioIcon /><span>Scenario Studio</span>
@@ -159,7 +166,7 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
             <SettingsIcon /><span>Settings</span>
           </button>
         </div>
-        {!authenticated && <p className="loppjusim-menu-hint">Sign in to enable cloud libraries, authoring tools and settings. Standalone simulation remains available without an account.</p>}
+        {!authenticated && <p className="loppjusim-menu-hint">Sign in to enable instructor scenario libraries, authoring tools and settings. Unauthenticated users can still run Standalone simulation or join scenarios through a session invitation/key.</p>}
         {effectiveRole !== 'standalone' && <p className="loppjusim-menu-hint">Session mode is active. Account changes and standalone authoring tools are locked until the session ends.</p>}
       </section>}
     </div>
