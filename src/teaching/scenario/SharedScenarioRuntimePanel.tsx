@@ -195,14 +195,25 @@ export function SharedScenarioRuntimePanel({
         </div>
       </div> : <button
         type="button"
+        data-no-drag="true"
         className={`shared-scenario-trigger-row informational forceable ${holdingTriggerId === trigger.id ? 'holding' : ''}`}
         key={trigger.id}
         aria-label={`${trigger.label}. ${trigger.detail}. Press and hold to trigger.`}
         title="Press and hold to trigger this transition"
-        onPointerDown={() => beginTriggerHold(trigger.id, trigger.onForce)}
-        onPointerUp={cancelTriggerHold}
-        onPointerCancel={cancelTriggerHold}
-        onPointerLeave={cancelTriggerHold}
+        onPointerDown={(event) => {
+          event.stopPropagation()
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+          beginTriggerHold(trigger.id, trigger.onForce)
+        }}
+        onPointerUp={(event) => {
+          event.stopPropagation()
+          cancelTriggerHold()
+          if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture?.(event.pointerId)
+        }}
+        onPointerCancel={(event) => {
+          event.stopPropagation()
+          cancelTriggerHold()
+        }}
         onKeyDown={(event) => {
           if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) beginTriggerHold(trigger.id, trigger.onForce)
         }}
