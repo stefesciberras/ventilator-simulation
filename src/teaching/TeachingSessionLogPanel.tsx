@@ -111,20 +111,11 @@ export function TeachingSessionLogPanel({ productId, sessionId, role }: Teaching
   const [error, setError] = useState<string | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [position, setPosition] = useState({ x: 0, y: 0 })
-  const [profileHost, setProfileHost] = useState<HTMLElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const standalone = !sessionId
   const standaloneRunId = standalone ? getStandaloneSessionLogRunId(productId) : null
   const canClear = role === 'instructor' || role === 'standalone'
   const simulationMode = typeof document !== 'undefined' && document.documentElement.dataset.loppjusimRuntimeMode === 'simulation'
-
-  useEffect(() => {
-    const findHost = () => setProfileHost(document.querySelector<HTMLElement>('.edumon-profile-strip'))
-    findHost()
-    const observer = new MutationObserver(findHost)
-    observer.observe(document.body, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [])
 
   useEffect(() => {
     setEntries([]); setError(null)
@@ -183,16 +174,14 @@ export function TeachingSessionLogPanel({ productId, sessionId, role }: Teaching
   </div>
 
   return <>
-    {profileHost ? createPortal(<button type="button" className="teaching-session-log-profile-button" onClick={openViewer}>Logs</button>, profileHost) : (
-      <section className="teaching-prompt-instructor teaching-session-log" aria-label="Session log">
-        <div className="teaching-prompt-section-heading teaching-session-log-heading" onClick={() => setCollapsed((value) => !value)}><div><h3>Session Log</h3></div><div className="teaching-prompt-heading-actions"><button type="button" className={`teaching-workspace-collapse ${collapsed ? 'collapsed' : 'expanded'}`} onClick={(event) => { event.stopPropagation(); setCollapsed((value) => !value) }} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand Session Log' : 'Collapse Session Log'}><span className="teaching-collapse-caret" aria-hidden="true" /></button></div></div>
-        {!collapsed && <div className="teaching-session-log-body">
-          {loading && entries.length === 0 ? <div className="teaching-session-log-empty">Loading session log…</div> : rows.length === 0 ? <div className="teaching-session-log-empty">{standalone ? 'Standalone logging is active. Actions will appear here as they occur.' : 'No session log entries yet.'}</div> : <LogRows rows={rows} />}
-          {error && <div className="teaching-session-log-error">{error}</div>}
-          <div className="teaching-session-log-actions">{panelActions}<small>{rows.length} {rows.length === 1 ? 'entry' : 'entries'} · {sessionId ? `Session ${sessionId.slice(0, 8)}…` : `Standalone ${standaloneRunId?.slice(0, 8)}… · local only`}</small></div>
-        </div>}
-      </section>
-    )}
+    <section className="teaching-prompt-instructor teaching-session-log" aria-label="Session log">
+      <div className="teaching-prompt-section-heading teaching-session-log-heading" onClick={() => setCollapsed((value) => !value)}><div><h3>Session Log</h3></div><div className="teaching-prompt-heading-actions"><button type="button" className={`teaching-workspace-collapse ${collapsed ? 'collapsed' : 'expanded'}`} onClick={(event) => { event.stopPropagation(); setCollapsed((value) => !value) }} aria-expanded={!collapsed} aria-label={collapsed ? 'Expand Session Log' : 'Collapse Session Log'}><span className="teaching-collapse-caret" aria-hidden="true" /></button></div></div>
+      {!collapsed && <div className="teaching-session-log-body">
+        {loading && entries.length === 0 ? <div className="teaching-session-log-empty">Loading session log…</div> : rows.length === 0 ? <div className="teaching-session-log-empty">{standalone ? 'Standalone logging is active. Actions will appear here as they occur.' : 'No session log entries yet.'}</div> : <LogRows rows={rows} />}
+        {error && <div className="teaching-session-log-error">{error}</div>}
+        <div className="teaching-session-log-actions">{panelActions}<small>{rows.length} {rows.length === 1 ? 'entry' : 'entries'} · {sessionId ? `Session ${sessionId.slice(0, 8)}…` : `Standalone ${standaloneRunId?.slice(0, 8)}… · local only`}</small></div>
+      </div>}
+    </section>
     {viewerOpen && createPortal(<div className="teaching-session-log-viewer-overlay" role="presentation">
       <section className="teaching-session-log-viewer" role="dialog" aria-modal="false" aria-label="Session Log viewer" style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
         <div className="teaching-session-log-viewer-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title="Drag to move on wide screens"><div><span>Teaching</span><strong>Session Log</strong></div><button type="button" className="teaching-session-log-close" onClick={() => setViewerOpen(false)} aria-label="Close Session Log">×</button></div>
