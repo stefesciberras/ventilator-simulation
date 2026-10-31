@@ -17,7 +17,12 @@ export function SharedDraggableModal({ ariaLabel, eyebrow, title, children, onCl
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; baseLeft: number; baseTop: number; width: number; height: number } | null>(null)
 
   const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (window.innerWidth < 900 || (event.target as HTMLElement).closest('button, input, select, textarea, video, audio, a, label')) return
+    const path = typeof event.nativeEvent.composedPath === 'function' ? event.nativeEvent.composedPath() : []
+    const noDragInPath = path.some((node) => node instanceof HTMLElement && node.dataset.noDrag === 'true')
+    const target = event.target instanceof HTMLElement ? event.target : null
+    const interactiveTarget = target?.closest('button, input, select, textarea, video, audio, a, label, [data-no-drag="true"]')
+    if (window.innerWidth < 900 || noDragInPath || interactiveTarget) return
+
     const panel = event.currentTarget as HTMLElement
     const rect = panel.getBoundingClientRect()
     dragRef.current = {
