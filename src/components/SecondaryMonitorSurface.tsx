@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import { LOPPJUSIM_OPEN_SCENARIOS_EVENT } from '../core/platformEvents'
 import { SimulationModal, type SimulationModalSize } from './SimulationModal'
 
 interface SecondaryMonitorSurfaceProps {
@@ -17,7 +18,7 @@ interface SecondaryMonitorSurfaceProps {
 export function SecondaryMonitorSurface({
   open = true,
   title,
-  eyebrow = 'EDUSIM secondary display',
+  eyebrow = 'LoppjuSIM secondary display',
   children,
   navigation,
   onClose,
@@ -26,10 +27,20 @@ export function SecondaryMonitorSurface({
   stageClassName = '',
   ariaModal = false,
 }: SecondaryMonitorSurfaceProps) {
+  const sessionSurface = title === 'Scenarios and sessions' || title === 'Sessions'
+  const displayTitle = title === 'Scenarios and sessions' ? 'Sessions' : title
+
+  useEffect(() => {
+    if (!open || !sessionSurface) return
+    const closeForScenarioLibrary = () => onClose()
+    window.addEventListener(LOPPJUSIM_OPEN_SCENARIOS_EVENT, closeForScenarioLibrary)
+    return () => window.removeEventListener(LOPPJUSIM_OPEN_SCENARIOS_EVENT, closeForScenarioLibrary)
+  }, [open, sessionSurface, onClose])
+
   return (
     <SimulationModal
       open={open}
-      title={title}
+      title={displayTitle}
       eyebrow={eyebrow}
       onClose={onClose}
       size={size}

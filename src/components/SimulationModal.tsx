@@ -18,7 +18,7 @@ interface SimulationModalProps {
 
 export function SimulationModal({
   title,
-  eyebrow = 'EDUSIM',
+  eyebrow = 'LoppjuSIM',
   children,
   onClose,
   open = true,
