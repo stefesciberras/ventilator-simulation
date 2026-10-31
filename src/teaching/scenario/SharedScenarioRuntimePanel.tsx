@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { createCaseMediaSignedUrl, listCaseMediaByIds } from '../../caseMedia'
 import { LOPPJUSIM_SESSION_ENDED_EVENT, LOPPJUSIM_SIMULATION_RESET_EVENT } from '../../core/platformEvents'
 import { SharedDraggableModal } from '../SharedDraggableModal'
+import { recordSessionLogEvent } from '../session/sessionLog'
 import type { TeachingScenarioStageContent } from './runtimeCore'
-import { setScenarioRuntimeIndicator, useScenarioRuntimeTriggerInfo } from './runtimeUiState'
+import { getScenarioRuntimeIndicator, setScenarioRuntimeIndicator, useScenarioRuntimeTriggerInfo } from './runtimeUiState'
 import './SharedScenarioRuntimePanel.css'
 
 export interface SharedScenarioBranchAction {
@@ -45,6 +47,20 @@ function formatCountdown(seconds: number | undefined) {
   const minutes = Math.floor(safe / 60)
   const remainder = safe % 60
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
+function afterNextPaint(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve()
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()))
+  })
+}
+
+function stageNameFromIndicator(): string | null {
+  const label = getScenarioRuntimeIndicator()?.label
+  if (!label) return null
+  const separator = label.indexOf('·')
+  return separator >= 0 ? label.slice(separator + 1).trim() || null : null
 }
 
 export function SharedScenarioRuntimePanel({
@@ -157,13 +173,36 @@ export function SharedScenarioRuntimePanel({
     onQuestionResult?.(true, correct)
   }
 
+  const runManualTransition = async (action: () => void | Promise<void>, knownTargetLabel?: string) => {
+    const fromStageName = stageName
+    const fromStageNumber = stageNumber
+    await action()
+    if (!knownTargetLabel) await afterNextPaint()
+    const toStageName = knownTargetLabel
+      ?? stageNameFromIndicator()
+      ?? (fromStageNumber < stageCount ? `Stage ${fromStageNumber + 1}` : 'Scenario complete')
+
+    await recordSessionLogEvent({
+      category: 'scenario',
+      eventType: 'scenario.manual_trigger',
+      label: `Manual trigger: ${fromStageName} → ${toStageName}`,
+      details: {
+        scenarioName,
+        fromStageName,
+        fromStageNumber,
+        toStageName,
+      },
+    })
+  }
+
   const runSingleManualAction = () => {
     if (!manualAvailable) return
     if (branchActions.length === 1) {
-      void branchActions[0].onSelect()
+      const branch = branchActions[0]
+      void runManualTransition(branch.onSelect, branch.targetLabel)
       return
     }
-    if (branchActions.length === 0 && manualAdvanceAvailable) void onAdvance?.()
+    if (branchActions.length === 0 && manualAdvanceAvailable && onAdvance) void runManualTransition(onAdvance)
   }
 
   const safeStageCount = Math.max(1, stageCount)
@@ -195,7 +234,7 @@ export function SharedScenarioRuntimePanel({
         <em>{!manualAvailable ? 'Not available' : branchActions.length > 1 ? 'Choose a path below' : 'Available'}</em>
       </button>
       {branchActions.length > 1 && <div className="shared-scenario-manual-paths">
-        {branchActions.map((branch) => <button type="button" key={branch.id} onClick={() => void branch.onSelect()}>
+        {branchActions.map((branch) => <button type="button" key={branch.id} onClick={() => void runManualTransition(branch.onSelect, branch.targetLabel)}>
           <span>{branch.label}</span>{branch.targetLabel && <em>→ {branch.targetLabel}</em>}
         </button>)}
       </div>}
@@ -243,9 +282,10 @@ export function SharedScenarioRuntimePanel({
 
   if (!selfDirected) {
     if (hidden) return null
-    return <SharedDraggableModal ariaLabel="Active scenario stage" eyebrow={scenarioName} title={`${stageNumber}/${stageCount} · ${stageName}`} onClose={() => setHidden(true)} closeLabel="Hide stage controls" className={`shared-scenario-runtime-modal ${complete ? 'complete' : ''}`}>
+    const modal = <SharedDraggableModal ariaLabel="Active scenario stage" eyebrow={scenarioName} title={`${stageNumber}/${stageCount} · ${stageName}`} onClose={() => setHidden(true)} closeLabel="Hide stage controls" className={`shared-scenario-runtime-modal ${complete ? 'complete' : ''}`}>
       <div className={`shared-scenario-runtime-panel modal-runtime ${complete ? 'complete' : ''}`}>{panelBody}</div>
     </SharedDraggableModal>
+    return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal
   }
 
   return <aside className={`shared-scenario-runtime-panel self-directed ${complete ? 'complete' : ''}`} aria-label="Active scenario stage">
