@@ -31,6 +31,8 @@ export interface TeachingScenarioRuntimeSnapshot {
   stageIndex: number
   stageStartedSimulationTime: number
   status: Exclude<TeachingScenarioRuntimeStatus, 'idle'>
+  timeTriggerPaused?: boolean
+  timeTriggerPauseStartedSimulationTime?: number | null
 }
 
 interface PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> {
@@ -63,7 +65,21 @@ function actorSuffix(trigger: Record<string, unknown>) {
   return ` · ${humaniseIdentifier(actor)}`
 }
 
-function describeTrigger(trigger: unknown, id: string, targetLabel?: string): ScenarioRuntimeTriggerInfo | null {
+function isTimeTrigger(trigger: unknown) {
+  return Boolean(trigger && typeof trigger === 'object' && String((trigger as Record<string, unknown>).type ?? '') === 'time')
+}
+
+function describeTrigger(
+  trigger: unknown,
+  id: string,
+  targetLabel: string | undefined,
+  timing: {
+    stageStartedSimulationTime: number
+    currentSimulationTime: number
+    paused: boolean
+    onTogglePause: () => void
+  },
+): ScenarioRuntimeTriggerInfo | null {
   if (!trigger || typeof trigger !== 'object') return null
   const value = trigger as Record<string, unknown>
   const type = String(value.type ?? '')
@@ -72,8 +88,18 @@ function describeTrigger(trigger: unknown, id: string, targetLabel?: string): Sc
   let label = humaniseIdentifier(type)
   let detail = ''
   if (type === 'time') {
-    label = 'Time elapsed'
-    detail = `${Number(value.seconds ?? 0)} s`
+    const durationSeconds = Math.max(0, Number(value.seconds ?? 0) || 0)
+    const elapsedSeconds = Math.max(0, timing.currentSimulationTime - timing.stageStartedSimulationTime)
+    const remainingSeconds = Math.max(0, durationSeconds - elapsedSeconds)
+    return {
+      id,
+      label: 'Time elapsed',
+      detail: targetLabel ? `→ ${targetLabel}` : 'Automatic advance',
+      kind: 'time',
+      remainingSeconds,
+      paused: timing.paused,
+      onTogglePause: timing.onTogglePause,
+    }
   } else if (type === 'condition') {
     label = 'Measurement condition'
     const operator = value.operator === 'lt' ? '<' : value.operator === 'gt' ? '>' : '='
@@ -108,7 +134,7 @@ function describeTrigger(trigger: unknown, id: string, targetLabel?: string): Sc
   }
 
   if (targetLabel) detail = detail ? `${detail} → ${targetLabel}` : `→ ${targetLabel}`
-  return { id, label, detail }
+  return { id, label, detail, kind: 'informational' }
 }
 
 /** Branches take priority over linear advancement; product adapters own trigger semantics. */
@@ -146,10 +172,18 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
   const [stageStartedSimulationTime, setStageStartedSimulationTime] = useState(0)
   const [status, setStatus] = useState<TeachingScenarioRuntimeStatus>('idle')
   const [persistenceReady, setPersistenceReady] = useState(false)
+  const [timeTriggerPaused, setTimeTriggerPaused] = useState(false)
+  const [timeTriggerPauseStartedSimulationTime, setTimeTriggerPauseStartedSimulationTime] = useState<number | null>(null)
   const transitionBusyRef = useRef(false)
   const restoreAttemptedRef = useRef(false)
+  const latestSimulationTimeRef = useRef(0)
+  const stageStartedSimulationTimeRef = useRef(0)
 
   const stage = scenario?.stages[stageIndex] ?? null
+
+  useEffect(() => {
+    stageStartedSimulationTimeRef.current = stageStartedSimulationTime
+  }, [stageStartedSimulationTime])
 
   const applyStageAt = useCallback(async (
     definition: TeachingScenarioDefinition<TSnapshot, TTrigger>,
@@ -165,9 +199,13 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
       stageStartedSimulationTime: simulationTime,
     }
     await adapter.applyStage(nextStage.snapshot, stageContext)
+    latestSimulationTimeRef.current = simulationTime
+    stageStartedSimulationTimeRef.current = simulationTime
     setScenario(definition)
     setStageIndex(index)
     setStageStartedSimulationTime(simulationTime)
+    setTimeTriggerPaused(false)
+    setTimeTriggerPauseStartedSimulationTime(null)
     setStatus('running')
     return true
   }, [adapter])
@@ -181,7 +219,10 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     setScenario(null)
     setStageIndex(0)
     setStageStartedSimulationTime(0)
+    stageStartedSimulationTimeRef.current = 0
     setStatus('idle')
+    setTimeTriggerPaused(false)
+    setTimeTriggerPauseStartedSimulationTime(null)
     transitionBusyRef.current = false
     setScenarioRuntimeTriggerInfo([])
     const key = runtimePersistenceKey()
@@ -217,46 +258,39 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     }
   }, [applyStageAt, scenario, status])
 
-  const evaluate = useCallback(async (context: TContext, simulationTime: number) => {
-    if (!scenario || !stage || status !== 'running' || transitionBusyRef.current) return false
-    const stageContext: TeachingScenarioStageContext<TSnapshot, TTrigger> = {
-      scenario,
-      stage,
-      stageIndex,
-      stageStartedSimulationTime,
+  const toggleTimeTriggerPause = useCallback(() => {
+    const now = latestSimulationTimeRef.current
+    if (timeTriggerPaused) {
+      const pauseStarted = timeTriggerPauseStartedSimulationTime ?? now
+      const pausedDuration = Math.max(0, now - pauseStarted)
+      const adjustedStageStart = stageStartedSimulationTimeRef.current + pausedDuration
+      stageStartedSimulationTimeRef.current = adjustedStageStart
+      setStageStartedSimulationTime(adjustedStageStart)
+      setTimeTriggerPaused(false)
+      setTimeTriggerPauseStartedSimulationTime(null)
+      return
     }
-    const triggerMatches = (trigger: TTrigger) => adapter.triggerMatches(trigger, context, stageContext)
-    const outgoingBranches = (scenario.branches ?? []).filter((branch) => !branch.fromStageId || branch.fromStageId === stage.id)
-    const resolution = resolveTeachingScenarioTransition({ stageTriggers: stage.triggers, branches: outgoingBranches, triggerMatches })
-    if (!resolution) return false
-    if (resolution.kind === 'branch') return goToStage(resolution.toStageId, simulationTime)
-    return advance(simulationTime)
-  }, [adapter, advance, goToStage, scenario, stage, stageIndex, stageStartedSimulationTime, status])
+    setTimeTriggerPauseStartedSimulationTime(now)
+    setTimeTriggerPaused(true)
+  }, [timeTriggerPaused, timeTriggerPauseStartedSimulationTime])
 
-  const restore = useCallback(async (
-    definition: TeachingScenarioDefinition<TSnapshot, TTrigger>,
-    snapshot: TeachingScenarioRuntimeSnapshot,
-  ) => {
-    if (snapshot.scenarioId !== definition.id) throw new Error('Scenario runtime snapshot does not match this scenario.')
-    const safeIndex = Math.max(0, Math.min(definition.stages.length - 1, snapshot.stageIndex))
-    const restored = await applyStageAt(definition, safeIndex, snapshot.stageStartedSimulationTime)
-    if (restored && snapshot.status === 'complete') setStatus('complete')
-    return restored
-  }, [applyStageAt])
-
-  const runtimeSnapshot = useMemo<TeachingScenarioRuntimeSnapshot | null>(() => {
-    if (!scenario || status === 'idle') return null
-    return { scenarioId: scenario.id, stageIndex, stageStartedSimulationTime, status }
-  }, [scenario, stageIndex, stageStartedSimulationTime, status])
-
-  useEffect(() => {
+  const publishTriggerInfo = useCallback((simulationTime: number) => {
     if (!scenario || !stage || status === 'idle') {
       setScenarioRuntimeTriggerInfo([])
       return
     }
+    const effectiveSimulationTime = timeTriggerPaused && timeTriggerPauseStartedSimulationTime != null
+      ? timeTriggerPauseStartedSimulationTime
+      : simulationTime
+    const timing = {
+      stageStartedSimulationTime,
+      currentSimulationTime: effectiveSimulationTime,
+      paused: timeTriggerPaused,
+      onTogglePause: toggleTimeTriggerPause,
+    }
     const info: ScenarioRuntimeTriggerInfo[] = []
     stage.triggers.forEach((trigger, index) => {
-      const described = describeTrigger(trigger, `stage:${stage.id}:${index}`)
+      const described = describeTrigger(trigger, `stage:${stage.id}:${index}`, undefined, timing)
       if (described) info.push(described)
     })
     ;(scenario.branches ?? [])
@@ -266,13 +300,65 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
         const branchTriggers = branch.triggers?.length ? branch.triggers : branch.trigger != null ? [branch.trigger] : []
         const targetLabel = scenario.stages.find((candidate) => candidate.id === branch.toStageId)?.name
         branchTriggers.forEach((trigger, triggerIndex) => {
-          const described = describeTrigger(trigger, `branch:${branch.id ?? branchIndex}:${triggerIndex}`, targetLabel)
+          const described = describeTrigger(trigger, `branch:${branch.id ?? branchIndex}:${triggerIndex}`, targetLabel, timing)
           if (described) info.push(described)
         })
       })
     setScenarioRuntimeTriggerInfo(info)
+  }, [scenario, stage, status, stageStartedSimulationTime, timeTriggerPaused, timeTriggerPauseStartedSimulationTime, toggleTimeTriggerPause])
+
+  const evaluate = useCallback(async (context: TContext, simulationTime: number) => {
+    latestSimulationTimeRef.current = simulationTime
+    publishTriggerInfo(simulationTime)
+    if (!scenario || !stage || status !== 'running' || transitionBusyRef.current) return false
+    const stageContext: TeachingScenarioStageContext<TSnapshot, TTrigger> = {
+      scenario,
+      stage,
+      stageIndex,
+      stageStartedSimulationTime,
+    }
+    const triggerMatches = (trigger: TTrigger) => {
+      if (timeTriggerPaused && isTimeTrigger(trigger)) return false
+      return adapter.triggerMatches(trigger, context, stageContext)
+    }
+    const outgoingBranches = (scenario.branches ?? []).filter((branch) => !branch.fromStageId || branch.fromStageId === stage.id)
+    const resolution = resolveTeachingScenarioTransition({ stageTriggers: stage.triggers, branches: outgoingBranches, triggerMatches })
+    if (!resolution) return false
+    if (resolution.kind === 'branch') return goToStage(resolution.toStageId, simulationTime)
+    return advance(simulationTime)
+  }, [adapter, advance, goToStage, publishTriggerInfo, scenario, stage, stageIndex, stageStartedSimulationTime, status, timeTriggerPaused])
+
+  const restore = useCallback(async (
+    definition: TeachingScenarioDefinition<TSnapshot, TTrigger>,
+    snapshot: TeachingScenarioRuntimeSnapshot,
+  ) => {
+    if (snapshot.scenarioId !== definition.id) throw new Error('Scenario runtime snapshot does not match this scenario.')
+    const safeIndex = Math.max(0, Math.min(definition.stages.length - 1, snapshot.stageIndex))
+    const restored = await applyStageAt(definition, safeIndex, snapshot.stageStartedSimulationTime)
+    if (restored) {
+      setTimeTriggerPaused(Boolean(snapshot.timeTriggerPaused))
+      setTimeTriggerPauseStartedSimulationTime(snapshot.timeTriggerPauseStartedSimulationTime ?? null)
+      if (snapshot.status === 'complete') setStatus('complete')
+    }
+    return restored
+  }, [applyStageAt])
+
+  const runtimeSnapshot = useMemo<TeachingScenarioRuntimeSnapshot | null>(() => {
+    if (!scenario || status === 'idle') return null
+    return {
+      scenarioId: scenario.id,
+      stageIndex,
+      stageStartedSimulationTime,
+      status,
+      timeTriggerPaused,
+      timeTriggerPauseStartedSimulationTime,
+    }
+  }, [scenario, stageIndex, stageStartedSimulationTime, status, timeTriggerPaused, timeTriggerPauseStartedSimulationTime])
+
+  useEffect(() => {
+    publishTriggerInfo(latestSimulationTimeRef.current)
     return () => setScenarioRuntimeTriggerInfo([])
-  }, [scenario, stage, status])
+  }, [publishTriggerInfo])
 
   useEffect(() => {
     if (restoreAttemptedRef.current) return
@@ -322,6 +408,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     stageStartedSimulationTime,
     status,
     runtimeSnapshot,
+    timeTriggerPaused,
     start,
     stop,
     advance,

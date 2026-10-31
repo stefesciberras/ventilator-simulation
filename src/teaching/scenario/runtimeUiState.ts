@@ -10,6 +10,10 @@ export interface ScenarioRuntimeTriggerInfo {
   id: string
   label: string
   detail: string
+  kind?: 'informational' | 'time'
+  remainingSeconds?: number
+  paused?: boolean
+  onTogglePause?: () => void
 }
 
 let current: ScenarioRuntimeIndicatorState | null = null
@@ -35,6 +39,18 @@ export function getScenarioRuntimeIndicator() {
 }
 
 export function setScenarioRuntimeTriggerInfo(next: ScenarioRuntimeTriggerInfo[]) {
+  const unchanged = next.length === currentTriggers.length && next.every((trigger, index) => {
+    const currentTrigger = currentTriggers[index]
+    return currentTrigger
+      && currentTrigger.id === trigger.id
+      && currentTrigger.label === trigger.label
+      && currentTrigger.detail === trigger.detail
+      && currentTrigger.kind === trigger.kind
+      && currentTrigger.remainingSeconds === trigger.remainingSeconds
+      && currentTrigger.paused === trigger.paused
+      && currentTrigger.onTogglePause === trigger.onTogglePause
+  })
+  if (unchanged) return
   currentTriggers = next
   emitTriggers()
 }
