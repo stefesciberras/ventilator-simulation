@@ -19,8 +19,10 @@
 
 .candidate-invite-dialog {
   width: min(620px, 100%);
+  max-width: calc(100vw - 2rem);
   max-height: min(760px, calc(100vh - 2rem));
   overflow: auto;
+  box-sizing: border-box;
   border: 1px solid rgb(104 178 202 / 32%);
   border-radius: 16px;
   padding: 1rem;
@@ -62,18 +64,30 @@
 }
 
 .candidate-invite-link-card {
+  min-width: 0;
+  max-width: 100%;
   margin-bottom: 0.9rem;
+  box-sizing: border-box;
   border: 1px solid rgb(104 178 202 / 20%);
   border-radius: 12px;
   padding: 0.8rem;
   background: rgb(255 255 255 / 4%);
+  overflow: hidden;
 }
 
-.candidate-invite-link-card strong {
+.candidate-invite-dialog .candidate-invite-link-card strong {
   display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
   color: #f4fbfd;
-  font-size: 0.92rem;
+  font-size: 0.92rem !important;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: normal !important;
+  text-transform: none !important;
 }
 
 .candidate-invite-link-card small,
@@ -85,11 +99,15 @@
 
 .candidate-invite-dialog textarea {
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   resize: vertical;
   border: 1px solid rgb(104 178 202 / 24%);
   border-radius: 10px;
   padding: 0.75rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
   background: #071820;
   color: #eaf7fb;
   font: inherit;
@@ -200,6 +218,41 @@
   }
 }
 
+.candidate-invite-share-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: 0.9rem;
+}
+
+.candidate-invite-share-card > * {
+  min-width: 0;
+}
+
+.candidate-invite-share-card .candidate-invite-link-card {
+  margin-bottom: 0;
+}
+
+.candidate-invite-qr {
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: #fff;
+  line-height: 0;
+}
+
+.candidate-invite-qr svg {
+  display: block;
+  width: min(156px, 100%);
+  height: auto;
+}
+
 @media (max-width: 640px) {
   .candidate-invite-dialog {
     padding: 0.85rem;
@@ -211,25 +264,12 @@
     left: 0.75rem;
     width: auto;
   }
-}
 
-.candidate-invite-share-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 1rem;
-  align-items: center;
-  margin-bottom: 0.9rem;
-}
-.candidate-invite-share-card .candidate-invite-link-card { margin-bottom: 0; }
-.candidate-invite-qr {
-  display: grid;
-  place-items: center;
-  padding: 8px;
-  border-radius: 12px;
-  background: #fff;
-  line-height: 0;
-}
-@media (max-width: 640px) {
-  .candidate-invite-share-card { grid-template-columns: 1fr; }
-  .candidate-invite-qr { justify-self: center; }
+  .candidate-invite-share-card {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-invite-qr {
+    justify-self: center;
+  }
 }
