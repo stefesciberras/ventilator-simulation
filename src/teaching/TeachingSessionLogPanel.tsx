@@ -133,7 +133,9 @@ function displayRows(entries: SessionLogEntry[], simulationMode: boolean): Displ
     }
     rows.push({ key: `${entry.id}:event`, entry, subject: subjectFor(entry, simulationMode), message: humanEventMessage(entry) })
   }
-  return coalesceContinuousSettingRows(rows).reverse()
+  const settledRows = coalesceContinuousSettingRows(rows)
+  rows.splice(0, rows.length, ...settledRows)
+  return rows.reverse()
 }
 
 function LogRows({ rows, viewer = false }: { rows: DisplayRow[]; viewer?: boolean }) {
