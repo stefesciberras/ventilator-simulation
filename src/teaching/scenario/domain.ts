@@ -77,6 +77,13 @@ export interface ScenarioStageContext<TSnapshot, TTrigger> {
 export interface ScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext> {
   applyStage: (snapshot: TSnapshot, context: ScenarioStageContext<TSnapshot, TTrigger>) => void | Promise<void>
   triggerMatches: (trigger: TTrigger, context: TContext, stage: ScenarioStageContext<TSnapshot, TTrigger>) => boolean
+  /**
+   * Optional product-owned semantic execution used by instructor long-press
+   * overrides. For executable triggers (for example Drugs / Events), this must
+   * perform the same domain action as the normal control before core advances
+   * the scenario. Observational triggers may intentionally do nothing here.
+   */
+  forceTrigger?: (trigger: TTrigger, context: TContext, stage: ScenarioStageContext<TSnapshot, TTrigger>) => void | Promise<void>
 }
 
 /**
