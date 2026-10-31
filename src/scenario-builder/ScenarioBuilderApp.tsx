@@ -29,6 +29,7 @@ import './scenarioBuilder.css'
 import './clinicalSections.css'
 import './scenarioStudioLight.css'
 import './scenarioStudioCleanup.css'
+import './scenarioLaunch.css'
 
 type StudioResource = 'scenarios' | 'profiles' | 'organisation'
 
