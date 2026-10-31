@@ -1,7 +1,7 @@
 # loppjuSIM Canonical Architecture
 
 **Status:** Canonical source of truth  
-**Updated:** 30 October 2026  
+**Updated:** 31 October 2026  
 **Repository:** `stefesciberras/ventilator-simulation`
 
 This document is the architectural source of truth for the loppjuSIM platform. It supersedes older handover summaries when they conflict with current code or the decisions recorded here. Historical internal names such as `EDUSIM`, `EDUVENT`, `EDUMON` and `scenario-builder` remain in source paths, database objects and compatibility contracts where migration would be disruptive; they should not be interpreted as current product naming.
@@ -128,7 +128,7 @@ Architectural invariant:
 
 This is critical for realistic branching, candidate interventions and progressive scenarios. Bulk authoring operations such as section-level Apply All/Unapply All are only shortcuts over the same sparse apply mask; they do not create a second persistence model.
 
-### 4.3 Stage transitions and timing
+### 4.3 Stage transitions, timing and runtime persistence
 
 The shared scenario runtime owns:
 
@@ -138,7 +138,8 @@ The shared scenario runtime owns:
 - branch resolution;
 - stage transition locking;
 - stage start simulation time;
-- durable runtime reconstruction.
+- durable runtime reconstruction;
+- cleanup of persisted runtime state when a scenario/session is deliberately terminated.
 
 The canonical stage clock is simulation time (`stageStartedSimulationTime`), not wall-clock time. Consequently:
 
@@ -147,6 +148,30 @@ The canonical stage clock is simulation time (`stageStartedSimulationTime`), not
 - automatic stage loads must not pause the simulator;
 - stage transitions must not reset unrelated simulation clocks;
 - Pause Simulation and Freeze Waveform remain separate concepts.
+
+Active scenario runtime is persisted locally using a path-scoped key of the form `loppjusim.scenario-runtime:<pathname>`. The persisted payload contains the scenario definition plus the minimum runtime snapshot required to reconstruct the current stage. This persistence has a strict lifecycle:
+
+```text
+active scenario
+  ↓
+runtime snapshot persisted
+  ↓
+browser refresh/reload
+  ↓
+scenario + current stage reconstructed
+
+explicit scenario stop / end session / full reset
+  ↓
+runtime.stop()
+  ↓
+persisted scenario runtime removed
+  ↓
+subsequent refresh starts without the previous scenario
+```
+
+Therefore a browser refresh during a live scenario may recover the current stage, but **ending the session or explicitly stopping/resetting the simulation must retire that runtime and clear its persisted stage**. Session teardown and scenario teardown are separate subsystems but their lifecycles are intentionally linked.
+
+The shared top bar may expose the current stage through a compact **STAGE** control. It displays the active stage and opens the current stage controls when a manual transition is available; it is disabled when the current stage has no manual path. The stage indicator is presentation state only and must never be treated as the source of runtime authority.
 
 ### 4.4 Branching/path model
 
@@ -310,6 +335,26 @@ Teaching mode is one instructor serving one or more candidates whose simulators 
 
 This mode preserves the long-standing architecture that teaching synchronization transmits semantic state, instructions and events rather than moving all physiology execution to the instructor/browser/cloud.
 
+### 5.4 Session and scenario lifecycle
+
+A live session and a scenario runtime are related but are not the same object. Ending/ leaving a session must transition the product back to Standalone and retire any session-owned scenario runtime. A normal browser refresh while a session/scenario remains active may recover the session and scenario state; an explicit end operation must not.
+
+Canonical teardown order is:
+
+```text
+End session / Leave session
+  ↓
+remote/session transport teardown
+  ↓
+role returns to Standalone
+  ↓
+active scenario runtime stops
+  ↓
+scenario runtime persistence is cleared
+```
+
+This prevents an ended Simulation/Teaching session from reappearing only because a browser-local scenario snapshot remained available.
+
 ## 6. Local-first and offline architecture
 
 The live simulation control loop is local-first.
@@ -431,23 +476,37 @@ Database/RPC names that still contain `edusim`, `eduvent` or `edumon` are compat
 Different data has different authority:
 
 - **live physiology/device state:** local simulation engine or Simulation-mode session authority;
-- **scenario runtime state:** local/shared scenario runtime, reconstructable from scenario + runtime snapshot;
+- **scenario runtime state:** local/shared scenario runtime, reconstructable from scenario + runtime snapshot; browser-local persistence is used for active-run recovery and is cleared on explicit runtime/session teardown;
 - **draft Studio document:** local safety copy plus asynchronous scenario-library save;
 - **published/library scenario:** durable scenario repository/Supabase-backed storage;
 - **teaching presentation state:** session-scoped transport/state;
 - **logs/debrief:** durable asynchronous persistence.
 
+A persisted scenario runtime is a recovery aid, not proof that a session remains active. Runtime restore must respect lifecycle state, and explicit stop/end/reset operations must clear stale recovery state.
+
 Do not treat every UI state as globally authoritative merely because it can be persisted.
 
-## 12. Shared UI components
+## 12. Shared UI components and platform controls
 
 Shared application primitives include the simulation shell/top bar/workspace/console, teaching/session surfaces, alarm primitives, media/presentation components and common authoring framework. Product-specific components should plug into these surfaces without duplicating generic behavior.
+
+The shared LoppjuSIM platform menu is the canonical entry point for cross-product platform actions. Runnable **Scenarios** are opened from this menu rather than separate product-specific top-bar scenario buttons. In Standalone mode it opens the scenario library/start workflow; during an instructor Simulation/Teaching session it provides scenario switching. Candidate mode does not expose scenario switching.
+
+The shared simulation top bar owns the common pause/speed/time/stage controls. A short press on **Pause Simulation** retains its ordinary pause/resume semantics. A deliberate long press opens a destructive **Stop & reset simulation** confirmation. Confirmation performs a full lifecycle reset rather than simply reloading the page:
+
+1. end/leave any active Simulation or Teaching session using the normal session teardown path;
+2. stop and clear the active scenario runtime and persisted stage;
+3. clear active Drugs/Events runtime state where applicable;
+4. clear product-local simulator persistence and scenario/session launch parameters;
+5. reload into a clean Standalone simulator.
+
+Reset must not clear unrelated account/authentication data. The destructive reset flow is intentionally distinct from ordinary Pause/Resume and from hiding the scenario runtime popup.
 
 UI styling and minor authoring ergonomics are intentionally not canonical architecture. They may change without requiring this document to be revised unless they introduce a new data/authority/runtime contract.
 
 ## 13. Implemented baseline
 
-At the 0.13.0 Studio baseline, the platform has implemented or established:
+At the current baseline, the platform has implemented or established:
 
 - product-neutral Scenario Studio for MV, Anaesth and ITU;
 - module-driven Studio variable/trigger exposure;
@@ -458,6 +517,11 @@ At the 0.13.0 Studio baseline, the platform has implemented or established:
 - Candidate/Instructor/Either actor scope for relevant triggers;
 - explicit Standalone / Simulation / Teaching mode metadata;
 - simulation-time stage clocks and runtime reconstruction snapshot support;
+- path-scoped active-scenario persistence across browser refresh/reload;
+- explicit scenario-runtime cleanup when an active session ends;
+- shared current-stage top-bar indicator/manual-control entry point;
+- runnable Scenarios entry consolidated into the shared LoppjuSIM platform menu;
+- long-press Pause → confirmed Stop & Reset lifecycle for clean Standalone recovery;
 - local-first runtime-mode contracts;
 - shared semantic Simulation commands/snapshots and transport abstraction;
 - continuous Studio draft autosave with local recovery and retry;
@@ -472,6 +536,7 @@ The following areas are architectural directions with implementation still evolv
 
 - complete parity of all scenario triggers and runtime behaviors across MV, Anaesth and ITU;
 - robust late-join reconstruction of every active effect/session/scenario state;
+- exact simulation-clock continuity semantics for every restored scenario runtime, especially where a product's local simulation clock itself restarts on reload;
 - end-to-end local/LAN Simulation-mode transport and failover behavior across all deployment shapes;
 - complete semantic synchronization of instructor Drugs/Events and other shared actions in every session context;
 - conflict/revision handling when the same Studio scenario is edited in multiple tabs/clients;
@@ -502,6 +567,9 @@ Do not regress to the following patterns:
 - resetting an entire simulator when a sparse stage transition should change only selected variables;
 - using wall-clock time for scenario stage timing;
 - coupling scenario sequencing to product-specific UI components;
+- treating a hidden scenario popup as equivalent to stopping a scenario;
+- leaving persisted scenario runtime behind after an explicit session end/reset;
+- maintaining separate product-specific top-bar scenario launch controls where the shared platform menu is appropriate;
 - autosave implicitly publishing a scenario;
 - renaming legacy database/source identifiers casually without migration planning.
 
@@ -521,6 +589,10 @@ Do not regress to the following patterns:
 12. **Draft autosave is not Publish.**
 13. **Legacy scenarios without runtime-mode metadata remain usable in all modes.**
 14. **Compatibility identifiers are migrated deliberately, never by cosmetic rename alone.**
+15. **Refresh may restore an active scenario, but explicit scenario/session termination must clear its persisted runtime.**
+16. **Ending a session must not leave a recoverable previous scenario stage behind.**
+17. **Full reset ends/leaves the session before clearing local simulator/runtime state and reloading Standalone.**
+18. **Shared platform actions belong in shared platform controls rather than duplicated product-specific top-bar controls.**
 
 ## 18. Primary implementation references
 
@@ -528,6 +600,10 @@ Key source areas at this baseline:
 
 ```text
 src/core/runtimeModes.ts
+src/core/platformEvents.ts
+src/core/simulationReset.ts
+src/components/LoppjuSimPlatformMenu.tsx
+src/components/SimulationTopBar.tsx
 src/session/localRuntimeTransport.ts
 src/session/webRtcRuntimeTransport.ts
 src/teaching/session/
