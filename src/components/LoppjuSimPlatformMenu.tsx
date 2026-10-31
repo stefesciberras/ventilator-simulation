@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { InstructorAccountDialog, InstructorCloudIcon, useInstructorAccountAuth } from './InstructorAccountAuth'
 import { getSessionLogRuntimeContext } from '../teaching/session/sessionLog'
-import { LOPPJUSIM_OPEN_SCENARIOS_EVENT } from '../core/platformEvents'
+import { LOPPJUSIM_OPEN_SCENARIOS_EVENT, LOPPJUSIM_SESSION_ENDED_EVENT } from '../core/platformEvents'
 import './LoppjuSimPlatformMenu.css'
 
 export type LoppjuSimRunMode = 'standalone' | 'instructor' | 'candidate'
@@ -44,6 +44,7 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
   const [runtimeRole, setRuntimeRole] = useState<LoppjuSimRunMode>(() => getSessionLogRuntimeContext().role)
   const menuRef = useRef<HTMLDivElement>(null)
   const effectiveRole = role ?? runtimeRole
+  const previousEffectiveRoleRef = useRef<LoppjuSimRunMode>(effectiveRole)
   const auth = useInstructorAccountAuth({ locked: effectiveRole !== 'standalone' })
   const authenticated = Boolean(auth.account)
   const platformUnlocked = authenticated && effectiveRole === 'standalone'
@@ -54,9 +55,17 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
     if (role) return
     const update = () => setRuntimeRole(getSessionLogRuntimeContext().role)
     update()
-    const timer = window.setInterval(update, 400)
+    const timer = window.setInterval(update, 150)
     return () => window.clearInterval(timer)
   }, [role])
+
+  useEffect(() => {
+    const previous = previousEffectiveRoleRef.current
+    previousEffectiveRoleRef.current = effectiveRole
+    if (previous !== 'standalone' && effectiveRole === 'standalone') {
+      window.dispatchEvent(new Event(LOPPJUSIM_SESSION_ENDED_EVENT))
+    }
+  }, [effectiveRole])
 
   useEffect(() => {
     if (!open) return
