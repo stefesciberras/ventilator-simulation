@@ -15,6 +15,8 @@ import { InstructorScenarioLibraryController } from '../teaching/instructor/Inst
 import { useEduventInstructorScenarioRuntime, type EduventDynamicScenarioDiagnosticContext } from '../eduvent/useEduventInstructorScenarioRuntime'
 import { configureSessionLogRuntime, diffSessionState, recordSessionLogEvent, settingChangesLabel } from '../teaching/session/sessionLog'
 import { clearScenarioLogs } from '../scenario-logger'
+import { PATIENT_PROFILES } from '../patientProfiles'
+import { registerSimulationResetHandler } from '../core/simulationReset'
 import '../account.css'
 
 export type DynamicScenarioDiagnosticContext = EduventDynamicScenarioDiagnosticContext
@@ -70,6 +72,51 @@ const INSTRUCTOR_DEVICE_ACTION_LABELS: Partial<Record<DynamicScenarioActionId, s
   'expiratory-hold': 'Expiratory hold',
 }
 
+const MV_RESET_SCENARIO: InstructorScenarioSnapshot = {
+  kind: 'static',
+  description: '',
+  ventilator: {
+    mode: 'VC-AC',
+    fio2: 0.35,
+    peep: 5,
+    rate: 14,
+    tidalVolume: 500,
+    inspiratoryTime: 1,
+    inspiratoryFlow: 30,
+    plateauPercent: 0,
+    pressureControl: 15,
+    volumeGuaranteePressureLimit: 40,
+    pressureSupport: 10,
+    triggerType: 'pressure',
+    triggerSensitivity: 2,
+    flowTriggerSensitivity: 2,
+    terminationSensitivity: 25,
+    simvSyncWindowPercent: 25,
+    showSimvSyncWindow: false,
+    pHigh: 24,
+    pLow: 5,
+    tHigh: 4,
+    tLow: 0.5,
+  },
+  patient: { ...PATIENT_PROFILES.Normal },
+  alarmLimits: {
+    pressureLimit: 40,
+    apneaTime: 30,
+    peakPressure: 35,
+    co2Min: 30,
+    co2Max: 50,
+    minuteVentilationMin: 3,
+    minuteVentilationMax: 12,
+    tidalVolumeMin: 250,
+    tidalVolumeMax: 600,
+    respiratoryRateMin: 10,
+    respiratoryRateMax: 25,
+  },
+  patientTransitionSeconds: 0,
+  waveformDisplay: { third: 'volume', fourth: null },
+  mediaIds: [],
+}
+
 export function InstructorAccountControls({ role, sessionId, currentScenario, onLoadScenario, simulationPaused, onSimulationPausedChange, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onAccountConnectionChange, onDynamicScenarioStarted, onStaticScenarioLoaded, onScenarioDiagnosticChange, scenarioActionEvent = null }: InstructorAccountControlsProps) {
   const accountChangeLocked = role !== 'standalone'
   const accountAuth = useInstructorAccountAuth({ locked: accountChangeLocked })
@@ -81,7 +128,6 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   const standalonePauseRef = useRef(simulationPaused)
   const standaloneSettingsTimerRef = useRef<number | null>(null)
   useEffect(() => { onAccountConnectionChange?.(Boolean(account)) }, [account, onAccountConnectionChange])
-  void onSimulationPausedChange
 
   useEffect(() => {
     configureSessionLogRuntime({ productId: 'mv', sessionId, role })
@@ -147,6 +193,21 @@ export function InstructorAccountControls({ role, sessionId, currentScenario, on
   }, [role, simulationPaused])
 
   const scenarioRuntime = useEduventInstructorScenarioRuntime({ role, sessionId, currentScenario, onLoadScenario, physiologyMeasurements, scenarioElapsedSeconds, sessionMembers, runtimeHost, onStartInstructorSession, onDynamicScenarioStarted, onScenarioDiagnosticChange, scenarioActionEvent })
+
+  useEffect(() => registerSimulationResetHandler(() => {
+    if (role === 'candidate') return
+    scenarioRuntime.close()
+    clearScenarioLogs()
+    onSimulationPausedChange(false)
+    onLoadScenario({
+      ...MV_RESET_SCENARIO,
+      ventilator: { ...MV_RESET_SCENARIO.ventilator },
+      patient: { ...MV_RESET_SCENARIO.patient },
+      alarmLimits: { ...MV_RESET_SCENARIO.alarmLimits },
+      waveformDisplay: { ...MV_RESET_SCENARIO.waveformDisplay },
+      mediaIds: [],
+    }, { pauseSimulation: false, resetScenarioClock: true })
+  }), [role, scenarioRuntime.close, onLoadScenario, onSimulationPausedChange])
 
   const loadStatic = (preset: InstructorPresetRow) => {
     onLoadScenario(preset.scenario)

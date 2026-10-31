@@ -1,4 +1,5 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
+import { LOPPJUSIM_SIMULATION_RESET_EVENT } from '../core/platformEvents'
 
 export function FreezeWaveformIcon() {
   return (
@@ -63,6 +64,16 @@ export function SimulationHardwareControls({
 }: SimulationHardwareControlsProps) {
   const longPressTimer = useRef<number | null>(null)
   const longPressTriggered = useRef(false)
+
+  useEffect(() => {
+    const resetDisplayState = () => {
+      if (laserActive && !laserDisabled) onLaserToggle()
+      if (frozen && !freezeDisabled) onFreezeToggle()
+      if (alarmSilenced && !alarmDisabled) onAlarmSilence(0)
+    }
+    window.addEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, resetDisplayState)
+    return () => window.removeEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, resetDisplayState)
+  }, [alarmDisabled, alarmSilenced, freezeDisabled, frozen, laserActive, laserDisabled, onAlarmSilence, onFreezeToggle, onLaserToggle])
 
   const clearLongPress = () => {
     if (longPressTimer.current != null) {

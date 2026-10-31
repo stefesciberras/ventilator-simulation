@@ -1,3 +1,5 @@
+import { LOPPJUSIM_SIMULATION_RESET_EVENT } from './platformEvents'
+
 type SimulationResetHandler = () => void | Promise<void>
 
 const handlers = new Set<SimulationResetHandler>()
@@ -5,7 +7,9 @@ let resetInProgress = false
 
 export function registerSimulationResetHandler(handler: SimulationResetHandler) {
   handlers.add(handler)
-  return () => handlers.delete(handler)
+  return () => {
+    handlers.delete(handler)
+  }
 }
 
 function persistencePrefixesFor(productLabel: string) {
@@ -36,8 +40,8 @@ function clearProductPersistence(productLabel: string) {
 
 /**
  * Resetting the simulator is deliberately independent of the live session lifecycle.
- * Session/invite parameters must survive so an instructor remains in the same room and
- * candidates keep the same session key while the product runtime is reconstructed.
+ * Session/invite parameters survive so the same room, participants and session key stay
+ * connected while scenario and product state are reset in memory.
  */
 function clearScenarioLaunchParameters() {
   if (typeof window === 'undefined') return
@@ -51,9 +55,12 @@ export async function resetSimulation(productLabel: string) {
   if (resetInProgress || typeof window === 'undefined') return
   resetInProgress = true
   try {
-    // Product-owned reset handlers may perform immediate in-memory cleanup. They must not
-    // end/leave the teaching session; session teardown belongs exclusively to End session.
-    await Promise.allSettled([...handlers].map((handler) => Promise.resolve(handler())))
+    // Scenario teardown is a separate lifecycle from session teardown. Runtime panels listen
+    // for this event and call their real stop/close path without ending the live room.
+    window.dispatchEvent(new Event(LOPPJUSIM_SIMULATION_RESET_EVENT))
+
+    // Remove active pharmacology/event effects before restoring the product baseline so the
+    // freshly reset state is not immediately modified by a lingering action runtime.
     try {
       const actionRuntime = await import('../edusim/actions/ActionRuntime')
       actionRuntime.clearActionRuntime()
@@ -62,14 +69,14 @@ export async function resetSimulation(productLabel: string) {
       // MV does not depend on ActionRuntime; failure here must not block reset.
     }
 
-    // Retire the current scenario and product state, but preserve sessionStorage/local
-    // recovery metadata used by the live teaching/simulation connection.
+    // Product-owned handlers restore physiology/device state in memory. They must never
+    // end/leave the teaching session; session teardown belongs exclusively to End session.
+    await Promise.allSettled([...handlers].map((handler) => Promise.resolve(handler())))
+
+    // Clear durable simulator/scenario state only. Session recovery data and transport
+    // ownership are intentionally untouched, so there is no disconnect/rejoin cycle.
     clearProductPersistence(productLabel)
     clearScenarioLaunchParameters()
-
-    // Reconstruct the product from its defaults. The existing session hook resumes the
-    // same instructor/candidate room and therefore retains its session id/key.
-    window.location.reload()
   } finally {
     resetInProgress = false
   }
