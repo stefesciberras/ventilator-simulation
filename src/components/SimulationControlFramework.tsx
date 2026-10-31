@@ -1,4 +1,5 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, type CSSProperties, type ReactNode } from 'react'
+import { LOPPJUSIM_OPEN_SESSIONS_EVENT } from '../core/platformEvents'
 
 export interface SimulationControlTabDefinition<TTab extends string> {
   id: TTab
@@ -59,6 +60,16 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
   const openEdumonLogs = () => {
     document.querySelector<HTMLButtonElement>('.teaching-session-log-profile-button')?.click()
   }
+
+  useEffect(() => {
+    const openSessions = () => {
+      const teachingTab = tabs.find((tab) => String(tab.id).toLowerCase() === 'teaching')
+      if (!teachingTab || teachingTab.disabled) return
+      onTabChange(teachingTab.id)
+    }
+    window.addEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
+    return () => window.removeEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
+  }, [tabs, onTabChange])
 
   return (
     <aside className={`control-panel edusim-control-framework ${className}`.trim()} aria-label={ariaLabel}>

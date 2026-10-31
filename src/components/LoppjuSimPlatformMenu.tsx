@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { InstructorAccountDialog, InstructorCloudIcon, useInstructorAccountAuth } from './InstructorAccountAuth'
 import { getSessionLogRuntimeContext } from '../teaching/session/sessionLog'
-import { LOPPJUSIM_OPEN_SCENARIOS_EVENT, LOPPJUSIM_SESSION_ENDED_EVENT } from '../core/platformEvents'
+import { LOPPJUSIM_OPEN_SCENARIOS_EVENT, LOPPJUSIM_OPEN_SESSIONS_EVENT, LOPPJUSIM_SESSION_ENDED_EVENT } from '../core/platformEvents'
 import './LoppjuSimPlatformMenu.css'
 
 export type LoppjuSimRunMode = 'standalone' | 'instructor' | 'candidate'
@@ -13,6 +13,10 @@ interface LoppjuSimPlatformMenuProps {
 
 function MenuIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></svg>
+}
+
+function SessionIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.7" /><circle cx="16" cy="9" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M4.5 18c.4-3 1.7-4.5 3.5-4.5s3.1 1.5 3.5 4.5M12.5 18c.4-3 1.7-4.5 3.5-4.5s3.1 1.5 3.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
 }
 
 function ScenarioIcon() {
@@ -92,6 +96,11 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
     auth.setOpen(true)
   }
 
+  const openSessions = () => {
+    setOpen(false)
+    window.dispatchEvent(new Event(LOPPJUSIM_OPEN_SESSIONS_EVENT))
+  }
+
   const openScenarios = () => {
     if (!scenarioLibraryAvailable) return
     setOpen(false)
@@ -140,6 +149,9 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
           </button>
           <button type="button" role="menuitem" disabled title="Registration will be enabled later">
             <span className="loppjusim-menu-icon-text">+</span><span>Register</span><small>Coming soon</small>
+          </button>
+          <button type="button" role="menuitem" onClick={openSessions}>
+            <SessionIcon /><span>Sessions</span><small>{effectiveRole === 'standalone' ? 'Start or join' : 'Session controls'}</small>
           </button>
           <button
             type="button"
