@@ -7,7 +7,7 @@ import { useInstructorAccountAuth } from '../components/InstructorAccountAuth'
 import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenarioLibrary'
 import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import type { EdumonStoredScenario } from './scenarioTypes'
-import { LOPPJUSIM_OPEN_SESSIONS_EVENT, LOPPJUSIM_RUN_SCENARIO_EVENT } from '../core/platformEvents'
+import { LOPPJUSIM_RUN_SCENARIO_EVENT } from '../core/platformEvents'
 import { EDUMON_APP_VERSION } from './appVersion'
 import './EdumonTopBar.css'
 
@@ -49,16 +49,10 @@ function scenarioSummary(scenario: EdumonStoredScenario) {
   return summary
 }
 
-export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, onScenario, diagnosticsAction, onAbout }: EdumonTopBarProps) {
+export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, diagnosticsAction, onAbout }: EdumonTopBarProps) {
   const settingsAuth = useInstructorAccountAuth({ locked: simulationControlsLocked })
   const scenarioProduct = scenarioProductForEdumonModule(module.id)
   const scenarioLibrary = useProductScenarioLibrary<EdumonStoredScenario>(scenarioProduct, Boolean(settingsAuth.account) && !simulationControlsLocked)
-
-  useEffect(() => {
-    const openSessions = () => onScenario()
-    window.addEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
-    return () => window.removeEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
-  }, [onScenario])
 
   useEffect(() => {
     const removeLegacyNibpPlaceholder = () => {
