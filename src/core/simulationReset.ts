@@ -7,7 +7,9 @@ let resetInProgress = false
 
 export function registerSimulationResetHandler(handler: SimulationResetHandler) {
   handlers.add(handler)
-  return () => handlers.delete(handler)
+  return () => {
+    handlers.delete(handler)
+  }
 }
 
 function persistencePrefixesFor(productLabel: string) {
