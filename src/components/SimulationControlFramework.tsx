@@ -1,5 +1,4 @@
-import { useEffect, type CSSProperties, type ReactNode } from 'react'
-import { LOPPJUSIM_OPEN_SESSIONS_EVENT } from '../core/platformEvents'
+import type { CSSProperties, ReactNode } from 'react'
 
 export interface SimulationControlTabDefinition<TTab extends string> {
   id: TTab
@@ -52,24 +51,11 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
   const edumonTabRowStyle: CSSProperties | undefined = isEdumonControlRow
     ? {
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr)) auto',
+        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
         gridAutoFlow: 'column',
         alignItems: 'stretch',
       }
     : undefined
-  const openEdumonLogs = () => {
-    document.querySelector<HTMLButtonElement>('.teaching-session-log-profile-button')?.click()
-  }
-
-  useEffect(() => {
-    const openSessions = () => {
-      const teachingTab = tabs.find((tab) => String(tab.id).toLowerCase() === 'teaching')
-      if (!teachingTab || teachingTab.disabled) return
-      onTabChange(teachingTab.id)
-    }
-    window.addEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
-    return () => window.removeEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
-  }, [tabs, onTabChange])
 
   return (
     <aside className={`control-panel edusim-control-framework ${className}`.trim()} aria-label={ariaLabel}>
@@ -101,14 +87,6 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
               onClick={() => onTabChange(tab.id)}
             >{tab.label}</button>
           ))}
-          {isEdumonControlRow && (
-            <button
-              type="button"
-              className="teaching-session-log-tab-button"
-              onClick={openEdumonLogs}
-              aria-label="Open Session Log"
-            >LOGS</button>
-          )}
         </nav>
       </div>
 
