@@ -56,7 +56,7 @@ const variables: ScenarioVariableDefinition[] = [
 const anaesthScenarioVariables: ScenarioVariableDefinition[] = [
   { id: 'fiSevoPercent', label: 'FiSevo', group: 'Anaesthesia', type: 'number', role: 'setting', unit: '%', min: 0, max: 8, step: 0.1, defaultValue: 0, writable: true, snapshotPath: 'patient.anaestheticGases.fiSevoPercent' },
   { id: 'ventilatorMode', label: 'Ventilation mode', group: 'Ventilation', type: 'select', role: 'setting', options: ventilationModeOptions, writable: true, snapshotPath: 'patient.respiratory.ventilatorMode' },
-  { id: 'fio2', label: 'FiO₂', group: 'Ventilation', type: 'number', role: 'setting', unit: '%', min: 0.21, max: 1, step: 0.01, defaultValue: 0.21, writable: true, snapshotPath: 'patient.respiratory.fio2' },
+  { id: 'fio2', label: 'FiO₂', group: 'Ventilation', type: 'number', role: 'setting', unit: '%', min: 21, max: 100, step: 1, defaultValue: 21, writable: true, snapshotPath: 'patient.respiratory.fio2' },
   { id: 'peepCmH2O', label: 'PEEP', group: 'Ventilation', type: 'number', role: 'setting', unit: 'cmH₂O', min: 0, max: 20, step: 1, defaultValue: 0, writable: true, snapshotPath: 'patient.respiratory.peepCmH2O' },
   { id: 'ventilatorSetRate', label: 'Set respiratory rate', group: 'Ventilation', type: 'number', role: 'setting', unit: '/min', min: 5, max: 40, step: 1, defaultValue: 12, writable: true, snapshotPath: 'patient.respiratory.ventilatorSetRate' },
   { id: 'ventilatorSetTidalVolumeMl', label: 'Set tidal volume', group: 'Ventilation', type: 'number', role: 'setting', unit: 'mL', min: 250, max: 800, step: 10, defaultValue: 500, writable: true, snapshotPath: 'patient.respiratory.ventilatorSetTidalVolumeMl' },
@@ -152,6 +152,7 @@ export function readScenarioSnapshotValue(snapshot: unknown, variable: ScenarioV
     if (!current || typeof current !== 'object') return undefined
     current = (current as Record<string, unknown>)[part]
   }
+  if (variable.id === 'fio2' && typeof current === 'number') return current * 100
   return current
 }
 
@@ -166,6 +167,7 @@ export function writeScenarioSnapshotValue<T>(snapshot: T, variable: ScenarioVar
     current[part] = next && typeof next === 'object' ? { ...(next as Record<string, unknown>) } : {}
     current = current[part] as Record<string, unknown>
   }
-  current[parts[parts.length - 1]] = value
+  const storedValue = variable.id === 'fio2' && typeof value === 'number' ? value / 100 : value
+  current[parts[parts.length - 1]] = storedValue
   return clone as T
 }
