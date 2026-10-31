@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { SecondaryMonitorSurface } from '../components/SecondaryMonitorSurface'
+import { LOPPJUSIM_OPEN_SESSIONS_EVENT } from '../core/platformEvents'
 import { TeachingInstructorWorkspace } from './TeachingWorkspace'
 import { TeachingMediaInstructorPanel } from './TeachingMediaPanel'
 import { TeachingSessionLogPanel } from './TeachingSessionLogPanel'
@@ -15,7 +17,7 @@ interface SharedTeachingTabProps {
   host: TeachingHostAdapter
   sessionId: string | null
   candidateCount: number
-  /** @deprecated Session management now belongs in the dedicated Sessions menu. */
+  /** Optional shared session-management panel opened from the platform Sessions menu. */
   sessionPanel?: ReactNode
   scenarioMediaIds: string[]
   onScenarioMediaIdsChange: (ids: string[]) => void
@@ -33,6 +35,7 @@ export function SharedTeachingTab({
   host,
   sessionId,
   candidateCount,
+  sessionPanel,
   scenarioMediaIds,
   onScenarioMediaIdsChange,
   prompts,
@@ -42,6 +45,15 @@ export function SharedTeachingTab({
   liveRoom,
   footer,
 }: SharedTeachingTabProps) {
+  const [sessionPanelOpen, setSessionPanelOpen] = useState(false)
+
+  useEffect(() => {
+    if (!sessionPanel) return
+    const openSessions = () => setSessionPanelOpen(true)
+    window.addEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
+    return () => window.removeEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, openSessions)
+  }, [sessionPanel])
+
   return (
     <div className="shared-teaching-tab">
       {role !== 'candidate' && activeScenario}
@@ -81,6 +93,16 @@ export function SharedTeachingTab({
       {runtimeHost}
       {liveRoom}
       {footer}
+      {sessionPanel && sessionPanelOpen && (
+        <SecondaryMonitorSurface
+          title="Sessions"
+          eyebrow="LOPPJUSIM SESSION"
+          onClose={() => setSessionPanelOpen(false)}
+          ariaModal
+        >
+          {sessionPanel}
+        </SecondaryMonitorSurface>
+      )}
     </div>
   )
 }
