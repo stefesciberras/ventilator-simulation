@@ -296,7 +296,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
         `stage:${stage.id}:${index}`,
         undefined,
         timing,
-        isTimeTrigger(trigger) ? undefined : () => advance(latestSimulationTimeRef.current),
+        isTimeTrigger(trigger) ? undefined : () => { void advance(latestSimulationTimeRef.current) },
       )
       if (described) info.push(described)
     })
@@ -312,7 +312,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
             `branch:${branch.id ?? branchIndex}:${triggerIndex}`,
             targetLabel,
             timing,
-            isTimeTrigger(trigger) ? undefined : () => goToStage(branch.toStageId, latestSimulationTimeRef.current),
+            isTimeTrigger(trigger) ? undefined : () => { void goToStage(branch.toStageId, latestSimulationTimeRef.current) },
           )
           if (described) info.push(described)
         })
