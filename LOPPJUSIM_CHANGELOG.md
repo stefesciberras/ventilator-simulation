@@ -12,6 +12,26 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-10-31 — Anaesth Scenario Studio gas/ventilation registry and physiology-aware stage application
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.71` (from `0.83.0.70`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.31` (from `1.2.8.30`)
+
+**Changes**
+
+- Added inspired sevoflurane (`FiSevo`) to the Anaesthesia section of the Anaesth Scenario Studio registry.
+- Added an Anaesth-only **Ventilation** section exposing the current monitor ventilator controls: mode, FiO₂, PEEP, set RR, VT, inspiratory time, inspiratory flow, plateau, pressure control, VG pressure limit, pressure support, termination sensitivity and SIMV sync window.
+- FiO₂ is presented in Studio as the clinical 21–100% value while remaining stored internally as the canonical 0.21–1.00 fraction.
+- Scenario-applied depth of anaesthesia and anaesthetic haemodynamic response now pass through `applyAnaestheticDepthEffects`, so changes affect HR, arterial pressure and spontaneous respiratory drive as well as BIS/depth-dependent displays.
+- If a stage explicitly supplies haemodynamic/respiratory baseline values together with DOA, those values are used as the new response baseline before the depth effect is applied, preserving reversible non-compounding anaesthetic physiology.
+- Scenario-applied ventilator controls now resolve effective RR/VT before entering the respiratory physiology engine, while FiO₂/PEEP and other canonical settings continue to feed the existing gas-exchange model.
+
+**Architectural rule**
+
+> Scenario Studio controls are declarative clinical inputs. Applying a scenario stage must use the same product physiology pathways as equivalent live simulator controls; Studio must not bypass derived physiology by writing display-facing state only.
+
 ## 2026-10-31 — Alarm source eligibility and event-based NIBP alarms
 
 **Versions after change**

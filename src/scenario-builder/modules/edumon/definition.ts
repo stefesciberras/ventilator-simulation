@@ -1,6 +1,6 @@
 import type { InstructorPresetRow } from '../../../instructorAccount'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS } from '../../../edumon/monitorEngine'
-import type { CardiacRhythm, EcgMorphology } from '../../../edumon/types'
+import type { CardiacRhythm, EcgMorphology, MonitorVentilationMode } from '../../../edumon/types'
 import type {
   ScenarioModuleDefinition,
   ScenarioTriggerSourceDefinition,
@@ -9,8 +9,17 @@ import type {
 
 const rhythmOptions = (Object.keys(RHYTHM_LABELS) as CardiacRhythm[]).map((value) => ({ value, label: RHYTHM_LABELS[value] }))
 const morphologyOptions = (ECG_MORPHOLOGIES as EcgMorphology[]).map((value) => ({ value, label: ECG_MORPHOLOGY_LABELS[value] }))
+const ventilationModeOptions: Array<{ value: MonitorVentilationMode; label: string }> = [
+  { value: 'MANUAL', label: 'Manual' },
+  { value: 'VC-AC', label: 'VC-AC' },
+  { value: 'PC-AC', label: 'PC-AC' },
+  { value: 'PSV', label: 'PSV' },
+  { value: 'SIMV-VC', label: 'SIMV-VC' },
+  { value: 'SIMV-PC', label: 'SIMV-PC' },
+  { value: 'VG-PC', label: 'VG-PC' },
+]
 
-export const EDUMON_PATIENT_GROUP_ORDER = ['Patient', 'Cardiovascular', 'Respiratory', 'Metabolism', 'Anaesthesia'] as const
+export const EDUMON_PATIENT_GROUP_ORDER = ['Patient', 'Cardiovascular', 'Respiratory', 'Ventilation', 'Metabolism', 'Anaesthesia'] as const
 
 const variables: ScenarioVariableDefinition[] = [
   { id: 'rhythm', label: 'Rhythm', group: 'Cardiovascular', type: 'select', role: 'setting', options: rhythmOptions, writable: true, snapshotPath: 'patient.rhythm' },
@@ -44,22 +53,49 @@ const variables: ScenarioVariableDefinition[] = [
   { id: 'totalRespiratoryRate', label: 'Total respiratory rate', group: 'Respiratory', type: 'number', role: 'measurement', unit: '/min' },
 ]
 
-const measurementIds = ['heartRate', 'systolicPressure', 'diastolicPressure', 'meanPressure', 'pulsePressure', 'spo2', 'peripheralPerfusion', 'totalRespiratoryRate'] as const
-const parameterActionIds = variables
-  .filter((variable) => variable.role === 'setting' && variable.writable)
-  .map((variable) => variable.id)
-
-const byId = new Map(variables.map((variable) => [variable.id, variable]))
-
-const triggerSources: ScenarioTriggerSourceDefinition[] = [
-  ...measurementIds.map((id) => ({ id: `measurement:${id}`, label: byId.get(id)?.label ?? id, kind: 'measurement' as const, variableId: id })),
-  ...parameterActionIds.flatMap((id) => [
-    { id: `candidate-action:${id}`, label: byId.get(id)?.label ?? id, kind: 'candidate-action' as const, variableId: id },
-    { id: `instructor-action:${id}`, label: byId.get(id)?.label ?? id, kind: 'instructor-action' as const, variableId: id },
-  ]),
+const anaesthScenarioVariables: ScenarioVariableDefinition[] = [
+  { id: 'fiSevoPercent', label: 'FiSevo', group: 'Anaesthesia', type: 'number', role: 'setting', unit: '%', min: 0, max: 8, step: 0.1, defaultValue: 0, writable: true, snapshotPath: 'patient.anaestheticGases.fiSevoPercent' },
+  { id: 'ventilatorMode', label: 'Ventilation mode', group: 'Ventilation', type: 'select', role: 'setting', options: ventilationModeOptions, writable: true, snapshotPath: 'patient.respiratory.ventilatorMode' },
+  { id: 'fio2', label: 'FiO₂', group: 'Ventilation', type: 'number', role: 'setting', unit: '%', min: 21, max: 100, step: 1, defaultValue: 21, writable: true, snapshotPath: 'patient.respiratory.fio2' },
+  { id: 'peepCmH2O', label: 'PEEP', group: 'Ventilation', type: 'number', role: 'setting', unit: 'cmH₂O', min: 0, max: 20, step: 1, defaultValue: 0, writable: true, snapshotPath: 'patient.respiratory.peepCmH2O' },
+  { id: 'ventilatorSetRate', label: 'Set respiratory rate', group: 'Ventilation', type: 'number', role: 'setting', unit: '/min', min: 5, max: 40, step: 1, defaultValue: 12, writable: true, snapshotPath: 'patient.respiratory.ventilatorSetRate' },
+  { id: 'ventilatorSetTidalVolumeMl', label: 'Set tidal volume', group: 'Ventilation', type: 'number', role: 'setting', unit: 'mL', min: 250, max: 800, step: 10, defaultValue: 500, writable: true, snapshotPath: 'patient.respiratory.ventilatorSetTidalVolumeMl' },
+  { id: 'ventilatorInspiratoryTimeSeconds', label: 'Inspiratory time', group: 'Ventilation', type: 'number', role: 'setting', unit: 's', min: 0.2, max: 3, step: 0.1, defaultValue: 1, writable: true, snapshotPath: 'patient.respiratory.ventilatorInspiratoryTimeSeconds' },
+  { id: 'ventilatorInspiratoryFlowLMin', label: 'Inspiratory flow', group: 'Ventilation', type: 'number', role: 'setting', unit: 'L/min', min: 10, max: 140, step: 1, defaultValue: 30, writable: true, snapshotPath: 'patient.respiratory.ventilatorInspiratoryFlowLMin' },
+  { id: 'ventilatorPlateauPercent', label: 'Inspiratory plateau', group: 'Ventilation', type: 'number', role: 'setting', unit: '% Ti', min: 0, max: 20, step: 1, defaultValue: 0, writable: true, snapshotPath: 'patient.respiratory.ventilatorPlateauPercent' },
+  { id: 'ventilatorPressureControlCmH2O', label: 'Pressure control', group: 'Ventilation', type: 'number', role: 'setting', unit: 'cmH₂O', min: 5, max: 30, step: 1, defaultValue: 15, writable: true, snapshotPath: 'patient.respiratory.ventilatorPressureControlCmH2O' },
+  { id: 'ventilatorVolumeGuaranteePressureLimitCmH2O', label: 'VG pressure limit', group: 'Ventilation', type: 'number', role: 'setting', unit: 'cmH₂O', min: 20, max: 60, step: 1, defaultValue: 40, writable: true, snapshotPath: 'patient.respiratory.ventilatorVolumeGuaranteePressureLimitCmH2O' },
+  { id: 'ventilatorPressureSupportCmH2O', label: 'Pressure support', group: 'Ventilation', type: 'number', role: 'setting', unit: 'cmH₂O', min: 0, max: 25, step: 1, defaultValue: 10, writable: true, snapshotPath: 'patient.respiratory.ventilatorPressureSupportCmH2O' },
+  { id: 'ventilatorTerminationSensitivityPercent', label: 'Termination sensitivity', group: 'Ventilation', type: 'number', role: 'setting', unit: '%', min: 5, max: 80, step: 5, defaultValue: 25, writable: true, snapshotPath: 'patient.respiratory.ventilatorTerminationSensitivityPercent' },
+  { id: 'ventilatorSimvSyncWindowPercent', label: 'SIMV sync window', group: 'Ventilation', type: 'number', role: 'setting', unit: '%', min: 5, max: 75, step: 5, defaultValue: 25, writable: true, snapshotPath: 'patient.respiratory.ventilatorSimvSyncWindowPercent' },
 ]
 
-function createModule(id: 'anaesth' | 'icu', label: string, shortLabel: string, description: string): ScenarioModuleDefinition<InstructorPresetRow> {
+const measurementIds = ['heartRate', 'systolicPressure', 'diastolicPressure', 'meanPressure', 'pulsePressure', 'spo2', 'peripheralPerfusion', 'totalRespiratoryRate'] as const
+
+function triggerSourcesFor(moduleVariables: ScenarioVariableDefinition[]): ScenarioTriggerSourceDefinition[] {
+  const byId = new Map(moduleVariables.map((variable) => [variable.id, variable]))
+  const parameterActionIds = moduleVariables
+    .filter((variable) => variable.role === 'setting' && variable.writable)
+    .map((variable) => variable.id)
+
+  return [
+    ...measurementIds
+      .filter((id) => byId.has(id))
+      .map((id) => ({ id: `measurement:${id}`, label: byId.get(id)?.label ?? id, kind: 'measurement' as const, variableId: id })),
+    ...parameterActionIds.flatMap((id) => [
+      { id: `candidate-action:${id}`, label: byId.get(id)?.label ?? id, kind: 'candidate-action' as const, variableId: id },
+      { id: `instructor-action:${id}`, label: byId.get(id)?.label ?? id, kind: 'instructor-action' as const, variableId: id },
+    ]),
+  ]
+}
+
+function createModule(
+  id: 'anaesth' | 'icu',
+  label: string,
+  shortLabel: string,
+  description: string,
+  moduleVariables: ScenarioVariableDefinition[],
+): ScenarioModuleDefinition<InstructorPresetRow> {
   return {
     id,
     schemaVersion: 3,
@@ -67,9 +103,9 @@ function createModule(id: 'anaesth' | 'icu', label: string, shortLabel: string, 
     shortLabel,
     description,
     available: true,
-    variables,
+    variables: moduleVariables,
     templates: [],
-    triggerSources,
+    triggerSources: triggerSourcesFor(moduleVariables),
     supportsPreset: (preset) => preset.product === id,
   }
 }
@@ -79,6 +115,7 @@ export const ANAESTH_SCENARIO_MODULE = createModule(
   'LoppjuSIM-Anaesth',
   'Anaesthesia monitor',
   'Anaesthesia patient-monitor scenarios using the shared LoppjuSIM scenario library.',
+  [...variables, ...anaesthScenarioVariables],
 )
 
 export const ICU_SCENARIO_MODULE = createModule(
@@ -86,6 +123,7 @@ export const ICU_SCENARIO_MODULE = createModule(
   'LoppjuSIM-ICU',
   'ICU monitor',
   'Intensive-care patient-monitor scenarios using the shared LoppjuSIM scenario library.',
+  variables,
 )
 
 export function getEdumonScenarioModule(product: 'anaesth' | 'icu') {
@@ -114,6 +152,7 @@ export function readScenarioSnapshotValue(snapshot: unknown, variable: ScenarioV
     if (!current || typeof current !== 'object') return undefined
     current = (current as Record<string, unknown>)[part]
   }
+  if (variable.id === 'fio2' && typeof current === 'number') return current * 100
   return current
 }
 
@@ -128,6 +167,7 @@ export function writeScenarioSnapshotValue<T>(snapshot: T, variable: ScenarioVar
     current[part] = next && typeof next === 'object' ? { ...(next as Record<string, unknown>) } : {}
     current = current[part] as Record<string, unknown>
   }
-  current[parts[parts.length - 1]] = value
+  const storedValue = variable.id === 'fio2' && typeof value === 'number' ? value / 100 : value
+  current[parts[parts.length - 1]] = storedValue
   return clone as T
 }
