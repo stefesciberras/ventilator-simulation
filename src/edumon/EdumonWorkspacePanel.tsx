@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type AnaestheticDepth, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
-import { applyAnaestheticDepthEffects, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { applyAnaestheticDepthEffects, effectiveAnaestheticDepth, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
 import { applyEdumonActionPhysiology } from './actionPhysiology'
 import { getActionRuntimeSimulationTime, supersedeActionTarget } from '../edusim/actions/ActionRuntime'
 import { ECG_MORPHOLOGIES, ECG_MORPHOLOGY_LABELS, RHYTHM_LABELS, RHYTHMS } from './monitorEngine'
@@ -72,6 +72,9 @@ export function EdumonWorkspacePanel({
   }, [savedProfiles])
   const [pressuresCoupled, setPressuresCoupled] = useState(false)
   const [showInvasiveBloodPressure, setShowInvasiveBloodPressure] = useState(true)
+  const [displayedAnaestheticDepth, setDisplayedAnaestheticDepth] = useState<AnaestheticDepth>(
+    () => effectiveAnaestheticDepth(patientState, getActionRuntimeSimulationTime()),
+  )
   const respiratory: MonitorRespiratorySettings = {
     ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
     ...(patientState.respiratory ?? {}),
@@ -88,6 +91,19 @@ export function EdumonWorkspacePanel({
     root.setAttribute('data-edumon-invasive-bp-visible', showInvasiveBloodPressure ? 'true' : 'false')
     return () => root.removeAttribute('data-edumon-invasive-bp-visible')
   }, [showInvasiveBloodPressure])
+
+  useEffect(() => {
+    if (teachingHost.appId !== 'anaesth') return
+
+    const syncEffectiveDepth = () => {
+      const nextDepth = effectiveAnaestheticDepth(patientState, getActionRuntimeSimulationTime())
+      setDisplayedAnaestheticDepth((currentDepth) => currentDepth === nextDepth ? currentDepth : nextDepth)
+    }
+
+    syncEffectiveDepth()
+    const timer = window.setInterval(syncEffectiveDepth, 100)
+    return () => window.clearInterval(timer)
+  }, [patientState, teachingHost.appId])
 
   const applyProfile = (nextProfile: string) => {
     if (patientControlsLocked) return
@@ -277,8 +293,8 @@ export function EdumonWorkspacePanel({
                 <input disabled={patientControlsLocked} type="range" min="-1" max="1" step="0.1" value={anaestheticPhysiology.anaestheticSensitivity} onChange={(event) => updateAnaestheticSensitivity(Number(event.target.value))} />
               </label>
               <label className="edumon-signal-control edumon-signal-agent">
-                <span>Depth of anaesthesia <b>Step {anaestheticPhysiology.depthOfAnaesthesia}</b></span>
-                <input disabled={patientControlsLocked} type="range" min="1" max="5" step="1" value={anaestheticPhysiology.depthOfAnaesthesia} onChange={(event) => updateAnaestheticDepth(Number(event.target.value))} />
+                <span>Depth of anaesthesia <b>Step {displayedAnaestheticDepth}</b></span>
+                <input disabled={patientControlsLocked} type="range" min="1" max="5" step="1" value={displayedAnaestheticDepth} onChange={(event) => updateAnaestheticDepth(Number(event.target.value))} />
               </label>
             </>
           )}
