@@ -122,7 +122,16 @@ export function SimulationTopBar({
   const confirmReset = async () => {
     if (resetting) return
     setResetting(true)
-    await resetSimulation(publicBrandKicker)
+    try {
+      await resetSimulation(publicBrandKicker)
+      // Pause/speed are shared top-bar controls across all products. Restore their neutral
+      // values here so product reset handlers only need to own clinical/device state.
+      onPausedChange(false)
+      onSpeedChange(1)
+      setResetOpen(false)
+    } finally {
+      setResetting(false)
+    }
   }
 
   const sessionPreserved = runMode === 'instructor'
