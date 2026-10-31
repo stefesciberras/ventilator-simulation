@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createCaseMediaSignedUrl, listCaseMediaByIds } from '../../caseMedia'
 import { SharedDraggableModal } from '../SharedDraggableModal'
 import type { TeachingScenarioStageContent } from './runtimeCore'
@@ -37,6 +37,8 @@ interface SharedScenarioRuntimePanelProps {
   onClose?: () => void
 }
 
+const TRIGGER_LONG_PRESS_MS = 800
+
 function formatCountdown(seconds: number | undefined) {
   const safe = Math.max(0, Math.ceil(seconds ?? 0))
   const minutes = Math.floor(safe / 60)
@@ -68,15 +70,39 @@ export function SharedScenarioRuntimePanel({
   const [resolvedMediaUrl, setResolvedMediaUrl] = useState<string | null>(null)
   const [mediaAcknowledged, setMediaAcknowledged] = useState(false)
   const [hidden, setHidden] = useState(false)
+  const [holdingTriggerId, setHoldingTriggerId] = useState<string | null>(null)
+  const triggerHoldRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const triggerInfo = useScenarioRuntimeTriggerInfo()
+
+  const cancelTriggerHold = () => {
+    if (triggerHoldRef.current) clearTimeout(triggerHoldRef.current)
+    triggerHoldRef.current = null
+    setHoldingTriggerId(null)
+  }
+
+  const beginTriggerHold = (triggerId: string, onForce: (() => void | Promise<void>) | undefined) => {
+    cancelTriggerHold()
+    if (!onForce) return
+    setHoldingTriggerId(triggerId)
+    triggerHoldRef.current = setTimeout(() => {
+      triggerHoldRef.current = null
+      setHoldingTriggerId(null)
+      void onForce()
+    }, TRIGGER_LONG_PRESS_MS)
+  }
 
   useEffect(() => {
     setAnswerId(null)
     setSubmitted(false)
     setMediaAcknowledged(false)
     setHidden(false)
+    cancelTriggerHold()
     onQuestionResult?.(false, false)
   }, [stageNumber])
+
+  useEffect(() => () => {
+    if (triggerHoldRef.current) clearTimeout(triggerHoldRef.current)
+  }, [])
 
   const question = content?.kind === 'question' ? content.question : null
   const media = content?.kind === 'media' ? content.media : null
@@ -167,10 +193,27 @@ export function SharedScenarioRuntimePanel({
           {trigger.detail && <em>{trigger.detail}</em>}
           {trigger.onTogglePause && <button type="button" onClick={trigger.onTogglePause}>{trigger.paused ? 'Continue' : 'Pause'}</button>}
         </div>
-      </div> : <div className="shared-scenario-trigger-row informational" key={trigger.id}>
+      </div> : <button
+        type="button"
+        className={`shared-scenario-trigger-row informational forceable ${holdingTriggerId === trigger.id ? 'holding' : ''}`}
+        key={trigger.id}
+        aria-label={`${trigger.label}. ${trigger.detail}. Press and hold to trigger.`}
+        title="Press and hold to trigger this transition"
+        onPointerDown={() => beginTriggerHold(trigger.id, trigger.onForce)}
+        onPointerUp={cancelTriggerHold}
+        onPointerCancel={cancelTriggerHold}
+        onPointerLeave={cancelTriggerHold}
+        onKeyDown={(event) => {
+          if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) beginTriggerHold(trigger.id, trigger.onForce)
+        }}
+        onKeyUp={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') cancelTriggerHold()
+        }}
+        onContextMenu={(event) => event.preventDefault()}
+      >
         <span>{trigger.label}</span>
         <em>{trigger.detail}</em>
-      </div>)}
+      </button>)}
     </div>}
   </>
 

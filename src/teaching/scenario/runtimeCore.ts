@@ -79,6 +79,7 @@ function describeTrigger(
     paused: boolean
     onTogglePause: () => void
   },
+  onForce?: () => void | Promise<void>,
 ): ScenarioRuntimeTriggerInfo | null {
   if (!trigger || typeof trigger !== 'object') return null
   const value = trigger as Record<string, unknown>
@@ -134,7 +135,7 @@ function describeTrigger(
   }
 
   if (targetLabel) detail = detail ? `${detail} → ${targetLabel}` : `→ ${targetLabel}`
-  return { id, label, detail, kind: 'informational' }
+  return { id, label, detail, kind: 'informational', onForce }
 }
 
 /** Branches take priority over linear advancement; product adapters own trigger semantics. */
@@ -290,7 +291,13 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     }
     const info: ScenarioRuntimeTriggerInfo[] = []
     stage.triggers.forEach((trigger, index) => {
-      const described = describeTrigger(trigger, `stage:${stage.id}:${index}`, undefined, timing)
+      const described = describeTrigger(
+        trigger,
+        `stage:${stage.id}:${index}`,
+        undefined,
+        timing,
+        isTimeTrigger(trigger) ? undefined : () => { void advance(latestSimulationTimeRef.current) },
+      )
       if (described) info.push(described)
     })
     ;(scenario.branches ?? [])
@@ -300,12 +307,18 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
         const branchTriggers = branch.triggers?.length ? branch.triggers : branch.trigger != null ? [branch.trigger] : []
         const targetLabel = scenario.stages.find((candidate) => candidate.id === branch.toStageId)?.name
         branchTriggers.forEach((trigger, triggerIndex) => {
-          const described = describeTrigger(trigger, `branch:${branch.id ?? branchIndex}:${triggerIndex}`, targetLabel, timing)
+          const described = describeTrigger(
+            trigger,
+            `branch:${branch.id ?? branchIndex}:${triggerIndex}`,
+            targetLabel,
+            timing,
+            isTimeTrigger(trigger) ? undefined : () => { void goToStage(branch.toStageId, latestSimulationTimeRef.current) },
+          )
           if (described) info.push(described)
         })
       })
     setScenarioRuntimeTriggerInfo(info)
-  }, [scenario, stage, status, stageStartedSimulationTime, timeTriggerPaused, timeTriggerPauseStartedSimulationTime, toggleTimeTriggerPause])
+  }, [advance, goToStage, scenario, stage, status, stageStartedSimulationTime, timeTriggerPaused, timeTriggerPauseStartedSimulationTime, toggleTimeTriggerPause])
 
   const evaluate = useCallback(async (context: TContext, simulationTime: number) => {
     latestSimulationTimeRef.current = simulationTime

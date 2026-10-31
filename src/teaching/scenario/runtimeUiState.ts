@@ -14,6 +14,7 @@ export interface ScenarioRuntimeTriggerInfo {
   remainingSeconds?: number
   paused?: boolean
   onTogglePause?: () => void
+  onForce?: () => void | Promise<void>
 }
 
 let current: ScenarioRuntimeIndicatorState | null = null
@@ -49,6 +50,7 @@ export function setScenarioRuntimeTriggerInfo(next: ScenarioRuntimeTriggerInfo[]
       && currentTrigger.remainingSeconds === trigger.remainingSeconds
       && currentTrigger.paused === trigger.paused
       && currentTrigger.onTogglePause === trigger.onTogglePause
+      && currentTrigger.onForce === trigger.onForce
   })
   if (unchanged) return
   currentTriggers = next
