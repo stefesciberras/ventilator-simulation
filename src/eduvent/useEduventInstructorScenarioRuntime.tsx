@@ -465,7 +465,7 @@ export function useEduventInstructorScenarioRuntime(options: EduventScenarioRunt
     runtime,
     start,
     close,
-    runtimeNode: options.runtimeHost && runtimePanel ? createPortal(runtimePanel, runtimeHost) : runtimePanel,
+    runtimeNode: options.runtimeHost && runtimePanel ? createPortal(runtimePanel, options.runtimeHost) : runtimePanel,
     selfDirectedError,
   }
 }
