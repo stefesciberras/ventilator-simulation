@@ -178,6 +178,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
   const transitionBusyRef = useRef(false)
   const restoreAttemptedRef = useRef(false)
   const latestSimulationTimeRef = useRef(0)
+  const latestContextRef = useRef<TContext | null>(null)
   const stageStartedSimulationTimeRef = useRef(0)
 
   const stage = scenario?.stages[stageIndex] ?? null
@@ -221,6 +222,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     setStageIndex(0)
     setStageStartedSimulationTime(0)
     stageStartedSimulationTimeRef.current = 0
+    latestContextRef.current = null
     setStatus('idle')
     setTimeTriggerPaused(false)
     setTimeTriggerPauseStartedSimulationTime(null)
@@ -259,6 +261,36 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     }
   }, [applyStageAt, scenario, status])
 
+  const forceTriggerTransition = useCallback(async (trigger: TTrigger, targetStageId?: string) => {
+    if (!scenario || !stage || status !== 'running' || transitionBusyRef.current) return false
+    const context = latestContextRef.current
+    if (adapter.forceTrigger && context == null) return false
+    const simulationTime = latestSimulationTimeRef.current
+    const currentStageContext: TeachingScenarioStageContext<TSnapshot, TTrigger> = {
+      scenario,
+      stage,
+      stageIndex,
+      stageStartedSimulationTime,
+    }
+    transitionBusyRef.current = true
+    try {
+      if (adapter.forceTrigger && context != null) await adapter.forceTrigger(trigger, context, currentStageContext)
+      if (targetStageId) {
+        const targetIndex = scenario.stages.findIndex((candidate) => candidate.id === targetStageId)
+        if (targetIndex < 0) return false
+        return await applyStageAt(scenario, targetIndex, simulationTime)
+      }
+      const nextIndex = stageIndex + 1
+      if (nextIndex >= scenario.stages.length) {
+        setStatus('complete')
+        return true
+      }
+      return await applyStageAt(scenario, nextIndex, simulationTime)
+    } finally {
+      transitionBusyRef.current = false
+    }
+  }, [adapter, applyStageAt, scenario, stage, stageIndex, stageStartedSimulationTime, status])
+
   const toggleTimeTriggerPause = useCallback(() => {
     const now = latestSimulationTimeRef.current
     if (timeTriggerPaused) {
@@ -296,7 +328,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
         `stage:${stage.id}:${index}`,
         undefined,
         timing,
-        isTimeTrigger(trigger) ? undefined : () => { void advance(latestSimulationTimeRef.current) },
+        isTimeTrigger(trigger) ? undefined : async () => { await forceTriggerTransition(trigger) },
       )
       if (described) info.push(described)
     })
@@ -312,16 +344,17 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
             `branch:${branch.id ?? branchIndex}:${triggerIndex}`,
             targetLabel,
             timing,
-            isTimeTrigger(trigger) ? undefined : () => { void goToStage(branch.toStageId, latestSimulationTimeRef.current) },
+            isTimeTrigger(trigger) ? undefined : async () => { await forceTriggerTransition(trigger, branch.toStageId) },
           )
           if (described) info.push(described)
         })
       })
     setScenarioRuntimeTriggerInfo(info)
-  }, [advance, goToStage, scenario, stage, status, stageStartedSimulationTime, timeTriggerPaused, timeTriggerPauseStartedSimulationTime, toggleTimeTriggerPause])
+  }, [forceTriggerTransition, scenario, stage, status, stageStartedSimulationTime, timeTriggerPaused, timeTriggerPauseStartedSimulationTime, toggleTimeTriggerPause])
 
   const evaluate = useCallback(async (context: TContext, simulationTime: number) => {
     latestSimulationTimeRef.current = simulationTime
+    latestContextRef.current = context
     publishTriggerInfo(simulationTime)
     if (!scenario || !stage || status !== 'running' || transitionBusyRef.current) return false
     const stageContext: TeachingScenarioStageContext<TSnapshot, TTrigger> = {

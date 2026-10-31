@@ -35,6 +35,8 @@ export type EdusimActionDraft = Pick<EdusimActionDefinition,
 >
 
 const selectColumns = 'id,kind,name,short_press_action,long_press_action,duration_seconds,description,setting,environments,effects,candidate_access,priority,sort_order,created_at,updated_at'
+const ACTION_RUNTIME_CACHE_KEY = 'loppjusim:edusim-action-definitions'
+const runtimeActionDefinitions = new Map<string, EdusimActionDefinition>()
 
 function settingToEnvironments(setting: EdusimActionSetting): EdusimActionEnvironment[] {
   if (setting === 'all') return ['edumon-ana', 'edumon-icu']
@@ -67,6 +69,53 @@ function normalise(row: Record<string, unknown>): EdusimActionDefinition {
   }
 }
 
+function actionAppliesToEnvironment(definition: EdusimActionDefinition, environment?: EdusimActionEnvironment) {
+  return !environment || definition.environments.includes(environment)
+}
+
+function hydrateRuntimeActionCache() {
+  if (runtimeActionDefinitions.size || typeof window === 'undefined') return
+  try {
+    const raw = window.localStorage.getItem(ACTION_RUNTIME_CACHE_KEY)
+    const rows = raw ? JSON.parse(raw) as EdusimActionDefinition[] : []
+    cacheEdusimActionDefinitions(rows, false)
+  } catch {
+    // Action cache is best-effort. The live library remains authoritative.
+  }
+}
+
+export function cacheEdusimActionDefinitions(definitions: readonly EdusimActionDefinition[], persist = true): void {
+  for (const definition of definitions) runtimeActionDefinitions.set(definition.id, definition)
+  if (!persist || typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(ACTION_RUNTIME_CACHE_KEY, JSON.stringify([...runtimeActionDefinitions.values()]))
+  } catch {
+    // Persistence is optional; an in-memory cache is enough for the active run.
+  }
+}
+
+export function getCachedEdusimActionDefinition(id: string, environment?: EdusimActionEnvironment): EdusimActionDefinition | null {
+  hydrateRuntimeActionCache()
+  const definition = runtimeActionDefinitions.get(id) ?? null
+  return definition && actionAppliesToEnvironment(definition, environment) ? definition : null
+}
+
+/**
+ * Resolve an action for the live simulation path. Prefer the already-loaded or
+ * locally persisted definition so scenario execution remains local-first; only
+ * fall back to the cloud library if this browser has never cached the action.
+ */
+export async function resolveEdusimActionDefinition(id: string, environment?: EdusimActionEnvironment): Promise<EdusimActionDefinition | null> {
+  const cached = getCachedEdusimActionDefinition(id, environment)
+  if (cached) return cached
+  try {
+    const rows = await listEdusimActions(environment)
+    return rows.find((definition) => definition.id === id) ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function listEdusimActions(environment?: EdusimActionEnvironment): Promise<EdusimActionDefinition[]> {
   let query = supabase.from('edusim_action_definitions').select(selectColumns).order('kind').order('sort_order').order('name')
   if (environment) {
@@ -75,7 +124,9 @@ export async function listEdusimActions(environment?: EdusimActionEnvironment): 
   }
   const { data, error } = await query
   if (error) throw error
-  return (data ?? []).map((row) => normalise(row as Record<string, unknown>))
+  const definitions = (data ?? []).map((row) => normalise(row as Record<string, unknown>))
+  cacheEdusimActionDefinitions(definitions)
+  return definitions
 }
 
 export async function saveEdusimAction(draft: EdusimActionDraft): Promise<EdusimActionDefinition> {
@@ -99,11 +150,17 @@ export async function saveEdusimAction(draft: EdusimActionDraft): Promise<Edusim
     .select(selectColumns)
     .single()
   if (error) throw error
-  return normalise(data as Record<string, unknown>)
+  const definition = normalise(data as Record<string, unknown>)
+  cacheEdusimActionDefinitions([definition])
+  return definition
 }
 
 export async function deleteEdusimAction(id: string): Promise<void> {
   await requireInstructorAccount()
   const { error } = await supabase.from('edusim_action_definitions').delete().eq('id', id)
   if (error) throw error
+  runtimeActionDefinitions.delete(id)
+  if (typeof window !== 'undefined') {
+    try { window.localStorage.setItem(ACTION_RUNTIME_CACHE_KEY, JSON.stringify([...runtimeActionDefinitions.values()])) } catch { /* optional cache */ }
+  }
 }
