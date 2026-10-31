@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { EdusimBackLink } from './EdusimBackLink'
 import { LoppjuSimPlatformMenu, type LoppjuSimRunMode } from './LoppjuSimPlatformMenu'
+import { resetSimulation } from '../core/simulationReset'
 import { useScenarioRuntimeIndicator } from '../teaching/scenario/runtimeUiState'
 import './SimulationTopBar.css'
 
@@ -48,6 +49,7 @@ interface SimulationTopBarProps {
 }
 
 const DEFAULT_SPEED_OPTIONS: readonly SharedSimulationSpeed[] = [0.5, 1, 2, 4]
+const RESET_LONG_PRESS_MS = 800
 const PUBLIC_PRODUCT_LABELS: Record<string, string> = {
   EDUVENT: 'LoppjuSIM-MV',
   'EDUMON-Ana': 'LoppjuSIM-Anaesth',
@@ -69,7 +71,7 @@ export function SimulationTopBar({
   statusText,
   version,
   onAbout,
-  runMode = 'standalone',
+  runMode,
   showPlatformMenu = true,
   className = '',
   brandClassName = '',
@@ -84,8 +86,46 @@ export function SimulationTopBar({
   const speedLabel = controlsControlledByInstructor ? 'Simulation speed controlled by instructor' : 'Simulation speed'
   const publicBrandKicker = PUBLIC_PRODUCT_LABELS[brandKicker] ?? brandKicker
   const scenarioIndicator = useScenarioRuntimeIndicator()
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [resetHolding, setResetHolding] = useState(false)
+  const resetHoldRef = useRef<number | null>(null)
+  const resetHoldTriggeredRef = useRef(false)
 
-  return (
+  const cancelResetHold = () => {
+    if (resetHoldRef.current != null) window.clearTimeout(resetHoldRef.current)
+    resetHoldRef.current = null
+    setResetHolding(false)
+  }
+
+  const startResetHold = () => {
+    if (controlsControlledByInstructor) return
+    cancelResetHold()
+    resetHoldTriggeredRef.current = false
+    setResetHolding(true)
+    resetHoldRef.current = window.setTimeout(() => {
+      resetHoldRef.current = null
+      resetHoldTriggeredRef.current = true
+      setResetHolding(false)
+      setResetOpen(true)
+    }, RESET_LONG_PRESS_MS)
+  }
+
+  const handlePauseClick = () => {
+    if (resetHoldTriggeredRef.current) {
+      resetHoldTriggeredRef.current = false
+      return
+    }
+    onPausedChange(!simulationPaused)
+  }
+
+  const confirmReset = async () => {
+    if (resetting) return
+    setResetting(true)
+    await resetSimulation(publicBrandKicker)
+  }
+
+  return <>
     <header className={`topbar simulation-topbar ${className}`.trim()}>
       <div className={`brand-block ${brandClassName}`.trim()}>
         {brandLeading ?? <EdusimBackLink />}
@@ -94,12 +134,17 @@ export function SimulationTopBar({
 
       <div className="top-simulation-controls">
         <button
-          className={`top-simulation-pause ${simulationPaused ? 'paused' : ''}`}
+          className={`top-simulation-pause ${simulationPaused ? 'paused' : ''} ${resetHolding ? 'reset-holding' : ''}`}
           type="button"
-          onClick={() => onPausedChange(!simulationPaused)}
+          onClick={handlePauseClick}
+          onPointerDown={startResetHold}
+          onPointerUp={cancelResetHold}
+          onPointerCancel={cancelResetHold}
+          onPointerLeave={cancelResetHold}
+          onContextMenu={(event) => event.preventDefault()}
           disabled={controlsControlledByInstructor}
           aria-label={pauseLabel}
-          title={pauseLabel}
+          title={`${pauseLabel}. Press and hold to stop and reset the simulation.`}
         >
           <PauseIcon paused={simulationPaused} />
           <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
@@ -143,5 +188,16 @@ export function SimulationTopBar({
         {onAbout && <button type="button" className="top-about-button" onClick={onAbout}>About</button>}
       </div>
     </header>
-  )
+
+    {resetOpen && <div className="simulation-reset-backdrop" role="presentation" onMouseDown={() => { if (!resetting) setResetOpen(false) }}>
+      <section className="simulation-reset-dialog" role="dialog" aria-modal="true" aria-label="Stop and reset simulation" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="simulation-reset-heading"><div><span>Simulation control</span><strong>Stop and reset simulation?</strong></div><button type="button" disabled={resetting} onClick={() => setResetOpen(false)} aria-label="Close">×</button></div>
+        <p>This will end any active Simulation or Teaching session, stop the current scenario, clear its saved stage and local simulator state, and restart in Standalone mode.</p>
+        <div className="simulation-reset-actions">
+          <button type="button" disabled={resetting} onClick={() => setResetOpen(false)}>Cancel</button>
+          <button type="button" className="danger" disabled={resetting} onClick={() => void confirmReset()}>{resetting ? 'Resetting…' : 'Stop & reset'}</button>
+        </div>
+      </section>
+    </div>}
+  </>
 }
