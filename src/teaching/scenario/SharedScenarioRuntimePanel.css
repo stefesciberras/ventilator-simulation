@@ -107,6 +107,7 @@
   background: #15242b;
   color: #edf5f7;
   text-align: left;
+  font: inherit;
 }
 
 .shared-scenario-trigger-row:not(:disabled),
@@ -117,6 +118,43 @@
 .shared-scenario-trigger-row.informational {
   cursor: default;
   background: #101b21;
+}
+
+.shared-scenario-trigger-row.informational.forceable {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  isolation: isolate;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.shared-scenario-trigger-row.informational.forceable::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(74, 163, 194, .22);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: none;
+  pointer-events: none;
+}
+
+.shared-scenario-trigger-row.informational.forceable.holding::before {
+  transform: scaleX(1);
+  transition: transform .8s linear;
+}
+
+.shared-scenario-trigger-row.informational.forceable > * {
+  position: relative;
+  z-index: 1;
+}
+
+.shared-scenario-trigger-row.informational.forceable:focus-visible {
+  outline: 2px solid #68bdd9;
+  outline-offset: 2px;
 }
 
 .shared-scenario-trigger-row.informational.time.paused {
