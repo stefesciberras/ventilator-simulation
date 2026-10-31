@@ -12,6 +12,7 @@ import type {
   ScenarioTransition,
 } from './domain'
 import { setScenarioRuntimeTriggerInfo, type ScenarioRuntimeTriggerInfo } from './runtimeUiState'
+import { LOPPJUSIM_RUN_SCENARIO_EVENT } from '../../core/platformEvents'
 
 export type TeachingScenarioMediaContent = ScenarioMediaContent
 export type TeachingScenarioQuestionContent = ScenarioQuestionContent
@@ -38,6 +39,11 @@ export interface TeachingScenarioRuntimeSnapshot {
 interface PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> {
   scenario: TeachingScenarioDefinition<TSnapshot, TTrigger>
   snapshot: TeachingScenarioRuntimeSnapshot
+}
+
+export interface TeachingScenarioRunEventDetail<TSnapshot, TTrigger> {
+  definition: TeachingScenarioDefinition<TSnapshot, TTrigger>
+  simulationTime?: number
 }
 
 export type TeachingScenarioTransitionResolution =
@@ -216,6 +222,18 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     if (!definition.stages.length) throw new Error('Scenario has no stages.')
     return applyStageAt(definition, 0, simulationTime)
   }, [applyStageAt])
+
+  useEffect(() => {
+    const runScenario = (event: Event) => {
+      const detail = (event as CustomEvent<TeachingScenarioRunEventDetail<TSnapshot, TTrigger>>).detail
+      if (!detail?.definition?.stages?.length) return
+      const requestedTime = Number(detail.simulationTime)
+      const simulationTime = Number.isFinite(requestedTime) ? requestedTime : latestSimulationTimeRef.current
+      void start(detail.definition, simulationTime)
+    }
+    window.addEventListener(LOPPJUSIM_RUN_SCENARIO_EVENT, runScenario)
+    return () => window.removeEventListener(LOPPJUSIM_RUN_SCENARIO_EVENT, runScenario)
+  }, [start])
 
   const stop = useCallback(() => {
     setScenario(null)
