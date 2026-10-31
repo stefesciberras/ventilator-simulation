@@ -119,6 +119,11 @@
   background: #101b21;
 }
 
+.shared-scenario-trigger-row.informational.time.paused {
+  border-color: #6a5a33;
+  background: #1b1911;
+}
+
 .shared-scenario-trigger-row:disabled {
   border-color: #2d3b42;
   background: #10191e;
@@ -145,6 +150,40 @@
   overflow-wrap: anywhere;
 }
 
+.shared-scenario-time-trigger-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .55rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.shared-scenario-time-trigger-controls time {
+  min-width: 4.2rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-align: right;
+}
+
+.shared-scenario-time-trigger-controls button {
+  border: 1px solid #556a74;
+  border-radius: .5rem;
+  background: #17272f;
+  color: #edf5f7;
+  padding: .38rem .65rem;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.shared-scenario-time-trigger-controls button:hover {
+  background: #1c313b;
+}
+
 .shared-scenario-manual-paths {
   display: grid;
   gap: .4rem;
@@ -166,5 +205,13 @@
   .shared-scenario-runtime-modal {
     width: 100% !important;
     max-height: 78dvh !important;
+  }
+
+  .shared-scenario-trigger-row.informational.time {
+    align-items: flex-start;
+  }
+
+  .shared-scenario-time-trigger-controls {
+    justify-content: flex-end;
   }
 }
