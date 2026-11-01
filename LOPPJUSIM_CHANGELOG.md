@@ -12,6 +12,25 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Scenario-controlled Anaesth monitoring displays
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.77` (from `0.83.0.76`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.38` (from `1.2.8.37`)
+
+**Changes**
+
+- Added a dedicated **Monitoring** section to Anaesth Scenario Studio with stage controls for invasive blood pressure, BIS, EtCO₂/capnography and temperature.
+- Monitoring controls use the normal sparse stage-application model: each monitor has its own Apply checkbox, and unapplied monitor state persists across stage transitions.
+- Existing/legacy scenarios do not automatically apply monitoring controls, preventing an older stage from unexpectedly switching monitor sources off merely by being opened or run.
+- Scenario-applied monitoring changes use the same canonical ActionRuntime monitor-display capability IDs as the live Anaesth Monitoring panel, so the visible monitor surface, action-toggle state and alarm-source eligibility remain aligned.
+- Monitoring configuration is stored separately from patient physiology in the Anaesth scenario snapshot.
+
+**Architectural rule**
+
+> Monitoring modality/display configuration is scenario-addressable device state, not patient physiology. Scenario stages must drive the same monitor-display capability/ActionRuntime pathway as the live simulator controls, and sparse application must preserve any monitor state not explicitly applied by that stage.
+
 ## 2026-11-01 — Dedicated Monitoring section in Actions
 
 **Versions after change**

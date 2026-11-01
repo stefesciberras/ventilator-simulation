@@ -7,6 +7,7 @@ import {
   type MonitorRespiratorySettings,
 } from './types'
 import { applyAnaestheticDepthEffects, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { ANAESTH_SCENARIO_MONITORING_CONTROLS, applyEdumonScenarioMonitoringControl } from './scenarioMonitoring'
 import type { ScenarioProductId } from '../teaching/scenario/products'
 import {
   getEdumonScenarioModule,
@@ -75,6 +76,7 @@ export function buildEdumonScenarioStageTarget(
     patient: { ...current.patient },
     simulationPaused: current.simulationPaused,
     simulationSpeed: current.simulationSpeed,
+    monitoring: { ...(current.monitoring ?? {}) },
   }
 
   const desiredValueFor = (variable: Parameters<typeof readScenarioSnapshotValue>[1]) => readScenarioSnapshotValue(desired, variable)
@@ -90,6 +92,14 @@ export function buildEdumonScenarioStageTarget(
   }
 
   if (product === 'anaesth') {
+    for (const control of ANAESTH_SCENARIO_MONITORING_CONTROLS) {
+      if (applied && !applied.has(control.id)) continue
+      const enabled = desired.monitoring?.[control.key]
+      if (enabled == null) continue
+      applyEdumonScenarioMonitoringControl(control, enabled)
+      target.monitoring = { ...(target.monitoring ?? {}), [control.key]: enabled }
+    }
+
     const depthVariable = module.variables.find((variable) => variable.id === 'depthOfAnaesthesia')
     const responseVariable = module.variables.find((variable) => variable.id === 'anaestheticResponse')
     const applyDepthPhysiology = Boolean(
