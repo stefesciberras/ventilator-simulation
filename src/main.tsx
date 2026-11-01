@@ -10,6 +10,7 @@ import { installTabletResponsiveMode } from './tabletResponsiveRuntime'
 import { installSelfDirectedScenarioPanelDrag } from './selfDirectedScenarioPanel'
 import { installCollapsibleHeaderRuntime } from './components/collapsibleHeaderRuntime'
 import { installActionLevelIndicatorRuntime } from './edumon/actionLevelIndicatorRuntime'
+import { installEdumonDoaInteractionRuntime, installSimulatorBackNavigationGuard } from './simulationInteractionRuntime'
 import { SharedAlarmMetricHighlight } from './components/SharedAlarmMetricHighlight'
 import { EDUMON_ALARM_METRIC_HIGHLIGHTS } from './edumon/alarmMetricHighlights'
 import './styles.css'
@@ -28,6 +29,7 @@ import './action-editor/actionEditorEnhancements.css'
 import './components/SharedAlarmMetricHighlight.css'
 import './components/collapsibleHeaderRuntime.css'
 import './scenario-builder/scenarioNavigation.css'
+import './simulationInteractionRuntime.css'
 
 const pathname = window.location.pathname
 const isLandingRoute = pathname === '/'
@@ -37,9 +39,13 @@ const isScenarioBuilderRoute = pathname === '/scenarios' || pathname.startsWith(
 const isActionEditorRoute = pathname === '/actions' || pathname.startsWith('/actions/')
 
 if (isEduventRoute || isEdumonRoute) {
+  installSimulatorBackNavigationGuard()
   installTabletResponsiveMode()
   installCollapsibleHeaderRuntime()
-  if (isEdumonRoute) installActionLevelIndicatorRuntime()
+  if (isEdumonRoute) {
+    installActionLevelIndicatorRuntime()
+    installEdumonDoaInteractionRuntime()
+  }
   if (isEduventRoute) installSelfDirectedScenarioPanelDrag()
 }
 
