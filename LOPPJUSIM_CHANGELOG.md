@@ -12,6 +12,27 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Expanded Anaesth Scenario Studio stage transitions
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.80` (from `0.83.0.79`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.41` (from `1.2.8.40`)
+
+**Changes**
+
+- Expanded Anaesth Scenario Studio transition support from the original five top-level monitor values to the full numeric Anaesth setting registry, including Depth of Anaesthesia, FiSevo, respiratory mechanics, metabolic inputs and numeric ventilator settings.
+- Kept discrete/select and boolean state changes immediate; rhythm, sex, ventilation mode and monitoring toggles are not numerically interpolated.
+- Replaced the EDUMON runtime's top-level-key transition loop with registry/path-driven interpolation so nested patient values such as `anaestheticGases.fiSevoPercent`, respiratory mechanics and ventilator settings can use the normal stage default transition and per-parameter overrides.
+- Depth of Anaesthesia can now transition over time (for example 5 → 2 over 30 seconds). The runtime carries the effective depth progressively while the associated HR, arterial-pressure and spontaneous-respiratory effects transition over the same interval rather than jumping to the final physiology immediately.
+- The Anaesth controls surface now receives the effective transitioning patient state, so the visible DOA/physiology controls follow the running transition rather than displaying only the final target state.
+- Scenario ventilation application now recalculates effective RR/VT when spontaneous breathing or compliance changes as well as when ventilator settings change. Derived RR/VT transitions inherit the relevant driving parameter's override duration.
+- ICU retains its existing explicitly declared transition set; this change deliberately broadens only the Anaesth product contract.
+
+**Architectural rule**
+
+> Scenario transition capability is declared by the product registry and executed by snapshot path, not by a hard-coded list of top-level patient fields. Derived physiology affected by a transitioning clinical input must evolve on the same simulation-time transition rather than jumping ahead of the input state.
+
 ## 2026-11-01 — Full PHYSIO domain colour treatment
 
 **Versions after change**
