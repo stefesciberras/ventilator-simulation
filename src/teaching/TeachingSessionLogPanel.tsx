@@ -61,7 +61,21 @@ function humanEventMessage(entry: SessionLogEntry): string {
   if (logicalActorRole(entry) === 'standalone') return entry.label
   return `${entry.label} by ${actorFor(entry)}`
 }
-function afterLatestClear(entries: SessionLogEntry[]): SessionLogEntry[] { let last = -1; entries.forEach((entry, index) => { if (entry.event_type === 'session.log.cleared') last = index }); return last >= 0 ? entries.slice(last + 1) : entries }
+function visibleEntries(entries: SessionLogEntry[]): SessionLogEntry[] {
+  let boundary = -1
+  let includeBoundary = false
+  entries.forEach((entry, index) => {
+    if (entry.event_type === 'session.log.cleared') {
+      boundary = index
+      includeBoundary = false
+    } else if (entry.event_type === 'scenario.restarted') {
+      boundary = index
+      includeBoundary = true
+    }
+  })
+  if (boundary < 0) return entries
+  return entries.slice(boundary + (includeBoundary ? 0 : 1))
+}
 function actionDedupeKey(entry: SessionLogEntry): string | null {
   if (!entry.event_type.startsWith('action.')) return null
   const actionId = typeof entry.details?.actionId === 'string' ? entry.details.actionId : ''
@@ -111,7 +125,7 @@ function coalesceContinuousSettingRows(rows: DisplayRow[]): DisplayRow[] {
 }
 function displayRows(entries: SessionLogEntry[], simulationMode: boolean): DisplayRow[] {
   const rows: DisplayRow[] = []
-  for (const entry of dedupeReplicatedActions(afterLatestClear(entries))) {
+  for (const entry of dedupeReplicatedActions(visibleEntries(entries))) {
     if (entry.event_type === 'session.log.cleared') continue
     if (entry.category === 'settings') {
       const before = entry.details?.before
