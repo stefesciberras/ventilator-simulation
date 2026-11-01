@@ -146,8 +146,9 @@ html[data-edumon-invasive-bp-visible='false'] .edumon-value-art {
   opacity: .62;
 }
 
-/* Give the PHYSIO domains a clear visual identity without overriding the
-   existing signal-specific slider/text accents inside each domain. */
+/* PHYSIO domains use the same full-control colour language as the Patient
+   panel: titles, labels, values, slider tracks and thumbs share the domain
+   accent while the neutral panel background/layout remains unchanged. */
 .edumon-physio-panel > .control-section-title:first-of-type {
   margin-inline: -8px;
   padding: 6px 8px;
@@ -160,6 +161,10 @@ html[data-edumon-invasive-bp-visible='false'] .edumon-value-art {
   color: #55c8f0;
 }
 
+.edumon-physio-panel > .edumon-signal-capnography {
+  --edumon-signal-accent: #55c8f0;
+}
+
 .edumon-physio-panel > .control-section-title:nth-of-type(2) {
   margin-inline: -8px;
   padding: 6px 8px;
@@ -170,6 +175,10 @@ html[data-edumon-invasive-bp-visible='false'] .edumon-value-art {
 
 .edumon-physio-panel > .control-section-title:nth-of-type(2) h2 {
   color: #f1d35c;
+}
+
+.edumon-physio-panel > .edumon-signal-agent {
+  --edumon-signal-accent: #f1d35c;
 }
 
 /* Rhythm selection now lives in Patient controls. Hide the legacy v0.1

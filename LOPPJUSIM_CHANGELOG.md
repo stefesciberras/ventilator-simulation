@@ -12,6 +12,24 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Full PHYSIO domain colour treatment
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.79` (from `0.83.0.78`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.40` (from `1.2.8.39`)
+
+**Changes**
+
+- Extended PHYSIO colour coding to match the PATIENT panel convention rather than colouring only the subsection headings.
+- **Respiratory / gas exchange** now uses blue for the heading, parameter labels/values, slider tracks and slider thumbs.
+- **Anaesthetic physiology** now uses yellow for the heading, parameter labels/values, slider tracks and slider thumbs.
+- The panel background/layout remains neutral; the colour is carried by the domain controls themselves.
+
+**Architectural rule**
+
+> PHYSIO domain colouring should use the same control-level accent mechanism as PATIENT signal families: section identity, labels, values and interactive range controls share one domain accent without changing physiology or control semantics.
+
 ## 2026-11-01 — PHYSIO section colour coding
 
 **Versions after change**
