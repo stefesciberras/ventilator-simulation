@@ -12,6 +12,26 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Explicit session recovery and clean scenario restart
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.80` (from `0.83.0.79`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.41` (from `1.2.8.40`)
+
+**Changes**
+
+- Instructor sessions are no longer silently resumed after a page refresh/reload. When an active recoverable instructor session is found, the shared simulator shell asks whether to **Continue existing session** or **Start new session**.
+- Continuing reclaims the same instructor session, key and participants and allows the existing persisted scenario/runtime state to continue. Starting new explicitly retires the previous session, clears recovered scenario/transient simulator state, restores clean product defaults and opens the normal Sessions workflow.
+- Candidate recovery remains automatic/explicit through the existing candidate join/rejoin flow and is not offered a new-session choice.
+- **Restart scenario** is now a clean clinical restart inside the same live session: the current scenario definition is retained, the old scenario runtime and persisted stage are stopped, ActionRuntime/active effects and product transient state are cleared, product defaults are restored, then Stage 1 of the same scenario is started again.
+- Restarting does not terminate or recreate the surrounding Simulation/Teaching session, change its key, or disconnect candidates.
+- A durable `scenario.restarted` Session Log boundary is written for each clean restart. The normal Session Log and CSV projection show the restarted run from that boundary onward, while earlier database rows remain retained for future audit/debrief rather than being physically deleted.
+
+**Architectural rule**
+
+> Instructor session recovery after reload must be explicit rather than automatic. Restarting a scenario creates a new clean scenario run within the same live session: prior transient physiology/effects must not leak into the restarted run, and the normal log projection must not mix prior-run entries with the new run even though durable historical rows remain available.
+
 ## 2026-11-01 — Full PHYSIO domain colour treatment
 
 **Versions after change**
