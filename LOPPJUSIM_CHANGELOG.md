@@ -12,6 +12,23 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — PHYSIO section colour coding
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.78` (from `0.83.0.77`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.39` (from `1.2.8.38`)
+
+**Changes**
+
+- Added a blue visual treatment to the **Respiratory / gas exchange** heading in the PHYSIO panel.
+- Added a yellow visual treatment to the **Anaesthetic physiology** heading in the PHYSIO panel.
+- The colour coding is limited to section identity; existing signal-specific control/slider accent colours remain unchanged.
+
+**Architectural rule**
+
+> PHYSIO domain colour coding is presentation-only. It must not change the underlying signal-family styling, physiology state or control behaviour.
+
 ## 2026-11-01 — Scenario-controlled Anaesth monitoring displays
 
 **Versions after change**
