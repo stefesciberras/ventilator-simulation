@@ -1,4 +1,7 @@
 import { useSyncExternalStore } from 'react'
+import eyesOpen from '../assets/patient-eyes-open.webp'
+import eyesHalf from '../assets/patient-eyes-half.webp'
+import eyesClosed from '../assets/patient-eyes-closed.webp'
 import './PatientEyeIndicator.css'
 
 export type PatientEyelidState = 'open' | 'half' | 'closed'
@@ -50,61 +53,24 @@ function getPatientEyeAppearance(): PatientEyeAppearance {
   return patientEyeAppearance
 }
 
-function pupilRadius(pupilMm: number): number {
-  const clamped = Math.max(1, Math.min(8, pupilMm))
-  return 1.2 + ((clamped - 1) / 7) * 2.8
-}
-
-function Eye({
-  side,
-  eyelidState,
-  pupilMm,
-  reactive,
-}: {
-  side: 'left' | 'right'
-  eyelidState: PatientEyelidState
-  pupilMm: number
-  reactive: boolean
-}) {
-  const offset = side === 'left' ? 0 : 31
-  const cx = offset + 15.5
-  const radius = pupilRadius(pupilMm)
-
-  if (eyelidState === 'closed') {
-    return (
-      <g className="patient-eye patient-eye-closed">
-        <path d={`M${offset + 3} 15 Q${cx} 8 ${offset + 28} 15`} />
-        <path d={`M${offset + 5} 16 Q${cx} 20 ${offset + 26} 16`} className="patient-eye-lid-shadow" />
-      </g>
-    )
-  }
-
-  const lowerY = eyelidState === 'half' ? 15 : 21
-  const upperY = eyelidState === 'half' ? 13 : 7
-  const pupilCy = eyelidState === 'half' ? 14.5 : 14
-
-  return (
-    <g className={`patient-eye patient-eye-${eyelidState}`} data-reactive={reactive ? 'true' : 'false'}>
-      <path d={`M${offset + 3} 14 Q${cx} ${upperY} ${offset + 28} 14 Q${cx} ${lowerY} ${offset + 3} 14 Z`} className="patient-eye-sclera" />
-      <circle cx={cx} cy={pupilCy} r="5" className="patient-eye-iris" />
-      <circle cx={cx} cy={pupilCy} r={radius} className="patient-eye-pupil" />
-      {reactive && <circle cx={cx - 1.8} cy={pupilCy - 1.8} r="0.9" className="patient-eye-highlight" />}
-      {eyelidState === 'half' && <path d={`M${offset + 3} 14 Q${cx} 8 ${offset + 28} 14`} className="patient-eye-upper-lid" />}
-    </g>
-  )
+const EYE_IMAGE_BY_STATE: Record<PatientEyelidState, string> = {
+  open: eyesOpen,
+  half: eyesHalf,
+  closed: eyesClosed,
 }
 
 export function PatientEyeIndicator({ className = '' }: { className?: string }) {
   const appearance = useSyncExternalStore(subscribePatientEyeAppearance, getPatientEyeAppearance, getPatientEyeAppearance)
-  const stateLabel = appearance.eyelidState === 'open' ? 'eyes open' : appearance.eyelidState === 'half' ? 'eyes partially closed' : 'eyes closed'
+  const stateLabel = appearance.eyelidState === 'open'
+    ? 'eyes open'
+    : appearance.eyelidState === 'half'
+      ? 'eyes partially closed'
+      : 'eyes closed'
   const title = `Patient: ${stateLabel}; pupils L ${appearance.leftPupilMm.toFixed(1)} mm, R ${appearance.rightPupilMm.toFixed(1)} mm`
 
   return (
     <div className={`patient-eye-indicator ${className}`.trim()} role="img" aria-label={title} title={title}>
-      <svg viewBox="0 0 62 28" aria-hidden="true">
-        <Eye side="left" eyelidState={appearance.eyelidState} pupilMm={appearance.leftPupilMm} reactive={appearance.leftReactive} />
-        <Eye side="right" eyelidState={appearance.eyelidState} pupilMm={appearance.rightPupilMm} reactive={appearance.rightReactive} />
-      </svg>
+      <img src={EYE_IMAGE_BY_STATE[appearance.eyelidState]} alt="" aria-hidden="true" />
     </div>
   )
 }
