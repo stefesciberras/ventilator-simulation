@@ -12,6 +12,24 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Mobile simulator back-navigation guard and DOA slider override
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.74` (from `0.83.0.73`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.35` (from `1.2.8.34`)
+
+**Changes**
+
+- Added a simulator-route history guard so browser back actions and mobile edge-swipe back gestures do not navigate away from an active MV, Anaesth or ITU simulator page; explicit in-app navigation remains available.
+- Manual Anaesth Depth of Anaesthesia adjustment now supersedes the active `anaesthesia.hypnoticEffect` before applying the selected depth, so the displayed effective depth and the requested slider step remain aligned instead of retaining a hidden propofol/hypnotic contribution.
+- The DOA range control is automatically marked as a dedicated interaction target and receives a 44 px coarse-pointer touch area on mobile/tablet layouts.
+- Browser gesture handling is disabled on the DOA slider itself so horizontal slider movement is reserved for the clinical control rather than browser navigation.
+
+**Architectural rule**
+
+> A manual physiology control that displays a derived/effective value must supersede the transient ActionEffect target responsible for that value before applying the manual setting. Simulator routes should protect active sessions from accidental browser-history navigation while preserving explicit application navigation.
+
 ## 2026-11-01 — Reference artwork for shared patient eye indicator
 
 **Versions after change**
