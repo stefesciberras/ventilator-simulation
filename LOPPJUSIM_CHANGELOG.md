@@ -12,6 +12,24 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Reference artwork for shared patient eye indicator
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.73` (from `0.83.0.72`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.34` (from `1.2.8.33`)
+
+**Changes**
+
+- Replaced the generated SVG eye artwork with the supplied three-state paired-eye reference artwork: open, half-closed and closed.
+- Preserved the existing Anaesth physiology mapping from `effectiveAnaestheticDepth()`: depth 5 open, depth 4 half-closed, depths 1–3 closed.
+- Kept the shared Anaesth/ITU patient-eye appearance state and independent pupil diameter/reactivity fields for future neurological pupil modelling.
+- Aligned the eye indicator to the far left of the monitor display-action strip and sized the artwork to the same 48 px height as the alarm-silence hardware control.
+
+**Architectural rule**
+
+> Patient eye appearance remains a shared physiology-driven component. Presentation artwork may change independently of the shared physiological state API and its future pupil-state extensions.
+
 ## 2026-11-01 — Mode-aware Anaesth Scenario Studio ventilation controls
 
 **Versions after change**
