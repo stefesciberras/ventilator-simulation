@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { DEFAULT_MONITOR_STATE } from '../../../edumon/types'
+import { DEFAULT_MONITOR_STATE, type MonitorVentilationMode } from '../../../edumon/types'
 import { calculateConfiguredVdVtFromValues } from '../../../patientMetrics'
 import { listEdusimActions } from '../../../edumon/actionLibrary'
 import type { EdumonScenarioMetric, EdumonScenarioSnapshot, EdumonScenarioTrigger, EdumonStoredScenario } from '../../../edumon/scenarioTypes'
@@ -49,9 +49,78 @@ function clinicalGroupClass(group: string) {
   if (group === 'Patient') return 'patient'
   if (group === 'Cardiovascular') return 'cardiovascular'
   if (group === 'Respiratory') return 'respiratory'
+  if (group === 'Ventilation') return 'ventilation'
   if (group === 'Metabolism') return 'metabolism'
   if (group === 'Anaesthesia') return 'anaesthesia'
   return 'monitor'
+}
+
+const ventilationVariablesByMode: Record<MonitorVentilationMode, ReadonlySet<string>> = {
+  MANUAL: new Set(['ventilatorMode', 'fio2', 'peepCmH2O']),
+  'VC-AC': new Set([
+    'ventilatorMode',
+    'fio2',
+    'peepCmH2O',
+    'ventilatorSetRate',
+    'ventilatorSetTidalVolumeMl',
+    'ventilatorInspiratoryTimeSeconds',
+    'ventilatorInspiratoryFlowLMin',
+    'ventilatorPlateauPercent',
+  ]),
+  'PC-AC': new Set([
+    'ventilatorMode',
+    'fio2',
+    'peepCmH2O',
+    'ventilatorSetRate',
+    'ventilatorInspiratoryTimeSeconds',
+    'ventilatorPressureControlCmH2O',
+  ]),
+  PSV: new Set([
+    'ventilatorMode',
+    'fio2',
+    'peepCmH2O',
+    'ventilatorPressureSupportCmH2O',
+    'ventilatorTerminationSensitivityPercent',
+  ]),
+  'SIMV-VC': new Set([
+    'ventilatorMode',
+    'fio2',
+    'peepCmH2O',
+    'ventilatorSetRate',
+    'ventilatorSetTidalVolumeMl',
+    'ventilatorInspiratoryTimeSeconds',
+    'ventilatorInspiratoryFlowLMin',
+    'ventilatorPlateauPercent',
+    'ventilatorPressureSupportCmH2O',
+    'ventilatorTerminationSensitivityPercent',
+    'ventilatorSimvSyncWindowPercent',
+  ]),
+  'SIMV-PC': new Set([
+    'ventilatorMode',
+    'fio2',
+    'peepCmH2O',
+    'ventilatorSetRate',
+    'ventilatorInspiratoryTimeSeconds',
+    'ventilatorPressureControlCmH2O',
+    'ventilatorPressureSupportCmH2O',
+    'ventilatorTerminationSensitivityPercent',
+    'ventilatorSimvSyncWindowPercent',
+  ]),
+  'VG-PC': new Set([
+    'ventilatorMode',
+    'fio2',
+    'peepCmH2O',
+    'ventilatorSetRate',
+    'ventilatorSetTidalVolumeMl',
+    'ventilatorInspiratoryTimeSeconds',
+    'ventilatorVolumeGuaranteePressureLimitCmH2O',
+  ]),
+}
+
+function ventilationVariableVisible(variable: ScenarioVariableDefinition, snapshot: EdumonScenarioSnapshot) {
+  if (variable.group !== 'Ventilation') return true
+  const mode = (snapshot.patient.respiratory?.ventilatorMode ?? 'MANUAL') as MonitorVentilationMode
+  return (ventilationVariablesByMode[mode] ?? ventilationVariablesByMode.MANUAL).has(variable.id)
 }
 
 function displayValue(variable: ScenarioVariableDefinition, value: unknown) {
@@ -97,15 +166,16 @@ function RegistryVariableControl({
 function SnapshotEditor({ product, snapshot, onChange, appliedVariableIds, onAppliedVariableIdsChange }: { product: EdumonScenarioProduct; snapshot: EdumonScenarioSnapshot; onChange: (snapshot: EdumonScenarioSnapshot) => void; appliedVariableIds?: string[]; onAppliedVariableIdsChange?: (ids: string[]) => void }) {
   const module = getEdumonScenarioModule(product)
   const editable = writableScenarioVariables(module).filter((variable) => variable.snapshotPath?.startsWith('patient.'))
+  const visibleEditable = editable.filter((variable) => ventilationVariableVisible(variable, snapshot))
   const selected = new Set(appliedVariableIds ?? editable.map((variable) => variable.id))
   const setApplied = (id: string, enabled: boolean) => { const next = new Set(selected); if (enabled) next.add(id); else next.delete(id); onAppliedVariableIdsChange?.([...next]) }
-  const groups = EDUMON_PATIENT_GROUP_ORDER.filter((group) => editable.some((variable) => variable.group === group))
+  const groups = EDUMON_PATIENT_GROUP_ORDER.filter((group) => visibleEditable.some((variable) => variable.group === group))
 
   return <div className="shared-scenario-eduvent-snapshot shared-scenario-edumon-snapshot">
     {groups.map((group) => <section key={group} className={`shared-scenario-control-group ${clinicalGroupClass(group)}`}>
       <h3>{group}</h3>
       <div className="shared-scenario-slider-grid">
-        {editable.filter((variable) => variable.group === group).map((variable) => <RegistryVariableControl key={variable.id} variable={variable} snapshot={snapshot} applied={selected.has(variable.id)} onAppliedChange={setApplied} onChange={onChange} />)}
+        {visibleEditable.filter((variable) => variable.group === group).map((variable) => <RegistryVariableControl key={variable.id} variable={variable} snapshot={snapshot} applied={selected.has(variable.id)} onAppliedChange={setApplied} onChange={onChange} />)}
       </div>
     </section>)}
   </div>
