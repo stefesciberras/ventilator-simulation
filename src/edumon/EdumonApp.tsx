@@ -35,7 +35,7 @@ import { getSimulationProduct } from '../core/products'
 import { autoscaleWaveformSamples, type WaveformAutoscaleOptions } from '../core/WaveformAutoscale'
 import type { EdumonTeachingState } from './teachingState'
 import { getActionRuntimeLog, subscribeToActionRuntime } from '../edusim/actions/ActionRuntime'
-import { buildEdumonScenarioStageTarget, type EdumonTransitionPatientKey } from './scenarioRegistry'
+import { buildEdumonScenarioStageTarget, interpolateEdumonScenarioPatientTransition, type EdumonScenarioPatientTransition } from './scenarioRegistry'
 import './edumon.css'
 import './edumon-console-parity.css'
 
@@ -231,7 +231,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const scenarioActionBaselineRef = useRef<Record<string, number>>({})
   const simulationPausedRef = useRef(false)
   const simulationSpeedRef = useRef<EdumonSimulationSpeed>(1)
-  const scenarioTransitionRef = useRef<{ from: MonitorPatientState; to: MonitorPatientState; start: number; defaultPolicy: TeachingScenarioTransition; overrides: Record<string, TeachingScenarioTransition>; keys: EdumonTransitionPatientKey[] } | null>(null)
+  const scenarioTransitionRef = useRef<EdumonScenarioPatientTransition | null>(null)
   const [elapsed, setElapsed] = useState(TRACE_WINDOW_SECONDS)
   const [simulationPaused, setSimulationPaused] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState<EdumonSimulationSpeed>(1)
@@ -278,19 +278,10 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const effectivePatientState = (() => {
     const scenarioTransition = scenarioTransitionRef.current
     if (scenarioTransition) {
-      const keys = scenarioTransition.keys
-      const next: MonitorPatientState = { ...scenarioTransition.to, rhythm: scenarioTransition.to.rhythm }
-      let running = false
-      for (const key of keys) {
-        const policy = scenarioTransition.overrides[key] ?? scenarioTransition.defaultPolicy
-        if (policy.mode !== 'linear' || policy.durationSeconds <= 0) { next[key] = scenarioTransition.to[key]; continue }
-        const progress = Math.max(0, Math.min(1, (elapsed - scenarioTransition.start) / Math.max(policy.durationSeconds, 0.001)))
-        next[key] = scenarioTransition.from[key] + (scenarioTransition.to[key] - scenarioTransition.from[key]) * progress
-        if (progress < 1) running = true
-      }
-      effectivePatientRef.current = next
-      if (!running) scenarioTransitionRef.current = null
-      return next
+      const result = interpolateEdumonScenarioPatientTransition(scenarioTransition, elapsed)
+      effectivePatientRef.current = result.patient
+      if (!result.running) scenarioTransitionRef.current = null
+      return result.patient
     }
     const transition = patientTransitionRef.current
     if (!transition) { effectivePatientRef.current = { ...patientState }; return patientState }
@@ -370,8 +361,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     scenarioPatientBaselineRef.current = { ...targetPatient }
     const transition = stage.transition ?? { mode: 'immediate' as const }
     const overrides = stage.transitionOverrides ?? {}
-    const hasLinear = target.transitionPatientKeys.some((key) => {
-      const policy = overrides[key] ?? transition
+    const hasLinear = target.transitionPatientVariables.some((variable) => {
+      const policy = overrides[variable.policyId ?? variable.id] ?? transition
       return policy.mode === 'linear' && policy.durationSeconds > 0
     })
     patientTransitionRef.current = null
@@ -382,7 +373,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         start: stageContext.stageStartedSimulationTime,
         defaultPolicy: transition,
         overrides,
-        keys: target.transitionPatientKeys,
+        variables: target.transitionPatientVariables,
       }
     } else {
       scenarioTransitionRef.current = null
@@ -666,7 +657,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         />
 
         )}
-        controls={<EdumonWorkspacePanel patientState={patientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
 
       {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (

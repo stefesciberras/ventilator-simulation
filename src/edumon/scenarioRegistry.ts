@@ -17,16 +17,96 @@ import {
   writeScenarioSnapshotValue,
 } from '../scenario-builder/modules/edumon/definition'
 
-export type EdumonTransitionPatientKey = keyof Pick<MonitorPatientState, 'heartRate' | 'systolicPressure' | 'diastolicPressure' | 'spo2' | 'peripheralPerfusion'>
+interface EdumonTransitionPolicy {
+  mode: 'immediate' | 'linear'
+  durationSeconds?: number
+}
+
+export interface EdumonTransitionPatientVariable {
+  id: string
+  policyId?: string
+  patientPath: string
+  defaultValue?: number
+}
+
+export interface EdumonScenarioPatientTransition {
+  from: MonitorPatientState
+  to: MonitorPatientState
+  start: number
+  defaultPolicy: EdumonTransitionPolicy
+  overrides: Record<string, EdumonTransitionPolicy>
+  variables: EdumonTransitionPatientVariable[]
+}
 
 export interface EdumonScenarioStageTarget {
   patient: MonitorPatientState
   simulationPaused: boolean
   simulationSpeed: EdumonSimulationSpeed
-  transitionPatientKeys: EdumonTransitionPatientKey[]
+  transitionPatientVariables: EdumonTransitionPatientVariable[]
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const SCENARIO_VENTILATION_DRIVER_IDS = new Set([
+  'ventilatorMode',
+  'ventilatorSetRate',
+  'ventilatorSetTidalVolumeMl',
+  'ventilatorPressureControlCmH2O',
+  'ventilatorPressureSupportCmH2O',
+  'spontaneousRespiratoryRate',
+  'spontaneousTidalVolumeMl',
+  'complianceMlPerCmH2O',
+])
+
+function readPatientPath(patient: MonitorPatientState, path: string): unknown {
+  let current: unknown = patient
+  for (const part of path.split('.')) {
+    if (!current || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[part]
+  }
+  return current
+}
+
+function writePatientPath(patient: MonitorPatientState, path: string, value: number): MonitorPatientState {
+  const clone = structuredClone(patient) as unknown as Record<string, unknown>
+  const parts = path.split('.')
+  let current = clone
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    const part = parts[index]
+    const next = current[part]
+    current[part] = next && typeof next === 'object' ? { ...(next as Record<string, unknown>) } : {}
+    current = current[part] as Record<string, unknown>
+  }
+  current[parts[parts.length - 1]] = value
+  return clone as unknown as MonitorPatientState
+}
+
+export function interpolateEdumonScenarioPatientTransition(
+  transition: EdumonScenarioPatientTransition,
+  simulationTime: number,
+): { patient: MonitorPatientState; running: boolean } {
+  let patient = structuredClone(transition.to)
+  let running = false
+
+  for (const variable of transition.variables) {
+    const policy = transition.overrides[variable.policyId ?? variable.id] ?? transition.defaultPolicy
+    const durationSeconds = policy.mode === 'linear' ? Math.max(0, policy.durationSeconds ?? 0) : 0
+    if (durationSeconds <= 0) continue
+
+    const toValue = readPatientPath(transition.to, variable.patientPath)
+    const fromValueRaw = readPatientPath(transition.from, variable.patientPath)
+    const fromValue = typeof fromValueRaw === 'number' && Number.isFinite(fromValueRaw)
+      ? fromValueRaw
+      : variable.defaultValue
+    if (typeof toValue !== 'number' || !Number.isFinite(toValue) || typeof fromValue !== 'number' || !Number.isFinite(fromValue)) continue
+
+    const progress = Math.max(0, Math.min(1, (simulationTime - transition.start) / Math.max(durationSeconds, 0.001)))
+    patient = writePatientPath(patient, variable.patientPath, fromValue + (toValue - fromValue) * progress)
+    if (progress < 1) running = true
+  }
+
+  return { patient, running }
+}
 
 function applyScenarioVentilation(patient: MonitorPatientState): MonitorPatientState {
   const respiratory: MonitorRespiratorySettings = {
@@ -64,6 +144,20 @@ function applyScenarioVentilation(patient: MonitorPatientState): MonitorPatientS
   }
 }
 
+function addTransitionVariable(
+  variables: EdumonTransitionPatientVariable[],
+  candidate: EdumonTransitionPatientVariable,
+) {
+  if (!variables.some((variable) => variable.patientPath === candidate.patientPath)) variables.push(candidate)
+}
+
+function firstAppliedTransitionId(
+  transitionVariables: EdumonTransitionPatientVariable[],
+  candidateIds: readonly string[],
+) {
+  return candidateIds.find((id) => transitionVariables.some((variable) => variable.id === id))
+}
+
 export function buildEdumonScenarioStageTarget(
   product: Extract<ScenarioProductId, 'anaesth' | 'icu'>,
   current: EdumonScenarioSnapshot,
@@ -91,6 +185,10 @@ export function buildEdumonScenarioStageTarget(
     target = writeScenarioSnapshotValue(target, variable, desiredValueFor(variable))
   }
 
+  let applyDepthPhysiology = false
+  let depthApplied = false
+  let responseApplied = false
+
   if (product === 'anaesth') {
     for (const control of ANAESTH_SCENARIO_MONITORING_CONTROLS) {
       if (applied && !applied.has(control.id)) continue
@@ -102,10 +200,9 @@ export function buildEdumonScenarioStageTarget(
 
     const depthVariable = module.variables.find((variable) => variable.id === 'depthOfAnaesthesia')
     const responseVariable = module.variables.find((variable) => variable.id === 'anaestheticResponse')
-    const applyDepthPhysiology = Boolean(
-      (depthVariable && shouldApply(depthVariable))
-      || (responseVariable && shouldApply(responseVariable)),
-    )
+    depthApplied = Boolean(depthVariable && shouldApply(depthVariable))
+    responseApplied = Boolean(responseVariable && shouldApply(responseVariable))
+    applyDepthPhysiology = depthApplied || responseApplied
 
     if (applyDepthPhysiology) {
       const explicitBaselineApplied = ['heartRate', 'systolicPressure', 'diastolicPressure', 'spontaneousRespiratoryRate']
@@ -135,7 +232,7 @@ export function buildEdumonScenarioStageTarget(
       }
     }
 
-    const ventilationApplied = writableVariables.some((variable) => variable.group === 'Ventilation' && shouldApply(variable))
+    const ventilationApplied = writableVariables.some((variable) => SCENARIO_VENTILATION_DRIVER_IDS.has(variable.id) && shouldApply(variable))
     if (ventilationApplied) {
       target = {
         ...target,
@@ -144,16 +241,58 @@ export function buildEdumonScenarioStageTarget(
     }
   }
 
-  const transitionPatientKeys = transitionScenarioVariables(module)
+  const transitionPatientVariables = transitionScenarioVariables(module)
     .filter(shouldApply)
     .filter((variable) => variable.snapshotPath?.startsWith('patient.'))
-    .map((variable) => variable.snapshotPath!.slice('patient.'.length))
-    .filter((key): key is EdumonTransitionPatientKey => ['heartRate', 'systolicPressure', 'diastolicPressure', 'spo2', 'peripheralPerfusion'].includes(key))
+    .map((variable) => ({
+      id: variable.id,
+      patientPath: variable.snapshotPath!.slice('patient.'.length),
+      defaultValue: typeof variable.defaultValue === 'number' ? variable.id === 'fio2' ? variable.defaultValue / 100 : variable.defaultValue : undefined,
+    }))
+
+  if (product === 'anaesth' && applyDepthPhysiology) {
+    const policyId = depthApplied ? 'depthOfAnaesthesia' : 'anaestheticResponse'
+    addTransitionVariable(transitionPatientVariables, { id: 'depth-effect-heartRate', policyId, patientPath: 'heartRate' })
+    addTransitionVariable(transitionPatientVariables, { id: 'depth-effect-systolicPressure', policyId, patientPath: 'systolicPressure' })
+    addTransitionVariable(transitionPatientVariables, { id: 'depth-effect-diastolicPressure', policyId, patientPath: 'diastolicPressure' })
+    addTransitionVariable(transitionPatientVariables, { id: 'depth-effect-spontaneousRespiratoryRate', policyId, patientPath: 'respiratory.spontaneousRespiratoryRate', defaultValue: DEFAULT_MONITOR_RESPIRATORY_SETTINGS.spontaneousRespiratoryRate })
+  }
+
+  if (product === 'anaesth') {
+    const respiratoryRatePolicyId = firstAppliedTransitionId(transitionPatientVariables, [
+      'ventilatorSetRate',
+      'spontaneousRespiratoryRate',
+    ])
+    if (respiratoryRatePolicyId) {
+      addTransitionVariable(transitionPatientVariables, {
+        id: 'ventilation-effect-respiratoryRate',
+        policyId: respiratoryRatePolicyId,
+        patientPath: 'respiratory.respiratoryRate',
+        defaultValue: DEFAULT_MONITOR_RESPIRATORY_SETTINGS.respiratoryRate,
+      })
+    }
+
+    const tidalVolumePolicyId = firstAppliedTransitionId(transitionPatientVariables, [
+      'ventilatorSetTidalVolumeMl',
+      'ventilatorPressureControlCmH2O',
+      'ventilatorPressureSupportCmH2O',
+      'complianceMlPerCmH2O',
+      'spontaneousTidalVolumeMl',
+    ])
+    if (tidalVolumePolicyId) {
+      addTransitionVariable(transitionPatientVariables, {
+        id: 'ventilation-effect-tidalVolumeMl',
+        policyId: tidalVolumePolicyId,
+        patientPath: 'respiratory.tidalVolumeMl',
+        defaultValue: DEFAULT_MONITOR_RESPIRATORY_SETTINGS.tidalVolumeMl,
+      })
+    }
+  }
 
   return {
     patient: target.patient,
     simulationPaused: target.simulationPaused,
     simulationSpeed: target.simulationSpeed,
-    transitionPatientKeys,
+    transitionPatientVariables,
   }
 }

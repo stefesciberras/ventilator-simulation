@@ -110,12 +110,18 @@ function createModule(
   }
 }
 
+const anaesthVariables = [...variables, ...anaesthScenarioVariables].map((variable) =>
+  variable.role === 'setting' && variable.writable && variable.type === 'number'
+    ? { ...variable, transitionable: true }
+    : variable,
+)
+
 export const ANAESTH_SCENARIO_MODULE = createModule(
   'anaesth',
   'LoppjuSIM-Anaesth',
   'Anaesthesia monitor',
   'Anaesthesia patient-monitor scenarios using the shared LoppjuSIM scenario library.',
-  [...variables, ...anaesthScenarioVariables],
+  anaesthVariables,
 )
 
 export const ICU_SCENARIO_MODULE = createModule(
