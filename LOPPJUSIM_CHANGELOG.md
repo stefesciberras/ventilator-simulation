@@ -12,6 +12,24 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Mode-aware Anaesth Scenario Studio ventilation controls
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.72` (from `0.83.0.71`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.33` (from `1.2.8.32`)
+
+**Changes**
+
+- Anaesth Scenario Studio now shows only ventilation controls that are clinically applicable to the selected ventilation mode.
+- Manual shows FiO₂ and PEEP only; VC-AC shows mandatory volume-control settings; PC-AC shows mandatory pressure-control settings; PSV shows pressure support and ETS; SIMV modes additionally expose pressure support, ETS and sync window; VG-PC exposes VT target and pressure limit.
+- Changing ventilation mode updates the visible control set immediately.
+- Hidden mode-inapplicable settings remain preserved in the scenario snapshot so switching modes does not destroy previously authored values.
+
+**Architectural rule**
+
+> Scenario Studio should expose the same mode-dependent device controls as the simulator. Controls that cannot affect the selected device mode should not be presented as active authoring parameters, while their stored values may be retained for reversible mode switching.
+
 ## 2026-10-31 — Anaesth Scenario Studio gas/ventilation registry and physiology-aware stage application
 
 **Versions after change**
