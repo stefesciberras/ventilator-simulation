@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { setInstructorSessionRecovery } from './sessionRecoveryUiState'
 import type {
   RecoverableTeachingCandidate,
   RecoverableTeachingInstructor,
@@ -26,6 +27,14 @@ function candidateRecoveryKey(namespace: string) { return `${namespace}.candidat
 function instructorSessionKey(namespace: string) { return `${namespace}.instructor-session-id` }
 function instructorClientKey(namespace: string) { return `${namespace}.instructor-client-id` }
 
+function clearInstructorRecoveryStorage(namespace: string) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(instructorSessionKey(namespace))
+    window.sessionStorage.removeItem(instructorClientKey(namespace))
+  } catch { /* optional */ }
+}
+
 function readCandidateRecovery(namespace: string): RecoverableTeachingCandidate | null {
   if (typeof window === 'undefined') return null
   try {
@@ -39,6 +48,11 @@ function readCandidateRecovery(namespace: string): RecoverableTeachingCandidate 
 
 function candidateRecoveryExpired(recovery: RecoverableTeachingCandidate) {
   const expiry = Date.parse(recovery.expiresAt)
+  return Number.isFinite(expiry) && expiry <= Date.now()
+}
+
+function sessionExpired(session: SharedTeachingSessionRow) {
+  const expiry = Date.parse(session.expires_at)
   return Number.isFinite(expiry) && expiry <= Date.now()
 }
 
@@ -114,6 +128,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
       try { window.localStorage.removeItem(candidateRecoveryKey(storageNamespace)) } catch { /* optional */ }
       setRecoverableCandidate(null)
     }
+    if (previousRole === 'instructor') setInstructorSessionRecovery(null)
     roleRef.current = 'standalone'
     setRole('standalone')
     sessionRef.current = null
@@ -157,10 +172,8 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
       void repository.touchInstructorSession(sessionId, clientId).catch((cause) => {
         const message = cause instanceof Error ? cause.message : 'Instructor control lease was lost.'
         if (/expired/i.test(message)) {
-          try {
-            window.sessionStorage.removeItem(instructorSessionKey(storageNamespace))
-            window.sessionStorage.removeItem(instructorClientKey(storageNamespace))
-          } catch { /* optional */ }
+          clearInstructorRecoveryStorage(storageNamespace)
+          setInstructorSessionRecovery(null)
           void terminateLocally('This teaching session expired 2 hours after it was created.')
           return
         }
@@ -184,7 +197,27 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
     candidateHeartbeatRef.current = window.setInterval(heartbeat, candidateHeartbeatMs)
   }
 
+  const retireRecoverableInstructor = async (recoveryOverride?: RecoverableTeachingInstructor | null) => {
+    const recovery = recoveryOverride ?? recoverableInstructor
+    if (!recovery) return true
+    setConnection('connecting')
+    setError(null)
+    try {
+      await repository.updateSession(recovery.sessionId, { status: 'ended' } as Partial<TSession>)
+      clearInstructorRecoveryStorage(storageNamespace)
+      setRecoverableInstructor(null)
+      setInstructorSessionRecovery(null)
+      setConnection('idle')
+      return true
+    } catch (cause) {
+      setConnection('error')
+      setError(cause instanceof Error ? cause.message : 'Unable to retire the previous instructor session.')
+      return false
+    }
+  }
+
   const startInstructor = async (input: TCreateInput) => {
+    if (recoverableInstructor && !(await retireRecoverableInstructor(recoverableInstructor))) return null
     setConnection('connecting')
     setError(null)
     try {
@@ -211,6 +244,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
         window.sessionStorage.setItem(instructorClientKey(storageNamespace), clientId)
       } catch { /* optional */ }
       setRecoverableInstructor(null)
+      setInstructorSessionRecovery(null)
       storeSession(row, 'start', true)
       await attachSession(row.id)
       await attachMembers(row.id)
@@ -234,6 +268,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
       const found = sessionId ? { sessionId, sessionKey: '' } : await repository.findActiveInstructorSession()
       if (!found) {
         setRecoverableInstructor(null)
+        setInstructorSessionRecovery(null)
         setConnection('idle')
         return null
       }
@@ -250,6 +285,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
         window.sessionStorage.setItem(instructorClientKey(storageNamespace), clientId)
       } catch { /* optional */ }
       setRecoverableInstructor(null)
+      setInstructorSessionRecovery(null)
       storeSession(row, 'resume', true)
       await attachSession(row.id)
       await attachMembers(row.id)
@@ -311,10 +347,8 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
     if (roleRef.current === 'instructor' && current) {
       try { await repository.updateSession(current.id, { status: 'ended' } as Partial<TSession>) } catch { /* local leave still wins */ }
     }
-    try {
-      window.sessionStorage.removeItem(instructorSessionKey(storageNamespace))
-      window.sessionStorage.removeItem(instructorClientKey(storageNamespace))
-    } catch { /* optional */ }
+    clearInstructorRecoveryStorage(storageNamespace)
+    setInstructorSessionRecovery(null)
     await terminateLocally(null)
   }
 
@@ -352,17 +386,40 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
       try { window.localStorage.removeItem(candidateRecoveryKey(storageNamespace)) } catch { /* optional */ }
     }
 
-    const storedSessionId = typeof window === 'undefined' ? null : window.sessionStorage.getItem(instructorSessionKey(storageNamespace))
-    if (storedSessionId) {
-      void resumeInstructor(storedSessionId)
-      return
+    let active = true
+    const publishInstructorRecovery = (found: RecoverableTeachingInstructor) => {
+      if (!active || roleRef.current !== 'standalone') return
+      setRecoverableInstructor(found)
+      setInstructorSessionRecovery({
+        sessionId: found.sessionId,
+        sessionKey: found.sessionKey,
+        continueSession: async () => Boolean(await resumeInstructor(found.sessionId)),
+        startNewSession: async () => retireRecoverableInstructor(found),
+      })
     }
+
     void (async () => {
+      const storedSessionId = typeof window === 'undefined' ? null : window.sessionStorage.getItem(instructorSessionKey(storageNamespace))
+      if (storedSessionId) {
+        try {
+          await repository.ensureIdentity()
+          const row = await repository.fetchSession(storedSessionId)
+          if (row.status !== 'ended' && !sessionExpired(row)) {
+            publishInstructorRecovery({ sessionId: row.id, sessionKey: row.session_key })
+            return
+          }
+          clearInstructorRecoveryStorage(storageNamespace)
+        } catch {
+          // Fall through to active-session discovery. A stale local ID must never force resume.
+        }
+      }
       try {
         const found = await repository.findActiveInstructorSession()
-        if (found && roleRef.current === 'standalone') setRecoverableInstructor(found)
+        if (found) publishInstructorRecovery(found)
       } catch { /* standalone is normal */ }
     })()
+
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
@@ -412,6 +469,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
     if (candidateHeartbeatRef.current != null) window.clearInterval(candidateHeartbeatRef.current)
     void repository.closeChannel(sessionChannelRef.current)
     void repository.closeChannel(memberChannelRef.current)
+    setInstructorSessionRecovery(null)
   }, [])
 
   return {
@@ -424,6 +482,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
     recoverableCandidate,
     startInstructor,
     resumeInstructor,
+    retireRecoverableInstructor,
     joinCandidate,
     resumeCandidate,
     leaveSession,
