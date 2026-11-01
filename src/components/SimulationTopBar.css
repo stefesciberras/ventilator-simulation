@@ -20,6 +20,17 @@
   background: rgba(255,255,255,.06);
 }
 
+.top-simulation-pause,
+.top-simulation-pause * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.top-simulation-pause {
+  touch-action: manipulation;
+}
+
 .top-simulation-pause.reset-holding {
   position: relative;
   overflow: hidden;
@@ -99,12 +110,12 @@
 }
 
 .simulation-reset-actions {
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
   gap: 10px;
 }
 
 .simulation-reset-actions button {
+  width: 100%;
   min-height: 38px;
   padding: 8px 14px;
   border: 1px solid rgba(255,255,255,.16);
@@ -113,6 +124,12 @@
   color: #eaf3f6;
   font-weight: 700;
   cursor: pointer;
+}
+
+.simulation-reset-actions button.restart {
+  border-color: rgba(88,183,214,.62);
+  background: rgba(40,128,160,.18);
+  color: #d9f4ff;
 }
 
 .simulation-reset-actions button.danger {
@@ -192,7 +209,4 @@
   }
 
   .simulation-stage-control strong { font-size: .72rem; }
-
-  .simulation-reset-actions { flex-direction: column-reverse; }
-  .simulation-reset-actions button { width: 100%; }
 }

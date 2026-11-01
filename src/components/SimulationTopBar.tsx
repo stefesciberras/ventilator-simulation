@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { EdusimBackLink } from './EdusimBackLink'
 import { LoppjuSimPlatformMenu, type LoppjuSimRunMode } from './LoppjuSimPlatformMenu'
 import { resetSimulation } from '../core/simulationReset'
+import { LOPPJUSIM_RUN_SCENARIO_EVENT } from '../core/platformEvents'
 import { useScenarioRuntimeIndicator } from '../teaching/scenario/runtimeUiState'
 import './SimulationTopBar.css'
 
@@ -56,6 +57,10 @@ const PUBLIC_PRODUCT_LABELS: Record<string, string> = {
   'EDUMON-ICU': 'LoppjuSIM-ICU',
 }
 
+interface PersistedScenarioRuntime {
+  scenario?: unknown
+}
+
 export function SimulationTopBar({
   brandKicker,
   title,
@@ -88,6 +93,7 @@ export function SimulationTopBar({
   const scenarioIndicator = useScenarioRuntimeIndicator()
   const [resetOpen, setResetOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [restarting, setRestarting] = useState(false)
   const [resetHolding, setResetHolding] = useState(false)
   const resetHoldRef = useRef<number | null>(null)
   const resetHoldTriggeredRef = useRef(false)
@@ -119,8 +125,26 @@ export function SimulationTopBar({
     onPausedChange(!simulationPaused)
   }
 
+  const restartScenario = async () => {
+    if (restarting || resetting || !scenarioIndicator || typeof window === 'undefined') return
+    setRestarting(true)
+    try {
+      const key = `loppjusim.scenario-runtime:${window.location.pathname}`
+      const raw = window.localStorage.getItem(key)
+      if (!raw) return
+      const persisted = JSON.parse(raw) as PersistedScenarioRuntime
+      if (!persisted.scenario) return
+      window.dispatchEvent(new CustomEvent(LOPPJUSIM_RUN_SCENARIO_EVENT, {
+        detail: { definition: persisted.scenario, simulationTime: elapsedSeconds },
+      }))
+      setResetOpen(false)
+    } finally {
+      setRestarting(false)
+    }
+  }
+
   const confirmReset = async () => {
-    if (resetting) return
+    if (resetting || restarting) return
     setResetting(true)
     try {
       await resetSimulation(publicBrandKicker)
@@ -135,6 +159,7 @@ export function SimulationTopBar({
   }
 
   const sessionPreserved = runMode === 'instructor'
+  const busy = resetting || restarting
 
   return <>
     <header className={`topbar simulation-topbar ${className}`.trim()}>
@@ -155,7 +180,7 @@ export function SimulationTopBar({
           onContextMenu={(event) => event.preventDefault()}
           disabled={controlsControlledByInstructor}
           aria-label={pauseLabel}
-          title={`${pauseLabel}. Press and hold to reset the simulator.`}
+          title={`${pauseLabel}. Press and hold for simulation controls.`}
         >
           <PauseIcon paused={simulationPaused} />
           <span>{simulationPaused ? 'RESUME SIMULATION' : 'PAUSE SIMULATION'}</span>
@@ -200,15 +225,18 @@ export function SimulationTopBar({
       </div>
     </header>
 
-    {resetOpen && <div className="simulation-reset-backdrop" role="presentation" onMouseDown={() => { if (!resetting) setResetOpen(false) }}>
-      <section className="simulation-reset-dialog" role="dialog" aria-modal="true" aria-label="Reset simulation" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="simulation-reset-heading"><div><span>Simulation control</span><strong>Reset simulation?</strong></div><button type="button" disabled={resetting} onClick={() => setResetOpen(false)} aria-label="Close">×</button></div>
-        <p>{sessionPreserved
-          ? 'This will stop the current scenario, clear its saved stage and transient simulator state, and restore the simulator defaults. The active session, session key and connected candidates will be preserved.'
-          : 'This will stop the current scenario, clear its saved stage and transient simulator state, and restore the simulator defaults.'}</p>
+    {resetOpen && <div className="simulation-reset-backdrop" role="presentation" onMouseDown={() => { if (!busy) setResetOpen(false) }}>
+      <section className="simulation-reset-dialog" role="dialog" aria-modal="true" aria-label="Simulation controls" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="simulation-reset-heading"><div><span>Simulation control</span><strong>{scenarioIndicator ? 'Scenario and simulation controls' : 'Reset simulation?'}</strong></div><button type="button" disabled={busy} onClick={() => setResetOpen(false)} aria-label="Close">×</button></div>
+        <p>{scenarioIndicator
+          ? 'Restart the active scenario from Stage 1, or reset the simulator completely.'
+          : sessionPreserved
+            ? 'This will clear transient simulator state and restore the simulator defaults. The active session, session key and connected candidates will be preserved.'
+            : 'This will clear transient simulator state and restore the simulator defaults.'}</p>
         <div className="simulation-reset-actions">
-          <button type="button" disabled={resetting} onClick={() => setResetOpen(false)}>Cancel</button>
-          <button type="button" className="danger" disabled={resetting} onClick={() => void confirmReset()}>{resetting ? 'Resetting…' : 'Reset simulation'}</button>
+          {scenarioIndicator && <button type="button" className="restart" disabled={busy} onClick={() => void restartScenario()}>{restarting ? 'Restarting…' : 'Restart scenario'}</button>}
+          <button type="button" className="danger" disabled={busy} onClick={() => void confirmReset()}>{resetting ? 'Resetting…' : 'Reset simulation'}</button>
+          <button type="button" disabled={busy} onClick={() => setResetOpen(false)}>Cancel</button>
         </div>
       </section>
     </div>}
