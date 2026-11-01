@@ -1,9 +1,11 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { EdusimBackLink } from './EdusimBackLink'
 import { LoppjuSimPlatformMenu, type LoppjuSimRunMode } from './LoppjuSimPlatformMenu'
 import { resetSimulation } from '../core/simulationReset'
-import { LOPPJUSIM_RUN_SCENARIO_EVENT } from '../core/platformEvents'
+import { LOPPJUSIM_OPEN_SESSIONS_EVENT, LOPPJUSIM_RUN_SCENARIO_EVENT } from '../core/platformEvents'
 import { useScenarioRuntimeIndicator } from '../teaching/scenario/runtimeUiState'
+import { recordSessionLogEvent } from '../teaching/session/sessionLog'
+import { useInstructorSessionRecovery } from '../teaching/session/sessionRecoveryUiState'
 import './SimulationTopBar.css'
 
 export type SharedSimulationSpeed = 0.5 | 1 | 1.5 | 2 | 4
@@ -51,6 +53,7 @@ interface SimulationTopBarProps {
 
 const DEFAULT_SPEED_OPTIONS: readonly SharedSimulationSpeed[] = [0.5, 1, 2, 4]
 const RESET_LONG_PRESS_MS = 800
+const RESTART_LOG_SETTLE_MS = 500
 const PUBLIC_PRODUCT_LABELS: Record<string, string> = {
   EDUVENT: 'LoppjuSIM-MV',
   'EDUMON-Ana': 'LoppjuSIM-Anaesth',
@@ -59,6 +62,15 @@ const PUBLIC_PRODUCT_LABELS: Record<string, string> = {
 
 interface PersistedScenarioRuntime {
   scenario?: unknown
+}
+
+function scenarioIdentity(definition: unknown): { id: string | null; name: string } {
+  if (!definition || typeof definition !== 'object') return { id: null, name: 'Scenario' }
+  const value = definition as { id?: unknown; name?: unknown }
+  return {
+    id: typeof value.id === 'string' ? value.id : null,
+    name: typeof value.name === 'string' && value.name.trim() ? value.name.trim() : 'Scenario',
+  }
 }
 
 export function SimulationTopBar({
@@ -91,12 +103,23 @@ export function SimulationTopBar({
   const speedLabel = controlsControlledByInstructor ? 'Simulation speed controlled by instructor' : 'Simulation speed'
   const publicBrandKicker = PUBLIC_PRODUCT_LABELS[brandKicker] ?? brandKicker
   const scenarioIndicator = useScenarioRuntimeIndicator()
+  const sessionRecovery = useInstructorSessionRecovery()
   const [resetOpen, setResetOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [resetHolding, setResetHolding] = useState(false)
+  const [recoveryBusy, setRecoveryBusy] = useState(false)
+  const [recoveryError, setRecoveryError] = useState<string | null>(null)
   const resetHoldRef = useRef<number | null>(null)
   const resetHoldTriggeredRef = useRef(false)
+
+  useEffect(() => {
+    if (!sessionRecovery) return
+    // A recovered scenario may already have reconstructed locally. Freeze simulation while
+    // the instructor decides whether the surrounding room should also be recovered.
+    onPausedChange(true)
+    setRecoveryError(null)
+  }, [sessionRecovery?.sessionId])
 
   const cancelResetHold = () => {
     if (resetHoldRef.current != null) window.clearTimeout(resetHoldRef.current)
@@ -134,6 +157,30 @@ export function SimulationTopBar({
       if (!raw) return
       const persisted = JSON.parse(raw) as PersistedScenarioRuntime
       if (!persisted.scenario) return
+      const identity = scenarioIdentity(persisted.scenario)
+
+      // Restart is deliberately a clean clinical run inside the same live session: stop the
+      // old runtime, clear ActionEffects/transient state, restore product defaults, then apply
+      // Stage 1 again. Session identity, key and participants are left untouched.
+      await resetSimulation(publicBrandKicker)
+      onPausedChange(false)
+      onSpeedChange(1)
+
+      // Product/session state propagation is debounced in a few paths. Allow the clean-default
+      // reset to settle before creating the new run boundary so a delayed reset-state entry
+      // cannot appear as though it belongs to the freshly restarted scenario.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, RESTART_LOG_SETTLE_MS))
+
+      // This durable boundary keeps the normal Session Log focused on the new run after a
+      // restart without deleting earlier rows that remain useful for audit/debrief.
+      await recordSessionLogEvent({
+        category: 'scenario',
+        eventType: 'scenario.restarted',
+        label: `Scenario restarted: “${identity.name}” — clean baseline restored`,
+        details: { scenarioId: identity.id, scenarioName: identity.name },
+        simulationTimeSeconds: elapsedSeconds,
+      })
+
       window.dispatchEvent(new CustomEvent(LOPPJUSIM_RUN_SCENARIO_EVENT, {
         detail: { definition: persisted.scenario, simulationTime: elapsedSeconds },
       }))
@@ -155,6 +202,41 @@ export function SimulationTopBar({
       setResetOpen(false)
     } finally {
       setResetting(false)
+    }
+  }
+
+  const continueRecoveredSession = async () => {
+    if (!sessionRecovery || recoveryBusy) return
+    setRecoveryBusy(true)
+    setRecoveryError(null)
+    try {
+      const resumed = await sessionRecovery.continueSession()
+      if (!resumed) setRecoveryError('Unable to continue the previous session. You can retry or start a new session.')
+    } catch (cause) {
+      setRecoveryError(cause instanceof Error ? cause.message : 'Unable to continue the previous session.')
+    } finally {
+      setRecoveryBusy(false)
+    }
+  }
+
+  const startNewRecoveredSession = async () => {
+    if (!sessionRecovery || recoveryBusy) return
+    setRecoveryBusy(true)
+    setRecoveryError(null)
+    try {
+      const retired = await sessionRecovery.startNewSession()
+      if (!retired) {
+        setRecoveryError('Unable to end the previous session. It has not been replaced.')
+        return
+      }
+      await resetSimulation(publicBrandKicker)
+      onPausedChange(false)
+      onSpeedChange(1)
+      window.dispatchEvent(new Event(LOPPJUSIM_OPEN_SESSIONS_EVENT))
+    } catch (cause) {
+      setRecoveryError(cause instanceof Error ? cause.message : 'Unable to start a new session.')
+    } finally {
+      setRecoveryBusy(false)
     }
   }
 
@@ -225,11 +307,23 @@ export function SimulationTopBar({
       </div>
     </header>
 
+    {sessionRecovery && <div className="simulation-reset-backdrop" role="presentation">
+      <section className="simulation-reset-dialog" role="dialog" aria-modal="true" aria-label="Recover instructor session">
+        <div className="simulation-reset-heading"><div><span>Session recovery</span><strong>Active session found</strong></div></div>
+        <p>Session <strong>{sessionRecovery.sessionKey || 'active'}</strong> was running before this page loaded. Continue it with the same participants and scenario state, or end it and start a new session from clean simulator defaults.</p>
+        {recoveryError && <p className="session-error">{recoveryError}</p>}
+        <div className="simulation-reset-actions">
+          <button type="button" className="restart" disabled={recoveryBusy} onClick={() => void continueRecoveredSession()}>{recoveryBusy ? 'Working…' : 'Continue existing session'}</button>
+          <button type="button" className="danger" disabled={recoveryBusy} onClick={() => void startNewRecoveredSession()}>Start new session</button>
+        </div>
+      </section>
+    </div>}
+
     {resetOpen && <div className="simulation-reset-backdrop" role="presentation" onMouseDown={() => { if (!busy) setResetOpen(false) }}>
       <section className="simulation-reset-dialog" role="dialog" aria-modal="true" aria-label="Simulation controls" onMouseDown={(event) => event.stopPropagation()}>
         <div className="simulation-reset-heading"><div><span>Simulation control</span><strong>{scenarioIndicator ? 'Scenario and simulation controls' : 'Reset simulation?'}</strong></div><button type="button" disabled={busy} onClick={() => setResetOpen(false)} aria-label="Close">×</button></div>
         <p>{scenarioIndicator
-          ? 'Restart the active scenario from Stage 1, or reset the simulator completely.'
+          ? 'Restart the active scenario from a clean simulator baseline at Stage 1, or reset the simulator completely.'
           : sessionPreserved
             ? 'This will clear transient simulator state and restore the simulator defaults. The active session, session key and connected candidates will be preserved.'
             : 'This will clear transient simulator state and restore the simulator defaults.'}</p>
