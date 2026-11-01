@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { LOPPJUSIM_SIMULATION_RESET_EVENT } from '../core/platformEvents'
 import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
 import { effectiveAnaestheticDepth } from './anaestheticPhysiology'
 import type { AnaestheticDepth, MonitorPatientState } from './types'
@@ -140,6 +141,19 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
   const bisEnabled = useMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.bis)
 
   patientRef.current = patientState
+
+  useEffect(() => {
+    const resetBisRuntime = () => {
+      currentBisRef.current = 100
+      simulationTimeRef.current = 0
+      sampleAccumulatorRef.current = 0
+      jitterTargetRef.current = 0
+      setBis(100)
+      setPoints([{ time: 0, value: 100 }])
+    }
+    window.addEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, resetBisRuntime)
+    return () => window.removeEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, resetBisRuntime)
+  }, [])
 
   useEffect(() => {
     const owner = ownerRef.current
