@@ -12,6 +12,25 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Restart active scenario from shared simulation controls
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.75` (from `0.83.0.74`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.36` (from `1.2.8.35`)
+
+**Changes**
+
+- Extended the shared long-press **Pause Simulation** control so an active scenario exposes a new **Restart scenario** action above **Reset simulation**.
+- Restart re-runs the same active scenario from Stage 1 at the current simulation time without ending the surrounding Simulation/Teaching session, changing the session key, or disconnecting candidates.
+- Full **Reset simulation** remains a separate operation that clears scenario/transient simulator state and restores product defaults while preserving the active session according to the current session/scenario lifecycle contract.
+- When no scenario runtime is active, the long-press dialog shows only Reset simulation and Cancel.
+- Made the Pause/Resume Simulation control non-selectable on touch and disabled the iOS touch callout so long-press gestures do not select the control text.
+
+**Architectural rule**
+
+> Scenario restart, simulator reset and session termination are separate lifecycle operations. Restarting a scenario restarts only the scenario runtime at Stage 1; it must not terminate or recreate the live session. Shared long-press controls should remain touch-safe and must not rely on native text selection behavior.
+
 ## 2026-11-01 — Mobile simulator back-navigation guard and DOA slider override
 
 **Versions after change**
