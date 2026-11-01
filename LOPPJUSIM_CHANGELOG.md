@@ -12,6 +12,43 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Dedicated Monitoring section in Actions
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.76` (from `0.83.0.75`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.37` (from `1.2.8.36`)
+
+**Changes**
+
+- Added **Monitoring** as a third top-level collapsible section in the ACTIONS panel alongside Drugs and Events.
+- Moved the display-only invasive BP, BIS and temperature controls out of Events into Monitoring without changing their ActionRuntime, candidate-permission or instructor-only semantics.
+- Moved the EtCO₂/capnography control into the same Monitoring section and renamed its visible control label from `Capno` to `EtCO₂`.
+- The clinical Events section now contains only patient/physiological events (Anaesthesia, Cardiovascular and Respiratory).
+- Instructor-only monitor-display controls remain grouped separately inside Monitoring and continue to affect only the instructor display.
+
+**Architectural rule**
+
+> Monitoring modality/display controls are device/observation configuration, not physiological events. They belong in a dedicated Monitoring surface while continuing to use the existing monitor-display capability and ActionRuntime pathways so alarm eligibility and session permissions remain unchanged.
+
+## 2026-11-01 — Restart active scenario from simulation controls
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.75` (from `0.83.0.74`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.36` (from `1.2.8.35`)
+
+**Changes**
+
+- Added a shared **Restart scenario** action to the long-press Pause Simulation dialog whenever a scenario runtime is active.
+- Restart re-runs the persisted active scenario from Stage 1 at the current simulation time without ending the session or performing a full simulator reset.
+- Retained Reset simulation and Cancel in the long-press dialog.
+- Made the Pause Simulation control non-selectable and touch-callout-safe so long-press interaction on mobile does not select button text.
+
+**Architectural rule**
+
+> Scenario restart is a runtime operation distinct from full simulator reset: it should re-enter the current scenario at Stage 1 while preserving the surrounding simulation/session context.
+
 ## 2026-11-01 — Mobile simulator back-navigation guard and DOA slider override
 
 **Versions after change**
