@@ -14,10 +14,10 @@ import {
 } from './monitorDisplayActions'
 import './edumon-actions.css'
 
-export type EdumonActionSectionId = 'drugs' | 'events'
+export type EdumonActionSectionId = 'drugs' | 'events' | 'monitoring'
 type ActionLevel = 'low' | 'medium' | 'high'
 type DrugClass = 'anaesthesia' | 'cardiovascular' | 'other'
-type EventClass = 'anaesthesia' | 'cardiovascular' | 'respiratory' | 'monitors'
+type EventClass = 'anaesthesia' | 'cardiovascular' | 'respiratory'
 
 const LEVEL_STEPS: Record<ActionLevel, { label: string; scale: number; bars: number }> = {
   low: { label: 'Low', scale: 0.65, bars: 1 },
@@ -111,7 +111,7 @@ const FALLBACK_ANA_ACTIONS: EdusimActionDefinition[] = [
 ]
 
 const INSTRUCTOR_MONITOR_BUTTONS: Array<{ id: EdumonMonitorDisplayActionId; label: string }> = [
-  { id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.invasiveBloodPressure, label: 'Inv AP' },
+  { id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.invasiveBloodPressure, label: 'Inv BP' },
   { id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.bis, label: 'BIS' },
   { id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.temperature, label: 'Temp' },
 ]
@@ -132,7 +132,6 @@ function drugClass(definition: EdusimActionDefinition): DrugClass {
 function eventClass(definition: EdusimActionDefinition): EventClass {
   if (CARDIOVASCULAR_EVENT_IDS.has(definition.id)) return 'cardiovascular'
   if (RESPIRATORY_EVENT_IDS.has(definition.id)) return 'respiratory'
-  if (MONITOR_EVENT_IDS.has(definition.id)) return 'monitors'
   return 'anaesthesia'
 }
 
@@ -342,6 +341,8 @@ export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRol
     : definitions
   const drugs = visibleDefinitions.filter((definition) => definition.kind === 'drug')
   const events = visibleDefinitions.filter((definition) => definition.kind === 'event')
+  const monitoring = events.filter((definition) => MONITOR_EVENT_IDS.has(definition.id))
+  const clinicalEvents = events.filter((definition) => !MONITOR_EVENT_IDS.has(definition.id))
 
   const renderGroup = (items: EdusimActionDefinition[], label: string) => (
     <div className="edumon-action-grid" role="group" aria-label={label}>
@@ -366,6 +367,13 @@ export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRol
     return <section className="edumon-drug-class" aria-label={`${title} ${noun}`}><h4>{title}</h4>{renderGroup(items, `${title} ${noun}`)}</section>
   }
 
+  const renderMonitoringControls = () => (
+    <section className="edumon-drug-class edumon-monitor-display-class" aria-label="Monitoring displays">
+      <h4>Monitor display</h4>
+      {renderGroup(monitoring, 'Monitoring displays')}
+    </section>
+  )
+
   const renderInstructorOnlyMonitors = () => {
     if (role !== 'instructor') return null
     return (
@@ -386,7 +394,8 @@ export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRol
   }
 
   const hasDrugs = drugs.length > 0
-  const hasEvents = events.length > 0 || role === 'instructor'
+  const hasEvents = clinicalEvents.length > 0
+  const hasMonitoring = monitoring.length > 0 || role === 'standalone' || role === 'instructor'
 
   return (
     <div className="edumon-actions-panel" aria-label="Clinical actions">
@@ -401,10 +410,14 @@ export function EdumonActionsPanel({ role = 'standalone' }: { role?: TeachingRol
       </EdumonActionSection>}
       {hasEvents && <EdumonActionSection id="events" title="Events">
         <div className="edumon-drug-classes">
-          {renderClass('Anaesthesia', events.filter((definition) => eventClass(definition) === 'anaesthesia'), 'events')}
-          {renderClass('Cardiovascular', events.filter((definition) => eventClass(definition) === 'cardiovascular'), 'events')}
-          {renderClass('Respiratory', events.filter((definition) => eventClass(definition) === 'respiratory'), 'events')}
-          {renderClass('Monitors', events.filter((definition) => eventClass(definition) === 'monitors'), 'events')}
+          {renderClass('Anaesthesia', clinicalEvents.filter((definition) => eventClass(definition) === 'anaesthesia'), 'events')}
+          {renderClass('Cardiovascular', clinicalEvents.filter((definition) => eventClass(definition) === 'cardiovascular'), 'events')}
+          {renderClass('Respiratory', clinicalEvents.filter((definition) => eventClass(definition) === 'respiratory'), 'events')}
+        </div>
+      </EdumonActionSection>}
+      {hasMonitoring && <EdumonActionSection id="monitoring" title="Monitoring">
+        <div className="edumon-drug-classes">
+          {renderMonitoringControls()}
           {renderInstructorOnlyMonitors()}
         </div>
       </EdumonActionSection>}

@@ -67,7 +67,7 @@ export function useMonitorDisplayEnabled(actionId: EdumonMonitorDisplayActionId)
 
 function syncCapnographyButton(): void {
   const instructorHost = document.querySelector<HTMLElement>('.edumon-instructor-monitor-class .edumon-action-grid')
-  const standaloneHost = document.querySelector<HTMLElement>('.edumon-drug-class[aria-label="Monitors events"] .edumon-action-grid')
+  const standaloneHost = document.querySelector<HTMLElement>('.edumon-action-section[data-action-section="monitoring"] .edumon-monitor-display-class .edumon-action-grid')
   const host = instructorHost ?? standaloneHost
   const existing = document.getElementById(CAPNOGRAPHY_BUTTON_ID) as HTMLButtonElement | null
 
@@ -85,10 +85,10 @@ function syncCapnographyButton(): void {
   }
 
   const desiredClassName = `edumon-action-button toggle ${instructorOnly ? 'instructor-monitor' : ''}`.trim()
-  const desiredTitle = instructorOnly ? 'Display only on the instructor monitor' : 'Show or hide capnography on this monitor'
+  const desiredTitle = instructorOnly ? 'Display EtCO₂ only on the instructor monitor' : 'Show or hide EtCO₂/capnography on this monitor'
   const desiredMarkup = instructorOnly
-    ? '<span>Capno</span><small class="edumon-action-local-badge">I</small>'
-    : '<span>Capno</span>'
+    ? '<span>EtCO₂</span><small class="edumon-action-local-badge">I</small>'
+    : '<span>EtCO₂</span>'
 
   // Keep this bridge idempotent. The Actions panel is watched for structural
   // changes; rewriting innerHTML on every observer callback creates a
