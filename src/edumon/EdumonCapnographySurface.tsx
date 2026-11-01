@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { LOPPJUSIM_SIMULATION_RESET_EVENT } from '../core/platformEvents'
 import { RollingSignalHistory } from '../core/RollingSignalHistory'
 import { autoscaleWaveformSamples } from '../core/WaveformAutoscale'
 import {
@@ -8,7 +9,7 @@ import {
   stepEdumonRespiratoryRuntime,
   type EdumonRespiratoryRuntime,
 } from './respiratoryPhysiology'
-import type { MonitorPatientState, MonitorRespiratorySettings } from './types'
+import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
 import './edumon-capnography.css'
 
 interface CapnographySample {
@@ -201,6 +202,22 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
   const [respiratoryRate, setRespiratoryRate] = useState(runtimeRef.current.output.respiratoryRate)
 
   patientRef.current = patientState
+
+  useEffect(() => {
+    const resetCapnographyRuntime = () => {
+      const runtime = createEdumonRespiratoryRuntime(DEFAULT_MONITOR_STATE, 0)
+      runtimeRef.current = runtime
+      capnogramRef.current = { breathPhase: 0, elapsedExpiration: 0, airwayCo2: 0, expiratory: false }
+      historyRef.current = new RollingSignalHistory<CapnographySample>(TRACE_WINDOW_SECONDS)
+      simulationTimeRef.current = 0
+      lastSampleTimeRef.current = -SAMPLE_INTERVAL
+      setSamples([])
+      setEtCo2(runtime.output.estimatedEtCo2MmHg)
+      setRespiratoryRate(runtime.output.respiratoryRate)
+    }
+    window.addEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, resetCapnographyRuntime)
+    return () => window.removeEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, resetCapnographyRuntime)
+  }, [])
 
   useEffect(() => {
     const findHosts = () => {
