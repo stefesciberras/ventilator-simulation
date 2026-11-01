@@ -53,6 +53,7 @@ interface SimulationTopBarProps {
 
 const DEFAULT_SPEED_OPTIONS: readonly SharedSimulationSpeed[] = [0.5, 1, 2, 4]
 const RESET_LONG_PRESS_MS = 800
+const RESTART_LOG_SETTLE_MS = 500
 const PUBLIC_PRODUCT_LABELS: Record<string, string> = {
   EDUVENT: 'LoppjuSIM-MV',
   'EDUMON-Ana': 'LoppjuSIM-Anaesth',
@@ -164,6 +165,11 @@ export function SimulationTopBar({
       await resetSimulation(publicBrandKicker)
       onPausedChange(false)
       onSpeedChange(1)
+
+      // Product/session state propagation is debounced in a few paths. Allow the clean-default
+      // reset to settle before creating the new run boundary so a delayed reset-state entry
+      // cannot appear as though it belongs to the freshly restarted scenario.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, RESTART_LOG_SETTLE_MS))
 
       // This durable boundary keeps the normal Session Log focused on the new run after a
       // restart without deleting earlier rows that remain useful for audit/debrief.
