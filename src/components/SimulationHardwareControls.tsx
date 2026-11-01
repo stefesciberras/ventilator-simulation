@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { LOPPJUSIM_SIMULATION_RESET_EVENT } from '../core/platformEvents'
+import { PatientEyeIndicator } from './PatientEyeIndicator'
 
 export function FreezeWaveformIcon() {
   return (
@@ -64,6 +65,7 @@ export function SimulationHardwareControls({
 }: SimulationHardwareControlsProps) {
   const longPressTimer = useRef<number | null>(null)
   const longPressTriggered = useRef(false)
+  const showPatientEyes = className.split(/\s+/).includes('edumon-console-top-actions')
 
   useEffect(() => {
     const resetDisplayState = () => {
@@ -104,6 +106,7 @@ export function SimulationHardwareControls({
 
   return (
     <div className={`action-bar console-top-actions ${className}`.trim()} aria-label="Display actions">
+      {showPatientEyes && <PatientEyeIndicator className="edumon-patient-eye-indicator" />}
       <button type="button" disabled={laserDisabled} className={`hardware-button icon-button teaching-laser-console-button ${laserActive ? 'active' : ''}`} onClick={onLaserToggle} title={laserDisabled ? 'Laser pointer controlled by instructor' : 'Laser pointer'} aria-label={laserDisabled ? 'Laser pointer controlled by instructor' : 'Laser pointer'} aria-pressed={laserActive}><LaserPointerIcon /></button>
       <button type="button" disabled={freezeDisabled} className={`hardware-button icon-button freeze-button ${frozen ? 'active' : ''}`} onClick={onFreezeToggle} title={freezeDisabled ? 'Waveform freeze controlled by instructor' : (frozen ? 'Resume waveforms' : 'Freeze waveforms')} aria-label={freezeDisabled ? 'Waveform freeze controlled by instructor' : (frozen ? 'Resume waveforms' : 'Freeze waveforms')}><FreezeWaveformIcon /></button>
       <button
