@@ -14,6 +14,7 @@ import { EdumonVentilatorControl } from './EdumonVentilatorControl'
 import { EdumonActionsPanel } from './EdumonActionsPanel'
 import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
 import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
+import { setPatientEyeAppearance } from '../components/PatientEyeIndicator'
 import { EDUMON_PATIENT_PROFILES } from './patientProfiles'
 import { EDUMON_PROFILE_KEYS } from '../profiles/builtinProfiles'
 import { useProductProfiles } from '../profiles/useProductProfiles'
@@ -93,11 +94,17 @@ export function EdumonWorkspacePanel({
   }, [showInvasiveBloodPressure])
 
   useEffect(() => {
-    if (teachingHost.appId !== 'anaesth') return
+    if (teachingHost.appId !== 'anaesth') {
+      setPatientEyeAppearance({ eyelidState: 'open' })
+      return
+    }
 
     const syncEffectiveDepth = () => {
       const nextDepth = effectiveAnaestheticDepth(patientState, getActionRuntimeSimulationTime())
       setDisplayedAnaestheticDepth((currentDepth) => currentDepth === nextDepth ? currentDepth : nextDepth)
+      setPatientEyeAppearance({
+        eyelidState: nextDepth >= 5 ? 'open' : nextDepth === 4 ? 'half' : 'closed',
+      })
     }
 
     syncEffectiveDepth()
