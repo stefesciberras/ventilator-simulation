@@ -1,0 +1,12 @@
+.loppjusim-doa-slider {
+  touch-action: none;
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+  .loppjusim-doa-slider {
+    min-height: 44px;
+    height: 44px;
+    padding-block: 10px;
+    box-sizing: border-box;
+  }
+}
