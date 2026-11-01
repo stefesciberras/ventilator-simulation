@@ -4,10 +4,23 @@ import type { MonitorPatientState } from './types'
 import type { TeachingScenarioDefinition } from '../teaching/scenario/runtimeCore'
 import type { SharedScenarioActor } from '../teaching/scenario/authoringTypes'
 
+export interface EdumonScenarioMonitoringSnapshot {
+  invasiveBloodPressure?: boolean
+  bis?: boolean
+  capnography?: boolean
+  temperature?: boolean
+}
+
 export interface EdumonScenarioSnapshot {
   patient: MonitorPatientState
   simulationPaused: boolean
   simulationSpeed: EdumonSimulationSpeed
+  /**
+   * Optional monitor/display capabilities controlled by a scenario stage.
+   * Kept separate from patient physiology so scenarios can add/remove monitoring
+   * without mutating the underlying clinical state.
+   */
+  monitoring?: EdumonScenarioMonitoringSnapshot
 }
 
 export type EdumonScenarioMetric =
