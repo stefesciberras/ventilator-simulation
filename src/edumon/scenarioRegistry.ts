@@ -7,8 +7,7 @@ import {
   type MonitorRespiratorySettings,
 } from './types'
 import { applyAnaestheticDepthEffects, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
-import { EDUMON_MONITOR_DISPLAY_ACTION_IDS } from './monitorDisplayActions'
-import { activateAction, deactivateAction, isActionToggleRunning, type EdusimActionRuntimeDefinition } from '../edusim/actions/ActionRuntime'
+import { ANAESTH_SCENARIO_MONITORING_CONTROLS, applyEdumonScenarioMonitoringControl } from './scenarioMonitoring'
 import type { ScenarioProductId } from '../teaching/scenario/products'
 import {
   getEdumonScenarioModule,
@@ -28,46 +27,6 @@ export interface EdumonScenarioStageTarget {
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
-
-const MONITORING_ACTIONS: Record<string, EdusimActionRuntimeDefinition> = {
-  monitorInvasiveBloodPressure: {
-    id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.invasiveBloodPressure,
-    name: 'Inv BP',
-    kind: 'event',
-    short_press_action: 'toggle',
-    effects: [],
-  },
-  monitorBis: {
-    id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.bis,
-    name: 'BIS',
-    kind: 'event',
-    short_press_action: 'toggle',
-    effects: [],
-  },
-  monitorCapnography: {
-    id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.capnography,
-    name: 'EtCO₂',
-    kind: 'event',
-    short_press_action: 'toggle',
-    effects: [],
-  },
-  monitorTemperature: {
-    id: EDUMON_MONITOR_DISPLAY_ACTION_IDS.temperature,
-    name: 'Temp',
-    kind: 'event',
-    short_press_action: 'toggle',
-    effects: [],
-  },
-}
-
-function applyScenarioMonitoring(variableId: string, enabled: boolean): void {
-  const definition = MONITORING_ACTIONS[variableId]
-  if (!definition) return
-  const running = isActionToggleRunning(definition.id)
-  if (running === enabled) return
-  if (enabled) activateAction(definition)
-  else deactivateAction(definition.id)
-}
 
 function applyScenarioVentilation(patient: MonitorPatientState): MonitorPatientState {
   const respiratory: MonitorRespiratorySettings = {
@@ -133,8 +92,12 @@ export function buildEdumonScenarioStageTarget(
   }
 
   if (product === 'anaesth') {
-    for (const variable of writableVariables.filter((candidate) => candidate.group === 'Monitoring' && shouldApply(candidate))) {
-      applyScenarioMonitoring(variable.id, Boolean(desiredValueFor(variable)))
+    for (const control of ANAESTH_SCENARIO_MONITORING_CONTROLS) {
+      if (applied && !applied.has(control.id)) continue
+      const enabled = desired.monitoring?.[control.key]
+      if (enabled == null) continue
+      applyEdumonScenarioMonitoringControl(control, enabled)
+      target.monitoring = { ...(target.monitoring ?? {}), [control.key]: enabled }
     }
 
     const depthVariable = module.variables.find((variable) => variable.id === 'depthOfAnaesthesia')
