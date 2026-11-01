@@ -12,6 +12,26 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-01 — Shared patient eye indicator for Anaesth and ITU
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.71` (unchanged by this PR)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.32` (from `1.2.8.31`)
+
+**Changes**
+
+- Added a shared paired-eye patient appearance component and placed it at the left of the monitor display-action strip, before the laser pointer, freeze and alarm-silence controls.
+- The same shared component is available in both loppjuSIM-Anaesth and loppjuSIM-ITU.
+- In Anaesth, eyelid state is driven from `effectiveAnaestheticDepth()` rather than BIS: depth 5 shows open eyes, depth 4 half-closed eyes, and depths 1–3 closed eyes.
+- This means volatile and IV hypnotic effects that alter effective anaesthetic depth also alter the patient's visual eye state without depending on BIS lag or measurement noise.
+- ITU currently defaults to open eyes until an ITU-specific consciousness/sedation model is connected.
+- The shared appearance state includes independent left/right pupil diameter and pupil reactivity fields so future ITU neurological modelling can support anisocoria, miosis, mydriasis and fixed/non-reactive pupils without replacing the eye component.
+
+**Architectural rule**
+
+> Patient appearance should reflect simulated patient physiology rather than a downstream monitor measurement. Shared visual patient-state components should expose product-neutral appearance state so Anaesth and ITU can drive them from their own physiology models.
+
 ## 2026-10-31 — Anaesth Scenario Studio gas/ventilation registry and physiology-aware stage application
 
 **Versions after change**
