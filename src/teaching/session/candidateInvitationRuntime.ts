@@ -1,4 +1,5 @@
 import { supabase } from '../../session/supabase'
+import { LOPPJUSIM_OPEN_SESSIONS_EVENT } from '../../core/platformEvents'
 
 let installed = false
 
@@ -9,6 +10,10 @@ function normaliseSessionKey(value: string | null) {
 function invitationSessionKey() {
   if (typeof window === 'undefined') return ''
   return normaliseSessionKey(new URLSearchParams(window.location.search).get('session'))
+}
+
+function requestSessionJoinUi() {
+  window.dispatchEvent(new Event(LOPPJUSIM_OPEN_SESSIONS_EVENT))
 }
 
 function showCandidateNamePrompt(sessionKey: string) {
@@ -102,6 +107,13 @@ export function installCandidateInvitationRuntime() {
   let joinSubmitted = false
   let namePromptShown = false
 
+  // Installation happens before React mounts. Ask the product shell to open its
+  // Sessions surface after mount; repeat once because route hydration can delay
+  // the event listener on slower devices. The candidate should never need to
+  // navigate Menu > Sessions > Join when an invitation link already contains a key.
+  window.setTimeout(requestSessionJoinUi, 0)
+  window.setTimeout(requestSessionJoinUi, 180)
+
   const maybeAutoJoin = () => {
     if (joinSubmitted) return
     const role = document.documentElement.dataset.loppjusimSessionRole
@@ -130,6 +142,7 @@ export function installCandidateInvitationRuntime() {
   const observer = new MutationObserver(() => {
     maybeAutoJoin()
     maybePromptForName()
+    if (!joinSubmitted && !document.querySelector('.candidate-join-form')) requestSessionJoinUi()
     if (namePromptShown) observer.disconnect()
   })
 
