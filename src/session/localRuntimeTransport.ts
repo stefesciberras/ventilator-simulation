@@ -283,6 +283,7 @@ export class LocalRuntimeTransport {
           serverTime?: number
           payload?: LocalRuntimePayload
           snapshot?: LocalRuntimeSnapshot | null
+          sessionControls?: Partial<SessionControlState> | null
           reason?: string
           runtimeMode?: LocalSessionRuntimeMode
         }
@@ -295,11 +296,21 @@ export class LocalRuntimeTransport {
           }
         }
 
-        if (typed.type === 'welcome' && typed.snapshot) {
-          const payload: LocalRuntimePayload = { type: 'snapshot', snapshot: typed.snapshot }
-          notifyPayload(this.options.sessionId, payload)
-          this.options.onEnvelope({ type: 'runtime', sequence: Number(typed.sequence ?? 0), serverTime: Number(typed.serverTime ?? Date.now()), payload })
-          this.lastSequence = Math.max(this.lastSequence, Number(typed.sequence ?? 0))
+        if (typed.type === 'welcome') {
+          const welcomeSequence = Number(typed.sequence ?? 0)
+          const serverTime = Number(typed.serverTime ?? Date.now())
+          if (typed.snapshot) {
+            const payload: LocalRuntimePayload = { type: 'snapshot', snapshot: typed.snapshot }
+            notifyPayload(this.options.sessionId, payload)
+            this.options.onEnvelope({ type: 'runtime', sequence: welcomeSequence, serverTime, payload })
+          }
+          if (typed.sessionControls && Object.keys(typed.sessionControls).length > 0) {
+            notifyPayload(this.options.sessionId, {
+              type: 'session-control',
+              update: { patch: typed.sessionControls, sentAt: serverTime },
+            })
+          }
+          this.lastSequence = Math.max(this.lastSequence, welcomeSequence)
           return
         }
 
