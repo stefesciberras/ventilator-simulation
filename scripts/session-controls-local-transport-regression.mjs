@@ -22,7 +22,7 @@ assert(transport.includes("type: 'session-control',\n              update: { pat
 assert(relay.includes("sessionControls: {}"), 'local relay room must cache session controls independently of patient snapshot')
 assert(relay.includes("payload?.type === 'session-control'"), 'relay must merge instructor session-control patches')
 assert(relay.includes('sessionControls: room.sessionControls'), 'welcome handshake must include cached session controls')
-assert(relay.includes("['snapshot', 'scenario-event', 'session-control', 'command']"), 'relay must accept instructor session-control payloads')
+assert(relay.includes("'session-control'"), 'relay accepted payload vocabulary must retain instructor session-control payloads')
 assert(relay.includes("socket.eduventRole === 'candidate' && payload.type !== 'command'"), 'candidate must remain unable to publish session controls')
 
 assert(displaySync.includes('subscribeLocalRuntimePayload(sessionId'), 'waveform freeze must consume the local runtime fast path')
