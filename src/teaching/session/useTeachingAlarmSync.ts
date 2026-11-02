@@ -54,12 +54,16 @@ export function useTeachingAlarmSync(
   useEffect(() => { candidateHandlerRef.current = onCandidateState }, [onCandidateState])
 
   const applyPersistentOverride = useCallback((enabled: boolean) => {
-    if (stateRef.current.instructorOverride === enabled) return
-    const next = { ...stateRef.current, instructorOverride: enabled, sentAt: Date.now() }
-    stateRef.current = next
-    setState(next)
-    if (role === 'candidate') candidateHandlerRef.current?.(next)
-  }, [role])
+    if (stateRef.current.instructorOverride !== enabled) {
+      const next = { ...stateRef.current, instructorOverride: enabled, sentAt: Date.now() }
+      stateRef.current = next
+      setState(next)
+      if (role === 'candidate') candidateHandlerRef.current?.(next)
+    }
+    if (role === 'instructor' && sessionId) {
+      publishLocalSessionControlPatch(sessionId, { alarmsSilenced: enabled })
+    }
+  }, [role, sessionId])
 
   const publish = useCallback((next: SharedAlarmSessionState) => {
     if (role !== 'instructor' || !sessionId) return
