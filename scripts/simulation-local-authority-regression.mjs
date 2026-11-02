@@ -29,8 +29,13 @@ assert(productSession.includes("command.actorRole !== 'candidate' || command.typ
 assert(productSession.includes("productRuntimeMode(localSessionRow.product_state) !== 'simulation'"), 'local candidate mutations must be Simulation-only')
 assert(productSession.includes("localConnectionBySession.get(sessionId) !== 'connected'"), 'candidate LAN-first path must require an active local connection')
 assert(productSession.includes('publishLocalSimulationCommand(sessionId, command)'), 'candidate mutation must travel through the LAN command transport')
+assert(productSession.includes('localInstructorPatchHandlers.get(sessionId)'), 'connected instructor mutations must also use local authority before cloud')
+assert(productSession.includes('acceptLocalInstructorPatch'), 'repository must expose an instructor-side local mutation handler')
+assert(productSession.includes('applyProductSimulationPatchCloud'), 'local authority reconciliation must bypass the local path when persisting to cloud')
 assert(productSession.includes('pendingLocalSimulationPatch = mergePatchObjects'), 'instructor must retain cloud reconciliation work after local acceptance')
 assert(productSession.includes('void flushPendingLocalSimulationPatch()'), 'pending local state must be retried toward cloud persistence')
 assert(productSession.includes('publishLocalRow(next)'), 'accepted candidate patch must be broadcast back as shared canonical local state')
+assert(productSession.includes('publishLocalRow(next)') && productSession.includes("actorRole: 'instructor'"), 'accepted instructor patch must also broadcast the shared local state')
+assert(productSession.includes('const rebased: ProductTeachingSessionRow<TState>'), 'cloud revision conflicts must rebase pending local state instead of discarding it')
 
 if (!process.exitCode) console.log('Simulation local authority regression checks passed')
