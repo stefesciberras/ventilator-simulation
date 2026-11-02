@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { publishLocalPresentationBroadcast, subscribeLocalRuntimePayload } from '../session/localRuntimeTransport'
 import { supabase } from '../session/supabase'
 
 type BroadcastHandler = (payload: unknown) => void
@@ -16,6 +17,16 @@ type SessionBus = {
 }
 
 const buses = new Map<string, SessionBus>()
+
+/**
+ * Ephemeral instructor presentation events get a LAN fast path and in-memory
+ * relay replay. They are deliberately not persisted as patient/session state.
+ */
+const LOCAL_PRESENTATION_EVENTS = new Set([
+  'teaching-laser-pointer',
+  'teaching-laser-waveform-snapshot',
+  'teaching-session-clock',
+])
 
 function ensureBus(sessionId: string): SessionBus {
   const existing = buses.get(sessionId)
@@ -73,7 +84,15 @@ export function subscribeTeachingBroadcast(sessionId: string, event: string, han
   bus.handlers.set(event, listeners)
   bus.users += 1
 
+  const unsubscribeLocal = LOCAL_PRESENTATION_EVENTS.has(event)
+    ? subscribeLocalRuntimePayload(sessionId, (message) => {
+        if (message.type !== 'presentation' || message.presentation.event !== event) return
+        handler(message.presentation.payload)
+      })
+    : () => undefined
+
   return () => {
+    unsubscribeLocal()
     listeners.delete(handler)
     bus.users = Math.max(0, bus.users - 1)
     if (bus.users > 0) return
@@ -86,6 +105,10 @@ export function subscribeTeachingBroadcast(sessionId: string, event: string, han
 }
 
 export function sendTeachingBroadcast(sessionId: string, event: string, payload: unknown) {
+  if (LOCAL_PRESENTATION_EVENTS.has(event)) {
+    publishLocalPresentationBroadcast(sessionId, event, payload)
+  }
+
   const bus = ensureBus(sessionId)
   if (bus.subscribed) {
     return bus.channel.send({ type: 'broadcast', event, payload })
