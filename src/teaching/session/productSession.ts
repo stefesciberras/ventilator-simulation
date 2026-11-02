@@ -47,10 +47,15 @@ export interface ProductSimulationPatchResult<TState> {
 
 type JsonObject = Record<string, unknown>
 type ProductLocalPublisher = (row: ProductTeachingSessionRow<unknown>) => boolean
+type ProductLocalInstructorPatchHandler = (
+  patch: JsonObject,
+  mutationId: string,
+) => ProductSimulationPatchResult<unknown> | null
 
 const localProductPublishers = new Map<string, ProductLocalPublisher>()
 const localProductRows = new Map<string, ProductTeachingSessionRow<unknown>>()
 const localConnectionBySession = new Map<string, LocalRuntimeConnection>()
+const localInstructorPatchHandlers = new Map<string, ProductLocalInstructorPatchHandler>()
 
 function currentSimulationActorRole(): 'instructor' | 'candidate' {
   const { role } = readParticipantAccessContextFromDocument()
@@ -117,6 +122,9 @@ function localCandidatePatchResult<TState>(
   if (!row || row.product_id !== toLegacyProductId(productId) || productRuntimeMode(row.product_state) !== 'simulation') return null
 
   const filtered = filterCandidateSimulationPatch(patch)
+  if (!Object.keys(filtered).length) {
+    return { applied: false, session: row, actorRole: 'candidate', mutationId }
+  }
   const command: SimulationCommand<{ patch: JsonObject }> = {
     id: mutationId,
     sessionId,
@@ -139,16 +147,14 @@ function localCandidatePatchResult<TState>(
   return { applied: true, session: optimistic, actorRole: 'candidate', mutationId }
 }
 
-export async function applyProductSimulationPatch<TState>(
+async function applyProductSimulationPatchCloud<TState>(
   productId: SimulationProductId,
   sessionId: string,
   expectedRevision: number,
   patch: Record<string, unknown>,
   mutationId: string,
+  actorRole: 'instructor' | 'candidate',
 ): Promise<ProductSimulationPatchResult<TState>> {
-  const localResult = localCandidatePatchResult<TState>(productId, sessionId, patch, mutationId)
-  if (localResult) return localResult
-
   await ensureAnonymousSession()
   const storageProductId = toLegacyProductId(productId)
   const { data, error } = await supabase.rpc('apply_edusim_simulation_patch', {
@@ -156,7 +162,7 @@ export async function applyProductSimulationPatch<TState>(
     p_expected_revision: expectedRevision,
     p_patch: patch,
     p_mutation_id: mutationId,
-    p_actor_role: currentSimulationActorRole(),
+    p_actor_role: actorRole,
   })
   if (error) throw error
   const result = Array.isArray(data) ? data[0] : data
@@ -171,6 +177,32 @@ export async function applyProductSimulationPatch<TState>(
     actorRole: result.actor_role === 'candidate' ? 'candidate' : 'instructor',
     mutationId: String(result.mutation_id ?? mutationId),
   }
+}
+
+export async function applyProductSimulationPatch<TState>(
+  productId: SimulationProductId,
+  sessionId: string,
+  expectedRevision: number,
+  patch: Record<string, unknown>,
+  mutationId: string,
+): Promise<ProductSimulationPatchResult<TState>> {
+  const actorRole = currentSimulationActorRole()
+  if (actorRole === 'candidate') {
+    const localResult = localCandidatePatchResult<TState>(productId, sessionId, patch, mutationId)
+    if (localResult) return localResult
+  } else if (localConnectionBySession.get(sessionId) === 'connected') {
+    const localResult = localInstructorPatchHandlers.get(sessionId)?.(patch, mutationId) ?? null
+    if (localResult) return localResult as ProductSimulationPatchResult<TState>
+  }
+
+  return applyProductSimulationPatchCloud<TState>(
+    productId,
+    sessionId,
+    expectedRevision,
+    patch,
+    mutationId,
+    actorRole,
+  )
 }
 
 export function createProductTeachingSessionRepository<TState>(productId: SimulationProductId): SharedTeachingSessionRepository<
@@ -195,6 +227,7 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
     localTransport = null
     if (localSessionRow) {
       localProductPublishers.delete(localSessionRow.id)
+      localInstructorPatchHandlers.delete(localSessionRow.id)
       localProductRows.delete(localSessionRow.id)
       localConnectionBySession.delete(localSessionRow.id)
     }
@@ -217,22 +250,55 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
     pendingLocalSimulationPatch = null
     pendingFlushInFlight = true
     try {
-      const result = await applyProductSimulationPatch<TState>(
+      const result = await applyProductSimulationPatchCloud<TState>(
         productId,
         localSessionRow.id,
         Number(localSessionRow.product_state_revision ?? 0),
         patch,
         crypto.randomUUID(),
+        'instructor',
       )
-      localSessionRow = result.session
-      localProductRows.set(result.session.id, result.session as ProductTeachingSessionRow<unknown>)
-      localOnUpdate?.(result.session)
-      if (!result.applied) pendingLocalSimulationPatch = mergePatchObjects(pendingLocalSimulationPatch, patch)
+      if (result.applied) {
+        localSessionRow = result.session
+        localProductRows.set(result.session.id, result.session as ProductTeachingSessionRow<unknown>)
+        localOnUpdate?.(result.session)
+        publishLocalRow(result.session)
+      } else {
+        const rebased: ProductTeachingSessionRow<TState> = {
+          ...result.session,
+          product_state: deepMerge(result.session.product_state, patch) as TState,
+          updated_at: new Date().toISOString(),
+        }
+        localSessionRow = rebased
+        localProductRows.set(rebased.id, rebased as ProductTeachingSessionRow<unknown>)
+        pendingLocalSimulationPatch = mergePatchObjects(pendingLocalSimulationPatch, patch)
+        localOnUpdate?.(rebased)
+        publishLocalRow(rebased)
+      }
     } catch {
       pendingLocalSimulationPatch = mergePatchObjects(pendingLocalSimulationPatch, patch)
     } finally {
       pendingFlushInFlight = false
     }
+  }
+
+  const acceptLocalInstructorPatch = (patch: JsonObject, mutationId: string): ProductSimulationPatchResult<TState> | null => {
+    if (!localSessionRow || productRuntimeMode(localSessionRow.product_state) !== 'simulation') return null
+    if (!Object.keys(patch).length) {
+      return { applied: false, session: localSessionRow, actorRole: 'instructor', mutationId }
+    }
+    const next: ProductTeachingSessionRow<TState> = {
+      ...localSessionRow,
+      product_state: deepMerge(localSessionRow.product_state, patch) as TState,
+      updated_at: new Date().toISOString(),
+    }
+    localSessionRow = next
+    localProductRows.set(next.id, next as ProductTeachingSessionRow<unknown>)
+    pendingLocalSimulationPatch = mergePatchObjects(pendingLocalSimulationPatch, patch)
+    localOnUpdate?.(next)
+    publishLocalRow(next)
+    void flushPendingLocalSimulationPatch()
+    return { applied: true, session: next, actorRole: 'instructor', mutationId }
   }
 
   const acceptLocalCandidatePatch = (command: SimulationCommand) => {
@@ -264,6 +330,11 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
     const url = getDefaultLocalRuntimeUrl()
     const { role } = readParticipantAccessContextFromDocument()
     if (!url || role === 'standalone') return
+    if (role === 'instructor') {
+      localInstructorPatchHandlers.set(row.id, (patch, mutationId) => (
+        acceptLocalInstructorPatch(patch, mutationId) as ProductSimulationPatchResult<unknown> | null
+      ))
+    }
     if (localTransport) {
       if (role === 'instructor') publishLocalRow(row)
       return
@@ -279,6 +350,9 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
       onConnection: (state) => {
         announceLocalConnection(row.id, state)
         if (state === 'connected' && role === 'instructor' && localSessionRow) {
+          localInstructorPatchHandlers.set(row.id, (patch, mutationId) => (
+            acceptLocalInstructorPatch(patch, mutationId) as ProductSimulationPatchResult<unknown> | null
+          ))
           publishLocalRow(localSessionRow)
           void flushPendingLocalSimulationPatch()
         }
@@ -439,13 +513,20 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
           },
           (payload) => {
             const row = payload.new as ProductTeachingSessionRow<TState>
-            localSessionRow = row
-            localProductRows.set(row.id, row as ProductTeachingSessionRow<unknown>)
+            const hasPendingLocalState = Boolean(pendingLocalSimulationPatch) && readParticipantAccessContextFromDocument().role === 'instructor'
+            localSessionRow = hasPendingLocalState && localSessionRow
+              ? {
+                  ...row,
+                  product_state: deepMerge(row.product_state, pendingLocalSimulationPatch) as TState,
+                  updated_at: localSessionRow.updated_at,
+                }
+              : row
+            localProductRows.set(row.id, localSessionRow as ProductTeachingSessionRow<unknown>)
             if (readParticipantAccessContextFromDocument().role === 'instructor') {
-              publishLocalRow(row)
+              publishLocalRow(localSessionRow)
               void flushPendingLocalSimulationPatch()
             }
-            onUpdate(row)
+            onUpdate(localSessionRow)
           },
         )
         .subscribe((status) => {
