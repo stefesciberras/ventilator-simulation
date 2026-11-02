@@ -139,6 +139,15 @@ export function SharedScenarioRuntimePanel({
   const sessionRole = typeof document === 'undefined' ? 'standalone' : document.documentElement.dataset.loppjusimSessionRole
   const manualControlsAllowed = selfDirected || sessionRole !== 'candidate'
   const manualAvailable = manualControlsAllowed && !complete && (Boolean(manualAdvanceAvailable) || branchActions.length > 0)
+  const manualStatus = !manualAvailable
+    ? 'Not available'
+    : branchActions.length > 1
+      ? 'Available → choose a path below'
+      : branchActions.length === 1
+        ? `Available → ${branchActions[0].targetLabel ?? branchActions[0].label}`
+        : stageNumber < stageCount
+          ? `Available → Stage ${stageNumber + 1}`
+          : 'Available → Scenario complete'
 
   useEffect(() => {
     if (selfDirected) return
@@ -231,7 +240,7 @@ export function SharedScenarioRuntimePanel({
         onClick={branchActions.length <= 1 ? runSingleManualAction : undefined}
       >
         <span>Manual</span>
-        <em>{!manualAvailable ? 'Not available' : branchActions.length > 1 ? 'Choose a path below' : 'Available'}</em>
+        <em>{manualStatus}</em>
       </button>
       {branchActions.length > 1 && <div className="shared-scenario-manual-paths">
         {branchActions.map((branch) => <button type="button" key={branch.id} onClick={() => void runManualTransition(branch.onSelect, branch.targetLabel)}>
