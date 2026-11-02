@@ -12,6 +12,42 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-02 — Informative manual-trigger destination labels
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.83` (from `0.83.0.82`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.44` (from `1.2.8.43`)
+
+**Changes**
+
+- Replaced the generic Manual trigger `Available` status with an informative destination label.
+- A single branch now displays `Available → <destination stage>` using the authored target label.
+- A simple sequential manual advance displays `Available → Stage N` (or `Scenario complete` at the end).
+- Multiple manual branches display `Available → choose a path below`, with each path retaining its own destination row.
+- Unavailable manual transitions continue to display only `Not available`.
+
+**Architectural rule**
+
+> Scenario runtime trigger rows should expose the consequence of an available transition wherever that destination is already known, rather than presenting availability without routing context.
+
+## 2026-11-01 — Clear EDUMON monitor histories on scenario reset
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.82` (from `0.83.0.81`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.43` (from `1.2.8.42`)
+
+**Changes**
+
+- BIS now clears its 60-second trend point history, lag/inertia state, jitter state and local simulation clock on the shared simulation-reset event.
+- Capnography now clears its rolling waveform history, respiratory runtime, capnogram state and local simulation clock on reset.
+- Restart Scenario therefore begins auxiliary monitor histories from a clean baseline before Stage 1 is applied, rather than retaining data from the previous scenario run.
+
+**Architectural rule**
+
+> Product/component-local rolling histories and dynamic monitor runtimes are transient simulation state. They must subscribe to the shared reset lifecycle and be cleared whenever the simulator or active scenario is cleanly restarted.
+
 ## 2026-11-01 — Explicit session recovery and clean scenario restart
 
 **Versions after change**
