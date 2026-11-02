@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react'
+import { readParticipantAccessContextFromDocument } from '../core/sessionAccessPolicy'
 import './InstructorConsoleView.css'
 
 export type SimulationViewMode = 'monitor' | 'instructor'
@@ -83,24 +84,31 @@ export function SimulationWorkspaceShell({
   const [view, setView] = useState<SimulationViewMode>(initialSimulationView)
   const swipeStart = useRef<WorkspaceSwipeStart | null>(null)
 
+  const accessContext = readParticipantAccessContextFromDocument()
+  const instructorAuthenticated = typeof document !== 'undefined'
+    && document.documentElement.dataset.loppjusimInstructorAuthenticated === 'true'
+  const effectiveInstructorVisible = Boolean(
+    instructorVisible
+    && instructorAuthenticated
+    && accessContext.role !== 'candidate'
+    && accessContext.policy.instructorView,
+  )
+
   const resetSwipe = () => {
     swipeStart.current = null
   }
 
   const selectView = (nextView: SimulationViewMode) => {
-    const effectiveView = nextView === 'instructor' && !instructorVisible ? 'monitor' : nextView
+    const effectiveView = nextView === 'instructor' && !effectiveInstructorVisible ? 'monitor' : nextView
     setView(effectiveView)
     persistSimulationViewInUrl(effectiveView)
   }
 
   useEffect(() => {
-    if (view === 'instructor' && !instructorVisible) selectView('monitor')
-  }, [instructorVisible, view])
+    if (view === 'instructor' && !effectiveInstructorVisible) selectView('monitor')
+  }, [effectiveInstructorVisible, view])
 
   const onTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    // A first finger must never arm workspace navigation. The gesture starts
-    // only when a second simultaneous contact is present, so ordinary sliders,
-    // scrolling, waveform interaction and the teaching laser remain one-finger gestures.
     if (event.touches.length !== 2) {
       if (event.touches.length < 2) resetSwipe()
       return
@@ -109,8 +117,6 @@ export function SimulationWorkspaceShell({
   }
 
   const onTouchMove = (event: TouchEvent<HTMLDivElement>) => {
-    // If a third contact is added, cancel rather than interpreting a pinch or
-    // other multi-touch interaction as workspace navigation.
     if (swipeStart.current && event.touches.length !== 2) resetSwipe()
   }
 
@@ -121,9 +127,6 @@ export function SimulationWorkspaceShell({
       return
     }
 
-    // touchend normally contains one remaining finger plus the finger that
-    // just lifted. Recombine those contacts so the final position remains the
-    // centre of the same two-finger gesture.
     const end = twoTouchCentroidAtEnd(event)
     resetSwipe()
     if (!end) return
@@ -135,10 +138,10 @@ export function SimulationWorkspaceShell({
   }
 
   const effectivePage = controlsVisible ? page : 'display'
-  const effectiveView = view === 'instructor' && instructorVisible ? 'instructor' : 'monitor'
+  const effectiveView = view === 'instructor' && effectiveInstructorVisible ? 'instructor' : 'monitor'
 
   return <>
-    {instructorVisible && (
+    {effectiveInstructorVisible && (
       <nav className="simulation-view-switcher" aria-label="Simulation view">
         <button type="button" className={effectiveView === 'monitor' ? 'active' : ''} onClick={() => selectView('monitor')} aria-pressed={effectiveView === 'monitor'}>Monitor</button>
         <button type="button" className={effectiveView === 'instructor' ? 'active' : ''} onClick={() => selectView('instructor')} aria-pressed={effectiveView === 'instructor'}>{instructorLabel}</button>
