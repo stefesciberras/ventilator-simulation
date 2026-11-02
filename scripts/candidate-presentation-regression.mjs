@@ -25,6 +25,7 @@ assert(candidateInvitationRuntime.includes("data-candidate-name-prompt"), 'a key
 assert(candidateInvitationRuntime.includes("join_edusim_session"), 'candidate name capture must update the existing candidate membership')
 assert(main.includes('installCandidateInvitationRuntime()'), 'candidate invitation bootstrap must run for simulator routes')
 
+// candidate control restriction: capability-based filtering must remain shared and product-neutral.
 assert(controlFramework.includes('readParticipantAccessContextFromDocument'), 'shared control framework must use the Core participant access context')
 assert(controlFramework.includes('participantCanAccess(accessPolicy, capability)'), 'candidate tabs must be filtered by shared capability policy')
 assert(controlFramework.includes('defaultControlTabAccessCapability(String(tab.id))'), 'legacy shared tabs must resolve through the canonical capability map')
