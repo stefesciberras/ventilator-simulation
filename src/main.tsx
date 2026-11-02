@@ -11,6 +11,7 @@ import { installSelfDirectedScenarioPanelDrag } from './selfDirectedScenarioPane
 import { installCollapsibleHeaderRuntime } from './components/collapsibleHeaderRuntime'
 import { installActionLevelIndicatorRuntime } from './edumon/actionLevelIndicatorRuntime'
 import { installEdumonDoaInteractionRuntime, installSimulatorBackNavigationGuard } from './simulationInteractionRuntime'
+import { installCandidateInvitationRuntime } from './teaching/session/candidateInvitationRuntime'
 import { SharedAlarmMetricHighlight } from './components/SharedAlarmMetricHighlight'
 import { EDUMON_ALARM_METRIC_HIGHLIGHTS } from './edumon/alarmMetricHighlights'
 import './styles.css'
@@ -42,6 +43,7 @@ if (isEduventRoute || isEdumonRoute) {
   installSimulatorBackNavigationGuard()
   installTabletResponsiveMode()
   installCollapsibleHeaderRuntime()
+  installCandidateInvitationRuntime()
   if (isEdumonRoute) {
     installActionLevelIndicatorRuntime()
     installEdumonDoaInteractionRuntime()
