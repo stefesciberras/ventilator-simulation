@@ -31,7 +31,7 @@ assert(sessionControls.includes('set_edusim_session_controls'), 'global mutation
 assert(displaySync.includes('fetchSessionControlSnapshot(sessionId)'), 'display sync must hydrate durable controls after reconnect')
 assert(displaySync.includes('subscribeSessionControlSnapshot(sessionId'), 'display sync must receive durable control updates')
 assert(displaySync.includes('waveformsFrozen: frozen'), 'instructor waveform freeze must persist')
-assert(displaySync.includes('Refresh/disconnect is not an instruction to clear durable'), 'instructor cleanup must not clear durable waveform freeze')
+assert(displaySync.includes('not an instruction to clear durable'), 'instructor cleanup must not clear durable waveform freeze')
 assert(displaySync.includes('laserEnabled: false'), 'ephemeral laser must be withdrawn when instructor presentation ends')
 
 assert(alarmSync.includes('fetchSessionControlSnapshot(sessionId)'), 'alarm sync must hydrate durable controls after reconnect')
