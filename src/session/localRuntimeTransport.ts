@@ -1,7 +1,7 @@
 import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import type { AlarmLimits } from '../alarmTypes'
 import type { SimulationSpeed } from '../simulationSpeed'
-import type { LoppjuSimRuntimeMode, SimulationCommand } from '../core/runtimeModes'
+import type { LoppjuSimRuntimeMode, SessionControlState, SimulationCommand } from '../core/runtimeModes'
 
 export type LocalRuntimeConnection = 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 export type LocalSessionRuntimeMode = Extract<LoppjuSimRuntimeMode, 'simulation' | 'teaching'>
@@ -31,7 +31,9 @@ export interface LocalRuntimeSnapshot {
   ventilator: VentilatorSettings
   alarmLimits: AlarmLimits
   patientTransitionMs: number
+  /** @deprecated Read sessionControls.paused when present. Kept for relay/backward compatibility. */
   simulationPaused: boolean
+  sessionControls?: SessionControlState
   policy: LocalRuntimePolicy
 }
 
@@ -259,64 +261,57 @@ export class LocalRuntimeTransport {
         let message: unknown
         try { message = JSON.parse(String(event.data)) } catch { return }
         if (!message || typeof message !== 'object') return
-        const record = message as Record<string, unknown>
-        if (record.type === 'welcome') {
-          const negotiatedMode: LocalSessionRuntimeMode = record.runtimeMode === 'simulation' ? 'simulation' : 'teaching'
-          if (negotiatedMode !== this.runtimeMode) this.runtimeMode = negotiatedMode
-          notifyRuntimeMode(this.options.sessionId, this.runtimeMode)
-          this.options.onRuntimeMode?.(this.runtimeMode)
-          const sequence = Number(record.sequence ?? 0)
-          if (Number.isFinite(sequence)) this.lastSequence = Math.max(this.lastSequence, sequence)
-          const snapshot = record.snapshot
-          if (snapshot && typeof snapshot === 'object') {
-            const payload: LocalRuntimePayload = { type: 'snapshot', snapshot: snapshot as LocalRuntimeSnapshot }
-            notifyPayload(this.options.sessionId, payload)
-            this.options.onEnvelope({
-              type: 'runtime',
-              sequence: this.lastSequence,
-              serverTime: Date.now(),
-              payload,
-            })
+        const typed = message as {
+          type?: string
+          sequence?: number
+          serverTime?: number
+          payload?: LocalRuntimePayload
+          snapshot?: LocalRuntimeSnapshot | null
+          reason?: string
+          runtimeMode?: LocalSessionRuntimeMode
+        }
+
+        if (typed.runtimeMode === 'simulation' || typed.runtimeMode === 'teaching') {
+          if (this.runtimeMode !== typed.runtimeMode) {
+            this.runtimeMode = typed.runtimeMode
+            notifyRuntimeMode(this.options.sessionId, typed.runtimeMode)
+            this.options.onRuntimeMode?.(typed.runtimeMode)
           }
+        }
+
+        if (typed.type === 'welcome' && typed.snapshot) {
+          const payload: LocalRuntimePayload = { type: 'snapshot', snapshot: typed.snapshot }
+          notifyPayload(this.options.sessionId, payload)
+          this.options.onEnvelope({ type: 'runtime', sequence: Number(typed.sequence ?? 0), serverTime: Number(typed.serverTime ?? Date.now()), payload })
+          this.lastSequence = Math.max(this.lastSequence, Number(typed.sequence ?? 0))
           return
         }
-        if (record.type !== 'runtime') return
-        const envelope = record as unknown as LocalRuntimeEnvelope
-        if (!Number.isFinite(envelope.sequence) || envelope.sequence <= 0) return
-        if (this.lastSequence > 0 && envelope.sequence > this.lastSequence + 1) {
+
+        if (typed.type !== 'runtime' || !typed.payload || typeof typed.sequence !== 'number') return
+        if (typed.sequence <= this.lastSequence) return
+        if (this.lastSequence > 0 && typed.sequence > this.lastSequence + 1) {
           this.requestResync()
           return
         }
-        if (envelope.sequence <= this.lastSequence) return
-        this.lastSequence = envelope.sequence
-        notifyPayload(this.options.sessionId, envelope.payload)
-        this.options.onEnvelope(envelope)
+        this.lastSequence = typed.sequence
+        notifyPayload(this.options.sessionId, typed.payload)
+        this.options.onEnvelope({ type: 'runtime', sequence: typed.sequence, serverTime: Number(typed.serverTime ?? Date.now()), payload: typed.payload })
       })
 
-      socket.addEventListener('close', () => {
-        if (this.socket === socket) this.socket = null
-        if (this.intentionallyClosed) return
-        this.scheduleReconnect()
-      })
-
-      socket.addEventListener('error', () => {
-        if (socket.readyState === WebSocket.OPEN) return
-        this.options.onConnection('error')
-      })
+      socket.addEventListener('close', () => this.handleDisconnect())
+      socket.addEventListener('error', () => this.handleDisconnect())
     } catch {
-      this.options.onConnection('error')
-      this.scheduleReconnect()
+      this.handleDisconnect()
     }
   }
 
-  private scheduleReconnect() {
-    if (this.intentionallyClosed || this.reconnectTimer != null) return
+  private handleDisconnect() {
+    if (this.intentionallyClosed) return
+    this.socket = null
     this.options.onConnection('reconnecting')
-    const delay = Math.min(MAX_RECONNECT_DELAY_MS, 400 * 2 ** this.reconnectAttempts)
     this.reconnectAttempts += 1
-    this.reconnectTimer = window.setTimeout(() => {
-      this.reconnectTimer = null
-      this.openSocket('reconnecting')
-    }, delay)
+    const delay = Math.min(MAX_RECONNECT_DELAY_MS, 250 * (2 ** Math.min(this.reconnectAttempts, 5)))
+    if (this.reconnectTimer != null) window.clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = window.setTimeout(() => this.openSocket('reconnecting'), delay)
   }
 }
