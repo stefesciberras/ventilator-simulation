@@ -50,10 +50,18 @@ export interface LocalSessionControlUpdate {
   sentAt: number
 }
 
+/** Ephemeral instructor presentation state. Never part of patient/session persistence. */
+export interface LocalPresentationBroadcast {
+  event: string
+  payload: unknown
+  sentAt: number
+}
+
 export type LocalRuntimePayload =
   | { type: 'snapshot'; snapshot: LocalRuntimeSnapshot }
   | { type: 'scenario-event'; event: LocalScenarioRuntimeEvent }
   | { type: 'session-control'; update: LocalSessionControlUpdate }
+  | { type: 'presentation'; presentation: LocalPresentationBroadcast }
   | { type: 'command'; command: SimulationCommand }
 
 export interface LocalRuntimeEnvelope {
@@ -156,6 +164,19 @@ export function publishLocalSessionControlPatch(sessionId: string, patch: Partia
   const payload: LocalRuntimePayload = { type: 'session-control', update: { patch, sentAt: Date.now() } }
   for (const transport of transports) {
     if (transport.publish(payload)) return true
+  }
+  return false
+}
+
+export function publishLocalPresentationBroadcast(sessionId: string, event: string, payload: unknown) {
+  const transports = transportsBySession.get(sessionId)
+  if (!transports?.size) return false
+  const message: LocalRuntimePayload = {
+    type: 'presentation',
+    presentation: { event, payload, sentAt: Date.now() },
+  }
+  for (const transport of transports) {
+    if (transport.publish(message)) return true
   }
   return false
 }
@@ -284,6 +305,7 @@ export class LocalRuntimeTransport {
           payload?: LocalRuntimePayload
           snapshot?: LocalRuntimeSnapshot | null
           sessionControls?: Partial<SessionControlState> | null
+          presentations?: LocalPresentationBroadcast[] | null
           reason?: string
           runtimeMode?: LocalSessionRuntimeMode
         }
@@ -309,6 +331,10 @@ export class LocalRuntimeTransport {
               type: 'session-control',
               update: { patch: typed.sessionControls, sentAt: serverTime },
             })
+          }
+          for (const presentation of typed.presentations ?? []) {
+            if (!presentation || typeof presentation.event !== 'string') continue
+            notifyPayload(this.options.sessionId, { type: 'presentation', presentation })
           }
           this.lastSequence = Math.max(this.lastSequence, welcomeSequence)
           return
