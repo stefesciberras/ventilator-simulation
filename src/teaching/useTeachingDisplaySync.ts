@@ -72,7 +72,10 @@ export function useTeachingDisplaySync(
     controlsRef.current = nextControls
     setControls(nextControls)
     applyFrozen(nextControls.waveformsFrozen)
-  }, [applyFrozen])
+    if (role === 'instructor' && sessionId) {
+      publishLocalSessionControlPatch(sessionId, { waveformsFrozen: nextControls.waveformsFrozen })
+    }
+  }, [applyFrozen, role, sessionId])
 
   const publish = useCallback((next: SharedTeachingDisplayState) => {
     if (role !== 'instructor' || !sessionId) return
