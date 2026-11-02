@@ -1,5 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toLegacyProductId, type SimulationProductId } from '../../core/SimulationProductAdapter'
+import { readParticipantAccessContextFromDocument } from '../../core/sessionAccessPolicy'
 import { ensureAnonymousSession, supabase } from '../../session/supabase'
 import type {
   SharedTeachingMemberRow,
@@ -35,8 +36,8 @@ export interface ProductSimulationPatchResult<TState> {
 }
 
 function currentSimulationActorRole(): 'instructor' | 'candidate' {
-  if (typeof document !== 'undefined' && document.documentElement.dataset.loppjusimSessionRole === 'candidate') return 'candidate'
-  return 'instructor'
+  const { role } = readParticipantAccessContextFromDocument()
+  return role === 'candidate' ? 'candidate' : 'instructor'
 }
 
 export async function applyProductSimulationPatch<TState>(

@@ -25,10 +25,11 @@ assert(candidateInvitationRuntime.includes("data-candidate-name-prompt"), 'a key
 assert(candidateInvitationRuntime.includes("join_edusim_session"), 'candidate name capture must update the existing candidate membership')
 assert(main.includes('installCandidateInvitationRuntime()'), 'candidate invitation bootstrap must run for simulator routes')
 
-assert(controlFramework.includes("dataset.loppjusimSessionRole === 'candidate'"), 'shared control framework must recognise candidate role')
-assert(controlFramework.includes("String(tab.id) === 'actions'"), 'candidate control restriction must retain only the Actions tab when available')
-assert(controlFramework.includes('const visibleProfiles = candidateActionsOnly ? [] : profiles'), 'patient profiles must be hidden from candidates')
-assert(controlFramework.includes('footer && !candidateActionsOnly'), 'candidate control surface must not expose instructor/session footer controls')
+assert(controlFramework.includes('readParticipantAccessContextFromDocument'), 'shared control framework must use the Core participant access context')
+assert(controlFramework.includes('accessPolicy.restrictedLearner && hasActionsTab'), 'candidate control restriction must retain the Actions-only presentation when available')
+assert(controlFramework.includes("tabs.filter((tab) => String(tab.id) === 'actions')"), 'candidate control restriction must retain only the Actions tab when available')
+assert(controlFramework.includes('const visibleProfiles = accessPolicy.patientProfiles ? profiles : []'), 'patient profiles must be hidden according to the shared access policy')
+assert(controlFramework.includes('footer && accessPolicy.sessionControls'), 'candidate control surface must not expose instructor/session footer controls')
 assert(edumonActions.includes("definition.candidate_access === 'allowed' || candidatePermissions.has(definition.id)"), 'candidate Actions must use the existing action permission model')
 assert(edumonActions.includes("definitions.filter(candidateCanUse)"), 'candidate Actions must hide actions that are not permitted')
 
