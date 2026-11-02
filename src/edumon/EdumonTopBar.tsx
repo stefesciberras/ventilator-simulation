@@ -8,6 +8,14 @@ import { useProductScenarioLibrary } from '../teaching/scenario/useProductScenar
 import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import type { EdumonStoredScenario } from './scenarioTypes'
 import { LOPPJUSIM_RUN_SCENARIO_EVENT } from '../core/platformEvents'
+import type { TeachingRole } from '../teaching/types'
+import { publishLocalSessionControlPatch, subscribeLocalRuntimePayload } from '../session/localRuntimeTransport'
+import {
+  closeSessionControlSubscription,
+  fetchSessionControlSnapshot,
+  setInstructorSessionPaused,
+  subscribeSessionControlSnapshot,
+} from '../teaching/session/sessionControls'
 import { EDUMON_APP_VERSION } from './appVersion'
 import './EdumonTopBar.css'
 
@@ -21,6 +29,8 @@ interface EdumonTopBarProps {
   onPausedChange: (paused: boolean) => void
   onSpeedChange: (speed: EdumonSimulationSpeed) => void
   simulationControlsLocked?: boolean
+  sessionRole?: TeachingRole
+  sessionId?: string | null
   onScenario: () => void
   accountAction: ReactNode
   diagnosticsAction: ReactNode
@@ -49,7 +59,7 @@ function scenarioSummary(scenario: EdumonStoredScenario) {
   return summary
 }
 
-export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, diagnosticsAction, onAbout }: EdumonTopBarProps) {
+export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapsedSeconds, onPausedChange, onSpeedChange, simulationControlsLocked = false, sessionRole = 'standalone', sessionId = null, diagnosticsAction, onAbout }: EdumonTopBarProps) {
   const settingsAuth = useInstructorAccountAuth({ locked: simulationControlsLocked })
   const scenarioProduct = scenarioProductForEdumonModule(module.id)
   const scenarioLibrary = useProductScenarioLibrary<EdumonStoredScenario>(scenarioProduct, Boolean(settingsAuth.account) && !simulationControlsLocked)
@@ -64,6 +74,33 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
     observer.observe(document.body, { childList: true, subtree: true })
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => {
+    if (!sessionId || sessionRole === 'standalone') return
+    let active = true
+    const applyPause = (paused: boolean) => {
+      if (active && sessionRole === 'candidate') onPausedChange(paused)
+    }
+    void fetchSessionControlSnapshot(sessionId).then((snapshot) => applyPause(snapshot.paused)).catch(() => undefined)
+    const channel = subscribeSessionControlSnapshot(sessionId, (snapshot) => applyPause(snapshot.paused))
+    const unsubscribeLocal = subscribeLocalRuntimePayload(sessionId, (payload) => {
+      if (sessionRole !== 'candidate' || payload.type !== 'session-control') return
+      if (typeof payload.update.patch.paused === 'boolean') applyPause(payload.update.patch.paused)
+    })
+    return () => {
+      active = false
+      unsubscribeLocal()
+      void closeSessionControlSubscription(channel)
+    }
+  }, [onPausedChange, sessionId, sessionRole])
+
+  const handlePausedChange = (paused: boolean) => {
+    if (sessionRole === 'candidate') return
+    onPausedChange(paused)
+    if (sessionRole !== 'instructor' || !sessionId) return
+    publishLocalSessionControlPatch(sessionId, { paused })
+    void setInstructorSessionPaused(sessionId, paused).catch(() => undefined)
+  }
 
   const runScenario = (item: InstructorScenarioLibraryItem<EdumonStoredScenario>) => {
     window.dispatchEvent(new CustomEvent(LOPPJUSIM_RUN_SCENARIO_EVENT, {
@@ -90,7 +127,7 @@ export function EdumonTopBar({ module, simulationPaused, simulationSpeed, elapse
         simulationPaused={simulationPaused}
         simulationSpeed={simulationSpeed}
         elapsedSeconds={elapsedSeconds}
-        onPausedChange={onPausedChange}
+        onPausedChange={handlePausedChange}
         onSpeedChange={onSpeedChange}
         controlsControlledByInstructor={simulationControlsLocked}
         rightActions={diagnosticsAction}
