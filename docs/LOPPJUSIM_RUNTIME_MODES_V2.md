@@ -1,141 +1,178 @@
-# loppjuSIM Core runtime modes v2
+# loppjuSIM Core runtime modes v3
 
-loppjuSIM has three first-class user-facing runtime modes. These modes describe **simulation ownership and synchronization semantics**. They are distinct from transport topology (LAN WebSocket, WebRTC, Supabase/cloud, or appliance).
+loppjuSIM has four first-class user-facing runtime modes. Runtime mode describes **simulation ownership and synchronization semantics**. It is distinct from participant role, authentication state and transport topology.
+
+## Canonical invariants
+
+```text
+Standalone:     1 user                  -> 1 unrestricted local runtime, no session
+Simulation:     1 instructor + 1 learner -> 1 shared authoritative patient runtime
+Teaching:       1 instructor + N learners -> 1 instructor/master state + N independent learner runtimes
+Self-directed:  1 learner               -> 1 independent learner runtime driven by a dynamic scenario
+```
+
+A browser tab, WebSocket connection or Supabase Realtime subscription is never the identity of the simulation session. Refreshing or reconnecting a client must reattach it to the existing runtime rather than create a new patient.
 
 ## Standalone
 
-**Participants:** one user.  
-**Logical runtimes:** one local runtime.  
-**Ownership:** local.
+**Session:** none.  
+**Authentication:** not required for simulator use.  
+**Logical runtime:** one local runtime.  
+**Control authority:** unrestricted local user.
 
-Standalone runs without an instructor session. The simulator, scenario runtime, Actions runtime, alarms, waveforms and physiology all remain local.
+Standalone is the absence of a shared session. Physiology, Actions, alarms, waveforms, ventilator/device controls and presentation controls remain local.
+
+Dynamic scenarios are authenticated content. A signed-out Standalone user may use the simulator manually but may not launch dynamic scenarios. A signed-in user may launch an eligible dynamic scenario locally without turning Standalone into a shared session.
+
+The laser pointer, pause, waveform freeze and alarm silence are local in Standalone.
 
 ## Simulation
 
-**Participants:** one instructor and normally one candidate.  
-**Logical runtimes:** one shared logical simulation.  
-**Ownership:** one authoritative session runtime, normally hosted by the instructor device for room-based simulation.
+**Participants:** exactly one signed-in instructor and one candidate.  
+**Joining:** instructor creates a session and invitation key/link; candidate may use invitation access without a full registered account.  
+**Logical runtimes:** exactly one shared authoritative patient runtime.
 
-Simulation is the conventional simulation-centre topology. Both users may perform permitted clinical/simulator interactions and every accepted mutation is reflected to both users.
-
-Examples:
-
-- Candidate changes PEEP -> instructor and candidate see the new PEEP.
-- Candidate gives a Drug -> the shared ActionRuntime changes and both users see the resulting simulation.
-- Instructor starts Bleeding -> both users enter the same active Event/effect state.
-- Instructor or candidate performs a scenario-relevant action -> one shared scenario runtime evaluates it.
-
-Simulation mode is **bidirectional but not peer-authoritative**. Instructor and candidate issue commands; one `SimulationSessionAuthority` validates, sequences and applies accepted mutations. This avoids conflicting last-write-wins state.
-
-### What is synchronized
-
-Synchronize simulation inputs and canonical runtime state, including as appropriate:
-
-- patient state/settings;
-- device settings;
-- environment settings;
-- Drugs/Events invocations, intensity and stop/toggle operations;
-- active effects;
-- scenario ID, stage and scenario runtime controls;
-- simulation clock, pause and speed where supported;
-- display freeze/shared display state;
-- alarm state where the product treats it as shared.
-
-Do **not** make waveform samples or measured HR/BP/etc. the primary synchronization protocol. Actions remain declarative and product physiology interprets them. A canonical snapshot may contain sufficient state to recover a participant after reconnect, but physiological display output is not the command vocabulary.
-
-### Command flow
+Simulation is the conventional simulation-centre topology. Instructor and candidate do not run two patient models that are merely synchronized. They are two control/view surfaces attached to one logical patient.
 
 ```text
-Instructor command ----\
-                       -> SessionAuthority -> canonical mutation -> both participants
-Candidate command -----/
+Instructor permitted command ----\
+                                 -> Session authority -> canonical patient runtime -> both views
+Candidate permitted command -----/
 ```
 
-Commands use a product-neutral envelope such as `SimulationCommand`; product modules own the meaning and validation of product-specific payloads.
+Every accepted candidate clinical mutation is reflected in the instructor runtime and vice versa. Examples include permitted ventilator settings, Sevo and explicitly permitted Actions. Derived waveform samples and measured monitor values are not the command vocabulary; physiology is reconstructed from canonical state.
 
-### Local-first transport
+### Candidate access
 
-Simulation mode must not depend on an internet connection for the live room path when a local path is available.
+The candidate uses a restricted control surface. The candidate must not have access to:
 
-Preferred order for a room-based session:
+- Patient controls;
+- Physiology controls;
+- Teaching controls;
+- Patient Profiles;
+- Instructor/Monitor mode;
+- pause/resume;
+- session termination;
+- unrestricted Actions/Events.
 
-1. same-LAN local WebSocket relay/server;
-2. direct browser peer transport where appropriate;
-3. cloud/Supabase fallback for remote use and durable metadata.
+The candidate may use the product-specific approved controls, including permitted ventilator settings, Sevo where applicable, limited waveform/display controls, local waveform freeze and explicitly permitted Actions.
 
-The existing loppjuSIM-MV local teaching relay already provides useful transport primitives: ordered envelopes, sequence numbers, replay, gap detection and full-snapshot recovery. Simulation mode should reuse those primitives rather than create another networking stack.
+### Instructor-global controls
 
-Supabase may remain useful for authentication, durable session records and remote fallback, but it is not in the critical live-control path when the participants are connected locally.
+The following are instructor-authoritative session controls:
 
-### Snapshot/reconnect
+- simulation pause/resume;
+- global waveform freeze/unfreeze;
+- alarm silence where the product exposes shared alarm silence.
 
-A participant joining or reconnecting receives a canonical `SimulationSnapshot`, then commands after its sequence number:
+They apply to instructor and candidate. Candidate-local presentation controls cannot override an active instructor-global state. In particular:
 
 ```text
-connect
-  -> snapshot sequence 840
-  -> hydrate shared runtime
-  -> command 841
-  -> command 842
+effectiveWaveformFreeze = instructorGlobalFreeze OR candidateLocalFreeze
 ```
 
-The snapshot should contain the state required to reconstruct the shared logical simulation without replaying the entire session history.
+The instructor laser pointer is a one-way ephemeral presentation broadcast. It is not patient state and the candidate cannot control it.
 
 ## Teaching
 
-**Participants:** one instructor and one or more candidates.  
-**Logical runtimes:** one local simulation runtime per candidate.  
-**Ownership:** instructor controls shared teaching/patient inputs; permitted candidate interventions remain local to that candidate.
+**Participants:** one signed-in instructor and one or more candidates.  
+**Joining:** instructor creates the session; candidates use invitation keys/links.  
+**Logical runtimes:** independent candidate runtimes under an instructor/master teaching state.
 
-Teaching preserves the existing architecture. Instructor-originated authoritative settings/events can broadcast to every candidate, but Candidate A's permitted intervention does not mutate Candidate B's simulator.
+Teaching deliberately differs from Simulation. Instructor-originated patient/teaching changes may be broadcast to every candidate, but a candidate intervention remains local to that candidate.
 
 ```text
-Instructor -> Candidate A local runtime
-           -> Candidate B local runtime
-           -> Candidate C local runtime
+Instructor/master state -> Candidate A runtime
+                        -> Candidate B runtime
+                        -> Candidate C runtime
 
-Candidate A action -> Candidate A runtime + log/notify instructor
-Candidate B action -> Candidate B runtime + log/notify instructor
+Candidate A intervention -> Candidate A only
+Candidate B intervention -> Candidate B only
 ```
 
-This is intentionally different from Simulation mode.
+When an instructor update arrives, candidate-owned permitted state must be merged rather than blindly replaced. Candidate A's ventilator intervention, for example, must not disappear merely because the instructor later introduces bronchospasm unless the instructor explicitly changes the same authoritative domain.
+
+Candidate access restrictions are the same policy used for Simulation. Instructor pause, global waveform freeze, shared alarm silence and laser-pointer broadcasts apply to all candidates.
+
+## Self-directed learning
+
+**Participants:** one learner, no live instructor.  
+**Entry:** a dynamic-scenario assignment/link.  
+**Logical runtime:** one independent restricted learner runtime.  
+**Teaching authority:** the dynamic scenario engine.
+
+Self-directed learning is a specialization of the Teaching candidate runtime, not a separate simulator architecture. Existing self-directed assignment/run infrastructure should be reused.
+
+```text
+Dynamic scenario
+      ↓
+conditions / timers / learner actions
+      ↓
+scenario transitions
+      ↓
+learner patient runtime
+```
+
+The learner receives the same restricted clinical control surface as a Teaching candidate. There is no instructor laser pointer or instructor control surface, and the learner does not receive a general pause control. Scenario-authored pauses or acknowledgement steps remain valid scenario-engine behavior.
+
+A self-directed run must be recoverable after refresh/reconnect and resume its own scenario progress and patient state rather than restarting unless the learner explicitly restarts or the assignment policy requires it.
+
+## State classes
+
+Do not force all synchronized data through one semantic rule. loppjuSIM distinguishes four classes:
+
+1. **Patient/model state** — physiology inputs, ventilator/device settings, Sevo, Actions/Events and scenario state.
+2. **Instructor-global session controls** — pause, global waveform freeze and shared alarm silence.
+3. **Instructor presentation broadcast** — laser pointer and future ephemeral teaching overlays.
+4. **Local view state** — local tab/panel selection, permitted waveform visibility and candidate-local freeze.
+
+Simulation shares class 1 through one canonical runtime. Teaching keeps candidate class-1 interventions local while applying instructor-authoritative changes. Classes 2 and 3 flow from instructor to all participants. Class 4 remains local unless explicitly promoted to a global instructor control.
+
+## Session durability and termination
+
+Refreshing a page, closing/reopening a tab, a transient network loss or losing an instructor-control lease is **not** an End Session operation.
+
+For Simulation, if either instructor or candidate remains connected, the session recovery window must remain alive and the other participant must be able to rehydrate from current canonical state. Teaching should provide the same lifecycle behavior, including restoration of each candidate's own independent runtime where persisted.
+
+The normal authoritative termination of a live Simulation or Teaching session is:
+
+```text
+Instructor -> End Session -> session status = ended
+```
+
+Presence/lease expiry may make a client temporarily unable to control the room, and an inactivity deadline may eventually make an abandoned session unrecoverable for housekeeping, but neither is semantically equivalent to an instructor manually ending the scenario.
+
+Session expiry therefore represents an **inactivity/recovery deadline**, not a fixed lifetime measured from session creation. Connected participant heartbeats extend that deadline.
+
+## Local-first transport
+
+Runtime semantics are independent of transport topology. The preferred live-room order remains:
+
+1. same-LAN local WebSocket relay/server;
+2. direct browser peer transport where appropriate;
+3. Supabase/cloud fallback for remote operation and durable metadata.
+
+A transport switch must not change Simulation or Teaching ownership semantics. Supabase may provide authentication, durable records and recovery without becoming the definition of the patient runtime.
 
 ## Scenario compatibility
 
-loppjuSIM Studio / Scenario Builder may declare:
+Scenario Studio documents may declare:
 
 ```ts
-supportedModes: ['standalone', 'simulation', 'teaching']
+supportedModes: ['standalone', 'simulation', 'teaching', 'self-directed']
 ```
 
-The field is optional for backward compatibility. A scenario with no `supportedModes` declaration (or an empty/invalid legacy declaration) is treated as supporting all three modes.
+The field remains optional for backward compatibility. An absent/empty legacy declaration is normalized as compatible with all runtime modes; launch-time authentication, assignment and product policies still determine whether that scenario can actually be started in a given context.
 
-Mode availability belongs to the shared scenario document contract. Product-specific scenario codecs must preserve it when converting between the shared Studio document and the simulator's persisted scenario format.
-
-Most permissions should remain properties of the runtime mode and product. Scenarios should only add genuinely scenario-specific exposure/restriction, such as an Action whose `candidate_access` is `scenario`.
+Most permissions belong to the runtime mode and product, not to individual scenarios. Scenarios should add only genuinely scenario-specific exposure, such as an Action explicitly made available to the candidate.
 
 ## Terminology boundary
 
-Do not conflate runtime mode with participant role:
+Do not conflate:
 
-- runtime mode: `standalone | simulation | teaching`
-- participant role inside a session: `instructor | candidate`
+- **runtime mode:** `standalone | simulation | teaching | self-directed`;
+- **participant role:** local/standalone user, instructor or candidate;
+- **authentication:** signed-out, anonymous invitation identity or authenticated instructor/account;
+- **transport:** LAN WebSocket, WebRTC/direct peer, Supabase/cloud or local appliance.
 
-Likewise, do not conflate runtime mode with transport topology:
-
-- LAN WebSocket
-- WebRTC/direct peer
-- Supabase/cloud
-- local appliance
-
-The same Simulation or Teaching semantics can be carried by different transports.
-
-## Architectural invariant
-
-```text
-Standalone: 1 user  -> 1 local logical runtime
-Simulation: 2 users -> 1 shared authoritative logical runtime
-Teaching:   1 instructor -> N independent candidate logical runtimes
-```
-
-That invariant should be enforced in Core so loppjuSIM-MV, loppjuSIM-Anaesth and loppjuSIM-ICU do not independently reinvent session ownership rules.
+These are orthogonal concerns and must remain separate in Core.
