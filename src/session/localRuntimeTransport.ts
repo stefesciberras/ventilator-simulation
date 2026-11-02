@@ -37,6 +37,15 @@ export interface LocalRuntimeSnapshot {
   policy: LocalRuntimePolicy
 }
 
+export interface LocalProductStateSnapshot {
+  productId: string
+  sessionId: string
+  runtimeMode: LocalSessionRuntimeMode
+  revision: number
+  state: unknown
+  sentAt: number
+}
+
 export interface LocalScenarioRuntimeEvent {
   eventId: string
   scenarioTimeMs: number
@@ -59,6 +68,7 @@ export interface LocalPresentationBroadcast {
 
 export type LocalRuntimePayload =
   | { type: 'snapshot'; snapshot: LocalRuntimeSnapshot }
+  | { type: 'product-state'; snapshot: LocalProductStateSnapshot }
   | { type: 'scenario-event'; event: LocalScenarioRuntimeEvent }
   | { type: 'session-control'; update: LocalSessionControlUpdate }
   | { type: 'presentation'; presentation: LocalPresentationBroadcast }
@@ -154,6 +164,16 @@ export function publishLocalSimulationCommand(sessionId: string, command: Simula
   if (!transports?.size) return false
   for (const transport of transports) {
     if (transport.publishCommand(command)) return true
+  }
+  return false
+}
+
+export function publishLocalProductState(sessionId: string, snapshot: Omit<LocalProductStateSnapshot, 'sentAt'>) {
+  const transports = transportsBySession.get(sessionId)
+  if (!transports?.size) return false
+  const payload: LocalRuntimePayload = { type: 'product-state', snapshot: { ...snapshot, sentAt: Date.now() } }
+  for (const transport of transports) {
+    if (transport.publish(payload)) return true
   }
   return false
 }
@@ -304,6 +324,7 @@ export class LocalRuntimeTransport {
           serverTime?: number
           payload?: LocalRuntimePayload
           snapshot?: LocalRuntimeSnapshot | null
+          productStates?: LocalProductStateSnapshot[] | null
           sessionControls?: Partial<SessionControlState> | null
           presentations?: LocalPresentationBroadcast[] | null
           reason?: string
@@ -325,6 +346,10 @@ export class LocalRuntimeTransport {
             const payload: LocalRuntimePayload = { type: 'snapshot', snapshot: typed.snapshot }
             notifyPayload(this.options.sessionId, payload)
             this.options.onEnvelope({ type: 'runtime', sequence: welcomeSequence, serverTime, payload })
+          }
+          for (const snapshot of typed.productStates ?? []) {
+            if (!snapshot || typeof snapshot.productId !== 'string') continue
+            notifyPayload(this.options.sessionId, { type: 'product-state', snapshot })
           }
           if (typed.sessionControls && Object.keys(typed.sessionControls).length > 0) {
             notifyPayload(this.options.sessionId, {
