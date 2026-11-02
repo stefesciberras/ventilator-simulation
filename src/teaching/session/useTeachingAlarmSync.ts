@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TeachingRole } from '../types'
+import { publishLocalSessionControlPatch, subscribeLocalRuntimePayload } from '../../session/localRuntimeTransport'
 import { sendTeachingBroadcast, subscribeTeachingBroadcast } from '../teachingRealtimeBus'
 import {
   closeSessionControlSubscription,
@@ -53,12 +54,16 @@ export function useTeachingAlarmSync(
   useEffect(() => { candidateHandlerRef.current = onCandidateState }, [onCandidateState])
 
   const applyPersistentOverride = useCallback((enabled: boolean) => {
-    if (stateRef.current.instructorOverride === enabled) return
-    const next = { ...stateRef.current, instructorOverride: enabled, sentAt: Date.now() }
-    stateRef.current = next
-    setState(next)
-    if (role === 'candidate') candidateHandlerRef.current?.(next)
-  }, [role])
+    if (stateRef.current.instructorOverride !== enabled) {
+      const next = { ...stateRef.current, instructorOverride: enabled, sentAt: Date.now() }
+      stateRef.current = next
+      setState(next)
+      if (role === 'candidate') candidateHandlerRef.current?.(next)
+    }
+    if (role === 'instructor' && sessionId) {
+      publishLocalSessionControlPatch(sessionId, { alarmsSilenced: enabled })
+    }
+  }, [role, sessionId])
 
   const publish = useCallback((next: SharedAlarmSessionState) => {
     if (role !== 'instructor' || !sessionId) return
@@ -79,6 +84,12 @@ export function useTeachingAlarmSync(
       if (active) applyPersistentOverride(snapshot.alarmsSilenced)
     })
 
+    const unsubLocal = subscribeLocalRuntimePayload(sessionId, (payload) => {
+      if (role !== 'candidate' || payload.type !== 'session-control') return
+      const silenced = payload.update.patch.alarmsSilenced
+      if (typeof silenced === 'boolean') applyPersistentOverride(silenced)
+    })
+
     const unsubState = subscribeTeachingBroadcast(sessionId, STATE_EVENT, (payload) => {
       if (role !== 'candidate' || !isState(payload)) return
       stateRef.current = payload
@@ -93,6 +104,7 @@ export function useTeachingAlarmSync(
 
     return () => {
       active = false
+      unsubLocal()
       unsubState()
       unsubRequest()
       void closeSessionControlSubscription(controlChannel)
@@ -142,6 +154,7 @@ export function useTeachingAlarmSync(
   const setInstructorOverride = useCallback((enabled: boolean) => {
     setInstructorState({ instructorOverride: enabled })
     if (role !== 'instructor' || !sessionId) return
+    publishLocalSessionControlPatch(sessionId, { alarmsSilenced: enabled })
     void setInstructorGlobalSessionControls(sessionId, { alarmsSilenced: enabled })
       .then((snapshot) => applyPersistentOverride(snapshot.alarmsSilenced))
       .catch(() => {

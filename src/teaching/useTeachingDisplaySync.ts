@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TeachingRole } from './types'
+import { publishLocalSessionControlPatch, subscribeLocalRuntimePayload } from '../session/localRuntimeTransport'
 import { sendTeachingBroadcast, subscribeTeachingBroadcast } from './teachingRealtimeBus'
 import {
   DEFAULT_SESSION_CONTROL_SNAPSHOT,
@@ -36,9 +37,9 @@ interface UseTeachingDisplaySyncOptions {
 /**
  * Product-neutral authority for shared display state.
  *
- * Instructor-global waveform freeze is durable session state: Realtime broadcast
- * is the low-latency path, while teaching_sessions is the recovery source of
- * truth after refresh/reconnect. Laser visibility/position remains ephemeral
+ * Instructor-global waveform freeze is durable session state: local runtime and
+ * Realtime broadcast are low-latency paths, while teaching_sessions is the
+ * durable recovery source. Laser visibility/position remains ephemeral
  * presentation state and is intentionally not persisted as patient/session state.
  */
 export function useTeachingDisplaySync(
@@ -58,16 +59,23 @@ export function useTeachingDisplaySync(
   useEffect(() => { frozenHandlerRef.current = options.onCandidateFrozenChange }, [options.onCandidateFrozenChange])
   useEffect(() => { laserHandlerRef.current = options.onCandidateLaserChange }, [options.onCandidateLaserChange])
 
-  const applyPersistentControls = useCallback((nextControls: SessionControlSnapshot) => {
+  const applyFrozen = useCallback((frozen: boolean) => {
     const previousFrozen = stateRef.current.frozen
-    controlsRef.current = nextControls
-    setControls(nextControls)
-    if (nextControls.waveformsFrozen === previousFrozen) return
-    const nextState = { ...stateRef.current, frozen: nextControls.waveformsFrozen, sentAt: Date.now() }
+    if (frozen === previousFrozen) return
+    const nextState = { ...stateRef.current, frozen, sentAt: Date.now() }
     stateRef.current = nextState
     setState(nextState)
-    if (role === 'candidate') frozenHandlerRef.current?.(nextControls.waveformsFrozen)
+    if (role === 'candidate') frozenHandlerRef.current?.(frozen)
   }, [role])
+
+  const applyPersistentControls = useCallback((nextControls: SessionControlSnapshot) => {
+    controlsRef.current = nextControls
+    setControls(nextControls)
+    applyFrozen(nextControls.waveformsFrozen)
+    if (role === 'instructor' && sessionId) {
+      publishLocalSessionControlPatch(sessionId, { waveformsFrozen: nextControls.waveformsFrozen })
+    }
+  }, [applyFrozen, role, sessionId])
 
   const publish = useCallback((next: SharedTeachingDisplayState) => {
     if (role !== 'instructor' || !sessionId) return
@@ -90,6 +98,12 @@ export function useTeachingDisplaySync(
       if (active) applyPersistentControls(snapshot)
     })
 
+    const unsubLocal = subscribeLocalRuntimePayload(sessionId, (payload) => {
+      if (role !== 'candidate' || payload.type !== 'session-control') return
+      const frozen = payload.update.patch.waveformsFrozen
+      if (typeof frozen === 'boolean') applyFrozen(frozen)
+    })
+
     const unsubState = subscribeTeachingBroadcast(sessionId, STATE_EVENT, (payload) => {
       if (role !== 'candidate' || !isState(payload)) return
       const previous = stateRef.current
@@ -105,6 +119,7 @@ export function useTeachingDisplaySync(
 
     return () => {
       active = false
+      unsubLocal()
       unsubState()
       unsubRequest()
       void closeSessionControlSubscription(controlChannel)
@@ -118,7 +133,7 @@ export function useTeachingDisplaySync(
         publish({ ...stateRef.current, laserEnabled: false, sentAt: Date.now() })
       }
     }
-  }, [applyPersistentControls, publish, role, sessionId])
+  }, [applyFrozen, applyPersistentControls, publish, role, sessionId])
 
   useEffect(() => {
     if (role !== 'instructor' || !sessionId || options.localLaserEnabled == null) return
@@ -142,6 +157,7 @@ export function useTeachingDisplaySync(
     const next = { ...stateRef.current, frozen, sentAt: Date.now() }
     stateRef.current = next
     setState(next)
+    publishLocalSessionControlPatch(sessionId, { waveformsFrozen: frozen })
     publish(next)
     void setInstructorGlobalSessionControls(sessionId, { waveformsFrozen: frozen })
       .then(applyPersistentControls)
