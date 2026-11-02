@@ -13,6 +13,7 @@ const sharedSessionPanel = read('src/teaching/session/SharedSessionModePanel.tsx
 const candidateInvitationRuntime = read('src/teaching/session/candidateInvitationRuntime.ts')
 const controlFramework = read('src/components/SimulationControlFramework.tsx')
 const edumonActions = read('src/edumon/EdumonActionsPanel.tsx')
+const caseMediaPanel = read('src/components/CaseMediaPanel.tsx')
 const main = read('src/main.tsx')
 const edumon = read('src/edumon/EdumonApp.tsx')
 const eduvent = read('src/App.tsx')
@@ -37,8 +38,8 @@ assert(edumonActions.includes("definitions.filter(candidateCanUse)"), 'candidate
 assert(edumon.includes('<TeachingCandidateOverlay'), 'Anaesth/ITU candidate question overlay must remain mounted at simulator root')
 assert(edumon.includes('<TeachingMediaCandidateOverlay'), 'Anaesth/ITU candidate media overlay must remain mounted at simulator root')
 assert(eduvent.includes('<TeachingCandidateOverlay'), 'MV candidate question overlay must remain mounted at simulator root')
-// Known pre-existing MV integration gap. Keep this bypass only while the session-runtime
-// branch reaches TypeScript/Vite; restore the assertion before finalising this PR.
-// assert(eduvent.includes('<TeachingMediaCandidateOverlay'), 'MV candidate media overlay must remain mounted at simulator root')
+assert(eduvent.includes('<CaseMediaPanel'), 'MV candidate media panel must remain mounted from the simulator root')
+assert(caseMediaPanel.includes('<TeachingMediaCandidateOverlay'), 'MV CaseMediaPanel must continue to mount the live candidate media overlay')
+assert(caseMediaPanel.includes('useTeachingMediaPresentation(role, sessionId)'), 'MV candidate media overlay must remain connected to the live teaching presentation state')
 
 if (!process.exitCode) console.log('Candidate join, control access and presentation regression checks passed')
