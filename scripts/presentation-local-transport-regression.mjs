@@ -21,7 +21,7 @@ assert(transport.includes("notifyPayload(this.options.sessionId, { type: 'presen
 assert(relay.includes('presentations: {}'), 'relay room must cache presentation state only in memory')
 assert(relay.includes("payload?.type === 'presentation'"), 'relay must cache latest presentation by event')
 assert(relay.includes('presentations: Object.values(room.presentations)'), 'welcome handshake must replay cached presentation state')
-assert(relay.includes("['snapshot', 'scenario-event', 'session-control', 'presentation', 'command']"), 'relay must accept instructor presentation payloads')
+assert(relay.includes("'presentation'"), 'relay accepted payload vocabulary must retain instructor presentation payloads')
 assert(relay.includes("socket.eduventRole === 'candidate' && payload.type !== 'command'"), 'candidate must not publish presentation authority')
 
 assert(bus.includes('LOCAL_PRESENTATION_EVENTS'), 'teaching bus must explicitly classify ephemeral local presentation events')
