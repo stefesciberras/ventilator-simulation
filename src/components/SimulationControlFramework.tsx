@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { readParticipantAccessContextFromDocument } from '../core/sessionAccessPolicy'
 
 export interface SimulationControlTabDefinition<TTab extends string> {
   id: TTab
@@ -46,11 +47,14 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
   bodyClassName = '',
   profileClassName = '',
 }: SimulationControlFrameworkProps<TTab, TProfile>) {
-  const candidateRole = typeof document !== 'undefined' && document.documentElement.dataset.loppjusimSessionRole === 'candidate'
+  const { policy: accessPolicy } = readParticipantAccessContextFromDocument()
   const hasActionsTab = tabs.some((tab) => String(tab.id) === 'actions')
-  const candidateActionsOnly = candidateRole && hasActionsTab
+  // Preserve the current candidate presentation while moving the authority
+  // decision into Core. Product adapters will progressively classify their
+  // non-Action tabs as device/local-view capabilities in later wiring steps.
+  const candidateActionsOnly = accessPolicy.restrictedLearner && hasActionsTab
   const visibleTabs = candidateActionsOnly ? tabs.filter((tab) => String(tab.id) === 'actions') : tabs
-  const visibleProfiles = candidateActionsOnly ? [] : profiles
+  const visibleProfiles = accessPolicy.patientProfiles ? profiles : []
   const selected = visibleTabs.find((tab) => tab.id === activeTab) ?? visibleTabs[0]
   const isEdumonControlRow = tabsClassName.split(/\s+/).includes('edumon-control-tabs')
   const edumonTabRowStyle: CSSProperties | undefined = isEdumonControlRow
@@ -118,7 +122,7 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
         })}
       </div>
 
-      {footer && !candidateActionsOnly && <div className="edusim-control-framework-footer">{footer}</div>}
+      {footer && accessPolicy.sessionControls && <div className="edusim-control-framework-footer">{footer}</div>}
     </aside>
   )
 }
