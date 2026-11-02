@@ -28,10 +28,10 @@ export const SIMULATION_PRODUCTS: Record<SimulationProductId, SimulationProductA
     teachingEnvironment: 'mechanical-ventilation',
     capabilities: { ...sharedCapabilities, deviceControls: true },
     controlTabs: [
-      { id: 'vent', label: 'Vent' },
-      { id: 'patient', label: 'Patient' },
-      { id: 'physio', label: 'Physio' },
-      { id: 'teaching', label: 'Teaching' },
+      { id: 'vent', label: 'Vent', accessCapability: 'device-controls' },
+      { id: 'patient', label: 'Patient', accessCapability: 'patient-controls' },
+      { id: 'physio', label: 'Physio', accessCapability: 'physiology-controls' },
+      { id: 'teaching', label: 'Teaching', accessCapability: 'teaching-controls' },
     ],
     secondaryDisplays: [
       { id: 'physiology', label: 'Physiological measurements', eyebrow: 'LoppjuSIM-MV secondary monitor' },
@@ -55,10 +55,10 @@ export const SIMULATION_PRODUCTS: Record<SimulationProductId, SimulationProductA
     teachingEnvironment: 'anaesthesia',
     capabilities: { ...sharedCapabilities, deviceControls: false },
     controlTabs: [
-      { id: 'actions', label: 'Actions' },
-      { id: 'patient', label: 'Patient' },
-      { id: 'physio', label: 'Physio' },
-      { id: 'teaching', label: 'Teaching' },
+      { id: 'actions', label: 'Actions', accessCapability: 'actions' },
+      { id: 'patient', label: 'Patient', accessCapability: 'patient-controls' },
+      { id: 'physio', label: 'Physio', accessCapability: 'physiology-controls' },
+      { id: 'teaching', label: 'Teaching', accessCapability: 'teaching-controls' },
     ],
     secondaryDisplays: [
       { id: 'gases', label: 'Anaesthetic gases' },
@@ -82,10 +82,10 @@ export const SIMULATION_PRODUCTS: Record<SimulationProductId, SimulationProductA
     teachingEnvironment: 'itu',
     capabilities: { ...sharedCapabilities, deviceControls: false },
     controlTabs: [
-      { id: 'actions', label: 'Actions' },
-      { id: 'patient', label: 'Patient' },
-      { id: 'physio', label: 'Physio' },
-      { id: 'teaching', label: 'Teaching' },
+      { id: 'actions', label: 'Actions', accessCapability: 'actions' },
+      { id: 'patient', label: 'Patient', accessCapability: 'patient-controls' },
+      { id: 'physio', label: 'Physio', accessCapability: 'physiology-controls' },
+      { id: 'teaching', label: 'Teaching', accessCapability: 'teaching-controls' },
     ],
     secondaryDisplays: [
       { id: 'neuro', label: 'Neuro / ICP' },
