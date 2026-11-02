@@ -12,6 +12,12 @@ export interface SharedTeachingSessionRow {
   updated_at: string
   expires_at: string
   status: SharedTeachingSessionStatus
+  simulation_paused?: boolean
+  pause_revision?: number
+  waveforms_frozen?: boolean
+  waveforms_freeze_revision?: number
+  global_alarms_silenced?: boolean
+  global_alarm_silence_revision?: number
   instructor_client_id?: string | null
   instructor_last_seen?: string | null
 }

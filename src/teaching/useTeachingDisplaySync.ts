@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TeachingRole } from './types'
 import { sendTeachingBroadcast, subscribeTeachingBroadcast } from './teachingRealtimeBus'
+import {
+  DEFAULT_SESSION_CONTROL_SNAPSHOT,
+  closeSessionControlSubscription,
+  fetchSessionControlSnapshot,
+  setInstructorGlobalSessionControls,
+  subscribeSessionControlSnapshot,
+  type SessionControlSnapshot,
+} from './session/sessionControls'
 
 const STATE_EVENT = 'teaching-display-state'
 const REQUEST_EVENT = 'teaching-display-state-request'
@@ -26,9 +34,12 @@ interface UseTeachingDisplaySyncOptions {
 }
 
 /**
- * Product-neutral authority for shared teaching display state. Pointer position and
- * captured waveform imagery remain in TeachingLaserPointerSurface; this hook owns
- * the session-level freeze/laser authority that every simulator can consume.
+ * Product-neutral authority for shared display state.
+ *
+ * Instructor-global waveform freeze is durable session state: Realtime broadcast
+ * is the low-latency path, while teaching_sessions is the recovery source of
+ * truth after refresh/reconnect. Laser visibility/position remains ephemeral
+ * presentation state and is intentionally not persisted as patient/session state.
  */
 export function useTeachingDisplaySync(
   role: TeachingRole,
@@ -36,13 +47,27 @@ export function useTeachingDisplaySync(
   options: UseTeachingDisplaySyncOptions = {},
 ) {
   const [state, setState] = useState<SharedTeachingDisplayState>({ frozen: false, laserEnabled: false, sentAt: Date.now() })
+  const [controls, setControls] = useState<SessionControlSnapshot>({ ...DEFAULT_SESSION_CONTROL_SNAPSHOT })
   const stateRef = useRef(state)
+  const controlsRef = useRef(controls)
   const frozenHandlerRef = useRef(options.onCandidateFrozenChange)
   const laserHandlerRef = useRef(options.onCandidateLaserChange)
 
   useEffect(() => { stateRef.current = state }, [state])
+  useEffect(() => { controlsRef.current = controls }, [controls])
   useEffect(() => { frozenHandlerRef.current = options.onCandidateFrozenChange }, [options.onCandidateFrozenChange])
   useEffect(() => { laserHandlerRef.current = options.onCandidateLaserChange }, [options.onCandidateLaserChange])
+
+  const applyPersistentControls = useCallback((nextControls: SessionControlSnapshot) => {
+    const previousFrozen = stateRef.current.frozen
+    controlsRef.current = nextControls
+    setControls(nextControls)
+    if (nextControls.waveformsFrozen === previousFrozen) return
+    const nextState = { ...stateRef.current, frozen: nextControls.waveformsFrozen, sentAt: Date.now() }
+    stateRef.current = nextState
+    setState(nextState)
+    if (role === 'candidate') frozenHandlerRef.current?.(nextControls.waveformsFrozen)
+  }, [role])
 
   const publish = useCallback((next: SharedTeachingDisplayState) => {
     if (role !== 'instructor' || !sessionId) return
@@ -50,10 +75,20 @@ export function useTeachingDisplaySync(
   }, [role, sessionId])
 
   useEffect(() => {
-    const reset = { frozen: false, laserEnabled: false, sentAt: Date.now() }
-    stateRef.current = reset
-    setState(reset)
+    const resetState = { frozen: false, laserEnabled: false, sentAt: Date.now() }
+    stateRef.current = resetState
+    setState(resetState)
+    controlsRef.current = { ...DEFAULT_SESSION_CONTROL_SNAPSHOT }
+    setControls({ ...DEFAULT_SESSION_CONTROL_SNAPSHOT })
     if (!sessionId || role === 'standalone') return
+
+    let active = true
+    void fetchSessionControlSnapshot(sessionId)
+      .then((snapshot) => { if (active) applyPersistentControls(snapshot) })
+      .catch(() => undefined)
+    const controlChannel = subscribeSessionControlSnapshot(sessionId, (snapshot) => {
+      if (active) applyPersistentControls(snapshot)
+    })
 
     const unsubState = subscribeTeachingBroadcast(sessionId, STATE_EVENT, (payload) => {
       if (role !== 'candidate' || !isState(payload)) return
@@ -69,15 +104,21 @@ export function useTeachingDisplaySync(
     if (role === 'candidate') void sendTeachingBroadcast(sessionId, REQUEST_EVENT, { requestedAt: Date.now() })
 
     return () => {
+      active = false
       unsubState()
       unsubRequest()
+      void closeSessionControlSubscription(controlChannel)
       if (role === 'candidate') {
         if (stateRef.current.frozen) frozenHandlerRef.current?.(false)
         if (stateRef.current.laserEnabled) laserHandlerRef.current?.(false)
       }
-      if (role === 'instructor') publish({ frozen: false, laserEnabled: false, sentAt: Date.now() })
+      // A browser refresh/disconnect is not an instruction to clear durable
+      // waveform freeze. Only the ephemeral laser is withdrawn on instructor exit.
+      if (role === 'instructor' && stateRef.current.laserEnabled) {
+        publish({ ...stateRef.current, laserEnabled: false, sentAt: Date.now() })
+      }
     }
-  }, [publish, role, sessionId])
+  }, [applyPersistentControls, publish, role, sessionId])
 
   useEffect(() => {
     if (role !== 'instructor' || !sessionId || options.localLaserEnabled == null) return
@@ -102,7 +143,12 @@ export function useTeachingDisplaySync(
     stateRef.current = next
     setState(next)
     publish(next)
-  }, [publish, role, sessionId])
+    void setInstructorGlobalSessionControls(sessionId, { waveformsFrozen: frozen })
+      .then(applyPersistentControls)
+      .catch(() => {
+        void fetchSessionControlSnapshot(sessionId).then(applyPersistentControls).catch(() => undefined)
+      })
+  }, [applyPersistentControls, publish, role, sessionId])
 
   const setLaserEnabled = useCallback((laserEnabled: boolean) => {
     if (role !== 'instructor' || !sessionId) return
@@ -112,5 +158,5 @@ export function useTeachingDisplaySync(
     publish(next)
   }, [publish, role, sessionId])
 
-  return { state, setFrozen, setLaserEnabled }
+  return { state, controls, setFrozen, setLaserEnabled }
 }

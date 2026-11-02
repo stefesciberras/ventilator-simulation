@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TeachingRole } from '../types'
 import { sendTeachingBroadcast, subscribeTeachingBroadcast } from '../teachingRealtimeBus'
+import {
+  closeSessionControlSubscription,
+  fetchSessionControlSnapshot,
+  setInstructorGlobalSessionControls,
+  subscribeSessionControlSnapshot,
+} from './sessionControls'
 
 const STATE_EVENT = 'teaching-alarm-session-state'
 const REQUEST_EVENT = 'teaching-alarm-session-request'
@@ -46,14 +52,32 @@ export function useTeachingAlarmSync(
   useEffect(() => { stateRef.current = state }, [state])
   useEffect(() => { candidateHandlerRef.current = onCandidateState }, [onCandidateState])
 
+  const applyPersistentOverride = useCallback((enabled: boolean) => {
+    if (stateRef.current.instructorOverride === enabled) return
+    const next = { ...stateRef.current, instructorOverride: enabled, sentAt: Date.now() }
+    stateRef.current = next
+    setState(next)
+    if (role === 'candidate') candidateHandlerRef.current?.(next)
+  }, [role])
+
   const publish = useCallback((next: SharedAlarmSessionState) => {
     if (role !== 'instructor' || !sessionId) return
     void sendTeachingBroadcast(sessionId, STATE_EVENT, next)
   }, [role, sessionId])
 
   useEffect(() => {
-    setState({ silenceUntil: null, instructorOverride: false, sentAt: Date.now() })
+    const reset = { silenceUntil: null, instructorOverride: false, sentAt: Date.now() }
+    stateRef.current = reset
+    setState(reset)
     if (!sessionId || role === 'standalone') return
+
+    let active = true
+    void fetchSessionControlSnapshot(sessionId)
+      .then((snapshot) => { if (active) applyPersistentOverride(snapshot.alarmsSilenced) })
+      .catch(() => undefined)
+    const controlChannel = subscribeSessionControlSnapshot(sessionId, (snapshot) => {
+      if (active) applyPersistentOverride(snapshot.alarmsSilenced)
+    })
 
     const unsubState = subscribeTeachingBroadcast(sessionId, STATE_EVENT, (payload) => {
       if (role !== 'candidate' || !isState(payload)) return
@@ -68,11 +92,15 @@ export function useTeachingAlarmSync(
     if (role === 'candidate') void sendTeachingBroadcast(sessionId, REQUEST_EVENT, { requestedAt: Date.now() })
 
     return () => {
+      active = false
       unsubState()
       unsubRequest()
+      void closeSessionControlSubscription(controlChannel)
       if (role === 'candidate') candidateHandlerRef.current?.({ silenceUntil: null, instructorOverride: false, sentAt: Date.now() })
+      // Do not clear instructorOverride here. Refresh/disconnect is not an
+      // instructor command and durable global alarm silence must survive it.
     }
-  }, [publish, role, sessionId])
+  }, [applyPersistentOverride, publish, role, sessionId])
 
   useEffect(() => {
     if (role !== 'instructor' || !sessionId) return
@@ -111,7 +139,17 @@ export function useTeachingAlarmSync(
 
   const silenceFor = useCallback((durationMs: number) => setInstructorState({ silenceUntil: Date.now() + Math.max(0, durationMs) }), [setInstructorState])
   const clearSilence = useCallback(() => setInstructorState({ silenceUntil: null }), [setInstructorState])
-  const setInstructorOverride = useCallback((enabled: boolean) => setInstructorState({ instructorOverride: enabled }), [setInstructorState])
+  const setInstructorOverride = useCallback((enabled: boolean) => {
+    setInstructorState({ instructorOverride: enabled })
+    if (role !== 'instructor' || !sessionId) return
+    void setInstructorGlobalSessionControls(sessionId, { alarmsSilenced: enabled })
+      .then((snapshot) => applyPersistentOverride(snapshot.alarmsSilenced))
+      .catch(() => {
+        void fetchSessionControlSnapshot(sessionId)
+          .then((snapshot) => applyPersistentOverride(snapshot.alarmsSilenced))
+          .catch(() => undefined)
+      })
+  }, [applyPersistentOverride, role, sessionId, setInstructorState])
 
   return { state, silenceFor, clearSilence, setInstructorOverride }
 }
