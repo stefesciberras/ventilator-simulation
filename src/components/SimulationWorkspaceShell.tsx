@@ -1,4 +1,7 @@
-import { useRef, useState, type ReactNode, type TouchEvent } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react'
+import './InstructorConsoleView.css'
+
+export type SimulationViewMode = 'monitor' | 'instructor'
 
 interface SimulationWorkspaceShellProps {
   display: ReactNode
@@ -11,6 +14,10 @@ interface SimulationWorkspaceShellProps {
   displayPageClassName?: string
   controlsPageClassName?: string
   controlsVisible?: boolean
+  instructorVisible?: boolean
+  instructorLabel?: string
+  instructorControlsLabel?: string
+  instructorStateLabel?: string
   /** Retained for backwards compatibility. Two-finger workspace navigation no longer needs canvas exceptions. */
   allowSwipeFromCanvas?: boolean
 }
@@ -43,6 +50,19 @@ const twoTouchCentroidAtEnd = (event: TouchEvent<HTMLDivElement>) => {
   return contacts.length >= 2 ? centroidFromTouches(contacts.slice(0, 2)) : null
 }
 
+const initialSimulationView = (): SimulationViewMode => {
+  if (typeof window === 'undefined') return 'monitor'
+  return new URLSearchParams(window.location.search).get('view') === 'instructor' ? 'instructor' : 'monitor'
+}
+
+const persistSimulationViewInUrl = (view: SimulationViewMode) => {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  if (view === 'instructor') url.searchParams.set('view', 'instructor')
+  else url.searchParams.delete('view')
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
 export function SimulationWorkspaceShell({
   display,
   controls,
@@ -54,13 +74,28 @@ export function SimulationWorkspaceShell({
   displayPageClassName = 'mobile-page-display',
   controlsPageClassName = 'mobile-page-controls',
   controlsVisible = true,
+  instructorVisible = controlsVisible,
+  instructorLabel = 'Instructor',
+  instructorControlsLabel = 'Instructor controls',
+  instructorStateLabel = 'Live state',
 }: SimulationWorkspaceShellProps) {
   const [page, setPage] = useState<'display' | 'controls'>('display')
+  const [view, setView] = useState<SimulationViewMode>(initialSimulationView)
   const swipeStart = useRef<WorkspaceSwipeStart | null>(null)
 
   const resetSwipe = () => {
     swipeStart.current = null
   }
+
+  const selectView = (nextView: SimulationViewMode) => {
+    const effectiveView = nextView === 'instructor' && !instructorVisible ? 'monitor' : nextView
+    setView(effectiveView)
+    persistSimulationViewInUrl(effectiveView)
+  }
+
+  useEffect(() => {
+    if (view === 'instructor' && !instructorVisible) selectView('monitor')
+  }, [instructorVisible, view])
 
   const onTouchStart = (event: TouchEvent<HTMLDivElement>) => {
     // A first finger must never arm workspace navigation. The gesture starts
@@ -100,20 +135,51 @@ export function SimulationWorkspaceShell({
   }
 
   const effectivePage = controlsVisible ? page : 'display'
+  const effectiveView = view === 'instructor' && instructorVisible ? 'instructor' : 'monitor'
+
   return <>
-    <nav className={`mobile-workspace-switcher ${switcherClassName}`.trim()} aria-label={ariaLabel}>
-      <button type="button" className={effectivePage === 'display' ? 'active' : ''} onClick={() => setPage('display')}>{displayLabel}</button>
-      {controlsVisible && <button type="button" className={effectivePage === 'controls' ? 'active' : ''} onClick={() => setPage('controls')}>{controlsLabel}</button>}
-    </nav>
-    <div
-      className={`workspace ${workspaceClassName} ${effectivePage === 'display' ? displayPageClassName : controlsPageClassName}`.trim()}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-      onTouchCancel={resetSwipe}
-    >
-      {display}
-      {controlsVisible ? controls : null}
-    </div>
+    {instructorVisible && (
+      <nav className="simulation-view-switcher" aria-label="Simulation view">
+        <button type="button" className={effectiveView === 'monitor' ? 'active' : ''} onClick={() => selectView('monitor')} aria-pressed={effectiveView === 'monitor'}>Monitor</button>
+        <button type="button" className={effectiveView === 'instructor' ? 'active' : ''} onClick={() => selectView('instructor')} aria-pressed={effectiveView === 'instructor'}>{instructorLabel}</button>
+      </nav>
+    )}
+
+    {effectiveView === 'instructor' ? (
+      <section className="shared-instructor-console" aria-label="Instructor console">
+        <section className="shared-instructor-console-main" aria-label={instructorControlsLabel}>
+          <header className="shared-instructor-console-heading">
+            <strong>{instructorControlsLabel}</strong>
+            <span>Same active simulation runtime</span>
+          </header>
+          <div className="shared-instructor-console-controls">{controls}</div>
+        </section>
+
+        <aside className="shared-instructor-console-state" aria-label={instructorStateLabel}>
+          <header className="shared-instructor-console-heading">
+            <strong>{instructorStateLabel}</strong>
+            <span>Current monitored values</span>
+          </header>
+          <div className="shared-instructor-console-state-display">{display}</div>
+        </aside>
+      </section>
+    ) : (
+      <>
+        <nav className={`mobile-workspace-switcher ${switcherClassName}`.trim()} aria-label={ariaLabel}>
+          <button type="button" className={effectivePage === 'display' ? 'active' : ''} onClick={() => setPage('display')}>{displayLabel}</button>
+          {controlsVisible && <button type="button" className={effectivePage === 'controls' ? 'active' : ''} onClick={() => setPage('controls')}>{controlsLabel}</button>}
+        </nav>
+        <div
+          className={`workspace ${workspaceClassName} ${effectivePage === 'display' ? displayPageClassName : controlsPageClassName}`.trim()}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onTouchCancel={resetSwipe}
+        >
+          {display}
+          {controlsVisible ? controls : null}
+        </div>
+      </>
+    )}
   </>
 }
