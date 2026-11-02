@@ -1,6 +1,13 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toLegacyProductId, type SimulationProductId } from '../../core/SimulationProductAdapter'
 import { readParticipantAccessContextFromDocument } from '../../core/sessionAccessPolicy'
+import {
+  getDefaultLocalRuntimeUrl,
+  LocalRuntimeTransport,
+  publishLocalProductState,
+  type LocalRuntimeConnection,
+  type LocalSessionRuntimeMode,
+} from '../../session/localRuntimeTransport'
 import { ensureAnonymousSession, supabase } from '../../session/supabase'
 import type {
   SharedTeachingMemberRow,
@@ -35,9 +42,34 @@ export interface ProductSimulationPatchResult<TState> {
   mutationId: string
 }
 
+type ProductLocalPublisher = (row: ProductTeachingSessionRow<unknown>) => boolean
+const localProductPublishers = new Map<string, ProductLocalPublisher>()
+
 function currentSimulationActorRole(): 'instructor' | 'candidate' {
   const { role } = readParticipantAccessContextFromDocument()
   return role === 'candidate' ? 'candidate' : 'instructor'
+}
+
+function productRuntimeMode(state: unknown): LocalSessionRuntimeMode {
+  if (state && typeof state === 'object' && (state as Record<string, unknown>).runtimeMode === 'simulation') return 'simulation'
+  return 'teaching'
+}
+
+function announceLocalConnection(sessionId: string, state: LocalRuntimeConnection) {
+  if (typeof document !== 'undefined') document.documentElement.dataset.loppjusimLocalRuntimeConnection = state
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('loppjusim-local-runtime-connection', { detail: { sessionId, state } }))
+  }
+}
+
+function publishCanonicalProductRow<TState>(row: ProductTeachingSessionRow<TState>) {
+  return publishLocalProductState(row.id, {
+    productId: row.product_id,
+    sessionId: row.id,
+    runtimeMode: productRuntimeMode(row.product_state),
+    revision: Number(row.product_state_revision ?? 0),
+    state: row.product_state,
+  })
 }
 
 export async function applyProductSimulationPatch<TState>(
@@ -61,6 +93,7 @@ export async function applyProductSimulationPatch<TState>(
   if (!result?.session_row) throw new Error('Simulation mutation returned no canonical session state.')
   const session = result.session_row as ProductTeachingSessionRow<TState>
   if (session.product_id !== storageProductId) throw new Error('Simulation mutation returned the wrong simulator state.')
+  localProductPublishers.get(sessionId)?.(session as ProductTeachingSessionRow<unknown>)
   return {
     applied: Boolean(result.applied),
     session,
@@ -76,6 +109,66 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
   ProductTeachingMemberTelemetry<TState>
 > {
   const storageProductId = toLegacyProductId(productId)
+  const localClientId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `product-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  let localTransport: LocalRuntimeTransport | null = null
+  let localSessionRow: ProductTeachingSessionRow<TState> | null = null
+  let localSessionChannel: RealtimeChannel | null = null
+  let localOnUpdate: ((row: ProductTeachingSessionRow<TState>) => void) | null = null
+
+  const disconnectLocalTransport = () => {
+    localTransport?.disconnect()
+    localTransport = null
+    if (localSessionRow) localProductPublishers.delete(localSessionRow.id)
+    localSessionRow = null
+    announceLocalConnection('', 'disabled')
+  }
+
+  const publishLocalRow = (row: ProductTeachingSessionRow<TState>) => {
+    localSessionRow = row
+    return publishCanonicalProductRow(row)
+  }
+
+  const ensureLocalTransport = (row: ProductTeachingSessionRow<TState>) => {
+    localSessionRow = row
+    const url = getDefaultLocalRuntimeUrl()
+    const { role } = readParticipantAccessContextFromDocument()
+    if (!url || role === 'standalone') return
+    if (localTransport) {
+      if (role === 'instructor') publishLocalRow(row)
+      return
+    }
+
+    localTransport = new LocalRuntimeTransport({
+      url,
+      role,
+      runtimeMode: productRuntimeMode(row.product_state),
+      sessionKey: row.session_key,
+      sessionId: row.id,
+      clientId: localClientId,
+      onConnection: (state) => {
+        announceLocalConnection(row.id, state)
+        if (state === 'connected' && role === 'instructor' && localSessionRow) publishLocalRow(localSessionRow)
+      },
+      onEnvelope: (envelope) => {
+        if (role !== 'candidate' || envelope.payload.type !== 'product-state') return
+        const snapshot = envelope.payload.snapshot
+        if (snapshot.sessionId !== row.id || snapshot.productId !== storageProductId) return
+        const current = localSessionRow ?? row
+        const next: ProductTeachingSessionRow<TState> = {
+          ...current,
+          product_state: snapshot.state as TState,
+          product_state_revision: Math.max(Number(current.product_state_revision ?? 0), Number(snapshot.revision ?? 0)),
+          updated_at: new Date(snapshot.sentAt).toISOString(),
+        }
+        localSessionRow = next
+        localOnUpdate?.(next)
+      },
+    })
+    localProductPublishers.set(row.id, (nextRow) => publishLocalRow(nextRow as ProductTeachingSessionRow<TState>))
+    localTransport.connect()
+  }
 
   return {
     ensureIdentity: ensureAnonymousSession,
@@ -116,10 +209,24 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
         .eq('product_id', storageProductId)
         .single()
       if (error) throw error
-      return data as ProductTeachingSessionRow<TState>
+      const row = data as ProductTeachingSessionRow<TState>
+      localSessionRow = row
+      window.setTimeout(() => ensureLocalTransport(row), 0)
+      return row
     },
 
     updateSession: async (sessionId, patch) => {
+      if (localSessionRow && patch.product_state !== undefined) {
+        const optimistic: ProductTeachingSessionRow<TState> = {
+          ...localSessionRow,
+          ...patch,
+          product_state: patch.product_state as TState,
+          updated_at: new Date().toISOString(),
+        }
+        // Teaching instructor state uses the LAN as the immediate path. The
+        // database update below remains the durable/cloud fallback.
+        publishLocalRow(optimistic)
+      }
       const { data, error } = await supabase
         .from('teaching_sessions')
         .update({ ...patch, updated_at: new Date().toISOString() })
@@ -128,7 +235,10 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
         .select('*')
         .single()
       if (error) throw error
-      return data as ProductTeachingSessionRow<TState>
+      const row = data as ProductTeachingSessionRow<TState>
+      localSessionRow = row
+      publishLocalRow(row)
+      return row
     },
 
     findActiveInstructorSession: async () => {
@@ -176,19 +286,32 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
       if (error) throw error
     },
 
-    subscribeSession: (sessionId, onUpdate, onStatus): RealtimeChannel => supabase
-      .channel(`simulation-${productId}-session-${sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'teaching_sessions',
-          filter: `id=eq.${sessionId}`,
-        },
-        (payload) => onUpdate(payload.new as ProductTeachingSessionRow<TState>),
-      )
-      .subscribe((status) => onStatus(status)),
+    subscribeSession: (sessionId, onUpdate, onStatus): RealtimeChannel => {
+      localOnUpdate = onUpdate
+      const channel = supabase
+        .channel(`simulation-${productId}-session-${sessionId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'teaching_sessions',
+            filter: `id=eq.${sessionId}`,
+          },
+          (payload) => {
+            const row = payload.new as ProductTeachingSessionRow<TState>
+            localSessionRow = row
+            if (readParticipantAccessContextFromDocument().role === 'instructor') publishLocalRow(row)
+            onUpdate(row)
+          },
+        )
+        .subscribe((status) => {
+          onStatus(status)
+          if (status === 'SUBSCRIBED' && localSessionRow) window.setTimeout(() => ensureLocalTransport(localSessionRow as ProductTeachingSessionRow<TState>), 0)
+        })
+      localSessionChannel = channel
+      return channel
+    },
 
     subscribeMembers: (sessionId, onChange): RealtimeChannel => {
       const instanceId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -210,6 +333,11 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
     },
 
     closeChannel: async (channel) => {
+      if (channel && channel === localSessionChannel) {
+        disconnectLocalTransport()
+        localSessionChannel = null
+        localOnUpdate = null
+      }
       if (channel) await supabase.removeChannel(channel)
     },
   }
