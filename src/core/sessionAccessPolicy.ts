@@ -49,6 +49,21 @@ export const SESSION_STATE_CLASS_CONTRACTS: Record<SessionStateClass, SessionSta
   },
 }
 
+export type ParticipantAccessCapability =
+  | 'patient-controls'
+  | 'physiology-controls'
+  | 'patient-profiles'
+  | 'teaching-controls'
+  | 'instructor-view'
+  | 'session-controls'
+  | 'session-termination'
+  | 'scenario-controls'
+  | 'device-controls'
+  | 'anaesthetic-gas-controls'
+  | 'waveform-visibility'
+  | 'local-waveform-freeze'
+  | 'actions'
+
 /**
  * Product-neutral access capabilities. Product adapters may further restrict
  * device/action details, but they must not grant a restricted learner any
@@ -111,6 +126,39 @@ export function resolveParticipantAccessPolicy(
 ): ParticipantAccessPolicy {
   if (mode === 'standalone' || role === 'standalone' || role === 'instructor') return { ...FULL_ACCESS }
   return { ...RESTRICTED_LEARNER_ACCESS }
+}
+
+export function participantCanAccess(policy: ParticipantAccessPolicy, capability: ParticipantAccessCapability) {
+  switch (capability) {
+    case 'patient-controls': return policy.patientControls
+    case 'physiology-controls': return policy.physiologyControls
+    case 'patient-profiles': return policy.patientProfiles
+    case 'teaching-controls': return policy.teachingControls
+    case 'instructor-view': return policy.instructorView
+    case 'session-controls': return policy.sessionControls
+    case 'session-termination': return policy.sessionTermination
+    case 'scenario-controls': return policy.scenarioControls
+    case 'device-controls': return policy.deviceControls
+    case 'anaesthetic-gas-controls': return policy.anaestheticGasControls
+    case 'waveform-visibility': return policy.waveformVisibilityControls
+    case 'local-waveform-freeze': return policy.localWaveformFreeze
+    case 'actions': return policy.actionAccess === 'all' || policy.actionAccess === 'permission-gated'
+  }
+}
+
+/**
+ * Compatibility map for established shared control-tab ids. New product tabs
+ * should declare their capability explicitly in the product adapter/framework.
+ */
+export function defaultControlTabAccessCapability(tabId: string): ParticipantAccessCapability | null {
+  switch (tabId) {
+    case 'actions': return 'actions'
+    case 'vent': return 'device-controls'
+    case 'patient': return 'patient-controls'
+    case 'physio': return 'physiology-controls'
+    case 'teaching': return 'teaching-controls'
+    default: return null
+  }
 }
 
 export interface ParticipantAccessContext {
