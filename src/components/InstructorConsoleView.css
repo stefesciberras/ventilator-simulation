@@ -1,0 +1,190 @@
+.simulation-view-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: #11191e;
+}
+
+.simulation-view-switcher button {
+  min-height: 36px;
+  padding: 7px 14px;
+  border: 1px solid #40525d;
+  border-radius: 7px;
+  background: #182229;
+  color: #dce5e9;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.simulation-view-switcher button.active {
+  background: #2b3b45;
+  border-color: #78909c;
+  color: #fff;
+}
+
+.shared-instructor-console {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 27vw);
+  gap: 10px;
+  padding: 10px;
+  overflow: hidden;
+  background: #0b1115;
+}
+
+.shared-instructor-console-main,
+.shared-instructor-console-state {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #2e3e47;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #11191e;
+}
+
+.shared-instructor-console-heading {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #2e3e47;
+  background: #162127;
+}
+
+.shared-instructor-console-heading strong {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.shared-instructor-console-heading span {
+  color: #8fa2ac;
+  font-size: 10px;
+  text-align: right;
+}
+
+.shared-instructor-console-controls {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.shared-instructor-console-state-display {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* The first Instructor Console milestone deliberately reuses each product's
+   authoritative live-value components while suppressing the visual monitor.
+   Product-specific physiology remains outside shared UI code. */
+.shared-instructor-console-state .simulation-console-header,
+.shared-instructor-console-state .simulation-console-hardware,
+.shared-instructor-console-state .simulation-console-status,
+.shared-instructor-console-state .simulation-console-footer,
+.shared-instructor-console-state .waveforms,
+.shared-instructor-console-state .edumon-waveform-area {
+  display: none !important;
+}
+
+.shared-instructor-console-state .simulation-console-shell,
+.shared-instructor-console-state .simulation-console-display,
+.shared-instructor-console-state .screen-body,
+.shared-instructor-console-state .edumon-monitor-body {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.shared-instructor-console-state .screen-body,
+.shared-instructor-console-state .edumon-monitor-body {
+  display: block;
+}
+
+.shared-instructor-console-state .screen-body > :not(.metrics-panel),
+.shared-instructor-console-state .edumon-monitor-body > :not(.edumon-measurements) {
+  display: none !important;
+}
+
+.shared-instructor-console-state .metrics-panel,
+.shared-instructor-console-state .edumon-measurements {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: auto;
+  position: static;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  padding: 8px;
+  background: transparent;
+  overflow: visible;
+}
+
+.shared-instructor-console-state .metric,
+.shared-instructor-console-state .edumon-value-panel {
+  min-height: 58px;
+  border-radius: 8px;
+}
+
+.shared-instructor-console-state .metrics-spacer,
+.shared-instructor-console-state .cursor-hint,
+.shared-instructor-console-state .metrics-actions {
+  display: none !important;
+}
+
+@media (max-width: 1000px) {
+  .shared-instructor-console {
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 30vw);
+    gap: 7px;
+    padding: 7px;
+  }
+
+  .shared-instructor-console-heading {
+    padding: 8px 10px;
+  }
+
+  .shared-instructor-console-state .metric,
+  .shared-instructor-console-state .edumon-value-panel {
+    min-height: 52px;
+  }
+}
+
+@media (max-width: 720px) {
+  .simulation-view-switcher {
+    justify-content: stretch;
+    padding: 5px 7px;
+  }
+
+  .simulation-view-switcher button {
+    flex: 1 1 0;
+    min-height: 40px;
+  }
+
+  .shared-instructor-console {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: auto;
+  }
+
+  .shared-instructor-console-state {
+    max-height: 42vh;
+  }
+
+  .shared-instructor-console-state .metrics-panel,
+  .shared-instructor-console-state .edumon-measurements {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
