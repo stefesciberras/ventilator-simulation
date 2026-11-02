@@ -43,7 +43,7 @@ assert(!durabilityMigration.includes("new.expires_at := new.created_at + interva
 assert(sharedSession.includes("{ status: 'ended' }"), 'instructor End Session must continue to persist ended status')
 assert(runtimeDocs.includes('Instructor -> End Session -> session status = ended'), 'canonical docs must state explicit instructor termination')
 assert(runtimeDocs.includes('inactivity/recovery deadline'), 'canonical docs must distinguish expiry from explicit termination')
-assert(runtimeDocs.includes('refreshing or reconnecting'), 'canonical docs must protect refresh/reconnect semantics')
+assert(runtimeDocs.includes('Refreshing or reconnecting'), 'canonical docs must protect refresh/reconnect semantics')
 
 // Existing candidate restrictions and invitation flow are protected by their dedicated regression suite.
 assert(candidatePresentation.includes('candidate invitation'), 'candidate invitation regression coverage must remain installed')
