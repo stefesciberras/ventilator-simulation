@@ -18,6 +18,7 @@ interface SessionControlRow {
 }
 
 export interface SessionControlPatch {
+  paused?: boolean
   waveformsFrozen?: boolean
   alarmsSilenced?: boolean
 }
@@ -43,17 +44,40 @@ export function sessionControlSnapshotFromRow(row: SessionControlRow | null | un
   }
 }
 
+const SESSION_CONTROL_SELECT = 'simulation_paused,pause_revision,waveforms_frozen,waveforms_freeze_revision,global_alarms_silenced,global_alarm_silence_revision'
+
 export async function fetchSessionControlSnapshot(sessionId: string): Promise<SessionControlSnapshot> {
   const { data, error } = await supabase
     .from('teaching_sessions')
-    .select('simulation_paused,pause_revision,waveforms_frozen,waveforms_freeze_revision,global_alarms_silenced,global_alarm_silence_revision')
+    .select(SESSION_CONTROL_SELECT)
     .eq('id', sessionId)
     .single()
   if (error) throw error
   return sessionControlSnapshotFromRow(data as SessionControlRow)
 }
 
+export async function setInstructorSessionPaused(sessionId: string, paused: boolean): Promise<SessionControlSnapshot> {
+  const current = await fetchSessionControlSnapshot(sessionId)
+  if (current.paused === paused) return current
+  const { data, error } = await supabase
+    .from('teaching_sessions')
+    .update({
+      simulation_paused: paused,
+      pause_revision: current.pauseRevision + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+    .select(SESSION_CONTROL_SELECT)
+    .single()
+  if (error) throw error
+  return sessionControlSnapshotFromRow(data as SessionControlRow)
+}
+
 export async function setInstructorGlobalSessionControls(sessionId: string, patch: SessionControlPatch): Promise<SessionControlSnapshot> {
+  if (patch.paused != null) await setInstructorSessionPaused(sessionId, patch.paused)
+  const hasDisplayPatch = patch.waveformsFrozen != null || patch.alarmsSilenced != null
+  if (!hasDisplayPatch) return fetchSessionControlSnapshot(sessionId)
+
   const { data, error } = await supabase.rpc('set_edusim_session_controls', {
     p_session_id: sessionId,
     p_waveforms_frozen: patch.waveformsFrozen ?? null,
