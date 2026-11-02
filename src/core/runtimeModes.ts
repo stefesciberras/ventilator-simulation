@@ -1,7 +1,10 @@
-export const LOPPJUSIM_RUNTIME_MODES = ['standalone', 'simulation', 'teaching'] as const
+export const LOPPJUSIM_RUNTIME_MODES = ['standalone', 'simulation', 'teaching', 'self-directed'] as const
 
 export type LoppjuSimRuntimeMode = (typeof LOPPJUSIM_RUNTIME_MODES)[number]
 export type LoppjuSimSessionRole = 'standalone' | 'instructor' | 'candidate'
+export type LoppjuSimSessionKind = 'none' | 'live' | 'self-directed'
+export type LoppjuSimLogicalRuntime = 'local' | 'shared-authoritative' | 'per-candidate'
+export type LoppjuSimCandidateCardinality = 'none' | 'one' | 'many'
 
 export const DEFAULT_SUPPORTED_RUNTIME_MODES: readonly LoppjuSimRuntimeMode[] = LOPPJUSIM_RUNTIME_MODES
 
@@ -12,6 +15,7 @@ export function isLoppjuSimRuntimeMode(value: unknown): value is LoppjuSimRuntim
 /**
  * Old scenarios did not declare runtime modes. Treat an absent/empty declaration
  * as compatible with every mode so existing scenario libraries remain usable.
+ * Availability is still gated by authentication/assignment policy at launch.
  */
 export function normalizeSupportedRuntimeModes(modes?: readonly unknown[] | null): LoppjuSimRuntimeMode[] {
   if (!modes?.length) return [...LOPPJUSIM_RUNTIME_MODES]
@@ -27,8 +31,13 @@ export interface LoppjuSimRuntimeModeContract {
   mode: LoppjuSimRuntimeMode
   label: string
   description: string
-  logicalRuntime: 'local' | 'shared-authoritative' | 'per-candidate'
+  sessionKind: LoppjuSimSessionKind
+  logicalRuntime: LoppjuSimLogicalRuntime
+  requiresInstructor: boolean
+  instructorAuthenticationRequired: boolean
+  candidateCardinality: LoppjuSimCandidateCardinality
   candidateToInstructorSync: boolean
+  dynamicScenarioPolicy: 'authenticated' | 'session' | 'required'
   internetRequiredForLiveRuntime: boolean
 }
 
@@ -36,27 +45,77 @@ export const LOPPJUSIM_RUNTIME_MODE_CONTRACTS: Record<LoppjuSimRuntimeMode, Lopp
   standalone: {
     mode: 'standalone',
     label: 'Standalone',
-    description: 'One user runs one local simulator without a session.',
+    description: 'One user runs one unrestricted local simulator without a session.',
+    sessionKind: 'none',
     logicalRuntime: 'local',
+    requiresInstructor: false,
+    instructorAuthenticationRequired: false,
+    candidateCardinality: 'none',
     candidateToInstructorSync: false,
+    dynamicScenarioPolicy: 'authenticated',
     internetRequiredForLiveRuntime: false,
   },
   simulation: {
     mode: 'simulation',
     label: 'Simulation',
-    description: 'One instructor and one candidate control one shared authoritative simulation.',
+    description: 'One signed-in instructor and one restricted candidate control one shared authoritative patient runtime.',
+    sessionKind: 'live',
     logicalRuntime: 'shared-authoritative',
+    requiresInstructor: true,
+    instructorAuthenticationRequired: true,
+    candidateCardinality: 'one',
     candidateToInstructorSync: true,
+    dynamicScenarioPolicy: 'session',
     internetRequiredForLiveRuntime: false,
   },
   teaching: {
     mode: 'teaching',
     label: 'Teaching',
-    description: 'One instructor teaches one or more candidates whose simulator runtimes remain independent.',
+    description: 'One signed-in instructor teaches one or more restricted candidates whose simulator runtimes remain independent.',
+    sessionKind: 'live',
     logicalRuntime: 'per-candidate',
+    requiresInstructor: true,
+    instructorAuthenticationRequired: true,
+    candidateCardinality: 'many',
     candidateToInstructorSync: false,
+    dynamicScenarioPolicy: 'session',
     internetRequiredForLiveRuntime: false,
   },
+  'self-directed': {
+    mode: 'self-directed',
+    label: 'Self-directed learning',
+    description: 'One learner runs an independent restricted runtime driven by an assigned dynamic scenario without a live instructor.',
+    sessionKind: 'self-directed',
+    logicalRuntime: 'per-candidate',
+    requiresInstructor: false,
+    instructorAuthenticationRequired: false,
+    candidateCardinality: 'one',
+    candidateToInstructorSync: false,
+    dynamicScenarioPolicy: 'required',
+    internetRequiredForLiveRuntime: false,
+  },
+}
+
+export function isLiveInstructorSessionMode(mode: LoppjuSimRuntimeMode): mode is 'simulation' | 'teaching' {
+  return mode === 'simulation' || mode === 'teaching'
+}
+
+export function isRestrictedLearnerMode(mode: LoppjuSimRuntimeMode): mode is 'simulation' | 'teaching' | 'self-directed' {
+  return mode !== 'standalone'
+}
+
+/** Persistent instructor-global controls. These are session state, not patient state. */
+export interface SessionControlState {
+  paused: boolean
+  waveformsFrozen: boolean
+  alarmsSilenced: boolean
+}
+
+/** Ephemeral instructor presentation state. It must never mutate patient physiology. */
+export interface InstructorPointerState {
+  visible: boolean
+  x: number
+  y: number
 }
 
 export type SimulationCommandType =
