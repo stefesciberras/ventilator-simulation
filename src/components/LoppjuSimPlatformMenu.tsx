@@ -57,6 +57,15 @@ export function LoppjuSimPlatformMenu({ role, productLabel }: LoppjuSimPlatformM
   const drugEventLibraryAvailable = productLabel !== 'LoppjuSIM-MV'
 
   useEffect(() => {
+    document.documentElement.dataset.loppjusimInstructorAuthenticated = authenticated ? 'true' : 'false'
+    return () => {
+      if (document.documentElement.dataset.loppjusimInstructorAuthenticated === (authenticated ? 'true' : 'false')) {
+        delete document.documentElement.dataset.loppjusimInstructorAuthenticated
+      }
+    }
+  }, [authenticated])
+
+  useEffect(() => {
     if (role) return
     const update = () => setRuntimeRole(getSessionLogRuntimeContext().role)
     update()
