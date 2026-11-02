@@ -45,9 +45,15 @@ export interface LocalScenarioRuntimeEvent {
   payload: unknown
 }
 
+export interface LocalSessionControlUpdate {
+  patch: Partial<SessionControlState>
+  sentAt: number
+}
+
 export type LocalRuntimePayload =
   | { type: 'snapshot'; snapshot: LocalRuntimeSnapshot }
   | { type: 'scenario-event'; event: LocalScenarioRuntimeEvent }
+  | { type: 'session-control'; update: LocalSessionControlUpdate }
   | { type: 'command'; command: SimulationCommand }
 
 export interface LocalRuntimeEnvelope {
@@ -140,6 +146,16 @@ export function publishLocalSimulationCommand(sessionId: string, command: Simula
   if (!transports?.size) return false
   for (const transport of transports) {
     if (transport.publishCommand(command)) return true
+  }
+  return false
+}
+
+export function publishLocalSessionControlPatch(sessionId: string, patch: Partial<SessionControlState>) {
+  const transports = transportsBySession.get(sessionId)
+  if (!transports?.size) return false
+  const payload: LocalRuntimePayload = { type: 'session-control', update: { patch, sentAt: Date.now() } }
+  for (const transport of transports) {
+    if (transport.publish(payload)) return true
   }
   return false
 }
