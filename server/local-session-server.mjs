@@ -31,7 +31,7 @@ function roomFor(sessionKey) {
   if (!/^[A-Z0-9]{6}$/.test(key)) return null
   let room = rooms.get(key)
   if (!room) {
-    room = { key, sequence: 0, snapshot: null, sessionControls: {}, presentations: {}, history: [], clients: new Set(), instructor: null, runtimeMode: 'teaching' }
+    room = { key, sequence: 0, snapshot: null, productStates: {}, sessionControls: {}, presentations: {}, history: [], clients: new Set(), instructor: null, runtimeMode: 'teaching' }
     rooms.set(key, room)
   }
   return room
@@ -45,6 +45,9 @@ function publish(room, payload) {
   room.sequence += 1
   const envelope = { type: 'runtime', sequence: room.sequence, serverTime: Date.now(), payload }
   if (payload?.type === 'snapshot') room.snapshot = payload.snapshot
+  if (payload?.type === 'product-state' && typeof payload.snapshot?.productId === 'string') {
+    room.productStates[payload.snapshot.productId] = payload.snapshot
+  }
   if (payload?.type === 'session-control' && payload.update?.patch && typeof payload.update.patch === 'object') {
     room.sessionControls = { ...room.sessionControls, ...payload.update.patch }
   }
@@ -66,6 +69,7 @@ function replay(room, socket, lastSequence) {
     type: 'welcome',
     sequence: room.sequence,
     snapshot: room.snapshot,
+    productStates: Object.values(room.productStates),
     sessionControls: room.sessionControls,
     presentations: Object.values(room.presentations),
     runtimeMode: room.runtimeMode,
@@ -161,14 +165,14 @@ wss.on('connection', (socket) => {
     if (!room) return
     if (message.type === 'publish') {
       const payload = message.payload
-      if (!payload || !['snapshot', 'scenario-event', 'session-control', 'presentation', 'command'].includes(payload.type)) return
+      if (!payload || !['snapshot', 'product-state', 'scenario-event', 'session-control', 'presentation', 'command'].includes(payload.type)) return
 
       const isAuthoritativeInstructor = socket.eduventRole === 'instructor' && room.instructor === socket
       const isSimulationCandidateCommand = socket.eduventRole === 'candidate' && room.runtimeMode === 'simulation' && payload.type === 'command'
       if (!isAuthoritativeInstructor && !isSimulationCandidateCommand) return
 
       // Candidates may request mutations in Simulation mode, but they may never
-      // publish canonical snapshots, session controls, presentation state or instructor/scenario events directly.
+      // publish canonical snapshots/product state, session controls, presentation state or instructor/scenario events directly.
       if (socket.eduventRole === 'candidate' && payload.type !== 'command') return
       publish(room, payload)
       return
