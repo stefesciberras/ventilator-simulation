@@ -122,6 +122,7 @@ export type SimulationCommandType =
   | 'patient.parameter.set'
   | 'device.parameter.set'
   | 'environment.parameter.set'
+  | 'product.state.patch'
   | 'action.invoke'
   | 'action.intensity.set'
   | 'action.stop'
