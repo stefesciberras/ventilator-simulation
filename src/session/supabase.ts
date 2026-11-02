@@ -75,6 +75,10 @@ export interface TeachingSessionRow {
   transition_ms: number
   simulation_paused: boolean
   pause_revision: number
+  waveforms_frozen: boolean
+  waveforms_freeze_revision: number
+  global_alarms_silenced: boolean
+  global_alarm_silence_revision: number
   sync_alarms: boolean
   candidate_can_edit_alarms: boolean
   alarm_settings: AlarmLimits
@@ -237,9 +241,8 @@ export function subscribeToSessionMembers(
   const instanceId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
   return supabase
-    .channel(`eduvent-session-members-${sessionId}-${instanceId}`)
+    .channel(`eduvent-members-${sessionId}-${instanceId}`)
     .on(
       'postgres_changes',
       {
@@ -253,7 +256,6 @@ export function subscribeToSessionMembers(
     .subscribe()
 }
 
-export async function closeTeachingSessionChannel(channel: RealtimeChannel | null) {
-  if (!channel) return
-  await supabase.removeChannel(channel)
+export async function closeChannel(channel: RealtimeChannel | null) {
+  if (channel) await supabase.removeChannel(channel)
 }
