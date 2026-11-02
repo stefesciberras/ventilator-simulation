@@ -132,6 +132,13 @@
 .action-editor-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
 .action-editor-message { color: #9ed99e; }
 .action-editor-error { color: #ff9c9c; }
+.action-editor-autosave { color: #8e9ca5; font-size: .8rem; }
+.action-editor-autosave-saving,
+.action-editor-autosave-pending { color: #ffd28d; }
+.action-editor-autosave-saved { color: #9ed99e; }
+.action-editor-autosave-local,
+.action-editor-autosave-retrying { color: #f0bd76; }
+.action-editor-autosave-error { color: #ffb0a5; font-size: .8rem; }
 
 @media (max-width: 1180px) {
   .action-editor-effect-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }

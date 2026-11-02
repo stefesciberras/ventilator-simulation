@@ -12,6 +12,26 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 2026-11-02 — Autosave shared Drug & Event library
+
+**Versions after change**
+
+- LoppjuSIM-MV: `0.83.0.84` (from `0.83.0.83`)
+- LoppjuSIM-Anaesth / EDUMON: `1.2.8.45` (from `1.2.8.44`)
+
+**Changes**
+
+- Added local-first autosave to the shared **Drug & Event Library Editor** so definition fields and declarative effect rows are persisted without requiring the manual Save button.
+- Every edit is written immediately to a browser recovery draft. Once an action has a valid lowercase ID and a name, changes are debounced to the shared action library after 1.5 seconds of inactivity.
+- Failed cloud autosaves retain the local draft and automatically retry after 5 seconds; the editor shows pending, saving, saved, local-only and retrying states.
+- New drugs/events begin autosaving as soon as their ID and name become valid. Duplicate IDs are blocked from autosaving so creating a new action cannot silently overwrite an existing definition.
+- The manual control remains as **Save now**, providing an explicit immediate flush in addition to autosave. Successful saves clear the matching recovery draft; deletion also clears its local draft.
+- No Supabase schema change was required; autosave uses the existing `saveEdusimAction()` upsert pathway and shared runtime action cache.
+
+**Architectural rule**
+
+> Shared authoring editors should be local-first: every edit must have an immediate recoverable local representation, while valid authoring state is asynchronously persisted to the durable shared library. A transient cloud failure must never discard the editor's current work, and manual Save should remain an explicit flush rather than the sole persistence mechanism.
+
 ## 2026-11-02 — Informative manual-trigger destination labels
 
 **Versions after change**
@@ -31,7 +51,7 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 > Scenario runtime trigger rows should expose the consequence of an available transition wherever that destination is already known, rather than presenting availability without routing context.
 
-## 2026-11-01 — Clear EDUMON monitor histories on scenario reset
+## 2026-11-01 — Clear EDUMON monitor histories on simulation reset
 
 **Versions after change**
 
