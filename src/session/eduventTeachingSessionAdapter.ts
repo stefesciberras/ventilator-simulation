@@ -3,7 +3,7 @@ import type { PatientSettings, VentilatorSettings } from '../simulation/types'
 import type { SharedTeachingSessionRepository } from '../teaching/session/types'
 import {
   claimInstructorSession,
-  closeTeachingSessionChannel,
+  closeChannel,
   createTeachingSession,
   ensureAnonymousSession,
   fetchSessionMembers,
@@ -51,5 +51,5 @@ export const eduventTeachingSessionRepository: SharedTeachingSessionRepository<
   touchMember: (sessionId, telemetry) => touchSessionMember(sessionId, telemetry.patient, telemetry.ventilator, telemetry.alarmLevel),
   subscribeSession: subscribeToTeachingSession,
   subscribeMembers: subscribeToSessionMembers,
-  closeChannel: closeTeachingSessionChannel,
+  closeChannel,
 }
