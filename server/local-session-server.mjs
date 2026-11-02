@@ -148,14 +148,14 @@ wss.on('connection', (socket) => {
     if (!room) return
     if (message.type === 'publish') {
       const payload = message.payload
-      if (!payload || (payload.type !== 'snapshot' && payload.type !== 'scenario-event' && payload.type !== 'command')) return
+      if (!payload || !['snapshot', 'scenario-event', 'session-control', 'command'].includes(payload.type)) return
 
       const isAuthoritativeInstructor = socket.eduventRole === 'instructor' && room.instructor === socket
       const isSimulationCandidateCommand = socket.eduventRole === 'candidate' && room.runtimeMode === 'simulation' && payload.type === 'command'
       if (!isAuthoritativeInstructor && !isSimulationCandidateCommand) return
 
       // Candidates may request mutations in Simulation mode, but they may never
-      // publish canonical snapshots or instructor/scenario events directly.
+      // publish canonical snapshots, session controls or instructor/scenario events directly.
       if (socket.eduventRole === 'candidate' && payload.type !== 'command') return
       publish(room, payload)
       return
