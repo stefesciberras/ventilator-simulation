@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { LOPPJUSIM_SIMULATION_RESET_EVENT } from '../core/platformEvents'
 import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
 import { markSessionLogModelState, recordSessionLogEvent } from '../teaching/session/sessionLog'
 import { latestEdumonRespiratoryOutput, resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
@@ -81,6 +82,26 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
   const fio2Percent = Math.round(respiratory.fio2 * 100)
   const fiSevo = clamp(anaesthetic.fiSevoPercent, 0, 8)
   const mac = etSevo / SEVO_MAC_PERCENT
+
+  useEffect(() => {
+    const resetAnaestheticGasRuntime = () => {
+      if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
+      if (sevoLogTimerRef.current != null) window.clearTimeout(sevoLogTimerRef.current)
+      if (tofTimerRef.current != null) window.clearTimeout(tofTimerRef.current)
+      settleTimerRef.current = null
+      sevoLogTimerRef.current = null
+      tofTimerRef.current = null
+      etSevoRef.current = 0
+      lastAutoDepthRef.current = null
+      setFiSevoActive(false)
+      setEtSevo(0)
+      setEtO2(16)
+      setTofReading(null)
+      setTofMeasuring(false)
+    }
+    window.addEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, resetAnaestheticGasRuntime)
+    return () => window.removeEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, resetAnaestheticGasRuntime)
+  }, [])
 
   useEffect(() => {
     const findHosts = () => {

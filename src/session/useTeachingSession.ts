@@ -54,11 +54,24 @@ function statePayload<T extends object>(payload: unknown): T | null {
  *
  * The mature Teaching implementation remains isolated in useTeachingSessionBase.
  * This layer adds the one-instructor/one-candidate Simulation contract only when
- * the local session negotiates `simulation`; Teaching therefore keeps its
- * existing candidate-local semantics unchanged.
+ * the local session negotiates `simulation`; Teaching keeps candidate-local
+ * ventilator state after the initial instructor seed.
  */
 export function useTeachingSession(args: UseTeachingSessionArgs) {
-  const base = useTeachingSessionBase(args)
+  const runtimeModeRef = useRef<LoppjuSimRuntimeMode>('standalone')
+  const roleRef = useRef<'standalone' | 'instructor' | 'candidate'>('standalone')
+  const teachingCandidateVentilatorSeededRef = useRef(false)
+
+  const base = useTeachingSessionBase({
+    ...args,
+    setVentilator: (next) => {
+      if (roleRef.current === 'candidate' && runtimeModeRef.current === 'teaching') {
+        if (teachingCandidateVentilatorSeededRef.current) return
+        teachingCandidateVentilatorSeededRef.current = true
+      }
+      args.setVentilator(next)
+    },
+  })
   const [runtimeMode, setRuntimeMode] = useState<LoppjuSimRuntimeMode>('standalone')
   const actorIdRef = useRef(typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `candidate-${Date.now()}`)
   const canonicalPatientRef = useRef('')
@@ -73,8 +86,33 @@ export function useTeachingSession(args: UseTeachingSessionArgs) {
 
   const sessionId = base.session?.id ?? null
 
+  useEffect(() => { roleRef.current = base.role }, [base.role])
+  useEffect(() => { runtimeModeRef.current = runtimeMode }, [runtimeMode])
+
+  useEffect(() => {
+    if (base.role === 'candidate' && runtimeMode === 'teaching' && sessionId) {
+      // The join/resume path has already seeded the candidate from the instructor
+      // session row before this effect runs. From this point onward the candidate
+      // ventilator is local and must not be overwritten by instructor updates.
+      teachingCandidateVentilatorSeededRef.current = true
+    } else {
+      teachingCandidateVentilatorSeededRef.current = false
+    }
+  }, [base.role, runtimeMode, sessionId])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.dataset.loppjusimSessionRole = base.role
+    document.documentElement.dataset.loppjusimRuntimeMode = runtimeMode
+    return () => {
+      if (document.documentElement.dataset.loppjusimSessionRole === base.role) delete document.documentElement.dataset.loppjusimSessionRole
+      if (document.documentElement.dataset.loppjusimRuntimeMode === runtimeMode) delete document.documentElement.dataset.loppjusimRuntimeMode
+    }
+  }, [base.role, runtimeMode])
+
   useEffect(() => {
     if (base.role === 'standalone' || !sessionId) {
+      runtimeModeRef.current = 'standalone'
       setRuntimeMode('standalone')
       canonicalPatientRef.current = ''
       canonicalVentilatorRef.current = ''
@@ -82,9 +120,13 @@ export function useTeachingSession(args: UseTeachingSessionArgs) {
       return
     }
 
+    const applyRuntimeMode = (next: LoppjuSimRuntimeMode) => {
+      runtimeModeRef.current = next
+      setRuntimeMode(next)
+    }
     const current = getNegotiatedLocalSessionRuntimeMode(sessionId)
-    if (current) setRuntimeMode(current)
-    return subscribeLocalSessionRuntimeMode(sessionId, setRuntimeMode)
+    if (current) applyRuntimeMode(current)
+    return subscribeLocalSessionRuntimeMode(sessionId, applyRuntimeMode)
   }, [base.role, sessionId])
 
   useEffect(() => {
@@ -171,10 +213,23 @@ export function useTeachingSession(args: UseTeachingSessionArgs) {
 
   const startInstructor = async (initial?: InstructorSessionInitialState) => {
     await base.startInstructor(initial)
-    if (getPreferredLocalSessionRuntimeMode() !== 'simulation') return
-    // Conventional Simulation starts with one shared device state. Patient
-    // physiology remains instructor-editable by default; candidates control the
-    // clinical device and any explicitly candidate-accessible actions.
+    const preferredMode = getPreferredLocalSessionRuntimeMode()
+    if (preferredMode === 'simulation') {
+      // Simulation has one shared patient/device runtime.
+      await base.updatePolicy({
+        syncPatient: true,
+        syncVentilator: true,
+        candidateCanEditPatient: false,
+        candidateCanEditVentilator: true,
+        candidateControlsVisible: true,
+        syncAlarms: true,
+        candidateCanEditAlarms: true,
+      })
+      return
+    }
+
+    // Teaching seeds candidates from the instructor state, but thereafter the
+    // candidate ventilator is independent and local to that candidate runtime.
     await base.updatePolicy({
       syncPatient: true,
       syncVentilator: true,
@@ -182,7 +237,7 @@ export function useTeachingSession(args: UseTeachingSessionArgs) {
       candidateCanEditVentilator: true,
       candidateControlsVisible: true,
       syncAlarms: true,
-      candidateCanEditAlarms: true,
+      candidateCanEditAlarms: false,
     })
   }
 

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import type { SimulationProductAdapter } from '../../core/SimulationProductAdapter'
+import { publishLocalSessionControlPatch } from '../../session/localRuntimeTransport'
+import { setInstructorSessionPaused } from './sessionControls'
 import type { SharedInstructorDashboardConfig, SharedSessionDomain } from './SharedSessionModePanel'
 
 export function buildProductSessionDomains(
@@ -56,8 +58,21 @@ export function buildProductInstructorDashboard(
     collapseStorageKey?: string
   } = {},
 ): SharedInstructorDashboardConfig {
+  const sessionId = session && typeof session === 'object' && typeof (session as { id?: unknown }).id === 'string'
+    ? String((session as { id: string }).id)
+    : null
+  const onSimulationPausedChange = options.onSimulationPausedChange
+    ? (paused: boolean) => {
+        options.onSimulationPausedChange?.(paused)
+        if (!sessionId) return
+        publishLocalSessionControlPatch(sessionId, { paused })
+        void setInstructorSessionPaused(sessionId, paused).catch(() => undefined)
+      }
+    : undefined
+
   return {
     ...options,
+    onSimulationPausedChange,
     domains: buildProductSessionDomains(product, session, options.onUpdatePolicy),
     candidateStatus: session ? <ProductCandidateStatus product={product} session={session} /> : null,
   }

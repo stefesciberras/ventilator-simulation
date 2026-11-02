@@ -46,11 +46,6 @@ function readCandidateRecovery(namespace: string): RecoverableTeachingCandidate 
   } catch { return null }
 }
 
-function candidateRecoveryExpired(recovery: RecoverableTeachingCandidate) {
-  const expiry = Date.parse(recovery.expiresAt)
-  return Number.isFinite(expiry) && expiry <= Date.now()
-}
-
 function sessionExpired(session: SharedTeachingSessionRow) {
   const expiry = Date.parse(session.expires_at)
   return Number.isFinite(expiry) && expiry <= Date.now()
@@ -91,9 +86,22 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
     hostRef.current?.onSessionRow?.(row, nextRole, source, force)
   }
 
+  const persistCandidateRecovery = (row: TSession, displayName?: string) => {
+    if (roleRef.current !== 'candidate') return
+    const previous = readCandidateRecovery(storageNamespace)
+    const recovery: RecoverableTeachingCandidate = {
+      sessionKey: row.session_key,
+      displayName: displayName ?? previous?.displayName ?? '',
+      expiresAt: row.expires_at,
+    }
+    try { window.localStorage.setItem(candidateRecoveryKey(storageNamespace), JSON.stringify(recovery)) } catch { /* optional */ }
+    setRecoverableCandidate(recovery)
+  }
+
   const storeSession = (row: TSession | null, source: SharedSessionRowSource = 'host-update', force = false) => {
     sessionRef.current = row
     setSession(row)
+    if (row && roleRef.current === 'candidate') persistCandidateRecovery(row)
     if (row && roleRef.current !== 'standalone') notifyHost(row, roleRef.current, source, force)
   }
 
@@ -174,7 +182,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
         if (/expired/i.test(message)) {
           clearInstructorRecoveryStorage(storageNamespace)
           setInstructorSessionRecovery(null)
-          void terminateLocally('This teaching session expired 2 hours after it was created.')
+          void terminateLocally('The session recovery window elapsed while nobody was connected.')
           return
         }
         setConnection('error')
@@ -190,34 +198,63 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
     const heartbeat = () => {
       void repository.touchMember(sessionId, telemetryRef.current()).catch((cause) => {
         const message = cause instanceof Error ? cause.message : ''
-        if (/expired|ended/i.test(message)) void terminateLocally('This teaching session expired 2 hours after it was created.', true)
+        if (/expired|ended/i.test(message)) void terminateLocally('The session ended or its recovery window elapsed.', true)
       })
     }
     heartbeat()
     candidateHeartbeatRef.current = window.setInterval(heartbeat, candidateHeartbeatMs)
   }
 
-  const retireRecoverableInstructor = async (recoveryOverride?: RecoverableTeachingInstructor | null) => {
-    const recovery = recoveryOverride ?? recoverableInstructor
-    if (!recovery) return true
+  const resumeInstructor = async (sessionId?: string) => {
     setConnection('connecting')
     setError(null)
     try {
-      await repository.updateSession(recovery.sessionId, { status: 'ended' } as Partial<TSession>)
-      clearInstructorRecoveryStorage(storageNamespace)
+      await repository.ensureIdentity()
+      const found = sessionId ? { sessionId, sessionKey: '' } : await repository.findActiveInstructorSession()
+      if (!found) {
+        setRecoverableInstructor(null)
+        setInstructorSessionRecovery(null)
+        setConnection('idle')
+        return null
+      }
+      const storedClient = typeof window === 'undefined' ? null : window.sessionStorage.getItem(instructorClientKey(storageNamespace))
+      const clientId = storedClient || crypto.randomUUID()
+      await repository.claimInstructorSession(found.sessionId, clientId)
+      let row = await repository.fetchSession(found.sessionId)
+      const prepared = await hostRef.current?.prepareInstructorSession?.(row, null, 'resume')
+      if (prepared) row = prepared
+      roleRef.current = 'instructor'
+      setRole('instructor')
+      try {
+        window.sessionStorage.setItem(instructorSessionKey(storageNamespace), row.id)
+        window.sessionStorage.setItem(instructorClientKey(storageNamespace), clientId)
+      } catch { /* optional */ }
       setRecoverableInstructor(null)
       setInstructorSessionRecovery(null)
-      setConnection('idle')
-      return true
+      storeSession(row, 'resume', true)
+      await attachSession(row.id)
+      await attachMembers(row.id)
+      attachInstructorLease(row.id, clientId)
+      setConnection('connected')
+      return row
     } catch (cause) {
       setConnection('error')
-      setError(cause instanceof Error ? cause.message : 'Unable to retire the previous instructor session.')
-      return false
+      setError(cause instanceof Error ? cause.message : 'Unable to rejoin instructor session.')
+      return null
     }
   }
 
+  const retireRecoverableInstructor = async (recoveryOverride?: RecoverableTeachingInstructor | null) => {
+    const recovery = recoveryOverride ?? recoverableInstructor
+    if (!recovery) return true
+    setError('An instructor session is still active. Rejoin it and use End session if you want to stop it.')
+    return false
+  }
+
   const startInstructor = async (input: TCreateInput) => {
-    if (recoverableInstructor && !(await retireRecoverableInstructor(recoverableInstructor))) return null
+    // A refresh/recovery must never end the active room. Reclaim the existing
+    // instructor session instead; explicit End session is the only normal stop.
+    if (recoverableInstructor) return resumeInstructor(recoverableInstructor.sessionId)
     setConnection('connecting')
     setError(null)
     try {
@@ -260,56 +297,17 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
     }
   }
 
-  const resumeInstructor = async (sessionId?: string) => {
-    setConnection('connecting')
-    setError(null)
-    try {
-      await repository.ensureIdentity()
-      const found = sessionId ? { sessionId, sessionKey: '' } : await repository.findActiveInstructorSession()
-      if (!found) {
-        setRecoverableInstructor(null)
-        setInstructorSessionRecovery(null)
-        setConnection('idle')
-        return null
-      }
-      const storedClient = typeof window === 'undefined' ? null : window.sessionStorage.getItem(instructorClientKey(storageNamespace))
-      const clientId = storedClient || crypto.randomUUID()
-      await repository.claimInstructorSession(found.sessionId, clientId)
-      let row = await repository.fetchSession(found.sessionId)
-      const prepared = await hostRef.current?.prepareInstructorSession?.(row, null, 'resume')
-      if (prepared) row = prepared
-      roleRef.current = 'instructor'
-      setRole('instructor')
-      try {
-        window.sessionStorage.setItem(instructorSessionKey(storageNamespace), row.id)
-        window.sessionStorage.setItem(instructorClientKey(storageNamespace), clientId)
-      } catch { /* optional */ }
-      setRecoverableInstructor(null)
-      setInstructorSessionRecovery(null)
-      storeSession(row, 'resume', true)
-      await attachSession(row.id)
-      await attachMembers(row.id)
-      attachInstructorLease(row.id, clientId)
-      setConnection('connected')
-      return row
-    } catch (cause) {
-      setConnection('error')
-      setError(cause instanceof Error ? cause.message : 'Unable to rejoin instructor session.')
-      return null
-    }
-  }
-
   const joinCandidate = async (sessionKey: string, displayName: string, recoveryAttempt = false) => {
     setConnection('connecting')
     setError(null)
     try {
       const joined = await repository.joinSession(sessionKey, displayName)
       const row = await repository.fetchSession(joined.sessionId)
+      roleRef.current = 'candidate'
+      setRole('candidate')
       const recovery: RecoverableTeachingCandidate = { sessionKey: row.session_key, displayName: displayName.trim(), expiresAt: row.expires_at }
       try { window.localStorage.setItem(candidateRecoveryKey(storageNamespace), JSON.stringify(recovery)) } catch { /* optional */ }
       setRecoverableCandidate(recovery)
-      roleRef.current = 'candidate'
-      setRole('candidate')
       storeSession(row, 'join', true)
       await repository.touchMember(row.id, telemetryRef.current())
       await attachSession(row.id)
@@ -332,11 +330,13 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
 
   const resumeCandidate = async () => {
     const recovery = readCandidateRecovery(storageNamespace)
-    if (!recovery || candidateRecoveryExpired(recovery)) {
-      try { window.localStorage.removeItem(candidateRecoveryKey(storageNamespace)) } catch { /* optional */ }
+    if (!recovery) {
       setRecoverableCandidate(null)
       return null
     }
+    // expiresAt is a cached value and can be stale because live heartbeats extend
+    // the server recovery window. Always let the server decide whether the room
+    // is still recoverable.
     return joinCandidate(recovery.sessionKey, recovery.displayName, true)
   }
 
@@ -381,10 +381,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
 
   useEffect(() => {
     const recovery = readCandidateRecovery(storageNamespace)
-    if (recovery && !candidateRecoveryExpired(recovery)) setRecoverableCandidate(recovery)
-    else if (recovery) {
-      try { window.localStorage.removeItem(candidateRecoveryKey(storageNamespace)) } catch { /* optional */ }
-    }
+    if (recovery) setRecoverableCandidate(recovery)
 
     let active = true
     const publishInstructorRecovery = (found: RecoverableTeachingInstructor) => {
@@ -394,7 +391,10 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
         sessionId: found.sessionId,
         sessionKey: found.sessionKey,
         continueSession: async () => Boolean(await resumeInstructor(found.sessionId)),
-        startNewSession: async () => retireRecoverableInstructor(found),
+        startNewSession: async () => {
+          setError('End the active instructor session explicitly before starting another.')
+          return false
+        },
       })
     }
 
@@ -446,23 +446,6 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
       window.clearInterval(timer)
     }
   }, [role, session?.id, candidateRefreshMs])
-
-  useEffect(() => {
-    if (!recoverableCandidate) return
-    const expiry = Date.parse(recoverableCandidate.expiresAt)
-    if (!Number.isFinite(expiry)) return
-    const remaining = expiry - Date.now()
-    if (remaining <= 0) {
-      try { window.localStorage.removeItem(candidateRecoveryKey(storageNamespace)) } catch { /* optional */ }
-      setRecoverableCandidate(null)
-      return
-    }
-    const timer = window.setTimeout(() => {
-      try { window.localStorage.removeItem(candidateRecoveryKey(storageNamespace)) } catch { /* optional */ }
-      setRecoverableCandidate(null)
-    }, remaining)
-    return () => window.clearTimeout(timer)
-  }, [recoverableCandidate?.expiresAt])
 
   useEffect(() => () => {
     if (instructorHeartbeatRef.current != null) window.clearInterval(instructorHeartbeatRef.current)
