@@ -31,6 +31,17 @@ import {
 import './actionEditor.css'
 
 const ACTION_EDITOR_SELECTION_KEY = 'loppjusim.actionEditor.selectedId'
+const ACTION_EDITOR_DRAFT_PREFIX = 'loppjusim.actionEditor.draft:'
+const ACTION_EDITOR_NEW_DRAFT_PREFIX = 'loppjusim.actionEditor.newDraft:'
+const ACTION_EDITOR_AUTOSAVE_DELAY_MS = 1500
+const ACTION_EDITOR_AUTOSAVE_RETRY_MS = 5000
+
+type ActionAutosaveState = 'idle' | 'local' | 'pending' | 'saving' | 'saved' | 'retrying'
+
+interface StoredActionDraft {
+  draft: EdusimActionDraft
+  updatedAt: number
+}
 
 const emptyDraft = (): EdusimActionDraft => ({
   id: '',
@@ -64,6 +75,49 @@ function toDraft(action: EdusimActionDefinition): EdusimActionDraft {
   }
 }
 
+function normalisedDraftId(draft: EdusimActionDraft): string {
+  return draft.id.trim().toLowerCase()
+}
+
+function draftSignature(draft: EdusimActionDraft): string {
+  return JSON.stringify(draft)
+}
+
+function draftStorageKey(selectedId: string | null, draft: EdusimActionDraft): string {
+  return selectedId
+    ? `${ACTION_EDITOR_DRAFT_PREFIX}${selectedId}`
+    : `${ACTION_EDITOR_NEW_DRAFT_PREFIX}${draft.kind}`
+}
+
+function readStoredDraft(key: string): EdusimActionDraft | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) ?? 'null') as StoredActionDraft | null
+    if (!parsed?.draft || typeof parsed.draft !== 'object') return null
+    return {
+      ...emptyDraft(),
+      ...parsed.draft,
+      effects: Array.isArray(parsed.draft.effects) ? parsed.draft.effects : [],
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeStoredDraft(key: string, draft: EdusimActionDraft): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ draft, updatedAt: Date.now() } satisfies StoredActionDraft))
+  } catch {
+    // Draft persistence is best-effort; cloud autosave/manual save remain available.
+  }
+}
+
+function clearStoredDraft(key: string): void {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.removeItem(key) } catch { /* optional local recovery */ }
+}
+
 function newEffectId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return `effect-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -91,12 +145,30 @@ const constraintLabel = (constraint: EdusimActionEffectConstraint): string => {
   }
 }
 
+function autosaveLabel(state: ActionAutosaveState): string {
+  switch (state) {
+    case 'local': return 'Draft saved locally'
+    case 'pending': return 'Autosave pending…'
+    case 'saving': return 'Autosaving…'
+    case 'saved': return 'All changes saved'
+    case 'retrying': return 'Saved locally · retrying cloud save…'
+    default: return 'Autosave ready'
+  }
+}
+
 export function ActionEditorApp() {
   const [account, setAccount] = useState<User | null>(null)
   const [actions, setActions] = useState<EdusimActionDefinition[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selectedIdRef = useRef<string | null>(null)
   const [draft, setDraft] = useState<EdusimActionDraft>(emptyDraft)
+  const draftRef = useRef<EdusimActionDraft>(draft)
+  const cloudSignaturesRef = useRef<Map<string, string>>(new Map())
+  const autosaveTimerRef = useRef<number | null>(null)
+  const retryTimerRef = useRef<number | null>(null)
+  const savingRef = useRef(false)
+  const [autosaveState, setAutosaveState] = useState<ActionAutosaveState>('idle')
+  const [autosaveError, setAutosaveError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [email, setEmail] = useState('')
@@ -106,6 +178,26 @@ export function ActionEditorApp() {
   const [aboutOpen, setAboutOpen] = useState(false)
 
   const selected = useMemo(() => actions.find((action) => action.id === selectedId) ?? null, [actions, selectedId])
+
+  const cancelAutosaveTimers = () => {
+    if (autosaveTimerRef.current != null) window.clearTimeout(autosaveTimerRef.current)
+    if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current)
+    autosaveTimerRef.current = null
+    retryTimerRef.current = null
+  }
+
+  const setEditorDraft = (next: EdusimActionDraft) => {
+    draftRef.current = next
+    setDraft(next)
+  }
+
+  const validationMessage = (candidate: EdusimActionDraft, currentSelectedId = selectedIdRef.current): string | null => {
+    const id = normalisedDraftId(candidate)
+    if (!id || !/^[a-z0-9][a-z0-9-]*$/.test(id)) return 'Enter a valid lowercase ID to enable cloud autosave.'
+    if (!candidate.name.trim()) return 'Enter a name to enable cloud autosave.'
+    if (!currentSelectedId && actions.some((action) => action.id === id)) return `An action with ID “${id}” already exists.`
+    return null
+  }
 
   useEffect(() => {
     selectedIdRef.current = selectedId
@@ -120,6 +212,7 @@ export function ActionEditorApp() {
   const refresh = async (preferredId?: string) => {
     const rows = await listEdusimActions()
     setActions(rows)
+    cloudSignaturesRef.current = new Map(rows.map((row) => [row.id, draftSignature(toDraft(row))]))
     let storedId: string | null = null
     try { storedId = sessionStorage.getItem(ACTION_EDITOR_SELECTION_KEY) } catch { /* ignore */ }
     const requestedId = preferredId ?? selectedIdRef.current ?? storedId
@@ -129,7 +222,15 @@ export function ActionEditorApp() {
     selectedIdRef.current = id
     setSelectedId(id)
     const row = rows.find((action) => action.id === id)
-    setDraft(row ? toDraft(row) : emptyDraft())
+    if (row) {
+      const base = toDraft(row)
+      const recovered = readStoredDraft(`${ACTION_EDITOR_DRAFT_PREFIX}${row.id}`)
+      setEditorDraft(recovered ?? base)
+      setAutosaveState(recovered && draftSignature(recovered) !== draftSignature(base) ? 'pending' : 'saved')
+    } else {
+      setEditorDraft(emptyDraft())
+      setAutosaveState('idle')
+    }
   }
 
   useEffect(() => {
@@ -148,18 +249,35 @@ export function ActionEditorApp() {
       setAccount(user)
       if (user) void refresh()
       else {
+        cancelAutosaveTimers()
         setActions([])
+        cloudSignaturesRef.current.clear()
         selectedIdRef.current = null
         setSelectedId(null)
-        setDraft(emptyDraft())
+        setEditorDraft(emptyDraft())
+        setAutosaveState('idle')
       }
     })
-    return () => { active = false; unsubscribe() }
+    return () => {
+      active = false
+      cancelAutosaveTimers()
+      unsubscribe()
+    }
   }, [])
 
-  useEffect(() => {
-    if (selected) setDraft(toDraft(selected))
-  }, [selected])
+  const selectAction = (action: EdusimActionDefinition) => {
+    cancelAutosaveTimers()
+    selectedIdRef.current = action.id
+    setSelectedId(action.id)
+    const base = toDraft(action)
+    const recovered = readStoredDraft(`${ACTION_EDITOR_DRAFT_PREFIX}${action.id}`)
+    setEditorDraft(recovered ?? base)
+    cloudSignaturesRef.current.set(action.id, draftSignature(base))
+    setAutosaveState(recovered && draftSignature(recovered) !== draftSignature(base) ? 'pending' : 'saved')
+    setAutosaveError(null)
+    setMessage(null)
+    setError(null)
+  }
 
   const signIn = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -177,6 +295,7 @@ export function ActionEditorApp() {
   const signOut = async () => {
     setBusy(true)
     try {
+      cancelAutosaveTimers()
       await signOutInstructor()
       setAccount(null)
     } catch (cause) {
@@ -185,15 +304,21 @@ export function ActionEditorApp() {
   }
 
   const beginNew = (kind: EdusimActionKind = 'drug') => {
+    cancelAutosaveTimers()
     selectedIdRef.current = null
     setSelectedId(null)
-    setDraft({
+    const base: EdusimActionDraft = {
       ...emptyDraft(),
       kind,
       candidate_access: kind === 'drug' ? 'allowed' : 'instructor-only',
       sort_order: actions.filter((action) => action.kind === kind).length * 10 + 10,
-    })
-    setMessage(null); setError(null)
+    }
+    const recovered = readStoredDraft(`${ACTION_EDITOR_NEW_DRAFT_PREFIX}${kind}`)
+    setEditorDraft(recovered ?? base)
+    setAutosaveState(recovered ? 'local' : 'idle')
+    setAutosaveError(null)
+    setMessage(null)
+    setError(null)
   }
 
   const addEffect = () => {
@@ -226,22 +351,125 @@ export function ActionEditorApp() {
     setDraft((current) => ({ ...current, effects: current.effects.filter((effect) => effect.id !== effectId) }))
   }
 
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault()
-    const id = draft.id.trim().toLowerCase()
-    if (!id || !/^[a-z0-9][a-z0-9-]*$/.test(id)) {
-      setError('ID must use lowercase letters, numbers and hyphens only.')
+  const scheduleRetry = () => {
+    if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current)
+    setAutosaveState('retrying')
+    retryTimerRef.current = window.setTimeout(() => {
+      retryTimerRef.current = null
+      void persistDraft(draftRef.current, 'auto')
+    }, ACTION_EDITOR_AUTOSAVE_RETRY_MS)
+  }
+
+  const persistDraft = async (snapshot: EdusimActionDraft, source: 'auto' | 'manual'): Promise<EdusimActionDefinition | null> => {
+    const selectionAtStart = selectedIdRef.current
+    const validation = validationMessage(snapshot, selectionAtStart)
+    if (validation) {
+      if (source === 'manual') setError(validation)
+      else setAutosaveState('local')
+      return null
+    }
+    if (savingRef.current) {
+      if (source === 'auto') scheduleRetry()
+      return null
+    }
+
+    const id = normalisedDraftId(snapshot)
+    savingRef.current = true
+    setAutosaveState('saving')
+    setAutosaveError(null)
+    if (source === 'manual') { setError(null); setMessage(null) }
+
+    try {
+      const row = await saveEdusimAction({ ...snapshot, id })
+      const signature = draftSignature(snapshot)
+      cloudSignaturesRef.current.set(row.id, signature)
+      setActions((current) => {
+        const found = current.some((action) => action.id === row.id)
+        const next = found
+          ? current.map((action) => action.id === row.id ? row : action)
+          : [...current, row]
+        return [...next].sort((a, b) => a.kind.localeCompare(b.kind) || a.sort_order - b.sort_order || a.name.localeCompare(b.name))
+      })
+
+      const currentDraft = draftRef.current
+      const currentSignature = draftSignature(currentDraft)
+      const stillEditingSavedDraft = normalisedDraftId(currentDraft) === row.id && currentSignature === signature
+      if (selectionAtStart == null && selectedIdRef.current == null && stillEditingSavedDraft) {
+        clearStoredDraft(`${ACTION_EDITOR_NEW_DRAFT_PREFIX}${snapshot.kind}`)
+        selectedIdRef.current = row.id
+        setSelectedId(row.id)
+      }
+      if (stillEditingSavedDraft) {
+        clearStoredDraft(`${ACTION_EDITOR_DRAFT_PREFIX}${row.id}`)
+        setAutosaveState('saved')
+        setAutosaveError(null)
+      } else {
+        setAutosaveState('pending')
+      }
+      if (source === 'manual') setMessage(`Saved “${row.name}”.`)
+      return row
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : 'Unable to save action.'
+      if (source === 'manual') setError(detail)
+      else {
+        setAutosaveError(detail)
+        scheduleRetry()
+      }
+      return null
+    } finally {
+      savingRef.current = false
+    }
+  }
+
+  useEffect(() => {
+    draftRef.current = draft
+    if (!account) return
+
+    const id = normalisedDraftId(draft)
+    const signature = draftSignature(draft)
+    const cloudSignature = id ? cloudSignaturesRef.current.get(id) : undefined
+    const storageKey = draftStorageKey(selectedId, draft)
+
+    if (cloudSignature === signature) {
+      clearStoredDraft(storageKey)
+      setAutosaveState('saved')
+      setAutosaveError(null)
       return
     }
-    if (!draft.name.trim()) { setError('Name is required.'); return }
-    setBusy(true); setError(null); setMessage(null)
+
+    writeStoredDraft(storageKey, draft)
+    const validation = validationMessage(draft, selectedId)
+    if (validation) {
+      if (autosaveTimerRef.current != null) window.clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+      setAutosaveState('local')
+      return
+    }
+
+    if (autosaveTimerRef.current != null) window.clearTimeout(autosaveTimerRef.current)
+    if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current)
+    retryTimerRef.current = null
+    setAutosaveState('pending')
+    setAutosaveError(null)
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null
+      void persistDraft(draftRef.current, 'auto')
+    }, ACTION_EDITOR_AUTOSAVE_DELAY_MS)
+
+    return () => {
+      if (autosaveTimerRef.current != null) window.clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+  }, [draft, selectedId, account])
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
     try {
-      const row = await saveEdusimAction({ ...draft, id })
-      await refresh(row.id)
-      setMessage(`Saved “${row.name}”.`)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to save action.')
-    } finally { setBusy(false) }
+      await persistDraft(draftRef.current, 'manual')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const remove = async () => {
@@ -249,7 +477,10 @@ export function ActionEditorApp() {
     if (!window.confirm(`Delete “${selected.name}” from the shared action library?`)) return
     setBusy(true); setError(null); setMessage(null)
     try {
+      cancelAutosaveTimers()
       await deleteEdusimAction(selected.id)
+      clearStoredDraft(`${ACTION_EDITOR_DRAFT_PREFIX}${selected.id}`)
+      cloudSignaturesRef.current.delete(selected.id)
       selectedIdRef.current = null
       setSelectedId(null)
       await refresh()
@@ -306,7 +537,7 @@ export function ActionEditorApp() {
               <div key={kind} className="action-editor-group">
                 <h2>{kind === 'drug' ? 'Drugs' : 'Events'}</h2>
                 {actions.filter((action) => action.kind === kind).map((action) => (
-                  <button key={action.id} type="button" className={selectedId === action.id ? 'selected' : ''} onClick={() => { setMessage(null); setSelectedId(action.id) }}>
+                  <button key={action.id} type="button" className={selectedId === action.id ? 'selected' : ''} onClick={() => selectAction(action)}>
                     <strong>{action.name}</strong><small>{action.id} · {action.short_press_action} · {action.setting.toUpperCase()} · {action.candidate_access ?? 'instructor-only'} · P{action.priority ?? DEFAULT_EDUSIM_ACTION_PRIORITY}</small>
                   </button>
                 ))}
@@ -371,8 +602,10 @@ export function ActionEditorApp() {
             </section>
 
             <div className="action-editor-footer">
-              <button type="submit" className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save action'}</button>
+              <button type="submit" className="primary" disabled={busy || autosaveState === 'saving'}>{busy ? 'Saving…' : 'Save now'}</button>
+              <span className={`action-editor-autosave action-editor-autosave-${autosaveState}`}>{autosaveLabel(autosaveState)}</span>
               {message && <span className="action-editor-message">{message}</span>}
+              {autosaveError && <span className="action-editor-autosave-error" title={autosaveError}>Cloud autosave failed; local draft retained.</span>}
               {error && <span className="action-editor-error">{error}</span>}
             </div>
           </form>
