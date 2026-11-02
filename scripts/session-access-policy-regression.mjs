@@ -10,6 +10,7 @@ const assert = (condition, message) => {
 
 const policy = read('src/core/sessionAccessPolicy.ts')
 const framework = read('src/components/SimulationControlFramework.tsx')
+const products = read('src/core/products.ts')
 const productSession = read('src/teaching/session/productSession.ts')
 const actionPermissions = read('src/edumon/sessionActionPermissions.ts')
 
@@ -33,9 +34,15 @@ assert(policy.includes('waveformVisibilityControls: true'), 'restricted learners
 assert(policy.includes('localWaveformFreeze: true'), 'restricted learners may freeze their local waveform display')
 assert(policy.includes('return globalFrozen || localFrozen'), 'instructor-global waveform freeze must dominate local candidate state')
 
-assert(framework.includes('readParticipantAccessContextFromDocument'), 'shared control framework must consume the Core access policy')
+assert(framework.includes('participantCanAccess(accessPolicy, capability)'), 'shared control tabs must be filtered by capability')
+assert(framework.includes('defaultControlTabAccessCapability(String(tab.id))'), 'established tabs must have a compatibility capability mapping')
 assert(framework.includes('accessPolicy.patientProfiles'), 'profile visibility must derive from Core access policy')
 assert(framework.includes('accessPolicy.sessionControls'), 'session footer visibility must derive from Core access policy')
+assert(products.includes("id: 'vent', label: 'Vent', accessCapability: 'device-controls'"), 'MV ventilator tab must remain available as a learner device capability')
+assert(products.includes("id: 'actions', label: 'Actions', accessCapability: 'actions'"), 'Anaesth/ICU Actions tab must remain available under per-action permissions')
+assert(products.includes("id: 'patient', label: 'Patient', accessCapability: 'patient-controls'"), 'Patient tabs must be instructor-only for restricted learners')
+assert(products.includes("id: 'physio', label: 'Physio', accessCapability: 'physiology-controls'"), 'Physio tabs must be instructor-only for restricted learners')
+assert(products.includes("id: 'teaching', label: 'Teaching', accessCapability: 'teaching-controls'"), 'Teaching tabs must be instructor-only for restricted learners')
 assert(productSession.includes('readParticipantAccessContextFromDocument'), 'Simulation mutation actor role must derive from the same Core participant context')
 assert(actionPermissions.includes('list_edusim_candidate_action_permissions'), 'per-Action permission backend must remain in place')
 
