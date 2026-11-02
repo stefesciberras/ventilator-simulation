@@ -46,12 +46,17 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
   bodyClassName = '',
   profileClassName = '',
 }: SimulationControlFrameworkProps<TTab, TProfile>) {
-  const selected = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]
+  const candidateRole = typeof document !== 'undefined' && document.documentElement.dataset.loppjusimSessionRole === 'candidate'
+  const hasActionsTab = tabs.some((tab) => String(tab.id) === 'actions')
+  const candidateActionsOnly = candidateRole && hasActionsTab
+  const visibleTabs = candidateActionsOnly ? tabs.filter((tab) => String(tab.id) === 'actions') : tabs
+  const visibleProfiles = candidateActionsOnly ? [] : profiles
+  const selected = visibleTabs.find((tab) => tab.id === activeTab) ?? visibleTabs[0]
   const isEdumonControlRow = tabsClassName.split(/\s+/).includes('edumon-control-tabs')
   const edumonTabRowStyle: CSSProperties | undefined = isEdumonControlRow
     ? {
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gridTemplateColumns: `repeat(${Math.max(1, visibleTabs.length)}, minmax(0, 1fr))`,
         gridAutoFlow: 'column',
         alignItems: 'stretch',
       }
@@ -60,9 +65,9 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
   return (
     <aside className={`control-panel edusim-control-framework ${className}`.trim()} aria-label={ariaLabel}>
       <div className="edusim-control-navigation-stack control-navigation-stack">
-        {profiles.length > 0 && (
+        {visibleProfiles.length > 0 && (
           <div className={`patient-profile-strip edusim-profile-strip ${profileClassName}`.trim()} role="group" aria-label="Patient profiles">
-            {profiles.map((profile) => (
+            {visibleProfiles.map((profile) => (
               <button
                 key={profile.id}
                 type="button"
@@ -76,7 +81,7 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
           </div>
         )}
         <nav className={`control-tabs edusim-control-tabs ${tabsClassName}`.trim()} role="tablist" aria-label="Simulator controls" style={edumonTabRowStyle}>
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -91,7 +96,7 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
       </div>
 
       <div className={`edusim-control-panel-body control-tab-content ${bodyClassName}`.trim()}>
-        {tabs.map((tab) => {
+        {visibleTabs.map((tab) => {
           const active = selected?.id === tab.id
           const wrapInLockFieldset = Boolean(tab.locked || tab.lockClassName)
           return (
@@ -113,7 +118,7 @@ export function SimulationControlFramework<TTab extends string, TProfile extends
         })}
       </div>
 
-      {footer && <div className="edusim-control-framework-footer">{footer}</div>}
+      {footer && !candidateActionsOnly && <div className="edusim-control-framework-footer">{footer}</div>}
     </aside>
   )
 }
