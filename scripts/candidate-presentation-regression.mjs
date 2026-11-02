@@ -26,8 +26,8 @@ assert(candidateInvitationRuntime.includes("join_edusim_session"), 'candidate na
 assert(main.includes('installCandidateInvitationRuntime()'), 'candidate invitation bootstrap must run for simulator routes')
 
 assert(controlFramework.includes('readParticipantAccessContextFromDocument'), 'shared control framework must use the Core participant access context')
-assert(controlFramework.includes('accessPolicy.restrictedLearner && hasActionsTab'), 'candidate control restriction must retain the Actions-only presentation when available')
-assert(controlFramework.includes("tabs.filter((tab) => String(tab.id) === 'actions')"), 'candidate control restriction must retain only the Actions tab when available')
+assert(controlFramework.includes('participantCanAccess(accessPolicy, capability)'), 'candidate tabs must be filtered by shared capability policy')
+assert(controlFramework.includes('defaultControlTabAccessCapability(String(tab.id))'), 'legacy shared tabs must resolve through the canonical capability map')
 assert(controlFramework.includes('const visibleProfiles = accessPolicy.patientProfiles ? profiles : []'), 'patient profiles must be hidden according to the shared access policy')
 assert(controlFramework.includes('footer && accessPolicy.sessionControls'), 'candidate control surface must not expose instructor/session footer controls')
 assert(edumonActions.includes("definition.candidate_access === 'allowed' || candidatePermissions.has(definition.id)"), 'candidate Actions must use the existing action permission model')
