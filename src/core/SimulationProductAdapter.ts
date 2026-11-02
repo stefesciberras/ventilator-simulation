@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { ParticipantAccessCapability } from './sessionAccessPolicy'
 
 export type SimulationProductId = 'mv' | 'anaesth' | 'icu'
 export type LegacySimulationProductId = 'eduvent' | 'edumon-ana' | 'edumon-icu'
@@ -42,6 +43,7 @@ export interface SimulationProductCapabilitySet {
 export interface SimulationProductControlTabDefinition {
   id: string
   label: string
+  accessCapability: ParticipantAccessCapability
 }
 
 export interface SimulationProductSecondaryDisplayDefinition {
