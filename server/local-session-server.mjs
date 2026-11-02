@@ -31,7 +31,7 @@ function roomFor(sessionKey) {
   if (!/^[A-Z0-9]{6}$/.test(key)) return null
   let room = rooms.get(key)
   if (!room) {
-    room = { key, sequence: 0, snapshot: null, history: [], clients: new Set(), instructor: null, runtimeMode: 'teaching' }
+    room = { key, sequence: 0, snapshot: null, sessionControls: {}, history: [], clients: new Set(), instructor: null, runtimeMode: 'teaching' }
     rooms.set(key, room)
   }
   return room
@@ -45,6 +45,9 @@ function publish(room, payload) {
   room.sequence += 1
   const envelope = { type: 'runtime', sequence: room.sequence, serverTime: Date.now(), payload }
   if (payload?.type === 'snapshot') room.snapshot = payload.snapshot
+  if (payload?.type === 'session-control' && payload.update?.patch && typeof payload.update.patch === 'object') {
+    room.sessionControls = { ...room.sessionControls, ...payload.update.patch }
+  }
   room.history.push(envelope)
   if (room.history.length > MAX_HISTORY) room.history.splice(0, room.history.length - MAX_HISTORY)
   for (const client of room.clients) send(client, envelope)
@@ -56,7 +59,13 @@ function replay(room, socket, lastSequence) {
     for (const item of missing) send(socket, item)
     return
   }
-  send(socket, { type: 'welcome', sequence: room.sequence, snapshot: room.snapshot, runtimeMode: room.runtimeMode })
+  send(socket, {
+    type: 'welcome',
+    sequence: room.sequence,
+    snapshot: room.snapshot,
+    sessionControls: room.sessionControls,
+    runtimeMode: room.runtimeMode,
+  })
 }
 
 function detach(socket) {
