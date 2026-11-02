@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TeachingRole } from '../types'
+import { publishLocalSessionControlPatch, subscribeLocalRuntimePayload } from '../../session/localRuntimeTransport'
 import { sendTeachingBroadcast, subscribeTeachingBroadcast } from '../teachingRealtimeBus'
 import {
   closeSessionControlSubscription,
@@ -79,6 +80,12 @@ export function useTeachingAlarmSync(
       if (active) applyPersistentOverride(snapshot.alarmsSilenced)
     })
 
+    const unsubLocal = subscribeLocalRuntimePayload(sessionId, (payload) => {
+      if (role !== 'candidate' || payload.type !== 'session-control') return
+      const silenced = payload.update.patch.alarmsSilenced
+      if (typeof silenced === 'boolean') applyPersistentOverride(silenced)
+    })
+
     const unsubState = subscribeTeachingBroadcast(sessionId, STATE_EVENT, (payload) => {
       if (role !== 'candidate' || !isState(payload)) return
       stateRef.current = payload
@@ -93,6 +100,7 @@ export function useTeachingAlarmSync(
 
     return () => {
       active = false
+      unsubLocal()
       unsubState()
       unsubRequest()
       void closeSessionControlSubscription(controlChannel)
@@ -142,6 +150,7 @@ export function useTeachingAlarmSync(
   const setInstructorOverride = useCallback((enabled: boolean) => {
     setInstructorState({ instructorOverride: enabled })
     if (role !== 'instructor' || !sessionId) return
+    publishLocalSessionControlPatch(sessionId, { alarmsSilenced: enabled })
     void setInstructorGlobalSessionControls(sessionId, { alarmsSilenced: enabled })
       .then((snapshot) => applyPersistentOverride(snapshot.alarmsSilenced))
       .catch(() => {
