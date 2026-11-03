@@ -84,6 +84,10 @@ function isTimeTrigger(trigger: unknown) {
   return Boolean(trigger && typeof trigger === 'object' && String((trigger as Record<string, unknown>).type ?? '') === 'time')
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 function describeTrigger(
   trigger: unknown,
   id: string,
@@ -450,7 +454,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
         lastActivityAt: lastActivityAtRef.current,
         savedAt: Date.now(),
         simulationTime: latestSimulationTimeRef.current,
-        recoveryState: adapter.captureRecoveryState?.(),
+        recoveryState: adapter.captureRecoveryState?.() ?? latestContextRef.current ?? undefined,
       }
       window.localStorage.setItem(key, JSON.stringify(persisted))
     } catch {
@@ -464,7 +468,9 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     if (snapshot.scenarioId !== definition.id || !definition.stages.length) throw new Error('Scenario recovery record is invalid.')
     const safeIndex = Math.max(0, Math.min(definition.stages.length - 1, snapshot.stageIndex))
     const recoveredStage = definition.stages[safeIndex]
-    const stageContext: TeachingScenarioStageContext<TSnapshot, TTrigger> = {
+    let stageForRecovery = recoveredStage
+    let snapshotForRecovery = recoveredStage.snapshot
+    const stageContextBase: TeachingScenarioStageContext<TSnapshot, TTrigger> = {
       scenario: definition,
       stage: recoveredStage,
       stageIndex: safeIndex,
@@ -472,9 +478,36 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     }
 
     if (adapter.restoreRecoveryState && persisted.recoveryState !== undefined) {
-      await adapter.restoreRecoveryState(persisted.recoveryState, stageContext)
+      await adapter.restoreRecoveryState(persisted.recoveryState, stageContextBase)
     } else {
-      await adapter.applyStage(recoveredStage.snapshot, stageContext)
+      // Compatibility for the two existing product contexts. EDUMON exposes its
+      // live snapshot as context.state; Vent exposes the full live simulator as
+      // context.current while its stage snapshot wraps that state in `.snapshot`.
+      if (isRecord(persisted.recoveryState) && 'state' in persisted.recoveryState) {
+        snapshotForRecovery = persisted.recoveryState.state as TSnapshot
+        stageForRecovery = {
+          ...recoveredStage,
+          snapshot: snapshotForRecovery,
+          appliedVariableIds: undefined,
+          transition: { mode: 'immediate' },
+          transitionOverrides: undefined,
+        }
+      } else if (
+        isRecord(persisted.recoveryState)
+        && 'current' in persisted.recoveryState
+        && isRecord(recoveredStage.snapshot)
+        && 'snapshot' in recoveredStage.snapshot
+      ) {
+        snapshotForRecovery = {
+          ...(recoveredStage.snapshot as Record<string, unknown>),
+          snapshot: persisted.recoveryState.current,
+          apply: undefined,
+          transition: { mode: 'immediate' },
+          transitionOverrides: undefined,
+        } as TSnapshot
+        stageForRecovery = { ...recoveredStage, snapshot: snapshotForRecovery }
+      }
+      await adapter.applyStage(snapshotForRecovery, { ...stageContextBase, stage: stageForRecovery })
     }
 
     latestSimulationTimeRef.current = Number.isFinite(persisted.simulationTime)
