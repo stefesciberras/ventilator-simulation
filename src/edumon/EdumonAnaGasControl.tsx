@@ -71,6 +71,7 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
   const [physioHost, setPhysioHost] = useState<HTMLElement | null>(null)
   const [fiSevoActive, setFiSevoActive] = useState(false)
   const [etSevo, setEtSevo] = useState(0)
+  const [bisResetEpoch, setBisResetEpoch] = useState(0)
   const [etO2, setEtO2] = useState(16)
   const [tofReading, setTofReading] = useState<TofReading | null>(null)
   const [tofMeasuring, setTofMeasuring] = useState(false)
@@ -95,6 +96,7 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
       lastAutoDepthRef.current = null
       setFiSevoActive(false)
       setEtSevo(0)
+      setBisResetEpoch((previous) => previous + 1)
       setEtO2(16)
       setTofReading(null)
       setTofMeasuring(false)
@@ -263,5 +265,5 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
     </>, physioHost,
   ) : null
 
-  return <><EdumonBisTrend patientState={patientState} />{footer}{overlay}{sideControl}</>
+  return <><EdumonBisTrend key={bisResetEpoch} patientState={patientState} />{footer}{overlay}{sideControl}</>
 }
