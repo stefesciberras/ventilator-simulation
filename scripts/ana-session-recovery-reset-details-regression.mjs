@@ -8,6 +8,7 @@ const shared = read('src/teaching/session/useProductTeachingSession.ts')
 const transport = read('src/teaching/session/productSession.ts')
 const bis = read('src/edumon/EdumonBisTrend.tsx')
 const gas = read('src/edumon/EdumonAnaGasControl.tsx')
+assert.ok(gas.includes('key={bisResetEpoch}') && gas.includes('setBisResetEpoch((previous) => previous + 1)'), 'BIS must remount a clean canvas on reset')
 const sessionPanel = read('src/teaching/session/SharedSessionModePanel.tsx')
 
 assert.ok(state.includes('resetRevision?: string'), 'EDUMON session model must carry reset revision')
