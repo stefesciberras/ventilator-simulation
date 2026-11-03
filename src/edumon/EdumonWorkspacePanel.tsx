@@ -11,6 +11,7 @@ import { EdumonCapnographySurface } from './EdumonCapnographySurface'
 import { EdumonTemperatureSurface } from './EdumonTemperatureSurface'
 import { EdumonAnaGasControl } from './EdumonAnaGasControl'
 import { EdumonVentilatorControl } from './EdumonVentilatorControl'
+import { useSimulationWorkspaceView } from '../components/SimulationWorkspaceShell'
 import { EdumonActionsPanel } from './EdumonActionsPanel'
 import { SimulationControlFramework, type SimulationControlProfileDefinition, type SimulationControlTabDefinition } from '../components/SimulationControlFramework'
 import { SimulationTransitionTimeControl } from '../components/SimulationTransitionTimeControl'
@@ -53,6 +54,7 @@ export function EdumonWorkspacePanel({
   deviceControlsLocked = false,
   sessionPanel,
 }: EdumonWorkspacePanelProps) {
+  const view = useSimulationWorkspaceView()
   const [tab, setTab] = useState<EdumonControlTab>('patient')
   const [profile, setProfile] = useState<string>('Awake')
   const profileProduct = teachingHost.appId.toLowerCase().includes('icu') ? 'icu' as const : 'anaesth' as const
@@ -324,11 +326,14 @@ export function EdumonWorkspacePanel({
       <EdumonNibpControl patientState={patientState} />
       <EdumonCapnographySurface patientState={patientState} />
       <EdumonTemperatureSurface patientState={patientState} />
-      <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} disabled={deviceControlsLocked} />
+      {view === 'instructor' && (
+        <div className="edumon-instructor-ventilator-host">
+          <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} disabled={deviceControlsLocked} />
+        </div>
+      )}
       {teachingHost.appId === 'anaesth' && (
         <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={deviceControlsLocked} />
       )}
-      <div className="edumon-instructor-ventilator-host" aria-hidden="true" />
       <SimulationControlFramework
         activeTab={tab}
         tabs={tabs}
