@@ -19,6 +19,7 @@ assert.ok(app.includes('window.dispatchEvent(new Event(LOPPJUSIM_SIMULATION_RESE
 assert.ok(bis.includes('setPoints([{ time: 0, value: 100 }])'), 'BIS history must clear on reset')
 assert.ok(gas.includes('etSevoRef.current = 0') && gas.includes('setEtSevo(0)'), 'Candidate EtSevo must clear on reset')
 
+assert.ok(shared.includes('actionRuntimeSnapshot: null') && shared.includes('actionCommand: null'), 'Reset must invalidate canonical drug runtime state')
 assert.ok(shared.includes('repository.connectLocalForRole(row, nextRole)'), 'Session resume must use lifecycle actor role for local reconnection')
 assert.ok(transport.includes('roleOverride ?? documentRole'), 'LAN transport must not rely on stale DOM role after refresh')
 assert.ok(transport.includes('localTransportRole !== role'), 'Transport must rebuild on role change')
