@@ -328,6 +328,7 @@ export function EdumonWorkspacePanel({
       {teachingHost.appId === 'anaesth' && (
         <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={deviceControlsLocked} />
       )}
+      <div className="edumon-instructor-ventilator-host" aria-hidden="true" />
       <SimulationControlFramework
         activeTab={tab}
         tabs={tabs}

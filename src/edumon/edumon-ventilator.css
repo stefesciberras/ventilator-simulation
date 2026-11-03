@@ -1,3 +1,23 @@
+.edumon-instructor-ventilator-host {
+  display: none;
+}
+
+.shared-instructor-console-controls .edumon-instructor-ventilator-host {
+  display: flex;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 6px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  border-bottom: 1px solid #2e3e47;
+  background: #11191e;
+}
+
+.shared-instructor-console-controls .edumon-instructor-ventilator-host > .edumon-ventilator-row {
+  min-width: 760px;
+}
+
 .edumon-control-strip.edumon-control-strip-with-ventilator {
   min-height: 136px;
   flex-wrap: wrap;
