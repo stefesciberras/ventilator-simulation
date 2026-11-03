@@ -32,10 +32,11 @@ import { useSharedSelfDirectedScenario } from '../teaching/scenario/useSharedSel
 import { scenarioProductForEdumonModule } from '../teaching/scenario/products'
 import { createSimulationPersistence, type SimulationPersistence } from '../core/SimulationPersistence'
 import { copySimulationDiagnostic } from '../core/SimulationDiagnostics'
+import { LOPPJUSIM_OPEN_SESSIONS_EVENT, LOPPJUSIM_SIMULATION_RESET_EVENT } from '../core/platformEvents'
 import { getSimulationProduct } from '../core/products'
 import { autoscaleWaveformSamples, type WaveformAutoscaleOptions } from '../core/WaveformAutoscale'
 import type { EdumonTeachingState } from './teachingState'
-import { getActionRuntimeLog, subscribeToActionRuntime } from '../edusim/actions/ActionRuntime'
+import { getActionRuntimeLog, subscribeToActionRuntime, clearActionRuntime, clearActionRuntimeLog } from '../edusim/actions/ActionRuntime'
 import { buildEdumonScenarioStageTarget, interpolateEdumonScenarioPatientTransition, type EdumonScenarioPatientTransition } from './scenarioRegistry'
 import './edumon.css'
 import './edumon-console-parity.css'
@@ -248,6 +249,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [elapsed, setElapsed] = useState(TRACE_WINDOW_SECONDS)
   const [simulationPaused, setSimulationPaused] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState<EdumonSimulationSpeed>(1)
+  const [resetRevision, setResetRevision] = useState<string | null>(null)
+  const observedResetRevisionRef = useRef<string | null>(null)
   simulationPausedRef.current = simulationPaused
   simulationSpeedRef.current = simulationSpeed
   const [frozen, setFrozen] = useState(false)
@@ -308,7 +311,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const samples = frozenSamples ?? liveSamples
   const measurements = measurementsFor(effectivePatientState)
   const teachingHost = module.id === 'ana' ? edumonAnaTeachingHost : edumonIcuTeachingHost
-  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits, lastActionId: scenarioActionEvent?.actionId ?? null, actionSequence: scenarioActionEvent?.sequence ?? 0, actionSimulationTime: scenarioActionEvent?.simulationTime ?? null }), [patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits, scenarioActionEvent])
+  const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits, resetRevision, lastActionId: scenarioActionEvent?.actionId ?? null, actionSequence: scenarioActionEvent?.sequence ?? 0, actionSimulationTime: scenarioActionEvent?.simulationTime ?? null }), [patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits, resetRevision, scenarioActionEvent])
   const teachingSession = useProductTeachingSession<EdumonTeachingState>({
     productId: teachingHost.appId,
     state: sharedTeachingState,
@@ -317,6 +320,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       lastActionId: localState.lastActionId ?? null,
       actionSequence: localState.actionSequence ?? 0,
       actionSimulationTime: localState.actionSimulationTime ?? null,
+      resetRevision: instructorState.resetRevision ?? null,
       patient: {
         ...instructorState.patient,
         respiratory: localState.patient.respiratory ?? instructorState.patient.respiratory,
@@ -324,6 +328,14 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       },
     }),
     setState: (next) => {
+      // A candidate's EtSevo/BIS time-series is local derived state and must be
+      // explicitly cleared when the instructor resets the shared Simulation.
+      if (next.resetRevision && next.resetRevision !== observedResetRevisionRef.current) {
+        observedResetRevisionRef.current = next.resetRevision
+        clearActionRuntime()
+        clearActionRuntimeLog()
+        window.dispatchEvent(new Event(LOPPJUSIM_SIMULATION_RESET_EVENT))
+      }
       setPatientState(next.patient)
       setPatientTransitionSeconds(next.patientTransitionSeconds ?? 0)
       setSimulationPaused(next.simulationPaused)
@@ -333,6 +345,25 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   })
   const teachingPrompts = useTeachingPrompts(teachingSession.role, teachingSession.session?.id ?? null, teachingHost)
   const liveTeachingMedia = useTeachingMediaPresentation(teachingSession.role, teachingSession.session?.id ?? null)
+  useEffect(() => {
+    const onReset = () => {
+      // Only the instructor publishes a reset. Standalone resets stay local;
+      // candidates follow the canonical resetRevision instead of rebroadcasting.
+      if (teachingSession.role !== 'instructor' || teachingSession.runtimeMode !== 'simulation') return
+      const revision = crypto.randomUUID()
+      observedResetRevisionRef.current = revision
+      setResetRevision(revision)
+    }
+    window.addEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, onReset)
+    return () => window.removeEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, onReset)
+  }, [teachingSession.role, teachingSession.runtimeMode])
+
+  useEffect(() => {
+    const onOpenSessions = () => setTopPanel('scenario')
+    window.addEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, onOpenSessions)
+    return () => window.removeEventListener(LOPPJUSIM_OPEN_SESSIONS_EVENT, onOpenSessions)
+  }, [])
+
   const candidateCount = teachingSession.members.filter((member) => member.role === 'candidate').length
   const candidateLocked = teachingSession.role === 'candidate'
   const accountChangeLocked = teachingSession.role !== 'standalone'
@@ -704,7 +735,17 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         </SecondaryMonitorSurface>
       )}
 
-      {topPanel === 'scenario' && <SecondaryMonitorSurface title="Scenarios and sessions" onClose={() => setTopPanel(null)}>{sessionPanel}</SecondaryMonitorSurface>}
+      {topPanel === 'scenario' && <SecondaryMonitorSurface title={teachingSession.role === 'candidate' || selfDirected.active ? 'Session details' : 'Scenarios and sessions'} onClose={() => setTopPanel(null)}>
+        {selfDirected.active ? (
+          <section className="candidate-session-body">
+            <h3>Self-directed learning</h3>
+            <p>Mode: Self-directed learning</p>
+            <p>Assignment key: <strong>{selfDirected.run?.accessCode ?? '—'}</strong></p>
+            <p>Scenario: {selfDirected.run?.title ?? '—'}</p>
+            <p>This scenario progresses without a live instructor.</p>
+          </section>
+        ) : sessionPanel}
+      </SecondaryMonitorSurface>}
       <InstructorAccountDialog auth={accountAuth} locked={accountChangeLocked} />
       <SimulationAboutDialog open={topPanel === 'about'} productLabel={module.productName} title={module.subtitle} description="An interactive patient-monitor simulator for anaesthesia, acute care and intensive-care education." version={EDUMON_APP_VERSION} onClose={() => setTopPanel(null)} wakeLock={screenWakeLock} diagnostics={edumonDiagnosticActions} />
     </main>

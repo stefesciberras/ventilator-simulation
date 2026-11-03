@@ -18,6 +18,8 @@ export interface EdumonTeachingState {
   simulationPaused: boolean
   simulationSpeed: EdumonSimulationSpeed
   alarmLimits: EdumonAlarmLimits
+  /** Instructor-issued cold reset token, propagated to Simulation candidates. */
+  resetRevision?: string | null
   /** Runtime topology selected by the instructor. Legacy sessions default to teaching. */
   runtimeMode?: Extract<LoppjuSimRuntimeMode, 'simulation' | 'teaching'>
   /** Latest local Drugs & Events activation, used by scenario triggers across a teaching session. */

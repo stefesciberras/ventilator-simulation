@@ -220,12 +220,13 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
   ProductTeachingMemberRow<TState>,
   ProductTeachingCreateInput<TState>,
   ProductTeachingMemberTelemetry<TState>
-> {
+> & { connectLocalForRole: (row: ProductTeachingSessionRow<TState>, role: 'instructor' | 'candidate') => void } {
   const storageProductId = toLegacyProductId(productId)
   const localClientId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `product-${Date.now()}-${Math.random().toString(36).slice(2)}`
   let localTransport: LocalRuntimeTransport | null = null
+  let localTransportRole: 'instructor' | 'candidate' | null = null
   let localSessionRow: ProductTeachingSessionRow<TState> | null = null
   let localSessionChannel: RealtimeChannel | null = null
   let localOnUpdate: ((row: ProductTeachingSessionRow<TState>) => void) | null = null
@@ -235,6 +236,7 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
   const disconnectLocalTransport = () => {
     localTransport?.disconnect()
     localTransport = null
+    localTransportRole = null
     if (localSessionRow) {
       localProductPublishers.delete(localSessionRow.id)
       localInstructorPatchHandlers.delete(localSessionRow.id)
@@ -335,12 +337,17 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
     void flushPendingLocalSimulationPatch()
   }
 
-  const ensureLocalTransport = (row: ProductTeachingSessionRow<TState>) => {
+  const ensureLocalTransport = (row: ProductTeachingSessionRow<TState>, roleOverride?: 'instructor' | 'candidate') => {
     localSessionRow = row
     localProductRows.set(row.id, row as ProductTeachingSessionRow<unknown>)
     const url = getDefaultLocalRuntimeUrl()
-    const { role } = readParticipantAccessContextFromDocument()
+    const { role: documentRole } = readParticipantAccessContextFromDocument()
+    const role = roleOverride ?? documentRole
     if (!url || role === 'standalone') return
+    if (localTransport && localTransportRole !== role) disconnectLocalTransport()
+    // Role changes invalidate the previous transport-owned row cache.
+    localSessionRow = row
+    localProductRows.set(row.id, row as ProductTeachingSessionRow<unknown>)
     if (role === 'instructor') {
       localInstructorPatchHandlers.set(row.id, (patch, mutationId) => (
         acceptLocalInstructorPatch(patch, mutationId) as ProductSimulationPatchResult<unknown> | null
@@ -351,6 +358,7 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
       return
     }
 
+    localTransportRole = role
     localTransport = new LocalRuntimeTransport({
       url,
       role,
@@ -394,6 +402,9 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
   }
 
   return {
+    // Role is supplied by the session lifecycle, not inferred from a DOM dataset
+    // that may still say standalone immediately after an instructor refresh.
+    connectLocalForRole: (row, role) => ensureLocalTransport(row, role),
     ensureIdentity: ensureAnonymousSession,
 
     createSession: async (input) => {
