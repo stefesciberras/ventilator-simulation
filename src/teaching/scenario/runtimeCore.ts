@@ -37,8 +37,13 @@ export interface TeachingScenarioRuntimeSnapshot {
 }
 
 interface PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> {
+  version: 2
   scenario: TeachingScenarioDefinition<TSnapshot, TTrigger>
   snapshot: TeachingScenarioRuntimeSnapshot
+  lastActivityAt: number
+  savedAt: number
+  simulationTime: number
+  recoveryState?: unknown
 }
 
 export interface TeachingScenarioRunEventDetail<TSnapshot, TTrigger> {
@@ -50,6 +55,10 @@ export type TeachingScenarioTransitionResolution =
   | { kind: 'branch'; toStageId: string }
   | { kind: 'advance' }
   | null
+
+export const SCENARIO_RECOVERY_AUTO_RESUME_MS = 5 * 60 * 1000
+export const SCENARIO_RECOVERY_EXPIRY_MS = 60 * 60 * 1000
+const SCENARIO_RECOVERY_CHECKPOINT_MS = 5000
 
 const runtimePersistenceKey = () => {
   if (typeof window === 'undefined') return null
@@ -73,6 +82,10 @@ function actorSuffix(trigger: Record<string, unknown>) {
 
 function isTimeTrigger(trigger: unknown) {
   return Boolean(trigger && typeof trigger === 'object' && String((trigger as Record<string, unknown>).type ?? '') === 'time')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function describeTrigger(
@@ -144,6 +157,11 @@ function describeTrigger(
   return { id, label, detail, kind: 'informational', onForce }
 }
 
+function recoveryAgeLabel(ageMs: number) {
+  const minutes = Math.max(1, Math.round(ageMs / 60000))
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`
+}
+
 /** Branches take priority over linear advancement; product adapters own trigger semantics. */
 export function resolveTeachingScenarioTransition<TTrigger>({
   stageTriggers,
@@ -166,11 +184,7 @@ export function resolveTeachingScenarioTransition<TTrigger>({
   return stageTriggers.some(triggerMatches) ? { kind: 'advance' } : null
 }
 
-/**
- * Product-neutral scenario sequencer. It owns stage order, branching, stage
- * timing and durable reconstruction; products only apply snapshots and match
- * their trigger vocabulary.
- */
+/** Product-neutral scenario sequencer with short-term crash/refresh recovery. */
 export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
   adapter: TeachingScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext>,
 ) {
@@ -186,8 +200,13 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
   const latestSimulationTimeRef = useRef(0)
   const latestContextRef = useRef<TContext | null>(null)
   const stageStartedSimulationTimeRef = useRef(0)
+  const lastActivityAtRef = useRef(0)
 
   const stage = scenario?.stages[stageIndex] ?? null
+
+  const markScenarioActivity = useCallback(() => {
+    lastActivityAtRef.current = Date.now()
+  }, [])
 
   useEffect(() => {
     stageStartedSimulationTimeRef.current = stageStartedSimulationTime
@@ -209,6 +228,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     await adapter.applyStage(nextStage.snapshot, stageContext)
     latestSimulationTimeRef.current = simulationTime
     stageStartedSimulationTimeRef.current = simulationTime
+    markScenarioActivity()
     setScenario(definition)
     setStageIndex(index)
     setStageStartedSimulationTime(simulationTime)
@@ -216,7 +236,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     setTimeTriggerPauseStartedSimulationTime(null)
     setStatus('running')
     return true
-  }, [adapter])
+  }, [adapter, markScenarioActivity])
 
   const start = useCallback(async (definition: TeachingScenarioDefinition<TSnapshot, TTrigger>, simulationTime: number) => {
     if (!definition.stages.length) throw new Error('Scenario has no stages.')
@@ -241,6 +261,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     setStageStartedSimulationTime(0)
     stageStartedSimulationTimeRef.current = 0
     latestContextRef.current = null
+    lastActivityAtRef.current = 0
     setStatus('idle')
     setTimeTriggerPaused(false)
     setTimeTriggerPauseStartedSimulationTime(null)
@@ -256,6 +277,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     if (!scenario || status !== 'running' || transitionBusyRef.current) return false
     const nextIndex = stageIndex + 1
     if (nextIndex >= scenario.stages.length) {
+      markScenarioActivity()
       setStatus('complete')
       return true
     }
@@ -265,7 +287,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     } finally {
       transitionBusyRef.current = false
     }
-  }, [applyStageAt, scenario, stageIndex, status])
+  }, [applyStageAt, markScenarioActivity, scenario, stageIndex, status])
 
   const goToStage = useCallback(async (stageId: string, simulationTime: number) => {
     if (!scenario || status !== 'running' || transitionBusyRef.current) return false
@@ -293,6 +315,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     transitionBusyRef.current = true
     try {
       if (adapter.forceTrigger && context != null) await adapter.forceTrigger(trigger, context, currentStageContext)
+      markScenarioActivity()
       if (targetStageId) {
         const targetIndex = scenario.stages.findIndex((candidate) => candidate.id === targetStageId)
         if (targetIndex < 0) return false
@@ -307,10 +330,11 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     } finally {
       transitionBusyRef.current = false
     }
-  }, [adapter, applyStageAt, scenario, stage, stageIndex, stageStartedSimulationTime, status])
+  }, [adapter, applyStageAt, markScenarioActivity, scenario, stage, stageIndex, stageStartedSimulationTime, status])
 
   const toggleTimeTriggerPause = useCallback(() => {
     const now = latestSimulationTimeRef.current
+    markScenarioActivity()
     if (timeTriggerPaused) {
       const pauseStarted = timeTriggerPauseStartedSimulationTime ?? now
       const pausedDuration = Math.max(0, now - pauseStarted)
@@ -323,7 +347,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     }
     setTimeTriggerPauseStartedSimulationTime(now)
     setTimeTriggerPaused(true)
-  }, [timeTriggerPaused, timeTriggerPauseStartedSimulationTime])
+  }, [markScenarioActivity, timeTriggerPaused, timeTriggerPauseStartedSimulationTime])
 
   const publishTriggerInfo = useCallback((simulationTime: number) => {
     if (!scenario || !stage || status === 'idle') {
@@ -419,6 +443,87 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     }
   }, [scenario, stageIndex, stageStartedSimulationTime, status, timeTriggerPaused, timeTriggerPauseStartedSimulationTime])
 
+  const persistRecovery = useCallback((definition: TeachingScenarioDefinition<TSnapshot, TTrigger>, snapshot: TeachingScenarioRuntimeSnapshot) => {
+    const key = runtimePersistenceKey()
+    if (!key || !lastActivityAtRef.current) return
+    try {
+      const persisted: PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> = {
+        version: 2,
+        scenario: definition,
+        snapshot,
+        lastActivityAt: lastActivityAtRef.current,
+        savedAt: Date.now(),
+        simulationTime: latestSimulationTimeRef.current,
+        recoveryState: adapter.captureRecoveryState?.() ?? latestContextRef.current ?? undefined,
+      }
+      window.localStorage.setItem(key, JSON.stringify(persisted))
+    } catch {
+      // Short-term recovery is best-effort; the live simulation must continue.
+    }
+  }, [adapter])
+
+  const restorePersistedRecovery = useCallback(async (persisted: PersistedTeachingScenarioRuntime<TSnapshot, TTrigger>) => {
+    const definition = persisted.scenario
+    const snapshot = persisted.snapshot
+    if (snapshot.scenarioId !== definition.id || !definition.stages.length) throw new Error('Scenario recovery record is invalid.')
+    const safeIndex = Math.max(0, Math.min(definition.stages.length - 1, snapshot.stageIndex))
+    const recoveredStage = definition.stages[safeIndex]
+    let stageForRecovery = recoveredStage
+    let snapshotForRecovery = recoveredStage.snapshot
+    const stageContextBase: TeachingScenarioStageContext<TSnapshot, TTrigger> = {
+      scenario: definition,
+      stage: recoveredStage,
+      stageIndex: safeIndex,
+      stageStartedSimulationTime: snapshot.stageStartedSimulationTime,
+    }
+
+    if (adapter.restoreRecoveryState && persisted.recoveryState !== undefined) {
+      await adapter.restoreRecoveryState(persisted.recoveryState, stageContextBase)
+    } else {
+      // Compatibility for the two existing product contexts. EDUMON exposes its
+      // live snapshot as context.state; Vent exposes the full live simulator as
+      // context.current while its stage snapshot wraps that state in `.snapshot`.
+      if (isRecord(persisted.recoveryState) && 'state' in persisted.recoveryState) {
+        snapshotForRecovery = persisted.recoveryState.state as TSnapshot
+        stageForRecovery = {
+          ...recoveredStage,
+          snapshot: snapshotForRecovery,
+          appliedVariableIds: undefined,
+          transition: { mode: 'immediate' },
+          transitionOverrides: undefined,
+        }
+      } else if (
+        isRecord(persisted.recoveryState)
+        && 'current' in persisted.recoveryState
+        && isRecord(recoveredStage.snapshot)
+        && 'snapshot' in recoveredStage.snapshot
+      ) {
+        snapshotForRecovery = {
+          ...(recoveredStage.snapshot as Record<string, unknown>),
+          snapshot: persisted.recoveryState.current,
+          apply: undefined,
+          transition: { mode: 'immediate' },
+          transitionOverrides: undefined,
+        } as TSnapshot
+        stageForRecovery = { ...recoveredStage, snapshot: snapshotForRecovery }
+      }
+      await adapter.applyStage(snapshotForRecovery, { ...stageContextBase, stage: stageForRecovery })
+    }
+
+    latestSimulationTimeRef.current = Number.isFinite(persisted.simulationTime)
+      ? persisted.simulationTime
+      : snapshot.stageStartedSimulationTime
+    stageStartedSimulationTimeRef.current = snapshot.stageStartedSimulationTime
+    lastActivityAtRef.current = persisted.lastActivityAt
+    setScenario(definition)
+    setStageIndex(safeIndex)
+    setStageStartedSimulationTime(snapshot.stageStartedSimulationTime)
+    setTimeTriggerPaused(Boolean(snapshot.timeTriggerPaused))
+    setTimeTriggerPauseStartedSimulationTime(snapshot.timeTriggerPauseStartedSimulationTime ?? null)
+    setStatus(snapshot.status)
+    return true
+  }, [adapter])
+
   useEffect(() => {
     publishTriggerInfo(latestSimulationTimeRef.current)
     return () => setScenarioRuntimeTriggerInfo([])
@@ -429,6 +534,7 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     restoreAttemptedRef.current = true
     const key = runtimePersistenceKey()
     if (!key) { setPersistenceReady(true); return }
+
     let persisted: PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> | null = null
     try {
       const raw = window.localStorage.getItem(key)
@@ -436,18 +542,44 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
     } catch {
       persisted = null
     }
-    if (!persisted?.scenario?.stages?.length || !persisted.snapshot) {
+
+    const discard = () => {
+      try { window.localStorage.removeItem(key) } catch { /* optional persistence */ }
       setPersistenceReady(true)
+    }
+
+    // Legacy records had no activity timestamp and must not resurrect indefinitely.
+    if (!persisted?.scenario?.stages?.length || !persisted.snapshot || persisted.version !== 2 || !Number.isFinite(persisted.lastActivityAt)) {
+      discard()
       return
     }
+
+    const ageMs = Math.max(0, Date.now() - persisted.lastActivityAt)
+    if (ageMs > SCENARIO_RECOVERY_EXPIRY_MS) {
+      discard()
+      return
+    }
+
+    const safeIndex = Math.max(0, Math.min(persisted.scenario.stages.length - 1, persisted.snapshot.stageIndex))
+    const savedStage = persisted.scenario.stages[safeIndex]
+    if (ageMs > SCENARIO_RECOVERY_AUTO_RESUME_MS) {
+      const shouldResume = window.confirm(
+        `Resume previous scenario?\n\n${persisted.scenario.name}\nStage ${safeIndex + 1}: ${savedStage?.name ?? 'Saved stage'}\nLast used ${recoveryAgeLabel(ageMs)} ago.\n\nResume with the saved patient/device parameters and this stage?`,
+      )
+      if (!shouldResume) {
+        discard()
+        return
+      }
+    }
+
     let cancelled = false
-    void restore(persisted.scenario, persisted.snapshot)
+    void restorePersistedRecovery(persisted)
       .catch(() => {
         try { window.localStorage.removeItem(key) } catch { /* optional persistence */ }
       })
       .finally(() => { if (!cancelled) setPersistenceReady(true) })
     return () => { cancelled = true }
-  }, [restore])
+  }, [restorePersistedRecovery])
 
   useEffect(() => {
     if (!persistenceReady) return
@@ -457,13 +589,17 @@ export function useTeachingScenarioRuntime<TSnapshot, TTrigger, TContext>(
       try { window.localStorage.removeItem(key) } catch { /* optional persistence */ }
       return
     }
-    try {
-      const persisted: PersistedTeachingScenarioRuntime<TSnapshot, TTrigger> = { scenario, snapshot: runtimeSnapshot }
-      window.localStorage.setItem(key, JSON.stringify(persisted))
-    } catch {
-      // Runtime persistence is best-effort; simulation must continue if storage is unavailable.
-    }
-  }, [persistenceReady, runtimeSnapshot, scenario])
+    persistRecovery(scenario, runtimeSnapshot)
+  }, [persistenceReady, persistRecovery, runtimeSnapshot, scenario])
+
+  useEffect(() => {
+    if (!persistenceReady || !scenario || !runtimeSnapshot) return
+    const timer = window.setInterval(() => {
+      // Checkpoint live parameters without extending lastActivityAt.
+      persistRecovery(scenario, runtimeSnapshot)
+    }, SCENARIO_RECOVERY_CHECKPOINT_MS)
+    return () => window.clearInterval(timer)
+  }, [persistenceReady, persistRecovery, runtimeSnapshot, scenario])
 
   return {
     scenario,
