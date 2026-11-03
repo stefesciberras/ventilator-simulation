@@ -3,6 +3,7 @@ import { toLegacyProductId, type SimulationProductId } from '../../core/Simulati
 import { filterCandidateSimulationPatch } from '../../core/simulationCandidatePatchPolicy'
 import { readParticipantAccessContextFromDocument } from '../../core/sessionAccessPolicy'
 import type { SimulationCommand } from '../../core/runtimeModes'
+import type { ActionRuntimeSnapshot } from '../../edusim/actions/ActionRuntime'
 import {
   getDefaultLocalRuntimeUrl,
   LocalRuntimeTransport,
@@ -84,6 +85,15 @@ function deepMerge(base: unknown, patch: unknown): unknown {
 
 function mergePatchObjects(base: JsonObject | null, patch: JsonObject): JsonObject {
   return (deepMerge(base ?? {}, patch) ?? {}) as JsonObject
+}
+
+function applyAuthoritativeCandidateActionPatch(patch: JsonObject) {
+  const command = isPlainObject(patch.actionCommand) ? patch.actionCommand : null
+  const snapshot = patch.actionRuntimeSnapshot
+  if (!command || command.actorRole !== 'candidate' || !snapshot || typeof snapshot !== 'object') return
+  void import('../../edumon/simulationActionBridge').then(({ applyReplicatedEdumonActionSnapshot }) => {
+    applyReplicatedEdumonActionSnapshot(snapshot as ActionRuntimeSnapshot)
+  }).catch(() => undefined)
 }
 
 function announceLocalConnection(sessionId: string, state: LocalRuntimeConnection) {
@@ -311,6 +321,7 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
     const patch = filterCandidateSimulationPatch(rawPatch)
     if (!Object.keys(patch).length) return
 
+    applyAuthoritativeCandidateActionPatch(patch)
     const next: ProductTeachingSessionRow<TState> = {
       ...localSessionRow,
       product_state: deepMerge(localSessionRow.product_state, patch) as TState,
