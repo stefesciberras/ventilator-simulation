@@ -77,6 +77,10 @@ export interface ScenarioStageContext<TSnapshot, TTrigger> {
 export interface ScenarioRuntimeAdapter<TSnapshot, TTrigger, TContext> {
   applyStage: (snapshot: TSnapshot, context: ScenarioStageContext<TSnapshot, TTrigger>) => void | Promise<void>
   triggerMatches: (trigger: TTrigger, context: TContext, stage: ScenarioStageContext<TSnapshot, TTrigger>) => boolean
+  /** Capture the product's actual live state for short-term crash/refresh recovery. */
+  captureRecoveryState?: () => unknown
+  /** Restore a previously captured live state without replaying the authored stage snapshot. */
+  restoreRecoveryState?: (state: unknown, stage: ScenarioStageContext<TSnapshot, TTrigger>) => void | Promise<void>
   /**
    * Optional product-owned semantic execution used by instructor long-press
    * overrides. For executable triggers (for example Drugs / Events), this must
