@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toLegacyProductId, type SimulationProductId } from '../../core/SimulationProductAdapter'
+import { LOPPJUSIM_SIMULATION_RESET_EVENT } from '../../core/platformEvents'
 import type { ActionRuntimeSnapshot } from '../../edusim/actions/ActionRuntime'
 import type { LocalRuntimeConnection } from '../../session/localRuntimeTransport'
 import { useSharedTeachingSession } from './useSharedTeachingSession'
@@ -308,6 +309,24 @@ export function useProductTeachingSession<TState>({
     configureSessionLogRuntime({ productId, sessionId: core.session?.id ?? null, role: core.role })
     if (core.role === 'standalone') standaloneStateRef.current = stateRef.current
   }, [productId, core.role, core.session?.id])
+
+  useEffect(() => {
+    if (!isEdumonProduct(productId) || core.role !== 'instructor' || runtimeMode !== 'simulation') return
+    const onReset = () => {
+      // A cold reset must invalidate old canonical drug effects as well as
+      // the local monitor history. Otherwise a refreshed browser rehydrates
+      // the previous drug snapshot and effectively undoes the reset.
+      enqueueSimulationPatch({
+        actionCommand: null,
+        actionRuntimeSnapshot: null,
+        lastActionId: null,
+        actionSequence: 0,
+        actionSimulationTime: null,
+      })
+    }
+    window.addEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, onReset)
+    return () => window.removeEventListener(LOPPJUSIM_SIMULATION_RESET_EVENT, onReset)
+  }, [productId, core.role, core.session?.id, runtimeMode])
 
   useEffect(() => {
     if (!isEdumonProduct(productId) || core.role === 'standalone' || runtimeMode !== 'simulation') return
