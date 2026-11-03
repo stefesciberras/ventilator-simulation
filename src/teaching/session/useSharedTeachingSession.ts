@@ -247,8 +247,30 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
   const retireRecoverableInstructor = async (recoveryOverride?: RecoverableTeachingInstructor | null) => {
     const recovery = recoveryOverride ?? recoverableInstructor
     if (!recovery) return true
-    setError('An instructor session is still active. Rejoin it and use End session if you want to stop it.')
-    return false
+    setError(null)
+    try {
+      // This is an explicit instructor choice, unlike a refresh or lost connection.
+      // End the existing room at the authority first so connected candidates are
+      // notified and cannot continue to use the previous invitation key.
+      await repository.ensureIdentity()
+      const row = await repository.fetchSession(recovery.sessionId)
+      if (row.status !== 'ended' && !sessionExpired(row)) {
+        const ended = await repository.updateSession(row.id, { status: 'ended' } as Partial<TSession>)
+        if (ended.id !== recovery.sessionId || ended.status !== 'ended') {
+          throw new Error('The previous session was not ended by the server.')
+        }
+      }
+      // Never clear recovery first: on a network/auth/permission error the
+      // instructor must still be able to retry or continue the existing room.
+      clearInstructorRecoveryStorage(storageNamespace)
+      setRecoverableInstructor(null)
+      setInstructorSessionRecovery(null)
+      setConnection('idle')
+      return true
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to end the previous session.')
+      return false
+    }
   }
 
   const startInstructor = async (input: TCreateInput) => {
@@ -391,10 +413,7 @@ export function useSharedTeachingSession<TSession extends SharedTeachingSessionR
         sessionId: found.sessionId,
         sessionKey: found.sessionKey,
         continueSession: async () => Boolean(await resumeInstructor(found.sessionId)),
-        startNewSession: async () => {
-          setError('End the active instructor session explicitly before starting another.')
-          return false
-        },
+        startNewSession: () => retireRecoverableInstructor(found),
       })
     }
 
