@@ -12,7 +12,7 @@ import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/
 import { SimulationHardwareControls } from '../components/SimulationHardwareControls'
 import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
 import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from '../components/SimulationDiagnosticsMenu'
-import { SimulationWorkspaceShell } from '../components/SimulationWorkspaceShell'
+import { SimulationWorkspaceShell, useSimulationWorkspaceView } from '../components/SimulationWorkspaceShell'
 import { SimulationConsoleShell } from '../components/SimulationConsoleShell'
 import { useSimulationDisplayControls } from '../components/useSimulationDisplayControls'
 import { useScreenWakeLock } from '../useScreenWakeLock'
@@ -147,6 +147,18 @@ function ValuePanel({ label, value, unit, detail, className }: { label: string; 
       {detail && <div className="edumon-value-detail">{detail}</div>}
     </div>
   )
+}
+
+/** The monitor footer is still mounted as display state in Instructor View.
+ * Do not mount two live ventilator controllers against one patient runtime.
+ */
+function EdumonMonitorVentilatorStrip({ patientState, onPatientStateChange }: {
+  patientState: MonitorPatientState
+  onPatientStateChange: (state: MonitorPatientState) => void
+}) {
+  const view = useSimulationWorkspaceView()
+  if (view !== 'monitor') return null
+  return <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} />
 }
 
 function EdumonLanding() {
@@ -654,7 +666,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             {module.auxiliaryMonitors.map((item) => (
               <button key={item.id} type="button" className="edumon-control-tile" onClick={() => setAuxiliaryMonitor(item.id)}><span>Extra monitor</span><strong>{item.shortLabel}</strong><small>{item.description}</small></button>
             ))}
-            <EdumonVentilatorControl patientState={effectivePatientState} onPatientStateChange={setPatientState} />
+            <EdumonMonitorVentilatorStrip patientState={effectivePatientState} onPatientStateChange={setPatientState} />
           </div>}
         />
 
