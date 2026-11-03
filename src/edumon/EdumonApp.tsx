@@ -617,6 +617,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       />
 
       <SimulationWorkspaceShell
+        // Temporarily disable the Anaesth Monitor/Instructor selector. The shared
+        // shell also forces stale ?view=instructor links back to Monitor.
+        instructorVisible={module.id !== 'ana'}
         workspaceClassName="edumon-workspace"
         switcherClassName="edumon-mobile-workspace-switcher"
         displayPageClassName="mobile-page-monitor"

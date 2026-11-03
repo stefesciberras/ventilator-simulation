@@ -60,3 +60,6 @@ assert(!ventilator.includes('MutationObserver') && !ventilator.includes('createP
 assert(desktopLayout.includes('@media (min-width: 1181px)'), 'Anaesth desktop layout must account for authenticated instructor view switcher')
 assert(desktopLayout.includes('.edumon-app-shell > .edumon-workspace') && desktopLayout.includes('flex: 1 1 0;') && desktopLayout.includes('height: auto;'), 'Anaesth desktop workspace must consume remaining viewport height instead of being clipped by extra switcher')
 assert(desktopLayout.includes('.edumon-app-shell > .simulation-view-switcher'), 'desktop view switcher must be included in flex height budgeting')
+
+// Temporarily keep Anaesth in Monitor view while the desktop view-selector placement is reviewed.
+assert(app.includes("instructorVisible={module.id !== 'ana'}"), 'Anaesth must temporarily hide Monitor/Instructor view switcher')
