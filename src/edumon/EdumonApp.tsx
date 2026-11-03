@@ -740,7 +740,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           <section className="candidate-session-body">
             <h3>Self-directed learning</h3>
             <p>Mode: Self-directed learning</p>
-            <p>Run: {selfDirected.run?.runId ?? '—'}</p>
+            <p>Assignment key: <strong>{selfDirected.run?.accessCode ?? '—'}</strong></p>
+            <p>Scenario: {selfDirected.run?.title ?? '—'}</p>
             <p>This scenario progresses without a live instructor.</p>
           </section>
         ) : sessionPanel}
