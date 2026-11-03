@@ -17,6 +17,7 @@ const workspace = read('src/edumon/EdumonWorkspacePanel.tsx')
 const capnography = read('src/edumon/EdumonCapnographySurface.tsx')
 const temperature = read('src/edumon/EdumonTemperatureSurface.tsx')
 const ventilator = read('src/edumon/EdumonVentilatorControl.tsx')
+const desktopLayout = read('src/edumon/edumon-console-parity.css')
 const workspaceShell = read('src/components/SimulationWorkspaceShell.tsx')
 
 assert(app.includes('function EdumonMonitor({ module }'), 'Ana and ICU must continue to render through one shared EdumonMonitor composition')
@@ -55,3 +56,7 @@ assert(app.includes("if (view !== 'monitor') return null"), 'instructor view mus
 assert(workspace.includes("view === 'instructor'") && workspace.includes('<EdumonVentilatorControl'), 'instructor view must mount the same ventilator controls explicitly')
 assert(workspaceShell.includes('SimulationWorkspaceViewContext.Provider value={effectiveView}'), 'workspace must supply the actual rendered view to descendants')
 assert(!ventilator.includes('MutationObserver') && !ventilator.includes('createPortal'), 'ventilator strip must not rely on fragile DOM portal discovery')
+
+assert(desktopLayout.includes('@media (min-width: 1181px)'), 'Anaesth desktop layout must account for authenticated instructor view switcher')
+assert(desktopLayout.includes('.edumon-app-shell > .edumon-workspace') && desktopLayout.includes('flex: 1 1 0;') && desktopLayout.includes('height: auto;'), 'Anaesth desktop workspace must consume remaining viewport height instead of being clipped by extra switcher')
+assert(desktopLayout.includes('.edumon-app-shell > .simulation-view-switcher'), 'desktop view switcher must be included in flex height budgeting')

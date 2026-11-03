@@ -10,6 +10,29 @@
   align-items: stretch;
 }
 
+/* Desktop: the Monitor/Instructor view switcher is inserted only for signed-in
+   instructors. A fixed viewport subtraction ignored its height and clipped
+   the bottom Anaesth ventilator settings outside the visible console. Let
+   the top bar and switcher consume their actual height, and give the
+   workspace the remaining viewport space. */
+@media (min-width: 1181px) {
+  .edumon-app-shell {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .edumon-app-shell > .simulation-topbar,
+  .edumon-app-shell > .simulation-view-switcher {
+    flex: 0 0 auto;
+  }
+
+  .edumon-app-shell > .edumon-workspace {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+  }
+}
+
 .edumon-console {
   min-height: 0;
   height: 100%;
