@@ -345,6 +345,9 @@ export function createProductTeachingSessionRepository<TState>(productId: Simula
     const role = roleOverride ?? documentRole
     if (!url || role === 'standalone') return
     if (localTransport && localTransportRole !== role) disconnectLocalTransport()
+    // Role changes invalidate the previous transport-owned row cache.
+    localSessionRow = row
+    localProductRows.set(row.id, row as ProductTeachingSessionRow<unknown>)
     if (role === 'instructor') {
       localInstructorPatchHandlers.set(row.id, (patch, mutationId) => (
         acceptLocalInstructorPatch(patch, mutationId) as ProductSimulationPatchResult<unknown> | null
