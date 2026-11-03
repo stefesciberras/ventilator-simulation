@@ -189,6 +189,9 @@ export function useProductTeachingSession<TState>({
     getMemberTelemetry: () => ({ state: stateRef.current }),
     host: {
       onSessionRow: (row, nextRole, source, force) => {
+        // Explicit lifecycle role is available before React publishes the DOM role.
+        // After instructor refresh, re-establish the local authority immediately.
+        repository.connectLocalForRole(row, nextRole)
         const rowRuntimeMode = stateRuntimeMode(row.product_state) ?? 'teaching'
         if (rowRuntimeMode === 'simulation') {
           canonicalStateRef.current = row.product_state
