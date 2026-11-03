@@ -68,6 +68,10 @@ const hasConventionalMandatoryTiming = (mode: EdumonVentilatorMode) => mode !== 
 const ieRatioFrom = (state: VentilatorState) => clamp(cycleTime(state.rate) / Math.max(state.inspiratoryTime, 0.2) - 1, MIN_IE, MAX_IE)
 
 function findVisibleFooterHost(): HTMLElement | null {
+  const instructorHosts = Array.from(document.querySelectorAll<HTMLElement>('.shared-instructor-console-controls .edumon-instructor-ventilator-host'))
+  const visibleInstructorHost = instructorHosts.find((candidate) => candidate.isConnected && candidate.getClientRects().length > 0)
+  if (visibleInstructorHost) return visibleInstructorHost
+
   const candidates = Array.from(document.querySelectorAll<HTMLElement>('.simulation-console-footer .edumon-control-strip'))
   return candidates.find((candidate) => candidate.isConnected && candidate.getClientRects().length > 0)
     ?? candidates.find((candidate) => candidate.isConnected)
@@ -161,7 +165,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     const nextPatient: MonitorPatientState = {
       ...baseline,
       respiratory: { ...(baseline.respiratory ?? {}) },
-      anaestheticGases: undefined,
+      anaestheticGases: { fiSevoPercent: 0 },
       anaestheticPhysiology: { ...(baseline.anaestheticPhysiology ?? {}) },
     }
     patientRef.current = nextPatient
