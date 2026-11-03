@@ -14,7 +14,7 @@ const ventilatorCss = read('src/edumon/edumon-ventilator.css')
 const productSession = read('src/teaching/session/productSession.ts')
 
 assert(workspace.includes('edumon-instructor-ventilator-host'), 'Instructor View must expose an explicit ventilator host')
-assert(ventilator.includes(".shared-instructor-console-controls .edumon-instructor-ventilator-host"), 'ventilator strip must target the visible Instructor View host')
+assert(workspace.includes("view === 'instructor'") && workspace.includes('<EdumonVentilatorControl'), 'ventilator strip must mount directly inside Instructor View controls')
 assert(ventilatorCss.includes('.shared-instructor-console-controls .edumon-instructor-ventilator-host'), 'Instructor View ventilator host must be visible and styled')
 
 assert(ventilator.includes('anaestheticGases: { fiSevoPercent: 0 }'), 'Reset Simulation must write FiSevo zero into authoritative patient state')

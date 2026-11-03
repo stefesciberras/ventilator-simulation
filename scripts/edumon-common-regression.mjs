@@ -16,6 +16,8 @@ const respiratoryRuntime = read('src/edumon/respiratoryPhysiology.ts')
 const workspace = read('src/edumon/EdumonWorkspacePanel.tsx')
 const capnography = read('src/edumon/EdumonCapnographySurface.tsx')
 const temperature = read('src/edumon/EdumonTemperatureSurface.tsx')
+const ventilator = read('src/edumon/EdumonVentilatorControl.tsx')
+const workspaceShell = read('src/components/SimulationWorkspaceShell.tsx')
 
 assert(app.includes('function EdumonMonitor({ module }'), 'Ana and ICU must continue to render through one shared EdumonMonitor composition')
 assert(app.includes('return <EdumonMonitor module={EDUMON_MODULES[moduleId]} />'), 'module routing must select configuration, not a separate product monitor implementation')
@@ -46,3 +48,10 @@ assert(!fs.existsSync('src/edumon/ana/capnographyEngine.ts'), 'EDUMON-Ana must n
 assert(!fs.existsSync('src/edumon/icu/capnographyEngine.ts'), 'EDUMON-ICU must not grow a duplicate capnography engine')
 
 if (!process.exitCode) console.log('EDUMON Ana/ICU common monitor architecture regression checks passed')
+
+// The monitor strip must remain visible with or without authenticated instructor tools.
+assert(app.includes('<EdumonMonitorVentilatorStrip patientState={effectivePatientState} onPatientStateChange={setPatientState} />'), 'monitor footer must render ventilator controls directly')
+assert(app.includes("if (view !== 'monitor') return null"), 'instructor view must not mount a second monitor ventilator controller')
+assert(workspace.includes("view === 'instructor'") && workspace.includes('<EdumonVentilatorControl'), 'instructor view must mount the same ventilator controls explicitly')
+assert(workspaceShell.includes('SimulationWorkspaceViewContext.Provider value={effectiveView}'), 'workspace must supply the actual rendered view to descendants')
+assert(!ventilator.includes('MutationObserver') && !ventilator.includes('createPortal'), 'ventilator strip must not rely on fragile DOM portal discovery')

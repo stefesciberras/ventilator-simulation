@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import type { VentilatorMode } from '../simulation/types'
 import { InteractiveSettingControls, type InteractiveSettingSpec } from '../components/InteractiveSettingControls'
 import { resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
@@ -66,17 +65,6 @@ const isSimvMode = (mode: EdumonVentilatorMode) => mode === 'SIMV-VC' || mode ==
 const usesTidalVolume = (mode: EdumonVentilatorMode) => isVolumeMandatoryMode(mode) || mode === 'VG-PC'
 const hasConventionalMandatoryTiming = (mode: EdumonVentilatorMode) => mode !== 'MANUAL' && mode !== 'PSV'
 const ieRatioFrom = (state: VentilatorState) => clamp(cycleTime(state.rate) / Math.max(state.inspiratoryTime, 0.2) - 1, MIN_IE, MAX_IE)
-
-function findVisibleFooterHost(): HTMLElement | null {
-  const instructorHosts = Array.from(document.querySelectorAll<HTMLElement>('.shared-instructor-console-controls .edumon-instructor-ventilator-host'))
-  const visibleInstructorHost = instructorHosts.find((candidate) => candidate.isConnected && candidate.getClientRects().length > 0)
-  if (visibleInstructorHost) return visibleInstructorHost
-
-  const candidates = Array.from(document.querySelectorAll<HTMLElement>('.simulation-console-footer .edumon-control-strip'))
-  return candidates.find((candidate) => candidate.isConnected && candidate.getClientRects().length > 0)
-    ?? candidates.find((candidate) => candidate.isConnected)
-    ?? null
-}
 
 function ventilatorFromRespiratory(respiratory: MonitorRespiratorySettings, current?: VentilatorState): VentilatorState {
   return {
@@ -156,7 +144,6 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
   const patientRef = useRef(patientState)
   patientRef.current = patientState
 
-  const [host, setHost] = useState<HTMLElement | null>(null)
   const [ventilator, setVentilator] = useState<VentilatorState>(() => ventilatorFromRespiratory(respiratory))
 
   useEffect(() => registerSimulationResetHandler(() => {
@@ -173,27 +160,6 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     setVentilator(nextVentilator)
     onPatientStateChange(nextPatient)
   }), [onPatientStateChange])
-
-  useEffect(() => {
-    const findHost = () => setHost((current) => {
-      const next = findVisibleFooterHost()
-      return current === next ? current : next
-    })
-    findHost()
-    const observer = new MutationObserver(findHost)
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
-    window.addEventListener('resize', findHost)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', findHost)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!host) return
-    host.classList.add('edumon-control-strip-with-ventilator')
-    return () => host.classList.remove('edumon-control-strip-with-ventilator')
-  }, [host])
 
   useEffect(() => {
     const next = ventilatorFromRespiratory(respiratory, ventilator)
@@ -305,9 +271,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     [respiratory.complianceMlPerCmH2O, respiratory.spontaneousRespiratoryRate, respiratory.spontaneousTidalVolumeMl, ventilator],
   )
 
-  if (!host) return null
-
-  return createPortal(
+  return (
     <section className="edumon-ventilator-row" aria-label="Ventilator settings and monitoring">
       <div className="edumon-ventilator-controls">
         <label className="edumon-ventilator-mode" title={disabled ? 'Ventilator mode controlled by instructor' : 'Change ventilation mode'}>
@@ -333,7 +297,6 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
         <div><span>Min Vent</span><strong>{monitoring.minuteVentilationLMin.toFixed(1)}</strong><small>L/min</small></div>
         <div><span>Peak Press</span><strong>{Math.round(monitoring.peakPressureCmH2O)}</strong><small>cmH₂O</small></div>
       </div>
-    </section>,
-    host,
+    </section>
   )
 }

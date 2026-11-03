@@ -6,12 +6,13 @@ import { SecondaryMonitorSurface } from '../components/SecondaryMonitorSurface'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonTopBar, type EdumonSimulationSpeed } from './EdumonTopBar'
 import { EdumonWorkspacePanel } from './EdumonWorkspacePanel'
+import { EdumonVentilatorControl } from './EdumonVentilatorControl'
 import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type EdumonModuleDefinition } from './modules'
 import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
 import { SimulationHardwareControls } from '../components/SimulationHardwareControls'
 import { SimulationAboutDialog } from '../components/SimulationAboutDialog'
 import { SimulationDiagnosticsMenu, type SimulationDiagnosticAction } from '../components/SimulationDiagnosticsMenu'
-import { SimulationWorkspaceShell } from '../components/SimulationWorkspaceShell'
+import { SimulationWorkspaceShell, useSimulationWorkspaceView } from '../components/SimulationWorkspaceShell'
 import { SimulationConsoleShell } from '../components/SimulationConsoleShell'
 import { useSimulationDisplayControls } from '../components/useSimulationDisplayControls'
 import { useScreenWakeLock } from '../useScreenWakeLock'
@@ -146,6 +147,18 @@ function ValuePanel({ label, value, unit, detail, className }: { label: string; 
       {detail && <div className="edumon-value-detail">{detail}</div>}
     </div>
   )
+}
+
+/** The monitor footer is still mounted as display state in Instructor View.
+ * Do not mount two live ventilator controllers against one patient runtime.
+ */
+function EdumonMonitorVentilatorStrip({ patientState, onPatientStateChange }: {
+  patientState: MonitorPatientState
+  onPatientStateChange: (state: MonitorPatientState) => void
+}) {
+  const view = useSimulationWorkspaceView()
+  if (view !== 'monitor') return null
+  return <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} />
 }
 
 function EdumonLanding() {
@@ -648,11 +661,12 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             <TeachingLaserPointerSurface role={teachingSession.role} sessionId={teachingSession.session?.id ?? null} enabled={laserActive} onEnabledChange={setLaserActive} />
             <EdumonAlarmLimitsDialog open={alarmLimitsOpen} limits={alarmLimits} disabled={alarmController.candidateLocked} contained onChange={setAlarmLimits} onClose={() => setAlarmLimitsOpen(false)} />
           </div>}
-          footer={<div className="edumon-control-strip" aria-label="Monitor controls">
+          footer={<div className="edumon-control-strip edumon-control-strip-with-ventilator" aria-label="Monitor controls">
             <button type="button" className="edumon-control-tile disabled" disabled title="NIBP will be enabled in a later EDUMON milestone"><span>NIBP</span><strong>Inactive</strong><small>Manual / cycle</small></button>
             {module.auxiliaryMonitors.map((item) => (
               <button key={item.id} type="button" className="edumon-control-tile" onClick={() => setAuxiliaryMonitor(item.id)}><span>Extra monitor</span><strong>{item.shortLabel}</strong><small>{item.description}</small></button>
             ))}
+            <EdumonMonitorVentilatorStrip patientState={effectivePatientState} onPatientStateChange={setPatientState} />
           </div>}
         />
 

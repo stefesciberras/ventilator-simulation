@@ -1,8 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react'
 import { readParticipantAccessContextFromDocument } from '../core/sessionAccessPolicy'
 import './InstructorConsoleView.css'
 
 export type SimulationViewMode = 'monitor' | 'instructor'
+
+const SimulationWorkspaceViewContext = createContext<SimulationViewMode>('monitor')
+
+/** The rendered view, not the URL or instructor login state. */
+export function useSimulationWorkspaceView(): SimulationViewMode {
+  return useContext(SimulationWorkspaceViewContext)
+}
 
 interface SimulationWorkspaceShellProps {
   display: ReactNode
@@ -140,7 +147,7 @@ export function SimulationWorkspaceShell({
   const effectivePage = controlsVisible ? page : 'display'
   const effectiveView = view === 'instructor' && effectiveInstructorVisible ? 'instructor' : 'monitor'
 
-  return <>
+  return <SimulationWorkspaceViewContext.Provider value={effectiveView}>
     {effectiveInstructorVisible && (
       <nav className="simulation-view-switcher" aria-label="Simulation view">
         <button type="button" className={effectiveView === 'monitor' ? 'active' : ''} onClick={() => selectView('monitor')} aria-pressed={effectiveView === 'monitor'}>Monitor</button>
@@ -184,5 +191,5 @@ export function SimulationWorkspaceShell({
         </div>
       </>
     )}
-  </>
+  </SimulationWorkspaceViewContext.Provider>
 }
