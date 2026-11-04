@@ -10,6 +10,7 @@ type SessionV2Snapshot = {
     anaestheticGases?: { fiSevoPercent?: number }
   } } }>
 }
+type ClockControl = { running: boolean; speed: number }
 type Status = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
 /**
@@ -32,6 +33,7 @@ export function AnaesthSessionV2Preview({
   const [selectedAction, setSelectedAction] = useState('propofol')
   const [verifiedRole, setVerifiedRole] = useState<'instructor' | 'candidate' | null>(null)
   const [resetPending, setResetPending] = useState(false)
+  const [clock, setClock] = useState<ClockControl>({ running: false, speed: 1 })
   const [newHeartRate, setNewHeartRate] = useState(90)
   const [newFiSevo, setNewFiSevo] = useState(2)
   const socketRef = useRef<WebSocket | null>(null)
@@ -68,6 +70,7 @@ export function AnaesthSessionV2Preview({
     setActionLibrary(null)
     setVerifiedRole(null)
     setResetPending(false)
+    setClock({ running: false, speed: 1 })
     setStatus('connecting')
     setMessage('Connecting to experimental Cloudflare session authority...')
     const url = endpoint.trim()
@@ -123,10 +126,15 @@ export function AnaesthSessionV2Preview({
           setStatus('connected')
           setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
+          if (packet.clock) setClock(packet.clock as ClockControl)
           receiveSnapshot(packet.snapshot)
         } else if (packet.type === 'snapshot') {
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
+          if (packet.clock) setClock(packet.clock as ClockControl)
           receiveSnapshot(packet.snapshot)
+        } else if (packet.type === 'clock-receipt') {
+          if (packet.clock) setClock(packet.clock as ClockControl)
+          setMessage(packet.accepted ? 'Authoritative simulation clock updated.' : 'Clock update failed.')
         } else if (packet.type === 'receipt') {
           if (typeof packet.requestId === 'string' && packet.requestId.startsWith('reset-')) {
             setResetPending(false)
@@ -191,6 +199,7 @@ export function AnaesthSessionV2Preview({
     setActionLibrary(null)
     setVerifiedRole(null)
     setResetPending(false)
+    setClock({ running: false, speed: 1 })
   }
   const command = (type: string, payload: object, requestPrefix = 'cmd') => {
     const socket = socketRef.current
@@ -201,6 +210,12 @@ export function AnaesthSessionV2Preview({
       command: { id: crypto.randomUUID(), epoch, runtimeId: 'main', type, payload },
     }))
     return true
+  }
+  const controlClock = (running: boolean, speed = clock.speed) => {
+    const socket = socketRef.current
+    if (verifiedRole !== 'instructor' || socket?.readyState !== WebSocket.OPEN) return
+    socket.send(JSON.stringify({ protocol: 2, type: 'clock.control',
+      requestId: `clock-${++sequenceRef.current}`, running, speed }))
   }
   const resetPatient = () => {
     if (verifiedRole !== 'instructor' || resetPending) return
@@ -228,7 +243,7 @@ export function AnaesthSessionV2Preview({
     <section style={{ border: '1px solid #8696a8', borderRadius: 8, padding: 12, margin: '8px 16px', maxWidth: 680 }}
       aria-label="Experimental Session Engine v2 preview">
       <strong>Session Engine v2 — experimental Cloudflare preview</strong>
-      <p style={{ fontSize: 12, margin: '6px 0' }}>Uses a checkpointed pilot of Anaesth ActionEffects and a limited monitor projection, not the complete physiology engine. Drug onset progresses with manual simulated-time advances (Relaxant default: 120 seconds); the preview does not automatically run simulation time. Do not use for clinical care or assessed simulation.</p>
+      <p style={{ fontSize: 12, margin: '6px 0' }}>Uses a checkpointed pilot of Anaesth ActionEffects and a limited monitor projection, not the complete physiology engine. Drug onset follows the authoritative clock when resumed (Relaxant default onset: 120 simulated seconds). Pause/resume and speed are instructor-only. Do not use for clinical care or assessed simulation.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
           onChange={event => setEndpoint(event.target.value)} disabled={status === 'connected'} /></label>
@@ -247,6 +262,7 @@ export function AnaesthSessionV2Preview({
         <span>HR {patient?.heartRate ?? '—'} bpm</span>
         <span>FiSevo {patient?.anaestheticGases?.fiSevoPercent ?? '—'}%</span>
         <span>Simulated time {actionRuntime?.simulationTime ?? 0}s</span>
+        <span>Clock: {clock.running ? 'Running' : 'Paused'} · {clock.speed}×</span>
         <span>Depth {patient?.anaestheticPhysiology?.depthOfAnaesthesia ?? '—'}</span>
         <span>Spontaneous RR {patient?.respiratory?.spontaneousRespiratoryRate?.toFixed(1) ?? '—'}/min</span>
         <label>HR <input type="number" min={0} max={240} value={newHeartRate}
@@ -264,13 +280,25 @@ export function AnaesthSessionV2Preview({
           <button type="button" onClick={() => command('action.invoke', { actionId: actionLibrary.actions.some(item => item.id === selectedAction) ? selectedAction : actionLibrary.actions[0]?.id })}
             disabled={!actionLibrary.actions.length}>Invoke selected action (experimental)</button>
         </>}
-        <button type="button" onClick={() => command('tick', { deltaMs: 1000 })}>Advance 1s (instructor)</button>
-        <button type="button" onClick={() => {
-          for (let i = 0; i < 10; i++) command('tick', { deltaMs: 1000 })
-        }}>Advance 10s (instructor)</button>
+        {verifiedRole === 'instructor' && <>
+          <button type="button" onClick={() => controlClock(!clock.running)}>
+            {clock.running ? 'Pause' : 'Resume'}
+          </button>
+          <label>Simulation speed <select aria-label="Simulation clock speed" value={clock.speed}
+            onChange={event => controlClock(clock.running, Number(event.target.value))}>
+            <option value={0.5}>0.5×</option>
+            <option value={1}>1×</option>
+            <option value={2}>2×</option>
+            <option value={4}>4×</option>
+          </select></label>
+          <button type="button" disabled={clock.running} onClick={() => command('tick', { deltaMs: 1000 })}>Step +1s</button>
+          <button type="button" disabled={clock.running} onClick={() => {
+            for (let i = 0; i < 10; i++) command('tick', { deltaMs: 1000 })
+          }}>Step +10s</button>
+        </>}
         <span>Active effects {actionRuntime?.activeEffects?.length ?? 0}</span>
         <span>Neuromuscular block (v2 model): {runtime?.effectIndicators?.neuromuscularBlockPercent ?? '—'}%</span>
-        {relaxantEffect && <span>Relaxant onset: {Math.round(relaxantElapsedSeconds ?? 0)} / {relaxantEffect.effect.onsetSeconds}s simulated; advance simulation time to see its effect.</span>}
+        {relaxantEffect && <span>Relaxant onset: {Math.round(relaxantElapsedSeconds ?? 0)} / {relaxantEffect.effect.onsetSeconds}s simulated; the running clock advances its effect.</span>}
         {verifiedRole === 'instructor' && <>
           <button type="button" onClick={resetPatient} disabled={resetPending}>
             {resetPending ? 'Resetting…' : 'Reset Patient'}
