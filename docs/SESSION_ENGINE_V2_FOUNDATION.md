@@ -44,3 +44,11 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - A competing host cannot take over until the prior lease expires. Re-acquisition requires trusted instructor identity and creates a newer fenced epoch.
 - `scripts/session-v2-authority-regression.mjs` tests double-writer attempts, expiry, recovery and persistence-failure rejection.
 - Browser IndexedDB offers **single-origin** transaction atomicity only. An authenticated LAN/server coordinator is still required for multiple devices; this contract is NOT live in the app.
+
+
+## LAN transport experiment (v1.3.0.3)
+- `src/session-v2/lanGateway.mjs` handles a separate v2 WebSocket protocol with instructor/candidate authentication, request receipts, snapshots and resync.
+- `server/session-v2-lan-server.mjs` provides an opt-in local test host at `/loppjusim-v2` on loopback port 4174, with a fixed Anaesth test patient and credentials supplied by the server operator.
+- `scripts/session-v2-lan-regression.mjs` uses actual WebSocket clients to validate two-party parameter synchronization, command permission rejection, action deduplication and reconnect.
+- This is a demonstration boundary only: server memory is not restart durable, the browser simulator has not been connected, no production trusted identity provider has been installed, and the test server does not expose the production Drugs & Events action library.
+- Network security: use loopback by default. Cleartext WebSocket credentials on a LAN are unsuitable for Internet or untrusted-network deployment. Preserve the legacy v1 LAN server unchanged.
