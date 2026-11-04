@@ -2,6 +2,13 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.10 — 2026-11-04 (Cloudflare Worker API routing fix)
+- Bumped Vent and Anaesth/ITU application versions to **1.3.0.10**, leaving v1 runtime behaviour unchanged.
+- Confirmed Cloudflare SPA asset fallback intercepted `/api/session-v2/status` and returned index.html instead of JSON, preventing Worker diagnostics and WebSocket upgrade requests.
+- Set Wrangler `assets.run_worker_first` to `["/api/*"]` so Worker API endpoints execute before the static SPA fallback; normal React page and asset requests still use the existing SPA routing.
+- Added a CI regression enforcing Worker-first API routing, SPA fallback and the v2 Durable Object binding.
+- After deployment, `/api/session-v2/status` should respond with nonsecret JSON indicating readiness; live deployment and actual WebSocket connectivity must still be verified.
+
 ## 1.3.0.9 — 2026-11-04 (Cloudflare WebSocket handshake diagnostics)
 - Bumped Vent and Anaesth/ITU application versions to **1.3.0.9**. Existing production v1 sessions are unchanged.
 - Added a Cloudflare Worker readiness endpoint `GET /api/session-v2/status` returning only `ready` and nonsecret configuration reason; it never reveals tokens or credential-derived data.
