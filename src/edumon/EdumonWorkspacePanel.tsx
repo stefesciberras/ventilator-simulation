@@ -33,6 +33,8 @@ interface EdumonWorkspacePanelProps {
   candidateCount?: number
   patientControlsLocked?: boolean
   deviceControlsLocked?: boolean
+  /** Present only in experimental Session v2: canonical EtSevo, null until snapshot. */
+  v2VolatileState?: { etSevoPercent: number | null }
   sessionPanel?: ReactNode
   meanPressure: number | null
 }
@@ -52,6 +54,7 @@ export function EdumonWorkspacePanel({
   candidateCount = 0,
   patientControlsLocked = false,
   deviceControlsLocked = false,
+  v2VolatileState,
   sessionPanel,
 }: EdumonWorkspacePanelProps) {
   const view = useSimulationWorkspaceView()
@@ -332,7 +335,7 @@ export function EdumonWorkspacePanel({
         </div>
       )}
       {teachingHost.appId === 'anaesth' && (
-        <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={deviceControlsLocked} />
+        <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={deviceControlsLocked} v2VolatileState={v2VolatileState} />
       )}
       <SimulationControlFramework
         activeTab={tab}

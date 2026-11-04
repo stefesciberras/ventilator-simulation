@@ -124,3 +124,10 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - The experimental preview distinguishes canonical `runtime.state.patient.anaestheticGases.fiSevoPercent` (authoritative) from the local FiSevo *draft*. On welcome or a new canonical FiSevo value (including reset), the draft is synchronized; repeated clock updates do not replace an unsent draft.
 - The preview displays `runtime.state.gasRuntime.etSevoPercent` only if it exists. Older checkpoints without a recorded end-tidal value must show an explicit missing-state indication, not a misleading zero.
 - The DO checkpoint persists canonical FiSevo, nonzero EtSevo and simulation time; regression verifies reconstruction/welcome snapshot. If a genuinely old room was created before EtSevo became checkpointed, its historical uptake cannot be recovered: use **New Session** to start a clean test.
+
+
+## v1.3.0.18 — avoid dual EtSevo authorities
+- In the opt-in Anaesth v2 preview, `AnaesthSessionV2Preview` publishes the checkpoint's EtSevo to `EdumonApp`; `EdumonWorkspacePanel` passes it to `EdumonAnaGasControl`. The real gas footer and MAC therefore show the same authoritative EtSevo as the preview.
+- The v1 `requestAnimationFrame` volatile uptake/depth controller must **not** run when `v2VolatileState` is supplied, including while reconnecting; locally administered FiSevo settings are disabled in this mode so v2 and v1 cannot independently own volatile state.
+- The canonical reset/recovery engine and server state are unchanged: on v2 reset EtSevo = 0, FiSevo = 0; on reconnect EtSevo and FiSevo are read from the same checkpoint. Normal sessions omit `v2VolatileState` and keep full v1 local physiology.
+- This resolves gas-footer authority only. BIS, TOF and other local device states in experimental v2 are not yet synchronized; they require separate authoritative integration.
