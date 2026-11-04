@@ -85,3 +85,12 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - The session WebSocket carries *public action metadata* (name/id/kind/access/mode) but no secrets, effect definitions, or user-supplied trusted parameters. Browser preview displays the pinned list and invokes only an ID.
 - A configured Supabase fetch/validation failure aborts new room creation rather than switching to a different drug catalogue. Supabase changes therefore apply only to newly created session IDs.
 - Current action catalogue version denotes the serialization schema (1), not a global published release hash. Global curriculum versioning and proper per-user authentication still require future work.
+
+
+## v1.3.0.13 — Instructor reset and new-session controls
+- Anaesth v2 preview shows Reset Patient and New Session only after a Worker `welcome.role === 'instructor'`; do not rely on the browser for authorization. The engine still enforces authority restrictions.
+- Reset Patient sends `reset` to the existing v2 reducer. In the shared session modes it resets `session.clockMs` alongside the adapter baseline and clears ActionRuntime effects; the Durable Object atomically persists and broadcasts the result. In Teaching mode, resetting one candidate runtime must not rewind a global/shared clock.
+- New Session creates a crypto-random `ana-<UUID>` room, automatically connects the instructor to the new Durable Object, and leaves the old room and pinned library unchanged. The instructor must share the new ID with candidates for their manual reconnect.
+- Both operations ask for confirmation in the experimental UI; no new server, secrets or Supabase schema are required.
+
+- The experimental preview now displays a recomputed neuromuscular block percentage and Relaxant onset elapsed/total simulated seconds. This is a diagnostic of v2 effects, not a measured TOF count or full clinical response; the manual simulation clock must advance for onset to occur.

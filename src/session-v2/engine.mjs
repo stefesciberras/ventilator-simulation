@@ -283,6 +283,12 @@ export class SessionEngineV2 {
     if (type === 'end') this.#session.status = 'ended'
     else {
       this.#runtimes.set(runtimeId, { id: runtimeId, revision: runtime.revision + 1, state: copy(nextState) })
+      // Reset of a shared session resets the authoritative clock too. The
+      // adapter restores simulationTime=0 and removes all active effects;
+      // keeping the old clockMs here would desynchronize recovery/UI.
+      // Teaching has independent candidate runtimes, so resetting one
+      // candidate must not rewind a clock shared with other candidates.
+      if (type === 'reset' && this.#session.mode !== 'teaching') this.#session.clockMs = 0
       if (type === 'tick' && nextState !== runtime.state &&
           (nextState?.actionRuntime?.simulationTime !== runtime.state?.actionRuntime?.simulationTime ||
             !runtime.state?.actionRuntime)) this.#session.clockMs += payload.deltaMs
