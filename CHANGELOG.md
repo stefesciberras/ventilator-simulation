@@ -9,6 +9,7 @@ This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuS
 - **New Session:** generates a unique `ana-<UUID>` session ID, disconnects the old preview socket and automatically connects the instructor to the new Durable Object room. This room starts with clean defaults and the latest configured action catalogue. The previous room is retained, and candidates must join the **new** session ID themselves.
 - The Worker includes the verified connection role in the `welcome` packet for UI gating; server-side permission checks remain authoritative. Candidate reset commands are still rejected even if submitted outside the UI.
 - Expanded Cloudflare Durable Object regressions to cover rejected candidate reset, accepted instructor reset, cleared drugs, zeroed clock, synchronized snapshots, checkpoint recovery after reset, and independent new-room creation.
+- Added read-only neuromuscular block percentage and Relaxant simulated onset indicators to clarify why a newly invoked 120-second onset drug has no immediate monitor effect. Includes candidate invocation and reset regressions.
 - Experimental v2 only; not a full simulator physiology reset or automatic candidate migration across sessions.
 
 ## 1.3.0.12 — 2026-11-04 (session-pinned Anaesth ActionDefinitions)
