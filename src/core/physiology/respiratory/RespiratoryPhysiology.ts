@@ -1,3 +1,5 @@
+import { advanceAlveolarCo2 } from './sharedCo2Kinetics.mjs'
+
 export interface RespiratoryPhysiologyInput {
   sex: 'male' | 'female'
   heightCm: number
@@ -153,16 +155,16 @@ export function stepRespiratoryPhysiology(
   const co2Production = Math.max(input.co2ProductionMlMin, 0)
   const oxygenConsumption = Math.max(input.oxygenConsumptionMlMin, 0)
 
-  const pbw = predictedBodyWeightKg(input.sex, input.heightCm)
-  const co2BufferCapacityL = Math.max(15, pbw * 0.55)
-  const eliminatedCo2MlMin = ventilation.alveolarVentilationLMin * previousState.alveolarCo2MmHg / 0.863
-  const netCo2MlMin = co2Production - eliminatedCo2MlMin
-  const changeMmHgPerMinute = 0.863 * netCo2MlMin / co2BufferCapacityL
-  const alveolarCo2MmHg = clamp(
-    previousState.alveolarCo2MmHg + (changeMmHgPerMinute / 60) * dt,
-    0,
-    150,
-  )
+  const { alveolarCo2MmHg } = advanceAlveolarCo2({
+    previousAlveolarCo2MmHg: previousState.alveolarCo2MmHg,
+    respiratoryRate: input.respiratoryRate,
+    tidalVolumeMl: input.tidalVolumeMl,
+    deadSpaceMl: input.deadSpaceMl,
+    co2ProductionMlMin: co2Production,
+    sex: input.sex,
+    heightCm: input.heightCm,
+    deltaSeconds: dt,
+  })
 
   const frcL = clamp(Math.max(input.frcMl, 500) / 1000, 0.5, 8)
   const inspiredOxygenFraction = clamp(input.fio2, 0.21, 1)
