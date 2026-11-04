@@ -123,6 +123,10 @@ export function projectAnaesthV2Monitor(state) {
   const bounded = applySharedEdumonActionPhysiology(baseline, resolve)
   return {
     ...bounded,
+    // v2 monitor values are a read-only projection of checkpointed oxygen
+    // kinetics. Keep the original instructor-set SpO2 baseline unchanged.
+    spo2: state.respiratoryRuntime?.spo2Percent ?? bounded.spo2,
+    authoritativeV2Spo2: state.respiratoryRuntime?.spo2Percent ?? bounded.spo2,
     anaestheticPhysiology: {
       ...bounded.anaestheticPhysiology,
       depthOfAnaesthesia: sharedAnaestheticDepth(baseline, resolve),
