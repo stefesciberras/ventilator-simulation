@@ -152,10 +152,19 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       const resolve = (target, base) => resolveV2ActionNumber(withEvent.actionRuntime, target, base)
       const effective = applySharedEdumonActionPhysiology(withEvent.patient, resolve)
       const respiratory = effective.respiratory
-      const mechanical = projectBronchospasmVentilation(respiratory)
-      const pressureControlled = ['PC-AC','SIMV-PC','PSV'].includes(respiratory.ventilatorMode)
-      const observedRespiratory = pressureControlled
-        ? { ...respiratory, tidalVolumeMl: mechanical.tidalVolumeMl } : respiratory
+      const mode = respiratory.ventilatorMode ?? 'MANUAL'
+      const mandatory = !['MANUAL','PSV'].includes(mode)
+      // In controlled modes, the device set rate remains authoritative even
+      // if a relaxant suppresses spontaneous breathing. Measured delivery is
+      // a separate output and must never overwrite device settings.
+      const controlled = mandatory ? {
+        ...respiratory,
+        respiratoryRate: respiratory.ventilatorSetRate ?? respiratory.respiratoryRate,
+      } : respiratory
+      const mechanical = projectBronchospasmVentilation(controlled)
+      const observedRespiratory = {
+        ...controlled, tidalVolumeMl: mechanical.tidalVolumeMl,
+      }
       const co2 = advanceAlveolarCo2({
         previousAlveolarCo2MmHg: state.respiratoryRuntime?.alveolarCo2MmHg ?? 40,
         respiratoryRate: observedRespiratory.respiratoryRate,
