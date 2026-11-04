@@ -11,6 +11,7 @@ import {
 } from './respiratoryPhysiology'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
 import type { SessionV2RespiratoryRuntime } from './AnaesthSessionV2Preview'
+import { v2WaveformPresentationTime } from './v2WaveformPresentation.mjs'
 import './edumon-capnography.css'
 
 interface CapnographySample {
@@ -203,6 +204,8 @@ export function EdumonCapnographySurface({ patientState, v2RespiratoryState }: {
   const [samples, setSamples] = useState<CapnographySample[]>([])
   const [etCo2, setEtCo2] = useState(runtimeRef.current?.output.estimatedEtCo2MmHg ?? 40)
   const [respiratoryRate, setRespiratoryRate] = useState(runtimeRef.current?.output.respiratoryRate ?? 12)
+  const v2ReadingRef = useRef<{ snapshot: SessionV2RespiratoryRuntime; receivedAtMs: number } | null>(null)
+  const v2LastSampleRef = useRef<number | null>(null)
 
   patientRef.current = patientState
 
@@ -292,31 +295,72 @@ export function EdumonCapnographySurface({ patientState, v2RespiratoryState }: {
 
   useEffect(() => {
     if (v2RespiratoryState === undefined) return
-    const { estimatedEtCo2MmHg: co2, respiratoryRate: rate,
-      simulationTime: time } = v2RespiratoryState
-    if (co2 == null || rate == null || time == null) {
+    // Record the real receipt time only when the canonical snapshot changes.
+    // The RAF loop interpolates the visual trace between 1 Hz server updates.
+    v2ReadingRef.current = { snapshot: v2RespiratoryState, receivedAtMs: performance.now() }
+    if (v2RespiratoryState.simulationTime == null) {
+      v2LastSampleRef.current = null
+      capnogramRef.current = { breathPhase: 0, elapsedExpiration: 0, airwayCo2: 0, expiratory: false }
+      historyRef.current = new RollingSignalHistory<CapnographySample>(TRACE_WINDOW_SECONDS)
       setSamples([])
-      return
     }
-    // Waveform *presentation* is local and bounded; the physiological
-    // EtCO2, RR and simulation time are owned by the v2 session authority.
-    // Rebuild the short trace on each canonical tick instead of integrating
-    // another browser-local CO2 model. A reconnect produces the same trace.
-    const respiratory = resolvedMonitorRespiratorySettings(patientRef.current)
-    const cap = { breathPhase: 0, elapsedExpiration: 0, airwayCo2: 0, expiratory: false }
-    const start = Math.max(0, time - TRACE_WINDOW_SECONDS)
-    const first = Math.floor(start / SAMPLE_INTERVAL) * SAMPLE_INTERVAL
-    const result: CapnographySample[] = []
-    const phaseSeconds = rate > 0 ? (first % (60 / rate)) : 0
-    cap.breathPhase = rate > 0 ? phaseSeconds * rate / 60 : 0
-    for (let sampleTime = first; sampleTime <= time + SAMPLE_INTERVAL * 0.1; sampleTime += SAMPLE_INTERVAL) {
-      result.push({ time: sampleTime, co2: advanceCapnogram(
-        cap, SAMPLE_INTERVAL, rate, co2, respiratory,
-      ) })
+  }, [v2RespiratoryState])
+
+  useEffect(() => {
+    if (v2RespiratoryState === undefined) return
+    let frame = 0
+    let lastPaintMs = 0
+    const draw = (nowMs: number) => {
+      frame = requestAnimationFrame(draw)
+      const latest = v2ReadingRef.current
+      if (!latest || waveformIsFrozen()) return
+      const { snapshot, receivedAtMs } = latest
+      const rate = snapshot.respiratoryRate
+      const co2 = snapshot.estimatedEtCo2MmHg
+      const time = v2WaveformPresentationTime({
+        simulationTime: snapshot.simulationTime, receivedAtMs, nowMs,
+        running: snapshot.clockRunning, speed: snapshot.clockSpeed,
+      })
+      if (time == null || co2 == null || rate == null) return
+
+      let previous = v2LastSampleRef.current
+      if (previous == null || time < previous - SAMPLE_INTERVAL) {
+        // Reconnect/reset: seed a short trace from canonical simulation time,
+        // never replay unbounded wall time or restart local gas exchange.
+        const start = Math.max(0, time - TRACE_WINDOW_SECONDS)
+        const initial = Math.floor(start / SAMPLE_INTERVAL) * SAMPLE_INTERVAL
+        const phase = rate > 0 ? (initial * rate / 60) % 1 : 0
+        capnogramRef.current = {
+          breathPhase: phase, elapsedExpiration: 0, airwayCo2: 0,
+          expiratory: rate > 0 && phase >= Math.min(1, 60 / rate * .45) / (60 / rate),
+        }
+        historyRef.current = new RollingSignalHistory<CapnographySample>(TRACE_WINDOW_SECONDS)
+        previous = initial - SAMPLE_INTERVAL
+      }
+      const respiratory = resolvedMonitorRespiratorySettings(patientRef.current)
+      // A fast 4x replay may need 200 samples/s; cap each RAF catch-up so
+      // disconnected/background tabs never block the main thread.
+      let steps = 0
+      while (previous + SAMPLE_INTERVAL <= time + 0.00001 && steps < 300) {
+        const sampleTime = previous + SAMPLE_INTERVAL
+        const value = advanceCapnogram(
+          capnogramRef.current, SAMPLE_INTERVAL, rate, co2, respiratory,
+        )
+        historyRef.current.append({ time: sampleTime, co2: value })
+        previous = sampleTime
+        steps++
+      }
+      v2LastSampleRef.current = previous
+      historyRef.current.trim(time)
+      // Render at up to 20 FPS while waveform samples are computed at 50 Hz.
+      if (nowMs - lastPaintMs >= 50 && steps > 0) {
+        lastPaintMs = nowMs
+        setSamples(historyRef.current.snapshot())
+      }
     }
-    setSamples(result)
-  }, [v2RespiratoryState?.estimatedEtCo2MmHg, v2RespiratoryState?.respiratoryRate,
-    v2RespiratoryState?.simulationTime, v2RespiratoryState === undefined])
+    frame = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(frame)
+  }, [v2RespiratoryState !== undefined])
 
   const displayedEtCo2 = v2RespiratoryState === undefined ? etCo2 : v2RespiratoryState.estimatedEtCo2MmHg
   const displayedRate = v2RespiratoryState === undefined ? respiratoryRate : v2RespiratoryState.respiratoryRate
