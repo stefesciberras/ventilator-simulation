@@ -26,7 +26,7 @@ globalThis.WebSocketPair = class {
   }
 }
 globalThis.Response = class {
-  constructor(body, init) { this.body = body; this.status = init.status; this.webSocket = init.webSocket }
+  constructor(body, init) { this.body = body; this.status = init.status; this.webSocket = init.webSocket; this.headers = new Headers(init.headers ?? {}) }
 }
 const state = () => ({
   storage: {
@@ -36,7 +36,8 @@ const state = () => ({
   blockConcurrencyWhile: fn => fn(),
 })
 const request = role => ({ headers: new Headers({ Upgrade: 'websocket',
-  'x-v2-session-id': 'cloud-regression', 'x-v2-verified-role': role }) })
+  'x-v2-session-id': 'cloud-regression', 'x-v2-verified-role': role,
+  'x-v2-selected-protocol': 'loppjusim-v2' }) })
 const flush = async () => {
   for (let i = 0; i < 12; i++) await new Promise(resolve => setTimeout(resolve, 0))
 }
@@ -46,8 +47,14 @@ const command = (client, requestId, id, epoch, type, payload = {}) => client.emi
 try {
   const room = new SessionV2Room(state(), {})
   assert.equal((await room.fetch(request('candidate'))).status, 409, 'candidate cannot create a room')
-  const instructor = (await room.fetch(request('instructor'))).webSocket
-  const candidate = (await room.fetch(request('candidate'))).webSocket
+  const instructorUpgrade = await room.fetch(request('instructor'))
+  assert.equal(instructorUpgrade.status, 101)
+  assert.equal(instructorUpgrade.headers.get('Sec-WebSocket-Protocol'), 'loppjusim-v2',
+    'the 101 response must negotiate an offered browser subprotocol')
+  const instructor = instructorUpgrade.webSocket
+  const candidateUpgrade = await room.fetch(request('candidate'))
+  assert.equal(candidateUpgrade.headers.get('Sec-WebSocket-Protocol'), 'loppjusim-v2')
+  const candidate = candidateUpgrade.webSocket
   assert.equal(instructor.messages[0].type, 'welcome')
   assert.equal(candidate.messages[0].snapshot.session.mode, 'simulation')
   let epoch = instructor.messages[0].snapshot.session.epoch
