@@ -29,6 +29,10 @@ const DEVICE_LIMITS = Object.freeze({
   ventilatorInspiratoryFlowLMin: [0, 200],
   ventilatorPressureControlCmH2O: [0, 80],
   ventilatorPressureSupportCmH2O: [0, 80],
+  ventilatorPlateauPercent: [0, 20],
+  ventilatorVolumeGuaranteePressureLimitCmH2O: [0, 80],
+  ventilatorTerminationSensitivityPercent: [5, 80],
+  ventilatorSimvSyncWindowPercent: [5, 75],
   fio2: [0.21, 1], peepCmH2O: [0, 35],
 })
 const INPUT_TYPES = new Set(['patient.parameter.set', 'device.parameter.set',
@@ -80,9 +84,12 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       }
       if (command.type === 'device.parameter.set') {
         validatePathValue(command.payload, DEVICE_LIMITS)
-        return { ...state, patient: { ...state.patient, respiratory: {
-          ...state.patient.respiratory, [command.payload.path]: command.payload.value,
-        } } }
+        const path = command.payload.path
+        const value = command.payload.value
+        const respiratory = { ...state.patient.respiratory, [path]: value }
+        // Preserve the distinction between set values and measured delivery.
+        // For mandatory modes the canonical mechanics tick will resolve VT/RR.
+        return { ...state, patient: { ...state.patient, respiratory } }
       }
       if (command.type === 'anaesth.gas.set') {
         if (!finite(command.payload?.fiSevoPercent, 0, 8)) throw new Error('Invalid FiSevo')
