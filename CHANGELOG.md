@@ -2,6 +2,13 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.24 — 2026-11-04 (live event severity and authoritative ventilator controls)
+- Experimental v2 bronchospasm severity now sends debounced commands directly, without an Apply button. The existing server-side Event effect and simulated-time onset/recovery remain authoritative.
+- The standard ventilator controls in both Monitor and Instructor views now submit validated v2 commands for mode, FiO2, PEEP, mandatory RR, VT, I:E/inspiratory time, inspiratory flow, plateau fraction, pressure control, pressure support, volume-guarantee limit, termination sensitivity and SIMV sync window.
+- Device settings persist in the canonical checkpoint, and the browser does not publish its own calculated patient/ventilator state. The educational mechanics now use the set rate in mandatory modes, the set volume in VC and the set pressure in PC.
+- Added full setting validation, mode/bronchospasm interactions and reconnect/reset regressions. Normal v1 remains unchanged; full loppjuSIM-Vent mechanics integration remains future work.
+- Both app versions bumped to **1.3.0.24**.
+
 ## 1.3.0.23 — 2026-11-04 (bronchospasm Event + capnogram clock fix)
 - Fixed ongoing experimental v2 capnogram stuttering: the preview passed authoritative clock metadata on `welcome` but **not** on subsequent `snapshot` packets, inadvertently marking every live waveform update paused. All canonical snapshots now carry running state and speed to the 50 Hz local renderer.
 - Introduced a session-owned intrinsic **Bronchospasm Event**, with an instructor-controlled 0–100% severity target and a short simulated-time response. The only physiological effect is the existing declarative `respiration.airwayObstruction` target. The browser may send only bounded severity; it cannot supply effect definitions or directly change EtCO₂, waveform shape or airway pressure. Changes persist in checkpoint, synchronize across peers, ramp down on 0% and clear on Reset Patient.
