@@ -1,0 +1,95 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { SessionEngineV2 } from '../src/session-v2/engine.mjs'
+import { createAnaesthSessionAdapter } from '../src/session-v2/adapters/anaesth.mjs'
+import { DEFAULT_V2_ALARM_LIMITS, withV2AlarmEvaluations } from '../src/session-v2/adapters/anaesthAlarms.mjs'
+const patient={heartRate:78,systolicPressure:122,diastolicPressure:68,
+ spo2:98,peripheralPerfusion:1,rhythm:'sinus',
+ respiratory:{ventilatorMode:'MANUAL',spontaneousRespiratoryRate:12,spontaneousTidalVolumeMl:500,
+ respiratoryRate:12,tidalVolumeMl:500,deadSpaceMl:150,fio2:.21,frcMl:2500}}
+const adapter=createAnaesthSessionAdapter({initialPatient:patient})
+const engine=new SessionEngineV2({sessionId:'v2-alarm-model',mode:'simulation',instructorId:'inst',adapter})
+engine.join({participantId:'candidate',role:'candidate'})
+engine.start('inst')
+let sequence=0
+const send=(who,type,payload={})=>engine.submit({id:'alarm-'+(++sequence),
+ epoch:engine.snapshot.session.epoch,participantId:who,runtimeId:'main',type,payload})
+const state=()=>engine.snapshot.runtimes[0].state
+const entry=key=>state().alarmRuntime.evaluations.find(e=>e.key===key)
+assert.deepEqual(state().alarmRuntime.limits,DEFAULT_V2_ALARM_LIMITS)
+assert.equal(entry('mapLow').eligible,false,'invasive BP is hidden by default')
+assert.equal(entry('nibpMapLow').eligible,false,'no cuff reading means no NIBP alarm')
+assert.equal(send('candidate','alarm.display.set',{parameter:'invasiveBloodPressure',enabled:true}).accepted,false)
+assert.equal(send('inst','alarm.display.set',{parameter:'invasiveBloodPressure',enabled:true,extra:1}).accepted,false)
+assert.equal(send('inst','alarm.display.set',{parameter:'invasiveBloodPressure',enabled:true}).accepted,true)
+assert.equal(entry('mapLow').eligible,true)
+assert.equal(send('inst','patient.parameter.set',{path:'systolicPressure',value:60}).accepted,true)
+assert.equal(send('inst','patient.parameter.set',{path:'diastolicPressure',value:30}).accepted,true)
+assert.equal(entry('mapLow').active,true,'low MAP alarms only when invasive BP displayed')
+assert.equal(send('inst','alarm.display.set',{parameter:'invasiveBloodPressure',enabled:false}).accepted,true)
+assert.equal(entry('mapLow').active,false)
+assert.equal(entry('mapLow').eligible,false)
+assert.equal(send('candidate','monitor.nibp.measure',{mean:35}).accepted,false,'cannot forge a cuff reading')
+assert.equal(send('candidate','monitor.nibp.measure',{}).accepted,true)
+assert.equal(entry('nibpMapLow').active,true,'completed low cuff reading activates NIBP alarm')
+const retainedReading=structuredClone(state().alarmRuntime.nibpReading)
+assert.equal(retainedReading.measuredAtSimulationTime,0)
+const modified={...DEFAULT_V2_ALARM_LIMITS,mapLow:20}
+assert.equal(send('candidate','alarm.limits.set',modified).accepted,false)
+assert.equal(send('inst','alarm.limits.set',{mapLow:20}).accepted,false,'incomplete limits rejected')
+assert.equal(send('inst','alarm.limits.set',modified).accepted,true)
+assert.equal(entry('nibpMapLow').active,true,'changing limits must NOT reinterpret prior cuff reading')
+assert.equal(send('inst','patient.parameter.set',{path:'systolicPressure',value:122}).accepted,true)
+assert.equal(send('inst','patient.parameter.set',{path:'diastolicPressure',value:68}).accepted,true)
+assert.equal(entry('nibpMapLow').active,true,'continuous BP change cannot clear previous NIBP alarm')
+assert.equal(send('candidate','monitor.nibp.measure',{}).accepted,true)
+assert.equal(entry('nibpMapLow').active,false,'new completed reading updates NIBP alarm')
+assert.equal(send('candidate','alarm.silence.set',{durationSeconds:60}).accepted,false)
+assert.equal(send('inst','alarm.silence.set',{durationSeconds:120}).accepted,true)
+assert.equal(state().alarmRuntime.silenced,true)
+assert.equal(send('inst','alarm.silence.set',{durationSeconds:999}).accepted,false)
+const shownHigh=withV2AlarmEvaluations({
+ ...state(),
+ respiratoryRuntime:{...state().respiratoryRuntime,estimatedEtCo2MmHg:75,spo2Percent:79},
+ monitorRuntime:{...state().monitorRuntime,bisValue:95},
+})
+const find=(s,key)=>s.alarmRuntime.evaluations.find(e=>e.key===key)
+assert.equal(find(shownHigh,'etco2High').active,false,'hidden EtCO2 must never alarm')
+assert.equal(find(shownHigh,'bisHigh').active,false,'hidden BIS must never alarm')
+assert.equal(find(shownHigh,'spo2Low').active,true,'visible SpO2 should alarm')
+assert.equal(send('inst','alarm.display.set',{parameter:'capnography',enabled:true}).accepted,true)
+assert.equal(send('inst','alarm.display.set',{parameter:'bis',enabled:true}).accepted,true)
+const shown=withV2AlarmEvaluations({
+ ...state(),
+ respiratoryRuntime:{...state().respiratoryRuntime,estimatedEtCo2MmHg:75,spo2Percent:79},
+ monitorRuntime:{...state().monitorRuntime,bisValue:95},
+})
+assert.equal(find(shown,'etco2High').active,true)
+assert.equal(find(shown,'bisHigh').active,true)
+assert.equal(send('inst','alarm.display.set',{parameter:'capnography',enabled:false}).accepted,true)
+assert.equal(find(withV2AlarmEvaluations({
+ ...state(),respiratoryRuntime:{...state().respiratoryRuntime,estimatedEtCo2MmHg:75}
+}),'etco2High').active,false)
+const checkpoint=engine.exportCheckpoint()
+const recovered=SessionEngineV2.fromCheckpoint({checkpoint,adapter})
+assert.deepEqual(recovered.snapshot.runtimes[0].state.alarmRuntime,state().alarmRuntime)
+assert.deepEqual(recovered.snapshot.runtimes[0].state.display,state().display)
+assert.equal(send('inst','reset').accepted,true)
+assert.deepEqual(state().alarmRuntime.limits,DEFAULT_V2_ALARM_LIMITS)
+assert.equal(state().alarmRuntime.nibpReading,null)
+assert.equal(entry('nibpMapLow').active,false)
+assert.equal(state().display.invasiveBloodPressure,false)
+assert.equal(state().alarmRuntime.silenced,false)
+const read=p=>readFileSync(p,'utf8')
+const preview=read('src/edumon/AnaesthSessionV2Preview.tsx')
+const app=read('src/edumon/EdumonApp.tsx')
+const nibp=read('src/edumon/EdumonNibpControl.tsx')
+const display=read('src/edumon/monitorDisplayActions.ts')
+const gateway=read('worker/sessionV2Room.mjs')
+assert.ok(preview.includes('alarmCallbackRef.current({'),'v2 must publish alarm state')
+assert.ok(app.includes('v2AlarmState?.evaluations'),'normal monitor alarms must follow v2 authority')
+assert.ok(nibp.includes('if (v2Reading === undefined)'),'v2 cuff completion must not write v1 local alarm state')
+assert.ok(nibp.includes('onV2MeasureRef.current?.()'),'cuff completion must request canonical reading')
+assert.ok(display.includes('v2DisplayAuthority'),'display toggles consume authoritative visibility')
+assert.ok(gateway.includes("'monitor.nibp.measure'"),'validated cuff command through Cloudflare gateway')
+console.log('v2 alarm visibility, NIBP-on-measurement, limits, silence, reset/recovery and UI wiring passed')
