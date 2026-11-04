@@ -2,6 +2,15 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.13 — 2026-11-04 (Anaesth v2 session reset and fresh-room controls)
+- Bumped Vent and Anaesth/ITU application versions to **1.3.0.13**; all v1 simulator session flows remain unchanged.
+- Added **Reset Patient** and **New Session** controls to the experimental Anaesth v2 preview, visible only when the Worker confirms the WebSocket as an instructor. Both actions require confirmation.
+- **Reset Patient:** issues an instructor-authorized v2 `reset` command; restores baseline monitor settings, clears active Drugs & Events, resets drug simulation time and the authoritative shared session clock to zero, persists before receipt and broadcasts the new snapshot to connected peers. Retains the same room, pinned drug catalogue, credentials and connections.
+- **New Session:** generates a unique `ana-<UUID>` session ID, disconnects the old preview socket and automatically connects the instructor to the new Durable Object room. This room starts with clean defaults and the latest configured action catalogue. The previous room is retained, and candidates must join the **new** session ID themselves.
+- The Worker includes the verified connection role in the `welcome` packet for UI gating; server-side permission checks remain authoritative. Candidate reset commands are still rejected even if submitted outside the UI.
+- Expanded Cloudflare Durable Object regressions to cover rejected candidate reset, accepted instructor reset, cleared drugs, zeroed clock, synchronized snapshots, checkpoint recovery after reset, and independent new-room creation.
+- Experimental v2 only; not a full simulator physiology reset or automatic candidate migration across sessions.
+
 ## 1.3.0.12 — 2026-11-04 (session-pinned Anaesth ActionDefinitions)
 - Bumped both product versions to **1.3.0.12**, keeping Session Engine v1 unchanged and v2 experimental.
 - Added a strict, server-side-only Anaesth ActionDefinition loader from Supabase REST (when `SESSION_V2_ACTIONS_SUPABASE_URL` and `SESSION_V2_ACTIONS_SUPABASE_KEY` are configured), accepting only supported Anaesth/all action settings, known effect targets/operations, and bounded inputs. Fail closed if a configured Supabase catalogue is unavailable, invalid, or empty.
