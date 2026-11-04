@@ -6,7 +6,7 @@ type SessionV2ActionLibrary = { version: number; source: string;
   actions: Array<{ id: string; name: string; kind: string; candidateAccess: string; mode: string }> }
 type SessionV2Snapshot = {
   session: { epoch: number; revision: number; status: string; mode: string }
-  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string }> }; patient?: Partial<MonitorPatientState> & {
+  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
     anaestheticGases?: { fiSevoPercent?: number }
   } } }>
 }
@@ -222,11 +222,13 @@ export function AnaesthSessionV2Preview({
   const runtime = snapshot?.runtimes.find(item => item.id === 'main')?.state
   const patient = runtime?.monitorProjection ?? runtime?.patient
   const actionRuntime = runtime?.actionRuntime
+  const relaxantEffect = actionRuntime?.activeEffects.find(item => item.actionId === 'relaxant' && item.effect.target === 'neuromuscular.block')
+  const relaxantElapsedSeconds = relaxantEffect ? Math.max(0, (actionRuntime?.simulationTime ?? 0) - relaxantEffect.startedAtSimulationTime) : null
   return (
     <section style={{ border: '1px solid #8696a8', borderRadius: 8, padding: 12, margin: '8px 16px', maxWidth: 680 }}
       aria-label="Experimental Session Engine v2 preview">
       <strong>Session Engine v2 — experimental Cloudflare preview</strong>
-      <p style={{ fontSize: 12, margin: '6px 0' }}>Uses a checkpointed pilot of Anaesth ActionEffects and a limited monitor projection, not the complete physiology engine. Do not use for clinical care or assessed simulation.</p>
+      <p style={{ fontSize: 12, margin: '6px 0' }}>Uses a checkpointed pilot of Anaesth ActionEffects and a limited monitor projection, not the complete physiology engine. Drug onset progresses with manual simulated-time advances (Relaxant default: 120 seconds); the preview does not automatically run simulation time. Do not use for clinical care or assessed simulation.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
           onChange={event => setEndpoint(event.target.value)} disabled={status === 'connected'} /></label>
@@ -267,6 +269,8 @@ export function AnaesthSessionV2Preview({
           for (let i = 0; i < 10; i++) command('tick', { deltaMs: 1000 })
         }}>Advance 10s (instructor)</button>
         <span>Active effects {actionRuntime?.activeEffects?.length ?? 0}</span>
+        <span>Neuromuscular block (v2 model): {runtime?.effectIndicators?.neuromuscularBlockPercent ?? '—'}%</span>
+        {relaxantEffect && <span>Relaxant onset: {Math.round(relaxantElapsedSeconds ?? 0)} / {relaxantEffect.effect.onsetSeconds}s simulated; advance simulation time to see its effect.</span>}
         {verifiedRole === 'instructor' && <>
           <button type="button" onClick={resetPatient} disabled={resetPending}>
             {resetPending ? 'Resetting…' : 'Reset Patient'}
