@@ -2,6 +2,12 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.22 — 2026-11-04 (smooth v2 capnogram)
+- Restores 50 Hz local capnogram waveform sampling and up-to-20 FPS rendering between authoritative Cloudflare snapshots. Canonical EtCO2, RR and simulated time remain owned by the server.
+- Passes authoritative pause/resume/speed to the waveform presentation. Bounded interpolation prevents a second simulation authority: caps extrapolation at 1.25 wall seconds, pauses on command and resets on reconnect.
+- V1 respiratory gas exchange remains unchanged. Bronchospasm severity is reserved for declarative Event integration rather than a browser-only slider.
+- Both app versions are 1.3.0.22.
+
 ## 1.3.0.21 — 2026-11-04 (authoritative v2 respiratory CO₂ and capnography)
 - Bumped both product versions to **1.3.0.21**, preserving default v1 runtime and established monitor styles.
 - Extracted v1 respiratory physiology's alveolar CO₂ mass balance into a pure shared `sharedCo2Kinetics.mjs`. The existing v1 respiratory engine now calls it with the established alveolar ventilation, production and body-weight assumptions, preserving the numerical CO₂ response.
