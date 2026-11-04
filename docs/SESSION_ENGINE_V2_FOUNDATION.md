@@ -140,3 +140,10 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - `EdumonBisTrend` renders authoritative BIS and local bounded presentation trace without running its browser-only physiology clock in v2. `EdumonAnaGasControl` displays checkpointed TOF and sends the measurement request to the v2 session gateway.
 - The v2 read-only FiSevo footer uses neutral monitor text rather than yellow adjustable-control text; v1 adjustable colour is unchanged.
 - **Not yet authoritative:** BIS noise/artifact, full monitor enable/disable semantics and complete waveform history; TOF v2 has no simulated 1.8-second acquisition delay. The measurements are educational simulation values, not clinical measurements.
+
+
+## v1.3.0.21 — CO₂ respiratory state and capnography
+- Shared `core/physiology/respiratory/sharedCo2Kinetics.mjs` computes the same v1 alveolar CO₂ mass-balance update without browser dependencies. v1 `stepRespiratoryPhysiology` injects its established settings and retains its own oxygenation handling.
+- The v2 Anaesth adapter persists `respiratoryRuntime` with alveolar/estimated end-tidal CO₂, RR, VT and ventilation. Its reducer advances respiratory kinetics on authoritative ticks from the v2 ActionEffect-adjusted respiratory state. Reset and checkpoint restore the values; older checkpoints populate the field at their next tick from the initial 40 mmHg baseline.
+- The experimental preview propagates CO₂, effective RR, VT and simulation time to the existing capnography component. Its local v1 respiratory runtime is suppressed in v2 mode; only the bounded waveform presentation remains browser-local. No second CO₂ oscillator is allowed.
+- This milestone does **not** implement authority for oxygenation/SpO₂, display visibility, NIBP or alarms; do not infer full capnography/ventilator synchronization from the numeric CO₂ authority.
