@@ -81,7 +81,13 @@ server.on('upgrade', (req, socket, head) => {
   if (new URL(req.url ?? '/', 'http://localhost').pathname !== '/loppjusim-v2') {
     socket.destroy(); return
   }
-  sockets.handleUpgrade(req, socket, head, ws => gateway.attach(ws))
+  sockets.handleUpgrade(req, socket, head, ws => {
+    // handleUpgrade() does not emit the connection event automatically.
+    // Register liveness before handing the socket to the v2 gateway.
+    ws.isAlive = true
+    ws.on('pong', () => { ws.isAlive = true })
+    gateway.attach(ws)
+  })
 })
 const heartbeat = setInterval(() => {
   for (const socket of sockets.clients) {
@@ -91,10 +97,6 @@ const heartbeat = setInterval(() => {
   }
 }, 15000)
 heartbeat.unref?.()
-sockets.on('connection', ws => {
-  ws.isAlive = true
-  ws.on('pong', () => { ws.isAlive = true })
-})
 server.listen(port, bind, () => {
   console.log(`Experimental Session v2 LAN gateway on ws://${bind}:${port}/loppjusim-v2`)
   console.log('Anaesth demo model only; file-backed checkpoints are enabled. Production actions/scenarios are NOT connected.')
