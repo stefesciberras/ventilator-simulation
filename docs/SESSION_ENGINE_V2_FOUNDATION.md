@@ -11,7 +11,7 @@ Status: **opt-in, not wired into the application**. Existing v1 session hooks an
 - Non-destructive instructor recovery; candidate runtime isolation in Teaching
 - Offline Node regression test: `node scripts/session-v2-engine-regression.mjs`
 
-## Not yet implemented
+## Anaesth adapter milestone (v1.3.0.0 development)\n- Added `src/session-v2/adapters/anaesth.mjs`, containing a pure patient and device command reducer, FiSevo updates, a baseline reset, and an injectable trusted action evaluator.\n- `scripts/session-v2-anaesth-regression.mjs` exercises instructor and candidate commands, mocked drug deduplication, reset, epoch recovery and Teaching isolation.\n- This adapter is a staging integration contract only. It does **not** call the real ActionRuntime physiology and is **not** wired to the React application.\n- Version constants for Vent and Anaesth/ITU are 1.3.0.0 on the v2 feature branch. See root `CHANGELOG.md`.\n\n## Not yet implemented
 Persistence, authenticated authority leases, transport adapters, wire protocol, replay across engine recreation, controlled simulation clock scheduling, snapshot schema migration, browser integration, simulator adapters, permission policies for individual device controls and two-browser end-to-end tests. Do not enable v2 in production until these are implemented and verified.
 
 ## Safety invariants
@@ -25,4 +25,4 @@ Persistence, authenticated authority leases, transport adapters, wire protocol, 
 8. Tests are a reducer-level first step, **not** a substitute for two-browser integration tests.
 
 ## Next implementation milestone
-Define snapshot durability and storage, trusted lease/epoch renewal, pluggable transport contract and Anaesth simulator adapter; then run browser integration tests before any v1 migration.
+Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and storage, trusted lease/epoch renewal and pluggable transports; then run browser integration tests before any v1 migration.
