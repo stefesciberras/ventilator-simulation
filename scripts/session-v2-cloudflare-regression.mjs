@@ -147,6 +147,29 @@ try {
   assert.equal(fresh.snapshot.runtimes[0].state.actionRuntime.activeEffects.length, 0)
   assert.equal(fresh.role, 'instructor')
   assert.equal(newLedger.get('actionLibrary').source, 'pilot-fallback-v1')
+  // Reconnect after agent wash-in: canonical inspired and end-tidal values
+  // must survive DO reconstruction. A browser form default must never be
+  // mistaken for the authoritative session concentration.
+  const freshEpoch = fresh.snapshot.session.epoch
+  const freshClient = (await newRoom.fetch(request('candidate', 'ana-fresh-new'))).webSocket
+  command(freshClient, 'fi-3', 'fi-3', freshEpoch, 'anaesth.gas.set', { fiSevoPercent: 3 })
+  await flush()
+  // Only an instructor is permitted to advance the simulated clock.
+  const freshInstructor = (await newRoom.fetch(request('instructor', 'ana-fresh-new'))).webSocket
+  for (let t = 0; t < 20; t++) {
+    command(freshInstructor, 'gas-tick-' + t, 'gas-tick-' + t, freshEpoch, 'tick', { deltaMs: 1000 })
+    await flush()
+  }
+  const beforeRestore = structuredClone(newLedger.get('checkpoint').snapshot.runtimes[0].state)
+  assert.equal(beforeRestore.patient.anaestheticGases.fiSevoPercent, 3)
+  assert.ok(beforeRestore.gasRuntime.etSevoPercent > 0)
+  const recoveredGasRoom = new SessionV2Room(state(newLedger), {})
+  const gasWelcome = (await recoveredGasRoom.fetch(request('instructor', 'ana-fresh-new'))).webSocket.messages[0]
+  assert.equal(gasWelcome.snapshot.runtimes[0].state.patient.anaestheticGases.fiSevoPercent, 3)
+  assert.equal(gasWelcome.snapshot.runtimes[0].state.gasRuntime.etSevoPercent,
+    beforeRestore.gasRuntime.etSevoPercent, 'Reconnected EtSevo must not reset to zero')
+  assert.equal(gasWelcome.snapshot.runtimes[0].state.actionRuntime.simulationTime,
+    beforeRestore.actionRuntime.simulationTime, 'Simulated time must not reset on reconnect')
   assert.equal(persistent.get('checkpoint').snapshot.session.id, 'cloud-regression')
   console.log('Cloudflare Durable Object v2 reset / fresh room / persistence regression passed')
 } finally {

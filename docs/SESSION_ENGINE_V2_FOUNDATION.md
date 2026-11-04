@@ -118,3 +118,9 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - The v2 Anaesth adapter tracks `gasRuntime.etSevoPercent` on authoritative ticks, persists it with patient and drug effects, and sets it to 0 on reset. Missing `gasRuntime` on legacy sessions is initialized at the next tick.
 - v2 preview projection uses EtSevo-derived depth as the effective volatile baseline and adds IV hypnotic effects once. The raw patient `anaestheticPhysiology.depthOfAnaesthesia` is not mutated by each tick.
 - The v2 preview displays EtSevo and approximate MAC. BIS/TOF numeric measurement models and live v1 gas-output parity remain subsequent milestones. Do not interpret preview EtSevo as a measured concentration or a validated clinical pharmacology model.
+
+
+## v1.3.0.17 — reconnect: hydrate volatile controls from checkpoint
+- The experimental preview distinguishes canonical `runtime.state.patient.anaestheticGases.fiSevoPercent` (authoritative) from the local FiSevo *draft*. On welcome or a new canonical FiSevo value (including reset), the draft is synchronized; repeated clock updates do not replace an unsent draft.
+- The preview displays `runtime.state.gasRuntime.etSevoPercent` only if it exists. Older checkpoints without a recorded end-tidal value must show an explicit missing-state indication, not a misleading zero.
+- The DO checkpoint persists canonical FiSevo, nonzero EtSevo and simulation time; regression verifies reconstruction/welcome snapshot. If a genuinely old room was created before EtSevo became checkpointed, its historical uptake cannot be recovered: use **New Session** to start a clean test.

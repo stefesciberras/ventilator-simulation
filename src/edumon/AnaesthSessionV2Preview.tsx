@@ -35,7 +35,8 @@ export function AnaesthSessionV2Preview({
   const [resetPending, setResetPending] = useState(false)
   const [clock, setClock] = useState<ClockControl>({ running: false, speed: 1 })
   const [newHeartRate, setNewHeartRate] = useState(90)
-  const [newFiSevo, setNewFiSevo] = useState(2)
+  const [newFiSevo, setNewFiSevo] = useState(0)
+  const lastAuthoritativeFiSevoRef = useRef<number | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
   const closedRef = useRef(true)
   const attemptRef = useRef(0)
@@ -59,6 +60,15 @@ export function AnaesthSessionV2Preview({
     setSnapshot(next)
     const runtime = next.runtimes.find(item => item.id === 'main')?.state
     const patient = runtime?.monitorProjection ?? runtime?.patient
+    // A form value is only a draft. Seed it from the first authoritative
+    // snapshot and again when canonical FiSevo changes (including reset), but
+    // never overwrite an unsent edit on each automatic clock tick.
+    const actualFiSevo = runtime?.patient?.anaestheticGases?.fiSevoPercent
+    if (typeof actualFiSevo === 'number' && Number.isFinite(actualFiSevo) &&
+      lastAuthoritativeFiSevoRef.current !== actualFiSevo) {
+      lastAuthoritativeFiSevoRef.current = actualFiSevo
+      setNewFiSevo(actualFiSevo)
+    }
     if (patient) patientCallbackRef.current(patient)
   }
   const connect = (targetSessionId = sessionId) => {
@@ -66,6 +76,7 @@ export function AnaesthSessionV2Preview({
     attemptRef.current += 1
     const currentAttempt = attemptRef.current
     snapshotRef.current = null
+    lastAuthoritativeFiSevoRef.current = null
     setSnapshot(null)
     setActionLibrary(null)
     setVerifiedRole(null)
@@ -194,6 +205,7 @@ export function AnaesthSessionV2Preview({
     socketRef.current?.close()
     socketRef.current = null
     snapshotRef.current = null
+    lastAuthoritativeFiSevoRef.current = null
     setStatus('disconnected')
     setSnapshot(null)
     setActionLibrary(null)
@@ -261,8 +273,8 @@ export function AnaesthSessionV2Preview({
         <span>Role: {verifiedRole ?? 'unknown'}</span>
         <span>HR {patient?.heartRate ?? '—'} bpm</span>
         <span>FiSevo {patient?.anaestheticGases?.fiSevoPercent ?? '—'}%</span>
-        <span>EtSevo (v2) {runtime?.gasRuntime?.etSevoPercent?.toFixed(2) ?? '—'}%</span>
-        <span>EtSevo MAC {( (runtime?.gasRuntime?.etSevoPercent ?? 0) / 2 ).toFixed(2)} (approx.)</span>
+        <span>EtSevo (v2) {runtime?.gasRuntime?.etSevoPercent?.toFixed(2) ?? 'Not recorded in this older session'}{runtime?.gasRuntime ? '%' : ''}</span>
+        <span>EtSevo MAC {typeof runtime?.gasRuntime?.etSevoPercent === 'number' ? (runtime.gasRuntime.etSevoPercent / 2).toFixed(2) : '—'} (approx.)</span>
         <span>Simulated time {actionRuntime?.simulationTime ?? 0}s</span>
         <span>Clock: {clock.running ? 'Running' : 'Paused'} · {clock.speed}×</span>
         <span>Depth {patient?.anaestheticPhysiology?.depthOfAnaesthesia ?? '—'}</span>
@@ -270,9 +282,9 @@ export function AnaesthSessionV2Preview({
         <label>HR <input type="number" min={0} max={240} value={newHeartRate}
           onChange={event => setNewHeartRate(Number(event.target.value))} /></label>
         <button type="button" onClick={() => command('patient.parameter.set', { path: 'heartRate', value: newHeartRate })}>Set HR (instructor)</button>
-        <label>FiSevo <input type="number" min={0} max={8} step={0.1} value={newFiSevo}
+        <label>FiSevo to set <input type="number" min={0} max={8} step={0.1} value={newFiSevo}
           onChange={event => setNewFiSevo(Number(event.target.value))} /></label>
-        <button type="button" onClick={() => command('anaesth.gas.set', { fiSevoPercent: newFiSevo })}>Set FiSevo</button>
+        <button type="button" disabled={status !== 'connected' || !Number.isFinite(newFiSevo) || newFiSevo < 0 || newFiSevo > 8} onClick={() => command('anaesth.gas.set', { fiSevoPercent: newFiSevo })}>Set FiSevo</button>
         {actionLibrary && <>
           <span>Session catalogue: {actionLibrary.source} (v{actionLibrary.version})</span>
           <label>Action <select aria-label="Session v2 action" value={actionLibrary.actions.some(item => item.id === selectedAction) ? selectedAction : (actionLibrary.actions[0]?.id ?? '')}
