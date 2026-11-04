@@ -2,6 +2,15 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.4 — 2026-11-04 (development; opt-in LAN browser preview and file durability)
+- Bumped Vent and Anaesth/ITU application versions to **1.3.0.4**. Existing v1 session paths remain the default.
+- Added a single-process Node file authority store using serialized transactions, fsync, atomic rename and revision/lease fencing. The LAN test server now restores canonical patient and action snapshots after restart once the previous lease expires.
+- Added instructor-controlled lease renewal in the experimental LAN host. A competing host cannot take over before lease expiry.
+- Added the Anaesth Session v2 preview behind `?sessionV2Preview=1`. It connects to the separate LAN v2 endpoint, displays session revision/epoch, sends instructor HR and candidate/instructor FiSevo controls and applies received canonical patient snapshots to the actual Anaesth monitor.
+- Added a file-backed restart regression verifying retained FiSevo/Propofol effect state, expired lease recovery, duplicate command receipt reuse and rejection of stale authority.
+- **Still experimental:** preview does not replace v1 product teaching hooks, the v2 demo does not use real production Drug/Action definitions or scenario runtime, waveform/gas kinetic continuity is not yet retained, no TLS/production authentication is configured. File store supports only a single running Node process using the same directory; no multiprocess locking.
+- Cloudflare/static hosting does not run the Node LAN server. Browser preview requires separately starting the local test server.
+
 ## 1.3.0.3 — 2026-11-04 (development; experimental LAN transport)
 - Bumped Vent and Anaesth/ITU application versions to **1.3.0.3**; active Session Engine v1 remains unchanged.
 - Added an isolated v2 WebSocket gateway: verified instructor/candidate joins, durable-authority command receipts, and revisioned canonical snapshot broadcasts.
