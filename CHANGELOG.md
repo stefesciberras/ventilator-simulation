@@ -2,6 +2,13 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.7 — 2026-11-04 (Cloudflare preview credential encoding fix)
+- Bumped Vent and Anaesth/ITU displayed application versions to **1.3.0.7**. Session Engine v1 remains unchanged.
+- Fixed browser WebSocket constructor failure when instructor/candidate test secrets include punctuation or non-ASCII characters. Both browser and Cloudflare Worker use a validated UTF-8 hex-encoded subprotocol, not the raw secret string.
+- Added bounded reconnect attempts, a 10-second welcome timeout and explicit connection-failure messages instead of indefinitely displaying Connecting.
+- Added regression tests for subprotocol encoding/decoding, special characters, Unicode, invalid tokens and oversized credentials.
+- **Security:** encoding is reversible and not encryption. Use WSS only, rotate secrets exposed in logs or shared console traces, and replace these demo shared secrets with proper per-user authentication before production use.
+
 ## 1.3.0.6 — 2026-11-04 (experimental Cloudflare-native v2)
 - Bumped displayed Vent and Anaesth/ITU application versions to **1.3.0.6**. Session Engine v1 remains default.
 - Added a SQLite-backed Cloudflare Durable Object class (`SessionV2Room`) with a single authoritative Session Engine v2 reducer per room, WebSocket message processing, checkpoint-before-acknowledgement and canonical snapshot broadcasting.
