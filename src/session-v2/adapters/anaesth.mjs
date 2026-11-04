@@ -8,7 +8,8 @@
  */
 import { advanceEndTidalSevo, estimatedAlveolarVentilationLMin } from '../../edumon/sharedVolatilePhysiology.mjs'
 import { applySharedEdumonActionPhysiology } from '../../edumon/sharedActionPhysiology.mjs'
-import { resolveV2ActionNumber } from './anaesthPilot.mjs'
+import { resolveV2ActionNumber, projectAnaesthV2Monitor } from './anaesthPilot.mjs'
+import { advanceBisIndex, tofReadingFromBlock } from '../../edumon/sharedAnaestheticMeasurements.mjs'
 
 const clone = value => structuredClone(value)
 const finite = (value, min, max) =>
@@ -29,7 +30,7 @@ const DEVICE_LIMITS = Object.freeze({
   fio2: [0.21, 1], peepCmH2O: [0, 35],
 })
 const INPUT_TYPES = new Set(['patient.parameter.set', 'device.parameter.set',
-  'anaesth.gas.set', 'action.invoke', 'tick'])
+  'anaesth.gas.set', 'action.invoke', 'monitor.tof.measure', 'tick'])
 
 function validatePathValue(payload, limits) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
@@ -54,6 +55,7 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
     patient: clone(baseline),
     actionRuntime: { simulationTime: 0, activeEffects: [], activeToggleActions: [] },
     gasRuntime: { etSevoPercent: 0 },
+    monitorRuntime: { bisValue: 100, tofReading: null },
     display: { invasiveBloodPressure: false, bis: false, capnography: false, temperature: false },
     controls: { paused: false, waveformsFrozen: false, alarmsSilenced: false },
   })
@@ -97,6 +99,17 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
         }
         return next
       }
+      if (command.type === 'monitor.tof.measure') {
+        if (command.payload && Object.keys(command.payload).length) throw Error('Untrusted TOF payload')
+        const now = state.actionRuntime.simulationTime
+        const block = resolveV2ActionNumber(state.actionRuntime, 'neuromuscular.block', 0)
+        const minimumCount = resolveV2ActionNumber(state.actionRuntime, 'neuromuscular.tofMinimumCount', 0)
+        const reading = tofReadingFromBlock(block, minimumCount)
+        return { ...state, monitorRuntime: { ...state.monitorRuntime,
+          bisValue: state.monitorRuntime?.bisValue ?? 100,
+          tofReading: { ...reading, measuredAtSimulationTime: now },
+        } }
+      }
       // Advancing model time is authority-controlled by SessionEngineV2.
       const delta = command.payload?.deltaMs
       if (!finite(delta, 1, 1000)) throw new Error('Invalid tick')
@@ -114,11 +127,16 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
         frcMl: respiratory.frcMl,
         dtSeconds: delta / 1000,
       })
-      return { ...state,
+      const next = { ...state,
         actionRuntime: { ...state.actionRuntime,
           simulationTime: state.actionRuntime.simulationTime + delta / 1000 },
         gasRuntime: { etSevoPercent: nextEtSevo },
       }
+      const depth = projectAnaesthV2Monitor(next).anaestheticPhysiology.depthOfAnaesthesia
+      return { ...next, monitorRuntime: { ...state.monitorRuntime,
+        bisValue: advanceBisIndex(state.monitorRuntime?.bisValue ?? 100, depth, delta / 1000),
+        tofReading: state.monitorRuntime?.tofReading ?? null,
+      } }
     },
   }
 }
