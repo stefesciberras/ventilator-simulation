@@ -73,6 +73,14 @@ export function createMemoryAuthorityStore() {
       leases.set(sessionId, next)
       return clone(next)
     },
+    async checkLease({ sessionId, leaseToken, expectedRevision, nowMs }) {
+      const current = leases.get(sessionId)
+      const persisted = checkpoints.get(sessionId)
+      if (!current || current.token !== leaseToken || current.untilMs <= nowMs) conflict('authority-lease-lost')
+      if (!persisted || revision(persisted) !== expectedRevision ||
+          current.epoch !== persisted.snapshot.session.epoch) conflict('checkpoint-revision-conflict')
+      return true
+    },
     async renew({ sessionId, leaseToken, nowMs, ttlMs }) {
       assertTime(nowMs, ttlMs)
       const current = leases.get(sessionId)
@@ -168,6 +176,16 @@ export function createIndexedDbAuthorityStore({
         const next = acquireState(record?.checkpoint, old, holderId, nowMs, ttlMs)
         await request('leases', 'put', next)
         return clone(next)
+      })
+    },
+    async checkLease({ sessionId, leaseToken, expectedRevision, nowMs }) {
+      return transact(['checkpoints', 'leases'], 'readonly', async ({ request }) => {
+        const persisted = await request('checkpoints', 'get', sessionId)
+        const lease = await request('leases', 'get', sessionId)
+        if (!lease || lease.token !== leaseToken || lease.untilMs <= nowMs) conflict('authority-lease-lost')
+        if (!persisted || revision(persisted.checkpoint) !== expectedRevision ||
+            persisted.checkpoint.snapshot.session.epoch !== lease.epoch) conflict('checkpoint-revision-conflict')
+        return true
       })
     },
     async renew({ sessionId, leaseToken, nowMs, ttlMs }) {
