@@ -241,7 +241,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const v2PreviewEnabled = module.id === 'ana' && new URLSearchParams(window.location.search).get('sessionV2Preview') === '1'
   const [v2EtSevo, setV2EtSevo] = useState<number | null>(null)
   const [v2RespiratoryState, setV2RespiratoryState] = useState<SessionV2RespiratoryRuntime>({
-    estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null,
+    estimatedEtCo2MmHg: null, spo2Percent: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null,
     clockRunning: false, clockSpeed: 1, expiratoryResistanceCmH2OLs: null,
     peakAirwayPressureCmH2O: null,
   })

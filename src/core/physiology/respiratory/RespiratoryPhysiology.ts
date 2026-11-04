@@ -1,4 +1,5 @@
 import { advanceAlveolarCo2 } from './sharedCo2Kinetics.mjs'
+import { advanceOxygenation, targetSpO2FromAlveolarFraction as sharedTargetSpO2 } from './sharedOxygenation.mjs'
 
 export interface RespiratoryPhysiologyInput {
   sex: 'male' | 'female'
@@ -97,42 +98,7 @@ export function targetSpO2FromAlveolarFraction(
     | 'maxSpO2'
   >,
 ): number {
-  // This preserves the EDUVENT teaching model: obstruction contributes a small
-  // V/Q penalty, PEEP can recruit shunt in low-compliance lungs, and systemic
-  // oxygen extraction determines how strongly shunt lowers arterial content.
-  const obstructionPenalty = clamp((input.expiratoryResistanceCmH2OLs - 8) / 32, 0, 1) * 0.018
-  const effectiveFraction = clamp(alveolarFraction - obstructionPenalty, 0.01, 0.95)
-  const endCapillaryPo2 = clamp(effectiveFraction * 650, 20, 650)
-  const ventilatedSaturation = clamp(saturationFromOxygenTension(endCapillaryPo2), 50, 100)
-
-  const baselineShunt = clamp(input.shuntFraction, 0, 0.5)
-  const recruitability = clamp((60 - input.complianceMlPerCmH2O) / 45, 0, 1)
-  const peepRecruitment = 0.55 * recruitability * clamp((input.peepCmH2O - 5) / 10, 0, 1)
-  const effectiveShunt = baselineShunt * (1 - peepRecruitment)
-
-  const haemoglobin = 15
-  const oxygenCapacity = 1.34 * haemoglobin
-  const ventilatedContent = oxygenCapacity * (ventilatedSaturation / 100) + 0.003 * endCapillaryPo2
-  const cardiacOutputLMin = Math.max(input.referenceCardiacOutputLMin ?? 5, 0.1)
-  const oxygenExtractionMlDl = Math.max(input.oxygenConsumptionMlMin, 0) / cardiacOutputLMin / 10
-  const shuntContentPenalty = effectiveShunt >= 0.999
-    ? ventilatedContent
-    : (effectiveShunt / Math.max(1 - effectiveShunt, 0.001)) * oxygenExtractionMlDl
-  const arterialContent = clamp(
-    ventilatedContent - shuntContentPenalty,
-    oxygenContentForSaturation(50),
-    ventilatedContent,
-  )
-
-  let low = 50
-  let high = 100
-  for (let iteration = 0; iteration < 24; iteration += 1) {
-    const mid = (low + high) / 2
-    if (oxygenContentForSaturation(mid) < arterialContent) low = mid
-    else high = mid
-  }
-  const physiologicalSaturation = clamp((low + high) / 2, 50, 100)
-  return Math.min(physiologicalSaturation, clamp(input.maxSpO2, 80, 100))
+  return sharedTargetSpO2(alveolarFraction, input)
 }
 
 export function createRespiratoryPhysiologyState(
@@ -166,27 +132,12 @@ export function stepRespiratoryPhysiology(
     deltaSeconds: dt,
   })
 
-  const frcL = clamp(Math.max(input.frcMl, 500) / 1000, 0.5, 8)
-  const inspiredOxygenFraction = clamp(input.fio2, 0.21, 1)
-  const oxygenConsumptionLs = oxygenConsumption / 1000 / 60
-  const turnoverPerSecond = ventilation.alveolarVentilationLMin / 60 / frcL
-  const metabolicDepletionPerSecond = oxygenConsumptionLs / frcL
-  const oxygenDerivative = turnoverPerSecond * (inspiredOxygenFraction - previousState.alveolarOxygenFraction)
-    - metabolicDepletionPerSecond
-  const alveolarOxygenFraction = clamp(
-    previousState.alveolarOxygenFraction + oxygenDerivative * dt,
-    0.01,
-    0.95,
-  )
-
-  const targetSpO2 = targetSpO2FromAlveolarFraction(alveolarOxygenFraction, input)
-  const pulseOximeterResponseSeconds = targetSpO2 < previousState.spo2Percent ? 2.5 : 4
-  const responseFraction = 1 - Math.exp(-dt / pulseOximeterResponseSeconds)
-  const spo2Percent = clamp(
-    previousState.spo2Percent + (targetSpO2 - previousState.spo2Percent) * responseFraction,
-    50,
-    100,
-  )
+  const { alveolarOxygenFraction, spo2Percent } = advanceOxygenation({
+    ...input,
+    alveolarOxygenFraction: previousState.alveolarOxygenFraction,
+    spo2Percent: previousState.spo2Percent,
+    deltaSeconds: dt,
+  })
 
   const state: RespiratoryPhysiologyState = { alveolarCo2MmHg, alveolarOxygenFraction, spo2Percent }
   const output: RespiratoryPhysiologyOutput = {

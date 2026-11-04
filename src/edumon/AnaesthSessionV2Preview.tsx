@@ -6,6 +6,7 @@ export type SessionV2VentilatorChange =
   | { type: 'mode'; mode: string }
   | { type: 'setting'; path: string; value: number }
 export type SessionV2RespiratoryRuntime = { estimatedEtCo2MmHg: number | null; respiratoryRate: number | null;
+  spo2Percent: number | null;
   tidalVolumeMl: number | null; simulationTime: number | null;
   expiratoryResistanceCmH2OLs: number | null; peakAirwayPressureCmH2O: number | null;
   clockRunning: boolean; clockSpeed: number }
@@ -15,7 +16,7 @@ type SessionV2ActionLibrary = { version: number; source: string;
   actions: Array<{ id: string; name: string; kind: string; candidateAccess: string; mode: string }> }
 type SessionV2Snapshot = {
   session: { epoch: number; revision: number; status: string; mode: string }
-  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; respiratoryRuntime?: { estimatedEtCo2MmHg: number; respiratoryRate: number; tidalVolumeMl: number; expiratoryResistanceCmH2OLs: number; peakAirwayPressureCmH2O: number }; bronchospasmRuntime?: { targetSeverityPercent: number; effectiveSeverityPercent: number }; monitorRuntime?: { bisValue: number; tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
+  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; respiratoryRuntime?: { estimatedEtCo2MmHg: number; respiratoryRate: number; tidalVolumeMl: number; spo2Percent: number; expiratoryResistanceCmH2OLs: number; peakAirwayPressureCmH2O: number }; bronchospasmRuntime?: { targetSeverityPercent: number; effectiveSeverityPercent: number }; monitorRuntime?: { bisValue: number; tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
     anaestheticGases?: { fiSevoPercent?: number }
   } } }>
 }
@@ -112,6 +113,7 @@ export function AnaesthSessionV2Preview({
       expiratoryResistanceCmH2OLs: runtime?.respiratoryRuntime?.expiratoryResistanceCmH2OLs ?? null,
       peakAirwayPressureCmH2O: runtime?.respiratoryRuntime?.peakAirwayPressureCmH2O ?? null,
       estimatedEtCo2MmHg: runtime?.respiratoryRuntime?.estimatedEtCo2MmHg ?? null,
+      spo2Percent: runtime?.respiratoryRuntime?.spo2Percent ?? null,
       respiratoryRate: runtime?.respiratoryRuntime?.respiratoryRate ?? null,
       tidalVolumeMl: runtime?.respiratoryRuntime?.tidalVolumeMl ?? null,
       simulationTime: runtime?.actionRuntime?.simulationTime ?? null,
@@ -134,7 +136,7 @@ export function AnaesthSessionV2Preview({
     lastBronchospasmSentRef.current = null
     volatileCallbackRef.current(null)
     monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
-    respiratoryCallbackRef.current({ estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null, clockRunning: false, clockSpeed: 1, expiratoryResistanceCmH2OLs: null, peakAirwayPressureCmH2O: null })
+    respiratoryCallbackRef.current({ estimatedEtCo2MmHg: null, spo2Percent: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null, clockRunning: false, clockSpeed: 1, expiratoryResistanceCmH2OLs: null, peakAirwayPressureCmH2O: null })
     setSnapshot(null)
     setActionLibrary(null)
     setVerifiedRole(null)
@@ -368,6 +370,7 @@ export function AnaesthSessionV2Preview({
         <span>Simulated time {actionRuntime?.simulationTime ?? 0}s</span>
         <span>Clock: {clock.running ? 'Running' : 'Paused'} · {clock.speed}×</span>
         <span>Depth {patient?.anaestheticPhysiology?.depthOfAnaesthesia ?? '—'}</span>
+        <span>SpO₂ (v2 model) {runtime?.respiratoryRuntime?.spo2Percent?.toFixed(1) ?? '—'}%</span>
         <span>EtCO₂ (v2 model) {runtime?.respiratoryRuntime?.estimatedEtCo2MmHg?.toFixed(1) ?? '—'} mmHg</span>
         <span>Effective RR (v2) {runtime?.respiratoryRuntime?.respiratoryRate?.toFixed(1) ?? '—'}/min</span>
         <span>Ppeak (v2 model) {runtime?.respiratoryRuntime?.peakAirwayPressureCmH2O?.toFixed(1) ?? '—'} cmH₂O</span>
