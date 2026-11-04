@@ -1,4 +1,4 @@
-import { AnaesthSessionV2Preview, type SessionV2MonitorRuntime, type SessionV2RespiratoryRuntime, type SessionV2VentilatorChange } from './AnaesthSessionV2Preview'
+import { AnaesthSessionV2Preview, type SessionV2MonitorRuntime, type SessionV2RespiratoryRuntime, type SessionV2VentilatorChange, type SessionV2AlarmRuntime } from './AnaesthSessionV2Preview'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EDUMON_APP_VERSION } from './appVersion'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
@@ -248,6 +248,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [v2MonitorState, setV2MonitorState] = useState<SessionV2MonitorRuntime>({ bisValue: null, simulationTime: null, tofReading: null })
   const v2TofRequestRef = useRef<(() => void) | null>(null)
   const v2VentilatorRequestRef = useRef<((change: SessionV2VentilatorChange) => void) | null>(null)
+  const v2AlarmRequestRef = useRef<((type: string, payload: object) => void) | null>(null)
+  const [v2AlarmState, setV2AlarmState] = useState<SessionV2AlarmRuntime | null>(null)
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
     const stored = persistence.readNumber('patient-transition-seconds', 0, [EDUMON_PATIENT_TRANSITION_STORAGE_KEY])
@@ -447,9 +449,21 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     role: teachingSession.role,
     sessionId: teachingSession.session?.id ?? null,
     policy: { syncAlarms: true, candidateCanEditAlarms: false, alarmsSilent: false },
-    evaluations: edumonAlarmEvaluations,
-    paused: simulationPaused,
+    evaluations: v2PreviewEnabled ? (v2AlarmState?.evaluations ?? []) : edumonAlarmEvaluations,
+    paused: simulationPaused || Boolean(v2PreviewEnabled && v2AlarmState?.silenced),
   })
+
+  useEffect(() => {
+    if (!v2PreviewEnabled || !v2AlarmState?.limits) return
+    const next = v2AlarmState.limits
+    setAlarmLimits(current => {
+      const updated = { ...current, heartRateLow: next.heartRateLow,
+        heartRateHigh: next.heartRateHigh, mapLow: next.mapLow, mapHigh: next.mapHigh,
+        spo2Low: next.spo2Low, spo2High: next.spo2High }
+      return Object.keys(updated).every(key => current[key as keyof EdumonAlarmLimits] === updated[key as keyof EdumonAlarmLimits])
+        ? current : updated
+    })
+  }, [v2PreviewEnabled, v2AlarmState?.limits])
 
   useEffect(() => {
     persistence.writeJson('alarm-limits', alarmLimits)
@@ -602,7 +616,12 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const toggleFreeze = displayControls.toggleFreeze
   const toggleLaser = displayControls.toggleLaser
 
-  const silenceAlarm = (durationMs: number) => alarmController.silenceFor(durationMs)
+  const silenceAlarm = (durationMs: number) => {
+    if (v2PreviewEnabled) {
+      if (v2AlarmState?.role !== 'instructor') return
+      v2AlarmRequestRef.current?.('alarm.silence.set', { durationSeconds: Math.min(300, Math.max(0, Math.round(durationMs / 1000))) })
+    } else alarmController.silenceFor(durationMs)
+  }
 
   const copyEdumonMonitorDiagnostics = async () => {
     await copySimulationDiagnostic<MonitorSample>({
@@ -646,6 +665,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           onRespiratorySnapshot={setV2RespiratoryState}
           tofRequestRef={v2TofRequestRef}
           ventilatorRequestRef={v2VentilatorRequestRef}
+          alarmRequestRef={v2AlarmRequestRef}
+          onAlarmSnapshot={setV2AlarmState}
         />
       )}
       <TeachingCandidateOverlay
@@ -695,13 +716,13 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             frozen={frozen}
             onFreezeToggle={toggleFreeze}
             freezeDisabled={displayControls.freezeDisabled}
-            alarmSilenced={alarmController.silenced}
-            alarmDisabled={alarmController.candidateLocked}
+            alarmSilenced={Boolean(v2PreviewEnabled && v2AlarmState?.silenced) || alarmController.silenced}
+            alarmDisabled={alarmController.candidateLocked || (v2PreviewEnabled && v2AlarmState?.role !== 'instructor')}
             alarmLabel={alarmController.silenceLabel}
             onAlarmSilence={silenceAlarm}
             alarmTimerClassName="edumon-alarm-silence-timer"
           />}
-          status={<div className="alarm-row"><div className="alarm-slot" aria-live="polite"><SharedAlarmBanner level={alarmController.level} labels={alarmController.labels} silenced={alarmController.silenced} /></div></div>}
+          status={<div className="alarm-row"><div className="alarm-slot" aria-live="polite"><SharedAlarmBanner level={alarmController.level} labels={alarmController.labels} silenced={Boolean(v2PreviewEnabled && v2AlarmState?.silenced) || alarmController.silenced} /></div></div>}
           display={<div className="edumon-monitor-body">
             <div className="edumon-waveform-area waveforms">
               {TRACE_SPECS.map((spec) => <TraceCanvas key={spec.key} samples={samples} spec={spec} />)}
@@ -710,14 +731,19 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
             <aside className="edumon-measurements metrics-panel" aria-label="Measured values">
               <div className="metrics-actions">
-                <button className="metrics-alarm-limits" type="button" disabled={alarmController.candidateLocked} onClick={() => setAlarmLimitsOpen(true)} title={alarmController.candidateLocked ? 'Alarm limits controlled by instructor' : 'Set alarm limits'}>Alarm limits</button>
+                <button className="metrics-alarm-limits" type="button" disabled={alarmController.candidateLocked || (v2PreviewEnabled && v2AlarmState?.role !== 'instructor')} onClick={() => setAlarmLimitsOpen(true)} title={alarmController.candidateLocked ? 'Alarm limits controlled by instructor' : 'Set alarm limits'}>Alarm limits</button>
               </div>
               <ValuePanel label="HR" value={measurements.heartRate == null ? '—' : `${measurements.heartRate}`} unit="bpm" className="ecg" />
               <ValuePanel label="ART" value={measurements.systolicPressure == null ? '—/—' : `${measurements.systolicPressure}/${measurements.diastolicPressure}`} unit="mmHg" detail={measurements.meanPressure == null ? 'MAP —' : `MAP ${measurements.meanPressure}`} className="art" />
               <ValuePanel label="SpO₂" value={measurements.spo2 == null ? '—' : `${measurements.spo2}`} unit="%" className="spo2" />
             </aside>
             <TeachingLaserPointerSurface role={teachingSession.role} sessionId={teachingSession.session?.id ?? null} enabled={laserActive} onEnabledChange={setLaserActive} />
-            <EdumonAlarmLimitsDialog open={alarmLimitsOpen} limits={alarmLimits} disabled={alarmController.candidateLocked} contained onChange={setAlarmLimits} onClose={() => setAlarmLimitsOpen(false)} />
+            <EdumonAlarmLimitsDialog open={alarmLimitsOpen} limits={alarmLimits} disabled={alarmController.candidateLocked || (v2PreviewEnabled && v2AlarmState?.role !== 'instructor')} contained onChange={next => {
+              if (v2PreviewEnabled) {
+                if (v2AlarmState?.role === 'instructor' && v2AlarmState.limits)
+                  v2AlarmRequestRef.current?.('alarm.limits.set', { ...v2AlarmState.limits, ...next })
+              } else setAlarmLimits(next)
+            }} onClose={() => setAlarmLimitsOpen(false)} />
           </div>}
           footer={<div className="edumon-control-strip edumon-control-strip-with-ventilator" aria-label="Monitor controls">
             <button type="button" className="edumon-control-tile disabled" disabled title="NIBP will be enabled in a later EDUMON milestone"><span>NIBP</span><strong>Inactive</strong><small>Manual / cycle</small></button>
@@ -731,7 +757,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         />
 
         )}
-        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined} v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined} onV2VentilatorChange={v2PreviewEnabled ? change => v2VentilatorRequestRef.current?.(change) : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined} v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined} onV2VentilatorChange={v2PreviewEnabled ? change => v2VentilatorRequestRef.current?.(change) : undefined} v2NibpReading={v2PreviewEnabled ? v2AlarmState?.nibpReading ?? null : undefined} onV2NibpMeasure={v2PreviewEnabled ? () => v2AlarmRequestRef.current?.('monitor.nibp.measure', {}) : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
 
       {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (
