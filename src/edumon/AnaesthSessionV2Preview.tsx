@@ -272,7 +272,7 @@ export function AnaesthSessionV2Preview({
             {resetPending ? 'Resetting…' : 'Reset Patient'}
           </button>
           <button type="button" onClick={newSession} disabled={resetPending}>New Session</button>
-        </>
+        </>}
       </div>}
     </section>
   )
