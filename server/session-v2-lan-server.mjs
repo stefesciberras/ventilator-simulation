@@ -16,7 +16,7 @@ import { createServer } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import { SessionEngineV2 } from '../src/session-v2/engine.mjs'
-import { createMemoryAuthorityStore } from '../src/session-v2/authorityStore.mjs'
+import { createNodeFileAuthorityStore } from './session-v2-file-authority-store.mjs'
 import { createSessionV2AuthorityHost } from '../src/session-v2/authorityHost.mjs'
 import { createAnaesthSessionAdapter } from '../src/session-v2/adapters/anaesth.mjs'
 import { createSessionV2LanGateway } from '../src/session-v2/lanGateway.mjs'
@@ -38,7 +38,7 @@ const authenticate = async token => {
   if (same(token, candidateToken)) return { participantId: 'candidate', role: 'candidate' }
   return null
 }
-const store = createMemoryAuthorityStore()
+const store = createNodeFileAuthorityStore({ filePath: process.env.LOPPJUSIM_V2_DATA_FILE || './.local/session-v2-authority.json' })
 const initialPatient = {
   heartRate: 78, rhythm: 'sinus', systolicPressure: 122, diastolicPressure: 68,
   spo2: 98, peripheralPerfusion: 1, temperatureC: 37,
@@ -53,7 +53,18 @@ const gateway = createSessionV2LanGateway({
     engine.join({ participantId: 'candidate', role: 'candidate' })
     engine.start('instructor')
     const host = createSessionV2AuthorityHost({ store, adapter, authenticate })
-    await host.create({ initialEngine: engine, credentials: instructorToken })
+    const existing = await store.load(sessionId)
+    if (existing) {
+      await host.takeover({ sessionId, credentials: instructorToken })
+    } else {
+      await host.create({ initialEngine: engine, credentials: instructorToken })
+    }
+    // Renew only from trusted server context. No client can extend a lease.
+    // Failure stops authorityHost; clients are shown an error on their next command.
+    const renewal = setInterval(() => {
+      void host.renew({ credentials: instructorToken }).catch(() => clearInterval(renewal))
+    }, 5000)
+    renewal.unref?.()
     return { host }
   },
 })
@@ -86,7 +97,7 @@ sockets.on('connection', ws => {
 })
 server.listen(port, bind, () => {
   console.log(`Experimental Session v2 LAN gateway on ws://${bind}:${port}/loppjusim-v2`)
-  console.log('Anaesth demo state only; Drugs & Events evaluator, real simulator UI and disk persistence are NOT connected.')
+  console.log('Anaesth demo model only; file-backed checkpoints are enabled. Production actions/scenarios are NOT connected.')
   if (bind !== '127.0.0.1' && bind !== '::1') {
     console.warn('WARNING: credentials traverse unencrypted ws://. Use only on an isolated, trusted LAN.')
   }
