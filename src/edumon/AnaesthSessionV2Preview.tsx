@@ -2,6 +2,8 @@ import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 
+type SessionV2ActionLibrary = { version: number; source: string;
+  actions: Array<{ id: string; name: string; kind: string; candidateAccess: string; mode: string }> }
 type SessionV2Snapshot = {
   session: { epoch: number; revision: number; status: string; mode: string }
   runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string }> }; patient?: Partial<MonitorPatientState> & {
@@ -26,6 +28,8 @@ export function AnaesthSessionV2Preview({
   const [status, setStatus] = useState<Status>('disconnected')
   const [message, setMessage] = useState('Experimental Cloudflare v2 preview; v1 remains in use for regular sessions.')
   const [snapshot, setSnapshot] = useState<SessionV2Snapshot | null>(null)
+  const [actionLibrary, setActionLibrary] = useState<SessionV2ActionLibrary | null>(null)
+  const [selectedAction, setSelectedAction] = useState('propofol')
   const [newHeartRate, setNewHeartRate] = useState(90)
   const [newFiSevo, setNewFiSevo] = useState(2)
   const socketRef = useRef<WebSocket | null>(null)
@@ -59,6 +63,7 @@ export function AnaesthSessionV2Preview({
     const currentAttempt = attemptRef.current
     snapshotRef.current = null
     setSnapshot(null)
+    setActionLibrary(null)
     setStatus('connecting')
     setMessage('Connecting to experimental Cloudflare session authority...')
     const url = endpoint.trim()
@@ -111,8 +116,10 @@ export function AnaesthSessionV2Preview({
           tries = 0
           setStatus('connected')
           setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
+          if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           receiveSnapshot(packet.snapshot)
         } else if (packet.type === 'snapshot') {
+          if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           receiveSnapshot(packet.snapshot)
         } else if (packet.type === 'receipt') {
           if (!packet.receipt?.accepted) setMessage(`Command rejected: ${packet.receipt?.reason ?? 'unknown'}`)
@@ -169,6 +176,7 @@ export function AnaesthSessionV2Preview({
     snapshotRef.current = null
     setStatus('disconnected')
     setSnapshot(null)
+    setActionLibrary(null)
   }
   const command = (type: string, payload: object) => {
     const socket = socketRef.current
@@ -212,9 +220,15 @@ export function AnaesthSessionV2Preview({
         <label>FiSevo <input type="number" min={0} max={8} step={0.1} value={newFiSevo}
           onChange={event => setNewFiSevo(Number(event.target.value))} /></label>
         <button type="button" onClick={() => command('anaesth.gas.set', { fiSevoPercent: newFiSevo })}>Set FiSevo</button>
-        <button type="button" onClick={() => command('action.invoke', { actionId: 'propofol' })}>Propofol (pilot)</button>
-        <button type="button" onClick={() => command('action.invoke', { actionId: 'fentanyl' })}>Fentanyl (pilot)</button>
-        <button type="button" onClick={() => command('action.invoke', { actionId: 'relaxant' })}>Relaxant (pilot)</button>
+        {actionLibrary && <>
+          <span>Session catalogue: {actionLibrary.source} (v{actionLibrary.version})</span>
+          <label>Action <select aria-label="Session v2 action" value={actionLibrary.actions.some(item => item.id === selectedAction) ? selectedAction : (actionLibrary.actions[0]?.id ?? '')}
+            onChange={event => setSelectedAction(event.target.value)}>
+            {actionLibrary.actions.map(item => <option key={item.id} value={item.id}>{item.name} · {item.kind}</option>)}
+          </select></label>
+          <button type="button" onClick={() => command('action.invoke', { actionId: actionLibrary.actions.some(item => item.id === selectedAction) ? selectedAction : actionLibrary.actions[0]?.id })}
+            disabled={!actionLibrary.actions.length}>Invoke selected action (experimental)</button>
+        </>}
         <button type="button" onClick={() => command('tick', { deltaMs: 1000 })}>Advance 1s (instructor)</button>
         <button type="button" onClick={() => {
           for (let i = 0; i < 10; i++) command('tick', { deltaMs: 1000 })

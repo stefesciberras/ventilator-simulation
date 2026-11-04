@@ -38,6 +38,7 @@ const pilot = [
     ],
   },
 ]
+export const getAnaesthV2PilotDefinitions = () => structuredClone(pilot)
 const definitions = new Map(pilot.map(def => [def.id, Object.freeze(def)]))
 export const anaesthV2PilotActionIds = Object.freeze([...definitions.keys()])
 export const createAnaesthV2PilotEvaluator = () =>
