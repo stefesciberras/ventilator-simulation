@@ -13,6 +13,8 @@ import { advanceBisIndex, tofReadingFromBlock } from '../../edumon/sharedAnaesth
 import { advanceAlveolarCo2 } from '../../core/physiology/respiratory/sharedCo2Kinetics.mjs'
 import { advanceOxygenation } from '../../core/physiology/respiratory/sharedOxygenation.mjs'
 import { setBronchospasmSeverity, advanceBronchospasm, projectBronchospasmVentilation } from './bronchospasm.mjs'
+import { DEFAULT_V2_ALARM_LIMITS, DEFAULT_V2_DISPLAY, withV2AlarmEvaluations,
+  setV2AlarmLimits, setV2AlarmDisplay, takeV2NibpMeasurement } from './anaesthAlarms.mjs'
 
 const clone = value => structuredClone(value)
 const finite = (value, min, max) =>
@@ -37,7 +39,8 @@ const DEVICE_LIMITS = Object.freeze({
   fio2: [0.21, 1], peepCmH2O: [0, 35],
 })
 const INPUT_TYPES = new Set(['patient.parameter.set', 'device.parameter.set',
-  'anaesth.gas.set', 'action.invoke', 'monitor.tof.measure', 'event.bronchospasm.set', 'device.ventilator.mode.set', 'tick'])
+  'anaesth.gas.set', 'action.invoke', 'monitor.tof.measure', 'event.bronchospasm.set', 'device.ventilator.mode.set',
+  'alarm.limits.set', 'alarm.display.set', 'alarm.silence.set', 'monitor.nibp.measure', 'tick'])
 
 function validatePathValue(payload, limits) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
@@ -70,14 +73,13 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       alveolarVentilationLMin: 4.2, minuteVentilationLMin: 6 },
     monitorRuntime: { bisValue: 100, tofReading: null },
     bronchospasmRuntime: { targetSeverityPercent: 0, effectiveSeverityPercent: 0 },
-    display: { invasiveBloodPressure: false, bis: false, capnography: false, temperature: false },
+    display: { ...DEFAULT_V2_DISPLAY },
+    alarmRuntime: { limits: { ...DEFAULT_V2_ALARM_LIMITS }, nibpReading: null,
+      nibpLow: false, nibpHigh: false, silencedUntilSimulationTime: 0 },
     controls: { paused: false, waveformsFrozen: false, alarmsSilenced: false },
   })
 
-  return {
-    initialState: () => initial(),
-    reset: () => initial(),
-    apply: (state, command, context) => {
+  const reduce = (state, command, context) => {
       if (!INPUT_TYPES.has(command.type)) throw new Error('Unsupported command')
       const actorRole = context.actorRole
       if (command.type === 'patient.parameter.set') {
@@ -132,6 +134,25 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
           throw new Error('Action evaluator must return canonical state')
         }
         return next
+      }
+      if (command.type === 'alarm.limits.set') {
+        if (actorRole !== 'instructor' && context.mode !== 'standalone') throw Error('Instructor-only alarm limits')
+        return setV2AlarmLimits(state,command.payload)
+      }
+      if (command.type === 'alarm.display.set') {
+        if (actorRole !== 'instructor' && context.mode !== 'standalone') throw Error('Instructor-only monitor display')
+        return setV2AlarmDisplay(state,command.payload)
+      }
+      if (command.type === 'alarm.silence.set') {
+        if (actorRole !== 'instructor' && context.mode !== 'standalone') throw Error('Instructor-only alarm silence')
+        if (!command.payload || Object.keys(command.payload).length!==1 ||
+            !finite(command.payload.durationSeconds,0,300)) throw Error('invalid-alarm-silence')
+        return {...state,alarmRuntime:{...state.alarmRuntime,
+          silencedUntilSimulationTime: state.actionRuntime.simulationTime + command.payload.durationSeconds}}
+      }
+      if (command.type === 'monitor.nibp.measure') {
+        if (command.payload && Object.keys(command.payload).length) throw Error('invalid-nibp-payload')
+        return takeV2NibpMeasurement(state)
       }
       if (command.type === 'monitor.tof.measure') {
         if (command.payload && Object.keys(command.payload).length) throw Error('Untrusted TOF payload')
@@ -217,6 +238,10 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
         bisValue: advanceBisIndex(state.monitorRuntime?.bisValue ?? 100, depth, delta / 1000),
         tofReading: state.monitorRuntime?.tofReading ?? null,
       } }
-    },
+  }
+  return {
+    initialState: () => withV2AlarmEvaluations(initial()),
+    reset: () => withV2AlarmEvaluations(initial()),
+    apply: (state, command, context) => withV2AlarmEvaluations(reduce(state, command, context)),
   }
 }

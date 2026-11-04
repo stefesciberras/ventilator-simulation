@@ -162,3 +162,9 @@ Existing ventilator controls in the experimental v2 preview send validated mode/
 
 ## v1.3.0.25 — Shared oxygenation and v2 SpO₂ authority
 The browser-free shared oxygenation kernel contains alveolar mixing, V/Q/shunt/PEEP effects and oximeter lag, reused by the established v1 respiratory engine and v2 checkpoint reducer. The canonical v2 respiratoryRuntime owns SpO₂ and alveolar O₂ fraction. V2 monitor projection supplies authoritative SpO₂ without mutating patient settings or consuming stale browser-local gas exchange. Alarms/NIBP remain next milestone.
+
+## v1.3.0.26 — Alarm visibility and NIBP authority
+- v2 alarmRuntime persists limits, last completed NIBP reading plus its fixed alarm outcome, current eligibility evaluations and simulated-time alarm silence. Display visibility lives in the same canonical patient runtime and is shared via WebSocket snapshots.
+- The existing monitor alarm controller remains responsible for banners, priorities, audible escalation and lifecycle presentation, but consumes v2 evaluative inputs in the opt-in v2 preview.
+- Hidden invasive BP, BIS and capnography must never trigger visible alarms. NIBP is measured only on completion: do not evaluate cuff values continuously or reinterpret retained readings on threshold edits.
+- V2 capabilities/limits/silence are instructor-controlled; candidate may complete a NIBP measurement. Reset clears the stored reading, silence and visibility to baseline. Browser-local v1 alarm/monitor toggles remain unchanged outside v2.

@@ -18,6 +18,19 @@ export type EdumonMonitorDisplayActionId = MonitorDisplayActionId
 const INSTRUCTOR_ONLY_MONITORS = new Set<EdumonMonitorDisplayActionId>()
 const INSTRUCTOR_ONLY_MONITOR_LISTENERS = new Set<() => void>()
 const CAPNOGRAPHY_BUTTON_ID = 'edumon-instructor-capnography-monitor-button'
+let v2DisplayAuthority: { display: Record<string, boolean>; onSet?: (parameter: string, enabled: boolean) => void } | null = null
+const V2_DISPLAY_LISTENERS = new Set<() => void>()
+export function setV2MonitorDisplayAuthority(display: Record<string, boolean> | null,
+  onSet?: (parameter: string, enabled: boolean) => void): void {
+  v2DisplayAuthority = display ? { display, onSet } : null
+  for (const notify of V2_DISPLAY_LISTENERS) notify()
+  notifyInstructorMonitorListeners()
+}
+const subscribeToV2DisplayAuthority = (listener: () => void) => {
+  V2_DISPLAY_LISTENERS.add(listener)
+  return () => { V2_DISPLAY_LISTENERS.delete(listener) }
+}
+
 
 function notifyInstructorMonitorListeners() {
   for (const listener of INSTRUCTOR_ONLY_MONITOR_LISTENERS) listener()
@@ -33,6 +46,12 @@ export function isInstructorMonitorDisplayEnabled(actionId: EdumonMonitorDisplay
 }
 
 export function setInstructorMonitorDisplay(actionId: EdumonMonitorDisplayActionId, enabled: boolean): void {
+  if (v2DisplayAuthority) {
+    const parameter = Object.keys(EDUMON_MONITOR_DISPLAY_ACTION_IDS).find(
+      key => EDUMON_MONITOR_DISPLAY_ACTION_IDS[key as keyof typeof EDUMON_MONITOR_DISPLAY_ACTION_IDS] === actionId)
+    if (parameter) v2DisplayAuthority.onSet?.(parameter, enabled)
+    return
+  }
   const before = INSTRUCTOR_ONLY_MONITORS.has(actionId)
   if (enabled) INSTRUCTOR_ONLY_MONITORS.add(actionId)
   else INSTRUCTOR_ONLY_MONITORS.delete(actionId)
@@ -40,6 +59,15 @@ export function setInstructorMonitorDisplay(actionId: EdumonMonitorDisplayAction
 }
 
 export function toggleInstructorMonitorDisplay(actionId: EdumonMonitorDisplayActionId): boolean {
+  if (v2DisplayAuthority) {
+    const parameter = Object.keys(EDUMON_MONITOR_DISPLAY_ACTION_IDS).find(
+      key => EDUMON_MONITOR_DISPLAY_ACTION_IDS[key as keyof typeof EDUMON_MONITOR_DISPLAY_ACTION_IDS] === actionId)
+    if (parameter) {
+      const next = !v2DisplayAuthority.display[parameter]
+      v2DisplayAuthority.onSet?.(parameter, next)
+      return next
+    }
+  }
   const next = !INSTRUCTOR_ONLY_MONITORS.has(actionId)
   setInstructorMonitorDisplay(actionId, next)
   return next
@@ -62,7 +90,13 @@ export function useMonitorDisplayEnabled(actionId: EdumonMonitorDisplayActionId)
     () => isInstructorMonitorDisplayEnabled(actionId),
     () => false,
   )
-  return sharedEnabled || instructorOnlyEnabled
+  const v2Enabled = useSyncExternalStore(subscribeToV2DisplayAuthority, () => {
+    if (!v2DisplayAuthority) return null
+    const key = Object.keys(EDUMON_MONITOR_DISPLAY_ACTION_IDS).find(
+      name => EDUMON_MONITOR_DISPLAY_ACTION_IDS[name as keyof typeof EDUMON_MONITOR_DISPLAY_ACTION_IDS] === actionId)
+    return key ? Boolean(v2DisplayAuthority.display[key]) : null
+  }, () => null)
+  return v2Enabled ?? (sharedEnabled || instructorOnlyEnabled)
 }
 
 function syncCapnographyButton(): void {
@@ -98,7 +132,8 @@ function syncCapnographyButton(): void {
   if (button.innerHTML !== desiredMarkup) button.innerHTML = desiredMarkup
   if (button.parentElement !== host) host.appendChild(button)
 
-  const active = isInstructorMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.capnography)
+  const active = v2DisplayAuthority ? Boolean(v2DisplayAuthority.display.capnography)
+    : isInstructorMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.capnography)
   button.classList.toggle('active', active)
   button.setAttribute('aria-pressed', active ? 'true' : 'false')
 }

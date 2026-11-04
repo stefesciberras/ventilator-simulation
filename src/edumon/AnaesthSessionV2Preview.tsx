@@ -2,6 +2,15 @@ import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 
+export type SessionV2AlarmRuntime = {
+  limits: Record<string, number>;
+  display: Record<string, boolean>;
+  evaluations: Array<{ key: string; label: string; active: boolean; eligible: boolean;
+    priority: 'warning' | 'critical'; immediateCritical: boolean }>;
+  nibpReading: { systolic: number; diastolic: number; mean: number; measuredAtSimulationTime: number } | null;
+  silenced: boolean;
+  role: 'instructor' | 'candidate' | null;
+}
 export type SessionV2VentilatorChange =
   | { type: 'mode'; mode: string }
   | { type: 'setting'; path: string; value: number }
@@ -16,7 +25,7 @@ type SessionV2ActionLibrary = { version: number; source: string;
   actions: Array<{ id: string; name: string; kind: string; candidateAccess: string; mode: string }> }
 type SessionV2Snapshot = {
   session: { epoch: number; revision: number; status: string; mode: string }
-  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; respiratoryRuntime?: { estimatedEtCo2MmHg: number; respiratoryRate: number; tidalVolumeMl: number; spo2Percent: number; expiratoryResistanceCmH2OLs: number; peakAirwayPressureCmH2O: number }; bronchospasmRuntime?: { targetSeverityPercent: number; effectiveSeverityPercent: number }; monitorRuntime?: { bisValue: number; tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
+  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; respiratoryRuntime?: { estimatedEtCo2MmHg: number; respiratoryRate: number; tidalVolumeMl: number; spo2Percent: number; expiratoryResistanceCmH2OLs: number; peakAirwayPressureCmH2O: number }; bronchospasmRuntime?: { targetSeverityPercent: number; effectiveSeverityPercent: number }; alarmRuntime?: Omit<SessionV2AlarmRuntime, 'display' | 'role'>; display?: Record<string, boolean>; monitorRuntime?: { bisValue: number; tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
     anaestheticGases?: { fiSevoPercent?: number }
   } } }>
 }
@@ -35,6 +44,8 @@ export function AnaesthSessionV2Preview({
   onRespiratorySnapshot,
   tofRequestRef,
   ventilatorRequestRef,
+  onAlarmSnapshot,
+  alarmRequestRef,
 }: {
   onPatientSnapshot: (patient: Partial<MonitorPatientState>) => void
   onVolatileSnapshot: (etSevoPercent: number | null) => void
@@ -42,6 +53,8 @@ export function AnaesthSessionV2Preview({
   onRespiratorySnapshot: (state: SessionV2RespiratoryRuntime) => void
   tofRequestRef: { current: (() => void) | null }
   ventilatorRequestRef: { current: ((change: SessionV2VentilatorChange) => void) | null }
+  onAlarmSnapshot: (state: SessionV2AlarmRuntime | null) => void
+  alarmRequestRef: { current: ((type: string, payload: object) => void) | null }
 }) {
   const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
   const [sessionId, setSessionId] = useState('ana-preview')
@@ -65,14 +78,17 @@ export function AnaesthSessionV2Preview({
   const attemptRef = useRef(0)
   const sequenceRef = useRef(0)
   const snapshotRef = useRef<SessionV2Snapshot | null>(null)
+  const verifiedRoleRef = useRef<'instructor' | 'candidate' | null>(null)
   const patientCallbackRef = useRef(onPatientSnapshot)
   const volatileCallbackRef = useRef(onVolatileSnapshot)
   const monitorCallbackRef = useRef(onMonitorSnapshot)
   const respiratoryCallbackRef = useRef(onRespiratorySnapshot)
+  const alarmCallbackRef = useRef(onAlarmSnapshot)
   patientCallbackRef.current = onPatientSnapshot
   volatileCallbackRef.current = onVolatileSnapshot
   monitorCallbackRef.current = onMonitorSnapshot
   respiratoryCallbackRef.current = onRespiratorySnapshot
+  alarmCallbackRef.current = onAlarmSnapshot
 
   useEffect(() => () => {
     closedRef.current = true
@@ -120,6 +136,14 @@ export function AnaesthSessionV2Preview({
       clockRunning: authorityClock.running,
       clockSpeed: authorityClock.speed,
     })
+    if (runtime?.alarmRuntime?.limits) alarmCallbackRef.current({
+      limits: runtime.alarmRuntime.limits,
+      display: runtime.display ?? {},
+      evaluations: runtime.alarmRuntime.evaluations ?? [],
+      nibpReading: runtime.alarmRuntime.nibpReading ?? null,
+      silenced: runtime.alarmRuntime.silenced ?? false,
+      role: verifiedRoleRef.current,
+    })
     monitorCallbackRef.current({
       bisValue: typeof runtime?.monitorRuntime?.bisValue === 'number' ? runtime.monitorRuntime.bisValue : null,
       simulationTime: runtime?.actionRuntime?.simulationTime ?? null,
@@ -131,6 +155,8 @@ export function AnaesthSessionV2Preview({
     attemptRef.current += 1
     const currentAttempt = attemptRef.current
     snapshotRef.current = null
+    verifiedRoleRef.current = null
+    alarmCallbackRef.current(null)
     lastAuthoritativeFiSevoRef.current = null
     lastBronchospasmTargetRef.current = null
     lastBronchospasmSentRef.current = null
@@ -192,8 +218,9 @@ export function AnaesthSessionV2Preview({
           welcomed = true
           window.clearTimeout(handshakeTimeout)
           tries = 0
-          setVerifiedRole(packet.role === 'instructor' || packet.role === 'candidate'
-            ? packet.role : null)
+          verifiedRoleRef.current = packet.role === 'instructor' || packet.role === 'candidate'
+            ? packet.role : null
+          setVerifiedRole(verifiedRoleRef.current)
           setStatus('connected')
           setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
@@ -271,6 +298,9 @@ export function AnaesthSessionV2Preview({
     monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
     tofRequestRef.current = null
     ventilatorRequestRef.current = null
+    alarmRequestRef.current = null
+    alarmCallbackRef.current(null)
+    verifiedRoleRef.current = null
     setStatus('disconnected')
     setSnapshot(null)
     setActionLibrary(null)
@@ -289,6 +319,8 @@ export function AnaesthSessionV2Preview({
     return true
   }
   tofRequestRef.current = status === 'connected' ? () => { command('monitor.tof.measure', {}) } : null
+  alarmRequestRef.current = status === 'connected'
+    ? (type: string, payload: object) => { command(type, payload) } : null
   ventilatorRequestRef.current = status === 'connected'
     ? (change: SessionV2VentilatorChange) => {
       if (change.type === 'mode') command('device.ventilator.mode.set', { mode: change.mode })
@@ -375,6 +407,7 @@ export function AnaesthSessionV2Preview({
         <span>Effective RR (v2) {runtime?.respiratoryRuntime?.respiratoryRate?.toFixed(1) ?? '—'}/min</span>
         <span>Ppeak (v2 model) {runtime?.respiratoryRuntime?.peakAirwayPressureCmH2O?.toFixed(1) ?? '—'} cmH₂O</span>
         <span>Airway resistance {runtime?.respiratoryRuntime?.expiratoryResistanceCmH2OLs?.toFixed(1) ?? '—'} cmH₂O·s/L</span>
+        <span>Active eligible alarms {runtime?.alarmRuntime?.evaluations?.filter(item => item.active && item.eligible).length ?? 0}</span>
         <span>Bronchospasm effective {runtime?.bronchospasmRuntime?.effectiveSeverityPercent?.toFixed(0) ?? '0'}%</span>
         {verifiedRole === 'instructor' && <>
           <label>Bronchospasm severity {bronchospasmSeverity}%
@@ -383,6 +416,14 @@ export function AnaesthSessionV2Preview({
           </label>
           <span style={{ fontSize: 12 }}>Live severity</span>
 
+        </>}
+        {verifiedRole === 'instructor' && runtime?.alarmRuntime && <>
+          {(['invasiveBloodPressure', 'capnography', 'bis', 'temperature'] as const).map(parameter =>
+            <label key={parameter} style={{fontSize:12}}>
+              <input type="checkbox" checked={Boolean(runtime.display?.[parameter])}
+                onChange={event => command('alarm.display.set', { parameter, enabled: event.target.checked })}/>
+              {parameter}
+            </label>)}
         </>}
         <span>BIS (modelled) {runtime?.monitorRuntime?.bisValue == null ? '—' : Math.round(runtime.monitorRuntime.bisValue)}</span>
         <span>TOF (last measurement) {runtime?.monitorRuntime?.tofReading ? `${runtime.monitorRuntime.tofReading.count}/4 · ratio ${runtime.monitorRuntime.tofReading.ratio.toFixed(2)}` : '—'}</span>

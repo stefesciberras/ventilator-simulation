@@ -2,6 +2,14 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.26 — 2026-11-04 (authoritative Anaesth monitor alarms, visibility and NIBP)
+- Added checkpointed experimental v2 alarm limits, display visibility, active eligibility evaluations, alarm silence and last completed NIBP reading. The shared v1 alarm controller still owns escalation, priority, banners and sound; its v2 inputs now come from the canonical Cloudflare session rather than browser-local physiology or hidden parameter values.
+- Invasive BP, BIS and EtCO2 alarms are ineligible while their corresponding display capability is hidden; SpO2 and HR remain visible by default. The v2 monitor display switches route through validated instructor-only session commands. Candidate screens receive identical visibility and alarm evaluations on each snapshot.
+- NIBP alarms are updated **only when a cuff measurement has completed**. Starting inflation, subsequent continuous MAP changes or edits to limits do not retroactively reinterpret a prior reading; the next completed measurement recalculates the retained outcome. The existing NIBP UI publishes an authoritative measurement command after its normal cycle and shows the checkpointed result.
+- Alarm limit controls submit validated, instructor-only v2 values and synchronize across peers; command payloads cannot inject measurements or bogus thresholds. V2 alarm silence is instructor-only and session-time based.
+- Added regressions for hidden invasive BP/BIS/EtCO2 gating, physiologic SpO2, NIBP measurement-only events, authority permissions, invalid commands, limit editing, silence, reset and checkpoint restoration.
+- Bumped both app versions to **1.3.0.26**. The default v1 session/monitor runtime remains unchanged. Full browser-level UX and cloud deployment need testing before removing experimental gating.
+
 ## 1.3.0.25 — 2026-11-04 (shared oxygenation and authoritative v2 SpO₂)
 - Extracted the existing EDUSIM alveolar oxygen balance, V/Q/shunt/PEEP response and pulse oximeter lag into a browser-free shared kernel, used by v1 respiratory physiology and checkpointed Session Engine v2 Anaesth.
 - V2 now stores modelled alveolar O₂ fraction and SpO₂, integrating on authoritative simulated-time ticks. Ventilation/FiO₂, bronchospasm resistance, shunt and metabolic oxygen demand influence the result; the instructor-set baseline remains an upper cap.

@@ -98,7 +98,11 @@ function playNibpStartSound(audioContextRef: React.MutableRefObject<AudioContext
   pump.stop(now + 2.2)
 }
 
-export function EdumonNibpControl({ patientState }: { patientState: MonitorPatientState }) {
+export function EdumonNibpControl({ patientState, v2Reading, onV2Measure }: {
+  patientState: MonitorPatientState
+  v2Reading?: { systolic: number; diastolic: number; mean: number; measuredAtSimulationTime: number } | null
+  onV2Measure?: () => void
+}) {
   const [host, setHost] = useState<HTMLElement | null>(null)
   const [open, setOpen] = useState(false)
   const [phase, setPhase] = useState<NibpPhase>('idle')
@@ -107,6 +111,8 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
   const [interval, setIntervalMode] = useState<NibpInterval>('off')
   const intervalRef = useRef<NibpInterval>('off')
   const patientRef = useRef(patientState)
+  const onV2MeasureRef = useRef(onV2Measure)
+  onV2MeasureRef.current = onV2Measure
   const cycleIndexRef = useRef(0)
   const timerRef = useRef<number | null>(null)
   const scheduledRef = useRef<number | null>(null)
@@ -196,8 +202,10 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
       measuringRef.current = false
       setPhase('idle')
       setCuffPressure(0)
-      setReading(target)
-      recordNibpMeasurementForAlarms(target.mean)
+      if (v2Reading === undefined) {
+        setReading(target)
+        recordNibpMeasurementForAlarms(target.mean)
+      } else onV2MeasureRef.current?.()
       void recordSessionLogEvent({
         category: 'device',
         eventType: 'nibp.measured',
@@ -209,7 +217,7 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
       if (selected === 'off') return
       scheduledRef.current = window.setTimeout(startMeasurement, INTERVAL_MS[selected])
     }, 80)
-  }, [clearTimers])
+  }, [clearTimers, v2Reading !== undefined])
 
   useEffect(() => () => {
     clearTimers()
@@ -263,10 +271,11 @@ export function EdumonNibpControl({ patientState }: { patientState: MonitorPatie
 
   if (!host) return null
 
+  const shownReading = v2Reading === undefined ? reading : v2Reading
   const status = phase === 'idle'
-    ? (reading ? `${reading.systolic}/${reading.diastolic}` : '—/—')
+    ? (shownReading ? `${shownReading.systolic}/${shownReading.diastolic}` : '—/—')
     : `${cuffPressure}`
-  const meanDetail = phase === 'idle' && reading ? `MAP ${reading.mean}` : null
+  const meanDetail = phase === 'idle' && shownReading ? `MAP ${shownReading.mean}` : null
   const cycleDetail = interval === 'off' ? null : `Cycle ${interval.toUpperCase()}`
   const phaseDetail = phase === 'idle' ? cycleDetail : `Cuff mmHg · ${phase === 'inflating' ? 'inflating' : 'measuring'}`
 
