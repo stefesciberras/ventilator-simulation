@@ -135,7 +135,7 @@ export class SessionEngineV2 {
     })
     engine.#session = { ...session,
       epoch: session.status === 'ended' ? session.epoch : session.epoch + 1,
-      status: session.status === 'active' ? 'recovering' : session.status,
+      status: session.status === 'active' && session.authorityId ? 'recovering' : session.status,
       revision: session.status === 'ended' ? session.revision : session.revision + 1,
     }
     engine.#participants = new Map(participants.map(p => [p.id, { ...p, connected: false }]))
