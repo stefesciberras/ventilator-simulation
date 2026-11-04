@@ -60,3 +60,13 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - `src/edumon/AnaesthSessionV2Preview.tsx` is shown only on the Anaesth route with `?sessionV2Preview=1`. It connects to the experimental LAN gateway and renders the canonical patient state through the existing monitor input, without taking over normal v1 sessions.
 - `scripts/session-v2-file-restart-regression.mjs` verifies file-backed recovery and old-authority fencing.
 - Preview is NOT an enabled production mode. Local demo drug evaluator is not loaded in the standalone LAN server; no production ActionRuntime or full physiological state model is yet integrated. No TLS, browser credential provisioning, multi-process lease coordinator or full two-browser refresh E2E test is claimed.
+
+
+## Cloudflare Durable Object experiment (v1.3.0.6)
+- Worker route `/api/session-v2/ws?sessionId=ana-preview` checks the experimental feature flag and two server-side secrets; the browser places its test credential in the `v2auth.<secret>` WebSocket subprotocol, not in a query string.
+- `worker/sessionV2Room.mjs` owns one product-neutral v2 runtime per session ID, uses persisted SQLite-backed Durable Object storage checkpoints, accepts supported validated v2 commands and publishes revisioned snapshots after accepted commits.
+- `wrangler.jsonc` declares a new SQLite Durable Object namespace via migration and defaults `SESSION_V2_EXPERIMENTAL` to `0`.
+- Anaesth preview `?sessionV2Preview=1` connects to same-origin `wss://.../api/session-v2/ws`; no standalone Node server is required for this route.
+- Explicit opt-in requires `SESSION_V2_EXPERIMENTAL=1` in Cloudflare deployment settings and two distinct server-side secrets (`SESSION_V2_INSTRUCTOR_TOKEN`, `SESSION_V2_CANDIDATE_TOKEN`), each 32+ characters.
+- Existing Node LAN experiment remains a development harness only; the live v1 session engine is untouched.
+- Cloudflare prototype only: no true LAN offline authority, no production Auth integration, no real Anaesth/ITU/Vent physiology bridge, no session scenario runtime integration, no production candidate UI permissions beyond demo model. Not production-ready.
