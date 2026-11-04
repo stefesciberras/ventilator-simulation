@@ -2,6 +2,14 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.18 — 2026-11-04 (single authoritative volatile display in v2 preview)
+- Bumped Vent and Anaesth/ITU versions to **1.3.0.18**, preserving the normal v1 simulator.
+- Fixed the experimental v2 preview/full Anaesth gas-panel split-brain state. Previously, the preview restored checkpointed `gasRuntime.etSevoPercent` but the full monitor footer retained its *own* React ref/state and kept calculating sevo uptake on a browser animation loop. This made a page refresh show EtSevo 0 in the monitor despite a restored server checkpoint, and allowed the full monitor EtSevo to remain high after v2 Reset Patient.
+- V2 preview now publishes each authoritative EtSevo snapshot to its parent. That value is passed to `EdumonWorkspacePanel` and `EdumonAnaGasControl`. Only when `sessionV2Preview=1`, the full gas footer and MAC read the canonical v2 concentration, and the competing local v1 uptake/depth loop and local FiSevo manipulation are disabled.
+- Connecting/disconnecting clears stale derived volatile display. A missing legacy EtSevo appears as unavailable rather than a fabricated zero, pending a new checkpoint.
+- Added regression testing of v2-only monitor wiring and restored/reset canonical FiSevo/EtSevo. No normal v1 gas UI calculation changes.
+- **Remaining gap:** BIS, TOF and other standard monitor/device controls are still local in the experimental v2 preview; full session/device authority and display synchronization remain future work.
+
 ## 1.3.0.17 — 2026-11-04 (v2 reconnect volatile-state synchronization)
 - Bumped both products to **1.3.0.17**, preserving the production v1 simulator and Cloudflare v2 authority.
 - Fixed the experimental Anaesth v2 preview's FiSevo editor: its draft now initializes from the **canonical session patient** on the first welcome snapshot and updates only when the authoritative FiSevo actually changes (including reset). Continuous tick snapshots do not overwrite an unsent user edit. Connecting/disconnecting clears stale draft-sync provenance.
