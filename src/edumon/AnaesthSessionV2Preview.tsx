@@ -30,6 +30,8 @@ export function AnaesthSessionV2Preview({
   const [snapshot, setSnapshot] = useState<SessionV2Snapshot | null>(null)
   const [actionLibrary, setActionLibrary] = useState<SessionV2ActionLibrary | null>(null)
   const [selectedAction, setSelectedAction] = useState('propofol')
+  const [verifiedRole, setVerifiedRole] = useState<'instructor' | 'candidate' | null>(null)
+  const [resetPending, setResetPending] = useState(false)
   const [newHeartRate, setNewHeartRate] = useState(90)
   const [newFiSevo, setNewFiSevo] = useState(2)
   const socketRef = useRef<WebSocket | null>(null)
@@ -57,17 +59,19 @@ export function AnaesthSessionV2Preview({
     const patient = runtime?.monitorProjection ?? runtime?.patient
     if (patient) patientCallbackRef.current(patient)
   }
-  const connect = () => {
+  const connect = (targetSessionId = sessionId) => {
     closedRef.current = false
     attemptRef.current += 1
     const currentAttempt = attemptRef.current
     snapshotRef.current = null
     setSnapshot(null)
     setActionLibrary(null)
+    setVerifiedRole(null)
+    setResetPending(false)
     setStatus('connecting')
     setMessage('Connecting to experimental Cloudflare session authority...')
     const url = endpoint.trim()
-    if (!/^wss?:\/\//.test(url) || !/^[a-zA-Z0-9_-]{3,80}$/.test(sessionId)) {
+    if (!/^wss?:\/\//.test(url) || !/^[a-zA-Z0-9_-]{3,80}$/.test(targetSessionId)) {
       setStatus('error')
       setMessage('Invalid Cloudflare WebSocket endpoint or session ID')
       return
@@ -86,7 +90,7 @@ export function AnaesthSessionV2Preview({
       if (closedRef.current || currentAttempt !== attemptRef.current) return
       let socket: WebSocket
       try {
-        socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}`, ['loppjusim-v2', protocol])
+        socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(targetSessionId)}`, ['loppjusim-v2', protocol])
       } catch {
         closedRef.current = true
         setStatus('error')
@@ -114,6 +118,8 @@ export function AnaesthSessionV2Preview({
           welcomed = true
           window.clearTimeout(handshakeTimeout)
           tries = 0
+          setVerifiedRole(packet.role === 'instructor' || packet.role === 'candidate'
+            ? packet.role : null)
           setStatus('connected')
           setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
@@ -122,7 +128,13 @@ export function AnaesthSessionV2Preview({
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           receiveSnapshot(packet.snapshot)
         } else if (packet.type === 'receipt') {
-          if (!packet.receipt?.accepted) setMessage(`Command rejected: ${packet.receipt?.reason ?? 'unknown'}`)
+          if (typeof packet.requestId === 'string' && packet.requestId.startsWith('reset-')) {
+            setResetPending(false)
+            setMessage(packet.receipt?.accepted
+              ? 'Patient reset committed: default values, no active drugs, and simulation time 0. Both screens updated.'
+              : `Reset rejected: ${packet.receipt?.reason ?? 'unknown'}`)
+          }
+          if (!packet.receipt?.accepted && !String(packet.requestId ?? '').startsWith('reset-')) setMessage(`Command rejected: ${packet.receipt?.reason ?? 'unknown'}`)
         } else if (packet.type === 'error') {
           setMessage(`Cloud authority: ${packet.reason}`)
           if (['unauthenticated', 'not-session-member', 'invalid-session'].includes(packet.reason)) {
@@ -177,15 +189,35 @@ export function AnaesthSessionV2Preview({
     setStatus('disconnected')
     setSnapshot(null)
     setActionLibrary(null)
+    setVerifiedRole(null)
+    setResetPending(false)
   }
-  const command = (type: string, payload: object) => {
+  const command = (type: string, payload: object, requestPrefix = 'cmd') => {
     const socket = socketRef.current
     const epoch = snapshotRef.current?.session.epoch
-    if (socket?.readyState !== WebSocket.OPEN || !epoch) return
+    if (socket?.readyState !== WebSocket.OPEN || !epoch) return false
     socket.send(JSON.stringify({ protocol: 2, type: 'command',
-      requestId: `cmd-${++sequenceRef.current}`,
+      requestId: `${requestPrefix}-${++sequenceRef.current}`,
       command: { id: crypto.randomUUID(), epoch, runtimeId: 'main', type, payload },
     }))
+    return true
+  }
+  const resetPatient = () => {
+    if (verifiedRole !== 'instructor' || resetPending) return
+    if (!window.confirm('Reset this session to defaults? This removes ALL active drugs and events, restores baseline patient settings, and rewinds simulation time to zero for everyone connected.')) return
+    setResetPending(true)
+    if (!command('reset', {}, 'reset')) setResetPending(false)
+  }
+  const newSession = () => {
+    if (verifiedRole !== 'instructor') return
+    if (!window.confirm('Create and join a NEW v2 session with default patient values and the latest available action library? The current session remains saved. Candidates must reconnect using the new session ID.')) return
+    const nextId = `ana-${crypto.randomUUID()}`
+    // Opening the new room is initiated by the authenticated instructor.
+    // Close the old socket and cancel its retry attempts before switching.
+    disconnect()
+    setSessionId(nextId)
+    connect(nextId)
+    setMessage(`Creating session ${nextId}. Share this ID with the candidate after connection.`)
   }
   const runtime = snapshot?.runtimes.find(item => item.id === 'main')?.state
   const patient = runtime?.monitorProjection ?? runtime?.patient
@@ -204,11 +236,12 @@ export function AnaesthSessionV2Preview({
           value={secret} onChange={event => setSecret(event.target.value)} disabled={status === 'connected'} /></label>
         {status === 'connected' || status === 'connecting' || status === 'reconnecting'
           ? <button type="button" onClick={disconnect}>Disconnect</button>
-          : <button type="button" onClick={connect} disabled={!secret}>Connect</button>}
+          : <button type="button" onClick={() => connect()} disabled={!secret}>Connect</button>}
       </div>
       <p role="status" style={{ fontSize: 12 }}>{status}: {message}</p>
       {snapshot && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <span>Epoch {snapshot.session.epoch} · Rev {snapshot.session.revision}</span>
+        <span>Role: {verifiedRole ?? 'unknown'}</span>
         <span>HR {patient?.heartRate ?? '—'} bpm</span>
         <span>FiSevo {patient?.anaestheticGases?.fiSevoPercent ?? '—'}%</span>
         <span>Simulated time {actionRuntime?.simulationTime ?? 0}s</span>
@@ -234,6 +267,12 @@ export function AnaesthSessionV2Preview({
           for (let i = 0; i < 10; i++) command('tick', { deltaMs: 1000 })
         }}>Advance 10s (instructor)</button>
         <span>Active effects {actionRuntime?.activeEffects?.length ?? 0}</span>
+        {verifiedRole === 'instructor' && <>
+          <button type="button" onClick={resetPatient} disabled={resetPending}>
+            {resetPending ? 'Resetting…' : 'Reset Patient'}
+          </button>
+          <button type="button" onClick={newSession} disabled={resetPending}>New Session</button>
+        </>
       </div>}
     </section>
   )
