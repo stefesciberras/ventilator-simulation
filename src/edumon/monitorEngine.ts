@@ -282,7 +282,7 @@ function recordBeat(runtime: MonitorWaveformRuntime, state: MonitorPatientState,
   const systolic = beatSystolicPressure(state, rhythm, pulseAmplitude)
   const mean = diastolic + (systolic - diastolic) / 3
   const perfusionNoise = (beatRandom(runtime.beatIndex + 101, rhythm) - 0.5) * (0.35 + (1 - clamp(state.peripheralPerfusion, 0, 1)) * 0.9)
-  const physiologicalSpo2 = currentEdumonRespiratorySpO2(state.spo2)
+  const physiologicalSpo2 = state.authoritativeV2Spo2 ?? currentEdumonRespiratorySpO2(state.spo2)
   const perfusionSpo2 = spo2ForSystolic(physiologicalSpo2, systolic)
   runtime.beatHistory.push({ time, rrSeconds, instantaneousRate: 60 / rrSeconds, pulseAmplitude, systolic, diastolic, mean, spo2: perfusionSpo2 == null ? null : clamp(perfusionSpo2 + perfusionNoise, 0, 100) })
 }
@@ -360,14 +360,16 @@ export function measurementsFor(state: MonitorPatientState): MonitorMeasurements
   const spo2Beats = beats.filter((beat) => beat.time >= now - 30 && beat.spo2 != null)
   const pressure = effectiveBloodPressure(state)
   const currentSystolic = latestBeat?.systolic ?? pressure.systolic
-  const physiologicalSpo2 = currentEdumonRespiratorySpO2(state.spo2)
+  const physiologicalSpo2 = state.authoritativeV2Spo2 ?? currentEdumonRespiratorySpO2(state.spo2)
   const fallbackSpo2 = spo2ForSystolic(physiologicalSpo2, currentSystolic)
   return {
     heartRate: Math.round(average(hrBeats.map((beat) => beat.instantaneousRate)) ?? effectiveRate(state)),
     systolicPressure: Math.round(currentSystolic),
     diastolicPressure: Math.round(latestBeat?.diastolic ?? pressure.diastolic),
     meanPressure: Math.round(latestBeat?.mean ?? pressure.mean),
-    spo2: currentSystolic < 70 ? null : Math.round(average(spo2Beats.map((beat) => beat.spo2 as number)) ?? fallbackSpo2 ?? clamp(physiologicalSpo2, 0, 100)),
+    spo2: currentSystolic < 70 ? null : (state.authoritativeV2Spo2 == null
+      ? Math.round(average(spo2Beats.map((beat) => beat.spo2 as number)) ?? fallbackSpo2 ?? clamp(physiologicalSpo2, 0, 100))
+      : Math.round(clamp(state.authoritativeV2Spo2, 0, 100))),
   }
 }
 
