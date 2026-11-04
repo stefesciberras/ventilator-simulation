@@ -2,6 +2,13 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.8 — 2026-11-04 (Cloudflare WebSocket subprotocol handshake)
+- Bumped Vent and Anaesth/ITU application versions to **1.3.0.8**; all production v1 sessions remain unchanged.
+- Corrected v2 Cloudflare WebSocket handshake negotiation: the browser now offers a fixed, public `loppjusim-v2` subprotocol alongside the credential-bearing, hex-encoded token.
+- The Worker validates the secret, strips the credential-bearing token from the internal Durable Object request, forwards only the public subprotocol, and the Durable Object selects `loppjusim-v2` in its HTTP 101 response. Secrets are never echoed in the selected protocol.
+- Added regression assertions for 101 responses and the negotiated protocol. This addresses browser handshake failures despite valid credentials.
+- The v2 preview remains experimental, disabled by feature flag unless explicitly configured. A successful build does not guarantee the live Cloudflare deployment or secret configuration.
+
 ## 1.3.0.7 — 2026-11-04 (Cloudflare preview credential encoding fix)
 - Bumped Vent and Anaesth/ITU displayed application versions to **1.3.0.7**. Session Engine v1 remains unchanged.
 - Fixed browser WebSocket constructor failure when instructor/candidate test secrets include punctuation or non-ASCII characters. Both browser and Cloudflare Worker use a validated UTF-8 hex-encoded subprotocol, not the raw secret string.

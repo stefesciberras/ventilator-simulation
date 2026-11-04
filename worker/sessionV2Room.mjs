@@ -148,6 +148,14 @@ export class SessionV2Room {
     const drop = () => { this.sockets.delete(server) }
     server.addEventListener('close', drop)
     server.addEventListener('error', drop)
-    return new Response(null, { status: 101, webSocket: client })
+    // Echo only the public negotiated subprotocol, not the credential.
+    const protocol = request.headers.get('x-v2-selected-protocol')
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+      headers: protocol === 'loppjusim-v2'
+        ? { 'Sec-WebSocket-Protocol': 'loppjusim-v2' }
+        : {},
+    })
   }
 }

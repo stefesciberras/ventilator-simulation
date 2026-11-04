@@ -80,7 +80,7 @@ export function AnaesthSessionV2Preview({
       if (closedRef.current || currentAttempt !== attemptRef.current) return
       let socket: WebSocket
       try {
-        socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}`, [protocol])
+        socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}`, ['loppjusim-v2', protocol])
       } catch {
         closedRef.current = true
         setStatus('error')
@@ -93,6 +93,11 @@ export function AnaesthSessionV2Preview({
         if (!welcomed && socket.readyState !== WebSocket.CLOSED) socket.close()
       }, 10000)
       socket.onopen = () => {
+        if (socket.protocol !== 'loppjusim-v2') {
+          setMessage('Cloudflare did not negotiate the required Session v2 protocol.')
+          socket.close(1002, 'Invalid negotiated protocol')
+          return
+        }
         setMessage('WebSocket open; awaiting canonical session snapshot...')
       }
       socket.onmessage = event => {

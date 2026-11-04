@@ -52,6 +52,13 @@ export default {
       // Browser WebSocket APIs cannot set Authorization headers. Test
       // secrets travel in the Sec-WebSocket-Protocol header over WSS,
       // never in query strings or persistent URLs.
+      const offeredProtocols = (request.headers.get('Sec-WebSocket-Protocol') ?? '')
+        .split(',').map(value => value.trim())
+      // Browser clients require a selected offered subprotocol in the 101
+      // response. Never echo the credential-bearing protocol in the response.
+      if (!offeredProtocols.includes('loppjusim-v2')) {
+        return new Response('Missing loppjusim-v2 protocol', { status: 400 })
+      }
       const presented = decodeV2WebSocketSecret(request.headers.get('Sec-WebSocket-Protocol')) ?? ''
       const role = tokenEquals(presented, env.SESSION_V2_INSTRUCTOR_TOKEN) ? 'instructor'
         : tokenEquals(presented, env.SESSION_V2_CANDIDATE_TOKEN) ? 'candidate' : null
@@ -61,7 +68,10 @@ export default {
       // the Worker after verification. DO binding cannot be called directly.
       headers.set('x-v2-verified-role', role)
       headers.set('x-v2-session-id', sessionId)
-      headers.delete('Sec-WebSocket-Protocol')
+      headers.set('x-v2-selected-protocol', 'loppjusim-v2')
+      // Strip the credential and forward only the public protocol so the
+      // Durable Object can negotiate it without exposing the secret.
+      headers.set('Sec-WebSocket-Protocol', 'loppjusim-v2')
       const internalRequest = new Request(request.url, { method: 'GET', headers })
       const id = env.SESSION_V2_ROOMS.idFromName(sessionId)
       return env.SESSION_V2_ROOMS.get(id).fetch(internalRequest)
