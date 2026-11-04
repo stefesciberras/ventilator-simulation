@@ -10,6 +10,7 @@
  * clinical pharmacokinetic model.
  */
 import { createAnaesthDeclarativeActionEvaluator } from './actionEffects.mjs'
+import { applySharedEdumonActionPhysiology, sharedAnaestheticDepth } from '../../edumon/sharedActionPhysiology.mjs'
 
 const pilot = [
   {
@@ -80,12 +81,16 @@ export function resolveV2ActionNumber(runtime, target, base) {
       case 'offset': case 'increment': value += e.value * w * intensity; break
       case 'multiplier': value *= 1 + (e.value - 1) * w * intensity; break
       case 'set': case 'target': value += (e.value - value) * clamp(w * intensity, 0, 1); break
-      case 'constraint':
-        if (e.constraint === 'minimum') value = Math.max(value, base + (e.value - base) * w)
-        if (e.constraint === 'maximum') value = Math.min(value, base + (e.value - base) * w)
-        if (e.constraint === 'block-increase') value = Math.min(value, base)
-        if (e.constraint === 'block-decrease') value = Math.max(value, base)
+      case 'constraint': {
+        // Match the existing ActionRuntime.applyConstraint() exactly,
+        // including partial onset and intensity interpolation.
+        const strength = clamp(w * intensity, 0, 1)
+        if (e.constraint === 'minimum' && value < e.value) value += (e.value - value) * strength
+        if (e.constraint === 'maximum' && value > e.value) value += (e.value - value) * strength
+        if (e.constraint === 'block-increase') value -= Math.max(0, value - base) * strength
+        if (e.constraint === 'block-decrease') value += Math.max(0, base - value) * strength
         break
+      }
       // Trigger is evaluated by the target-specific physiology model, not a
       // numeric addition; this pilot does not support trigger projection.
       default: break
@@ -95,37 +100,22 @@ export function resolveV2ActionNumber(runtime, target, base) {
 }
 
 /**
- * Small, explicitly bounded monitor projection; avoids mutating baseline or
- * calling the browser-global v1 ActionRuntime.
+ * v2 uses the exact same pure EDUMON haemodynamic, respiratory and
+ * sympathetic physiology as v1. It resolves each effect from its own
+ * canonical ActionRuntime, never from the browser's singleton.
+ * This remains a modelled state projection, not full monitor/device parity.
  */
 export function projectAnaesthV2Monitor(state) {
-  const p = state.patient
-  const runtime = state.actionRuntime
-  const hypnotic = clamp(resolveV2ActionNumber(runtime, 'anaesthesia.hypnoticEffect', 0), 0, 1)
-  const drive = clamp(resolveV2ActionNumber(runtime, 'respiration.drive', 1), 0, 3)
-  const block = clamp(resolveV2ActionNumber(runtime, 'neuromuscular.block', 0), 0, 1)
-  const map = p.diastolicPressure + (p.systolicPressure - p.diastolicPressure) / 3
-  const resolvedMap = resolveV2ActionNumber(runtime, 'haemodynamics.meanArterialPressure', map)
-  const bpShift = resolvedMap - map
-  const respiratory = p.respiratory ?? {}
-  const baselineRate = respiratory.spontaneousRespiratoryRate ?? respiratory.respiratoryRate ?? 12
-  const baselineTidal = respiratory.spontaneousTidalVolumeMl ?? respiratory.tidalVolumeMl ?? 500
-  const spontaneousRate = clamp(baselineRate * drive * (1 - block), 0, 80)
-  const spontaneousTidal = clamp(baselineTidal * drive * (1 - block), 0, 2500)
-  const spontaneousMode = !respiratory.ventilatorMode ||
-    respiratory.ventilatorMode === 'MANUAL' || respiratory.ventilatorMode === 'PSV'
-  const priorDepth = p.anaestheticPhysiology?.depthOfAnaesthesia ?? 5
-  const depth = clamp(Math.round(priorDepth - 4 * hypnotic), 1, 5)
+  const resolve = (target, base) => resolveV2ActionNumber(state.actionRuntime, target, base)
+  const bounded = applySharedEdumonActionPhysiology(state.patient, resolve)
+  // v1 depthOfAnaesthesia is a baseline control and effective depth is used
+  // separately by the monitor; v2 transmits effective depth explicitly so
+  // the preview can display the same observable hypnotic state.
   return {
-    ...p,
-    heartRate: clamp(resolveV2ActionNumber(runtime, 'haemodynamics.heartRate', p.heartRate), 0, 300),
-    systolicPressure: clamp(p.systolicPressure + bpShift, 0, 350),
-    diastolicPressure: clamp(p.diastolicPressure + bpShift, 0, 250),
-    anaestheticPhysiology: { ...p.anaestheticPhysiology, depthOfAnaesthesia: depth },
-    respiratory: { ...respiratory,
-      spontaneousRespiratoryRate: spontaneousRate,
-      spontaneousTidalVolumeMl: spontaneousTidal,
-      ...(spontaneousMode ? { respiratoryRate: spontaneousRate, tidalVolumeMl: spontaneousTidal } : {}),
+    ...bounded,
+    anaestheticPhysiology: {
+      ...bounded.anaestheticPhysiology,
+      depthOfAnaesthesia: sharedAnaestheticDepth(state.patient, resolve),
     },
   }
 }
