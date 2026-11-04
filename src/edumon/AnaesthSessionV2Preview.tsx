@@ -2,13 +2,15 @@ import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 
+export type SessionV2RespiratoryRuntime = { estimatedEtCo2MmHg: number | null; respiratoryRate: number | null;
+  tidalVolumeMl: number | null; simulationTime: number | null }
 export type SessionV2MonitorRuntime = { bisValue: number | null; simulationTime: number | null;
   tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }
 type SessionV2ActionLibrary = { version: number; source: string;
   actions: Array<{ id: string; name: string; kind: string; candidateAccess: string; mode: string }> }
 type SessionV2Snapshot = {
   session: { epoch: number; revision: number; status: string; mode: string }
-  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; monitorRuntime?: { bisValue: number; tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
+  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; respiratoryRuntime?: { estimatedEtCo2MmHg: number; respiratoryRate: number; tidalVolumeMl: number }; monitorRuntime?: { bisValue: number; tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
     anaestheticGases?: { fiSevoPercent?: number }
   } } }>
 }
@@ -24,11 +26,13 @@ export function AnaesthSessionV2Preview({
   onPatientSnapshot,
   onVolatileSnapshot,
   onMonitorSnapshot,
+  onRespiratorySnapshot,
   tofRequestRef,
 }: {
   onPatientSnapshot: (patient: Partial<MonitorPatientState>) => void
   onVolatileSnapshot: (etSevoPercent: number | null) => void
   onMonitorSnapshot: (state: SessionV2MonitorRuntime) => void
+  onRespiratorySnapshot: (state: SessionV2RespiratoryRuntime) => void
   tofRequestRef: { current: (() => void) | null }
 }) {
   const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
@@ -53,9 +57,11 @@ export function AnaesthSessionV2Preview({
   const patientCallbackRef = useRef(onPatientSnapshot)
   const volatileCallbackRef = useRef(onVolatileSnapshot)
   const monitorCallbackRef = useRef(onMonitorSnapshot)
+  const respiratoryCallbackRef = useRef(onRespiratorySnapshot)
   patientCallbackRef.current = onPatientSnapshot
   volatileCallbackRef.current = onVolatileSnapshot
   monitorCallbackRef.current = onMonitorSnapshot
+  respiratoryCallbackRef.current = onRespiratorySnapshot
 
   useEffect(() => () => {
     closedRef.current = true
@@ -86,6 +92,12 @@ export function AnaesthSessionV2Preview({
     // as this preview. Do not let its separate v1 animation clock run here.
     const etSevo = runtime?.gasRuntime?.etSevoPercent
     volatileCallbackRef.current(typeof etSevo === 'number' && Number.isFinite(etSevo) ? etSevo : null)
+    respiratoryCallbackRef.current({
+      estimatedEtCo2MmHg: runtime?.respiratoryRuntime?.estimatedEtCo2MmHg ?? null,
+      respiratoryRate: runtime?.respiratoryRuntime?.respiratoryRate ?? null,
+      tidalVolumeMl: runtime?.respiratoryRuntime?.tidalVolumeMl ?? null,
+      simulationTime: runtime?.actionRuntime?.simulationTime ?? null,
+    })
     monitorCallbackRef.current({
       bisValue: typeof runtime?.monitorRuntime?.bisValue === 'number' ? runtime.monitorRuntime.bisValue : null,
       simulationTime: runtime?.actionRuntime?.simulationTime ?? null,
@@ -100,6 +112,7 @@ export function AnaesthSessionV2Preview({
     lastAuthoritativeFiSevoRef.current = null
     volatileCallbackRef.current(null)
     monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
+    respiratoryCallbackRef.current({ estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null })
     setSnapshot(null)
     setActionLibrary(null)
     setVerifiedRole(null)
@@ -305,6 +318,8 @@ export function AnaesthSessionV2Preview({
         <span>Simulated time {actionRuntime?.simulationTime ?? 0}s</span>
         <span>Clock: {clock.running ? 'Running' : 'Paused'} · {clock.speed}×</span>
         <span>Depth {patient?.anaestheticPhysiology?.depthOfAnaesthesia ?? '—'}</span>
+        <span>EtCO₂ (v2 model) {runtime?.respiratoryRuntime?.estimatedEtCo2MmHg?.toFixed(1) ?? '—'} mmHg</span>
+        <span>Effective RR (v2) {runtime?.respiratoryRuntime?.respiratoryRate?.toFixed(1) ?? '—'}/min</span>
         <span>BIS (modelled) {runtime?.monitorRuntime?.bisValue == null ? '—' : Math.round(runtime.monitorRuntime.bisValue)}</span>
         <span>TOF (last measurement) {runtime?.monitorRuntime?.tofReading ? `${runtime.monitorRuntime.tofReading.count}/4 · ratio ${runtime.monitorRuntime.tofReading.ratio.toFixed(2)}` : '—'}</span>
         <button type="button" onClick={() => command('monitor.tof.measure', {})}>Measure TOF</button>
