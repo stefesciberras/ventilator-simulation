@@ -6,7 +6,7 @@ type SessionV2ActionLibrary = { version: number; source: string;
   actions: Array<{ id: string; name: string; kind: string; candidateAccess: string; mode: string }> }
 type SessionV2Snapshot = {
   session: { epoch: number; revision: number; status: string; mode: string }
-  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
+  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
     anaestheticGases?: { fiSevoPercent?: number }
   } } }>
 }
@@ -243,7 +243,7 @@ export function AnaesthSessionV2Preview({
     <section style={{ border: '1px solid #8696a8', borderRadius: 8, padding: 12, margin: '8px 16px', maxWidth: 680 }}
       aria-label="Experimental Session Engine v2 preview">
       <strong>Session Engine v2 — experimental Cloudflare preview</strong>
-      <p style={{ fontSize: 12, margin: '6px 0' }}>Uses a checkpointed pilot of Anaesth ActionEffects and a limited monitor projection, not the complete physiology engine. Drug onset follows the authoritative clock when resumed (Relaxant default onset: 120 simulated seconds). Pause/resume and speed are instructor-only. Do not use for clinical care or assessed simulation.</p>
+      <p style={{ fontSize: 12, margin: '6px 0' }}>Uses checkpointed Anaesth ActionEffects and simplified end-tidal sevo uptake; effective anaesthetic depth combines volatile and IV hypnotic effects. The model is educational, not a complete clinical physiology engine. Drug onset follows the authoritative clock when resumed (Relaxant default onset: 120 simulated seconds). Pause/resume and speed are instructor-only. Do not use for clinical care or assessed simulation.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
           onChange={event => setEndpoint(event.target.value)} disabled={status === 'connected'} /></label>
@@ -261,6 +261,8 @@ export function AnaesthSessionV2Preview({
         <span>Role: {verifiedRole ?? 'unknown'}</span>
         <span>HR {patient?.heartRate ?? '—'} bpm</span>
         <span>FiSevo {patient?.anaestheticGases?.fiSevoPercent ?? '—'}%</span>
+        <span>EtSevo (v2) {runtime?.gasRuntime?.etSevoPercent?.toFixed(2) ?? '—'}%</span>
+        <span>EtSevo MAC {( (runtime?.gasRuntime?.etSevoPercent ?? 0) / 2 ).toFixed(2)} (approx.)</span>
         <span>Simulated time {actionRuntime?.simulationTime ?? 0}s</span>
         <span>Clock: {clock.running ? 'Running' : 'Paused'} · {clock.speed}×</span>
         <span>Depth {patient?.anaestheticPhysiology?.depthOfAnaesthesia ?? '—'}</span>
