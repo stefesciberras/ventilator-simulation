@@ -235,6 +235,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const productId = scenarioProductForEdumonModule(module.id)
   const persistence = useMemo(() => createSimulationPersistence(productId), [productId])
   const [patientState, setPatientState] = useState<MonitorPatientState>(DEFAULT_MONITOR_STATE)
+  const v2PreviewEnabled = module.id === 'ana' && new URLSearchParams(window.location.search).get('sessionV2Preview') === '1'
+  const [v2EtSevo, setV2EtSevo] = useState<number | null>(null)
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
     const stored = persistence.readNumber('patient-transition-seconds', 0, [EDUMON_PATIENT_TRANSITION_STORAGE_KEY])
@@ -625,8 +627,11 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   return (
     <main className={`app-shell edumon-app-shell edumon-module-${module.id}`}>
-      {module.id === 'ana' && new URLSearchParams(window.location.search).get('sessionV2Preview') === '1' && (
-        <AnaesthSessionV2Preview onPatientSnapshot={(patient) => setPatientState((current) => ({ ...current, ...patient }))} />
+      {v2PreviewEnabled && (
+        <AnaesthSessionV2Preview
+          onPatientSnapshot={(patient) => setPatientState((current) => ({ ...current, ...patient }))}
+          onVolatileSnapshot={setV2EtSevo}
+        />
       )}
       <TeachingCandidateOverlay
         role={teachingSession.role}
@@ -709,7 +714,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         />
 
         )}
-        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
 
       {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (
