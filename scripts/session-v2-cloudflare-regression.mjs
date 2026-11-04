@@ -31,7 +31,11 @@ globalThis.Response = class {
 const state = () => ({
   storage: {
     async get(key) { return structuredClone(persistent.get(key)) },
-    async put(key, value) { persistent.set(key, structuredClone(value)) },
+    async put(key, value) {
+      if (value === undefined && typeof key === 'object') {
+        for (const [entryKey, entryValue] of Object.entries(key)) persistent.set(entryKey, structuredClone(entryValue))
+      } else persistent.set(key, structuredClone(value))
+    },
   },
   blockConcurrencyWhile: fn => fn(),
 })
@@ -70,6 +74,7 @@ try {
   command(candidate, 'sevo', 'sevo', epoch, 'anaesth.gas.set', { fiSevoPercent: 2.4 })
   await flush()
   assert.equal(instructor.messages.at(-1).snapshot.runtimes[0].state.patient.anaestheticGases.fiSevoPercent, 2.4)
+  assert.equal(instructor.messages[0].actionLibrary.source, 'pilot-fallback-v1')
   const revision = persistent.get('checkpoint').snapshot.session.revision
   command(candidate, 'duplicate', 'sevo', epoch, 'anaesth.gas.set', { fiSevoPercent: 2.4 })
   await flush()
@@ -77,9 +82,11 @@ try {
   assert.equal(persistent.get('checkpoint').snapshot.session.revision, revision)
   // Simulate Durable Object eviction/reconstruction: new instance sees
   // persisted checkpoint, fences old epoch on authenticated instructor join.
+  assert.equal(persistent.get('actionLibrary').source, 'pilot-fallback-v1')
   const revived = new SessionV2Room(state(), {})
   const instructor2 = (await revived.fetch(request('instructor'))).webSocket
   const candidate2 = (await revived.fetch(request('candidate'))).webSocket
+  assert.deepEqual(instructor2.messages[0].actionLibrary, instructor.messages[0].actionLibrary)
   epoch = instructor2.messages[0].snapshot.session.epoch
   assert.equal(epoch, 3)
   assert.equal(instructor2.messages[0].snapshot.runtimes[0].state.patient.heartRate, 96)
