@@ -2,6 +2,15 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.2 — 2026-11-04 (development; trusted authority boundary)
+- Bumped Vent and Anaesth/ITU application versions to **1.3.0.2**; the v2 engine remains disabled in the live simulators.
+- Added transactional authority-ledger contract with secure short-lived lease tokens, expiry, host fencing epochs and revision-checked checkpoint commits.
+- Added a memory authority ledger for tests and a browser-local IndexedDB v2 ledger that writes leases and checkpoints in the same transaction. Browser-local storage **does not establish cross-device LAN authority**.
+- Added a trusted-host coordinator requiring an injected identity verifier, verified participant identity on each command, instructor-only lease renewal and takeover after old lease expiry.
+- Accepted commands are first evaluated on an isolated engine fork and then committed; no accepted receipt is returned until the checkpoint transaction succeeds. Ambiguous, stale or failed writes stop the host.
+- Added regression tests covering competing hosts, expired leases, instructor takeover, command epoch fencing, recovered action deduplication, candidate permissions and failed-checkpoint fail-closed behavior.
+- **Not yet complete:** trusted authentication is an injectable host contract, not a deployed identity service. LAN/server authoritative persistence, transport signaling, UI wiring and two-browser tests remain outstanding.
+
 ## 1.3.0.1 — 2026-11-04 (development; v2 checkpoint foundation)
 - Bumped both app version constants to **1.3.0.1**, retaining existing production v1 session behavior.
 - Introduced versioned v2 checkpoint export/import with canonical patient/runtime state, participant roles, simulation clock, authority epoch, bounded event history and accepted-command receipts.
