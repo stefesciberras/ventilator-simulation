@@ -5,5 +5,24 @@
   "main": "./worker/index.ts",
   "assets": {
     "not_found_handling": "single-page-application"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SESSION_V2_ROOMS",
+        "class_name": "SessionV2Room"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "session-v2-cloudflare-1",
+      "new_sqlite_classes": [
+        "SessionV2Room"
+      ]
+    }
+  ],
+  "vars": {
+    "SESSION_V2_EXPERIMENTAL": "0"
   }
 }
