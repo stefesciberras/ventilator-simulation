@@ -156,3 +156,6 @@ Experimental v2 renders 50Hz local capnogram samples with up to 20 FPS repaint, 
 - Intrinsic `event.bronchospasm.set` is an instructor-only pilot Event command with 0–100% validated severity. The reducer ramps it over 2s simulated time and stores one nonstacking declarative `respiration.airwayObstruction` effect in the ActionRuntime. Do not mutate monitor values directly.
 - V2 canonical effective resistance informs **both** capnogram shape and mode-aware respiratory pressure projection, and is forwarded to the actual capnography and ventilator monitor UI; stale local ventilation controls are disabled in v2. VC Ppeak increases with resistance; PC/PSV maintain set pressure but delivered VT may fall.
 - This is a bounded educational single-compartment model, **not** parity with the full breath-by-breath loop in loppjuSIM-Vent. No auto-PEEP or full airway pressure/flow waveforms yet. Supabase action library and Scenario Studio authoring for bronchospasm remain future work.
+
+## v1.3.0.24 — Live bronchospasm severity and authoritative ventilator controls
+Existing ventilator controls in the experimental v2 preview send validated mode/device commands into checkpointed v2 state, retaining monitored delivery as a distinct derived projection. The bronchospasm slider submits debounced instructor-only commands without an Apply button. Normal v1 is unchanged.

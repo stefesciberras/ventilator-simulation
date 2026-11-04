@@ -29,6 +29,10 @@ const DEVICE_LIMITS = Object.freeze({
   ventilatorInspiratoryFlowLMin: [0, 200],
   ventilatorPressureControlCmH2O: [0, 80],
   ventilatorPressureSupportCmH2O: [0, 80],
+  ventilatorPlateauPercent: [0, 20],
+  ventilatorVolumeGuaranteePressureLimitCmH2O: [0, 80],
+  ventilatorTerminationSensitivityPercent: [5, 80],
+  ventilatorSimvSyncWindowPercent: [5, 75],
   fio2: [0.21, 1], peepCmH2O: [0, 35],
 })
 const INPUT_TYPES = new Set(['patient.parameter.set', 'device.parameter.set',
@@ -36,6 +40,7 @@ const INPUT_TYPES = new Set(['patient.parameter.set', 'device.parameter.set',
 
 function validatePathValue(payload, limits) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+      Object.keys(payload).some(key => !['path', 'value'].includes(key)) ||
       typeof payload.path !== 'string' || !Object.hasOwn(limits, payload.path)) {
     throw new Error('Unsupported parameter')
   }
@@ -80,9 +85,12 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       }
       if (command.type === 'device.parameter.set') {
         validatePathValue(command.payload, DEVICE_LIMITS)
-        return { ...state, patient: { ...state.patient, respiratory: {
-          ...state.patient.respiratory, [command.payload.path]: command.payload.value,
-        } } }
+        const path = command.payload.path
+        const value = command.payload.value
+        const respiratory = { ...state.patient.respiratory, [path]: value }
+        // Preserve the distinction between set values and measured delivery.
+        // For mandatory modes the canonical mechanics tick will resolve VT/RR.
+        return { ...state, patient: { ...state.patient, respiratory } }
       }
       if (command.type === 'anaesth.gas.set') {
         if (!finite(command.payload?.fiSevoPercent, 0, 8)) throw new Error('Invalid FiSevo')
@@ -145,10 +153,19 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       const resolve = (target, base) => resolveV2ActionNumber(withEvent.actionRuntime, target, base)
       const effective = applySharedEdumonActionPhysiology(withEvent.patient, resolve)
       const respiratory = effective.respiratory
-      const mechanical = projectBronchospasmVentilation(respiratory)
-      const pressureControlled = ['PC-AC','SIMV-PC','PSV'].includes(respiratory.ventilatorMode)
-      const observedRespiratory = pressureControlled
-        ? { ...respiratory, tidalVolumeMl: mechanical.tidalVolumeMl } : respiratory
+      const mode = respiratory.ventilatorMode ?? 'MANUAL'
+      const mandatory = !['MANUAL','PSV'].includes(mode)
+      // In controlled modes, the device set rate remains authoritative even
+      // if a relaxant suppresses spontaneous breathing. Measured delivery is
+      // a separate output and must never overwrite device settings.
+      const controlled = mandatory ? {
+        ...respiratory,
+        respiratoryRate: respiratory.ventilatorSetRate ?? respiratory.respiratoryRate,
+      } : respiratory
+      const mechanical = projectBronchospasmVentilation(controlled)
+      const observedRespiratory = {
+        ...controlled, tidalVolumeMl: mechanical.tidalVolumeMl,
+      }
       const co2 = advanceAlveolarCo2({
         previousAlveolarCo2MmHg: state.respiratoryRuntime?.alveolarCo2MmHg ?? 40,
         respiratoryRate: observedRespiratory.respiratoryRate,

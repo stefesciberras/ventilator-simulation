@@ -3,7 +3,7 @@ import type { VentilatorMode } from '../simulation/types'
 import { InteractiveSettingControls, type InteractiveSettingSpec } from '../components/InteractiveSettingControls'
 import { resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
 import type { MonitorPatientState, MonitorRespiratorySettings } from './types'
-import type { SessionV2RespiratoryRuntime } from './AnaesthSessionV2Preview'
+import type { SessionV2RespiratoryRuntime, SessionV2VentilatorChange } from './AnaesthSessionV2Preview'
 import { EDUMON_PATIENT_PROFILES } from './patientProfiles'
 import { registerSimulationResetHandler } from '../core/simulationReset'
 import './edumon-ventilator.css'
@@ -139,9 +139,10 @@ interface EdumonVentilatorControlProps {
   onPatientStateChange: (state: MonitorPatientState) => void
   disabled?: boolean
   v2RespiratoryState?: SessionV2RespiratoryRuntime
+  onV2VentilatorChange?: (change: SessionV2VentilatorChange) => void
 }
 
-export function EdumonVentilatorControl({ patientState, onPatientStateChange, disabled = false, v2RespiratoryState }: EdumonVentilatorControlProps) {
+export function EdumonVentilatorControl({ patientState, onPatientStateChange, disabled = false, v2RespiratoryState, onV2VentilatorChange }: EdumonVentilatorControlProps) {
   const respiratory = resolvedMonitorRespiratorySettings(patientState)
   const patientRef = useRef(patientState)
   patientRef.current = patientState
@@ -252,7 +253,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
   }, [respiratory.spontaneousRespiratoryRate, respiratory.spontaneousTidalVolumeMl, v2RespiratoryState !== undefined])
 
   const applyValue = (key: VentilatorSettingKey, rawValue: number) => {
-    if (disabled || v2RespiratoryState !== undefined) return
+    if (disabled || (v2RespiratoryState !== undefined && !onV2VentilatorChange)) return
     const next = { ...ventilator }
     if (key === 'ieRatio') next.inspiratoryTime = cycleTime(ventilator.rate) / (1 + clamp(rawValue, MIN_IE, MAX_IE))
     else (next as unknown as Record<VentilatorSettingKey, number>)[key] = rawValue
@@ -260,12 +261,39 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
       const currentRatio = ieRatioFrom(ventilator)
       next.inspiratoryTime = cycleTime(rawValue) / (1 + currentRatio)
     }
+    if (v2RespiratoryState !== undefined) {
+      // Send only validated device-setting commands to the canonical v2 room.
+      // Never publish a locally recomputed patient snapshot in v2.
+      const changes: Partial<Record<VentilatorSettingKey, { path: string; value: number }>> = {
+        fio2: { path: 'fio2', value: next.fio2 / 100 },
+        peep: { path: 'peepCmH2O', value: next.peep },
+        rate: { path: 'ventilatorSetRate', value: next.rate },
+        tidalVolume: { path: 'ventilatorSetTidalVolumeMl', value: next.tidalVolume },
+        ieRatio: { path: 'ventilatorInspiratoryTimeSeconds', value: next.inspiratoryTime },
+        inspiratoryFlow: { path: 'ventilatorInspiratoryFlowLMin', value: next.inspiratoryFlow },
+        plateauPercent: { path: 'ventilatorPlateauPercent', value: next.plateauPercent },
+        pressureControl: { path: 'ventilatorPressureControlCmH2O', value: next.pressureControl },
+        volumeGuaranteePressureLimit: { path: 'ventilatorVolumeGuaranteePressureLimitCmH2O', value: next.volumeGuaranteePressureLimit },
+        pressureSupport: { path: 'ventilatorPressureSupportCmH2O', value: next.pressureSupport },
+        terminationSensitivity: { path: 'ventilatorTerminationSensitivityPercent', value: next.terminationSensitivity },
+        simvSyncWindowPercent: { path: 'ventilatorSimvSyncWindowPercent', value: next.simvSyncWindowPercent },
+      }
+      const setting = changes[key]
+      if (setting) onV2VentilatorChange?.({ type: 'setting', ...setting })
+      if (key === 'rate' && hasConventionalMandatoryTiming(ventilator.mode))
+        onV2VentilatorChange?.({ type: 'setting', path: 'ventilatorInspiratoryTimeSeconds', value: next.inspiratoryTime })
+      return
+    }
     setVentilator(next)
     publishRespiratory(next)
   }
 
   const selectMode = (mode: EdumonVentilatorMode) => {
-    if (disabled || v2RespiratoryState !== undefined) return
+    if (disabled || (v2RespiratoryState !== undefined && !onV2VentilatorChange)) return
+    if (v2RespiratoryState !== undefined) {
+      onV2VentilatorChange?.({ type: 'mode', mode })
+      return
+    }
     const next = { ...ventilator, mode }
     setVentilator(next)
     publishRespiratory(next)
@@ -284,9 +312,9 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
   return (
     <section className="edumon-ventilator-row" aria-label="Ventilator settings and monitoring">
       <div className="edumon-ventilator-controls">
-        <label className="edumon-ventilator-mode" title={disabled || v2RespiratoryState !== undefined ? 'Ventilator mode controlled by v2 session' : 'Change ventilation mode'}>
+        <label className="edumon-ventilator-mode" title={disabled ? 'Ventilator controls locked' : 'Change ventilation mode'}>
           <span>VENT MODE</span>
-          <select disabled={disabled || v2RespiratoryState !== undefined} value={ventilator.mode} onChange={(event) => selectMode(event.target.value as EdumonVentilatorMode)} aria-label="Ventilation mode">
+          <select disabled={disabled || (v2RespiratoryState !== undefined && !onV2VentilatorChange)} value={ventilator.mode} onChange={(event) => selectMode(event.target.value as EdumonVentilatorMode)} aria-label="Ventilation mode">
             {MODES.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
           </select>
         </label>
@@ -295,7 +323,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
           controls={controls}
           onChange={applyValue}
           overlayTargetSelector=".edumon-monitor-body"
-          disabled={disabled || v2RespiratoryState !== undefined}
+          disabled={disabled || (v2RespiratoryState !== undefined && !onV2VentilatorChange)}
           className="edumon-ventilator-settings"
           ariaLabel="Ventilator settings"
         />

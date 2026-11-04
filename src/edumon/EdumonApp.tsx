@@ -1,4 +1,4 @@
-import { AnaesthSessionV2Preview, type SessionV2MonitorRuntime, type SessionV2RespiratoryRuntime } from './AnaesthSessionV2Preview'
+import { AnaesthSessionV2Preview, type SessionV2MonitorRuntime, type SessionV2RespiratoryRuntime, type SessionV2VentilatorChange } from './AnaesthSessionV2Preview'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EDUMON_APP_VERSION } from './appVersion'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
@@ -154,15 +154,16 @@ function ValuePanel({ label, value, unit, detail, className }: { label: string; 
 /** The monitor footer is still mounted as display state in Instructor View.
  * Do not mount two live ventilator controllers against one patient runtime.
  */
-function EdumonMonitorVentilatorStrip({ patientState, onPatientStateChange, v2RespiratoryState }: {
+function EdumonMonitorVentilatorStrip({ patientState, onPatientStateChange, v2RespiratoryState, onV2VentilatorChange }: {
   patientState: MonitorPatientState
   onPatientStateChange: (state: MonitorPatientState) => void
   v2RespiratoryState?: SessionV2RespiratoryRuntime
+  onV2VentilatorChange?: (change: SessionV2VentilatorChange) => void
 }) {
   const view = useSimulationWorkspaceView()
   if (view !== 'monitor') return null
   return <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange}
-    disabled={v2RespiratoryState !== undefined} v2RespiratoryState={v2RespiratoryState} />
+    v2RespiratoryState={v2RespiratoryState} onV2VentilatorChange={onV2VentilatorChange} />
 }
 
 function EdumonLanding() {
@@ -246,6 +247,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   })
   const [v2MonitorState, setV2MonitorState] = useState<SessionV2MonitorRuntime>({ bisValue: null, simulationTime: null, tofReading: null })
   const v2TofRequestRef = useRef<(() => void) | null>(null)
+  const v2VentilatorRequestRef = useRef<((change: SessionV2VentilatorChange) => void) | null>(null)
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
     if (typeof window === 'undefined') return 0
     const stored = persistence.readNumber('patient-transition-seconds', 0, [EDUMON_PATIENT_TRANSITION_STORAGE_KEY])
@@ -643,6 +645,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           onMonitorSnapshot={setV2MonitorState}
           onRespiratorySnapshot={setV2RespiratoryState}
           tofRequestRef={v2TofRequestRef}
+          ventilatorRequestRef={v2VentilatorRequestRef}
         />
       )}
       <TeachingCandidateOverlay
@@ -722,12 +725,13 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
               <button key={item.id} type="button" className="edumon-control-tile" onClick={() => setAuxiliaryMonitor(item.id)}><span>Extra monitor</span><strong>{item.shortLabel}</strong><small>{item.description}</small></button>
             ))}
             <EdumonMonitorVentilatorStrip patientState={effectivePatientState} onPatientStateChange={setPatientState}
-              v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} />
+              v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined}
+              onV2VentilatorChange={v2PreviewEnabled ? change => v2VentilatorRequestRef.current?.(change) : undefined} />
           </div>}
         />
 
         )}
-        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined} v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined} v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined} onV2VentilatorChange={v2PreviewEnabled ? change => v2VentilatorRequestRef.current?.(change) : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
 
       {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (
