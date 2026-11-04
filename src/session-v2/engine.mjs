@@ -13,6 +13,57 @@ const allowedModes = new Set(['standalone', 'simulation', 'teaching', 'self-dire
 const allowedRoles = new Set(['instructor', 'candidate', 'learner'])
 const freezeState = value => Object.freeze(value)
 const reject = (reason, revision) => ({ accepted: false, reason, revision })
+const isNonnegativeInteger = value => Number.isSafeInteger(value) && value >= 0
+const assertCheckpoint = checkpoint => {
+  if (!checkpoint || checkpoint.schema !== 'loppjusim.session-v2.checkpoint' || checkpoint.version !== 1) {
+    throw new Error('Unsupported session checkpoint format')
+  }
+  const { snapshot, receipts, events } = checkpoint
+  const session = snapshot?.session
+  if (snapshot?.protocol !== 2 || !session || typeof session.id !== 'string' || !session.id ||
+      !allowedModes.has(session.mode) || !['created', 'active', 'recovering', 'ended'].includes(session.status) ||
+      !isNonnegativeInteger(session.revision) || !Number.isSafeInteger(session.epoch) || session.epoch < 1 ||
+      !isNonnegativeInteger(session.clockMs) ||
+      !Array.isArray(snapshot.participants) || !Array.isArray(snapshot.runtimes) ||
+      !Array.isArray(receipts) || !Array.isArray(events)) throw new Error('Malformed session checkpoint')
+  if (['simulation', 'teaching'].includes(session.mode) &&
+      (typeof session.authorityId !== 'string' || !session.authorityId)) throw new Error('Missing authority')
+  const participantIds = new Set()
+  for (const participant of snapshot.participants) {
+    if (!participant || typeof participant.id !== 'string' || !participant.id ||
+        participantIds.has(participant.id) || !allowedRoles.has(participant.role) ||
+        typeof participant.connected !== 'boolean') throw new Error('Malformed participant checkpoint')
+    participantIds.add(participant.id)
+  }
+  if (session.authorityId && !snapshot.participants.some(p => p.id === session.authorityId && p.role === 'instructor')) {
+    throw new Error('Missing instructor participant')
+  }
+  if (session.mode === 'simulation' &&
+      snapshot.participants.filter(p => p.role === 'candidate').length > 1) throw new Error('Invalid candidate cardinality')
+  const runtimeIds = new Set()
+  for (const runtime of snapshot.runtimes) {
+    if (!runtime || typeof runtime.id !== 'string' || !runtime.id ||
+        runtimeIds.has(runtime.id) || !isNonnegativeInteger(runtime.revision) ||
+        runtime.state === undefined || runtime.state === null) throw new Error('Malformed runtime checkpoint')
+    runtimeIds.add(runtime.id)
+  }
+  if (session.mode === 'teaching') {
+    for (const participant of snapshot.participants.filter(p => p.role === 'candidate')) {
+      if (!runtimeIds.has(participant.id)) throw new Error('Missing teaching candidate runtime')
+    }
+  } else if (runtimeIds.size !== 1 || !runtimeIds.has('main')) throw new Error('Missing shared runtime')
+  const receiptKeys = new Set()
+  for (const entry of receipts) {
+    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' ||
+        receiptKeys.has(entry[0]) || entry[1]?.accepted !== true ||
+        !isNonnegativeInteger(entry[1].revision) || entry[1].revision > session.revision) {
+      throw new Error('Malformed command receipt')
+    }
+    receiptKeys.add(entry[0])
+  }
+  if (events.length > 10000 || receipts.length > 100000) throw new Error('Checkpoint exceeds safety limits')
+  return structuredClone(checkpoint)
+}
 
 export class SessionEngineV2 {
   #adapter
@@ -52,6 +103,47 @@ export class SessionEngineV2 {
   }
 
   get events() { return copy(this.#events) }
+
+  /**
+   * Versioned durable checkpoint. Persist atomically before acknowledging a
+   * command externally. Includes receipts to prevent re-executing a drug after
+   * process recreation. The host is responsible for authenticating authority.
+   */
+  exportCheckpoint() {
+    return copy({
+      schema: 'loppjusim.session-v2.checkpoint',
+      version: 1,
+      snapshot: this.snapshot,
+      receipts: [...this.#seen.entries()],
+      events: this.#events,
+    })
+  }
+
+  /**
+   * Reconstruct model state without replaying any drug, tick or reset.
+   * Restoring a live room fences the previous in-memory epoch and leaves the
+   * room Recovering until an authenticated instructor reclaims authority.
+   * The checkpoint store MUST enforce single-writer ownership separately.
+   */
+  static fromCheckpoint({ checkpoint, adapter, expectedSessionId } = {}) {
+    const persisted = assertCheckpoint(checkpoint)
+    const { session, participants, runtimes } = persisted.snapshot
+    if (expectedSessionId != null && session.id !== expectedSessionId) throw new Error('Wrong session checkpoint')
+    const engine = new SessionEngineV2({
+      sessionId: session.id, mode: session.mode, instructorId: session.authorityId,
+      adapter,
+    })
+    engine.#session = { ...session,
+      epoch: session.status === 'ended' ? session.epoch : session.epoch + 1,
+      status: session.status === 'active' && session.authorityId ? 'recovering' : session.status,
+      revision: session.status === 'ended' ? session.revision : session.revision + 1,
+    }
+    engine.#participants = new Map(participants.map(p => [p.id, { ...p, connected: false }]))
+    engine.#runtimes = new Map(runtimes.map(runtime => [runtime.id, runtime]))
+    engine.#seen = new Map(persisted.receipts)
+    engine.#events = persisted.events.slice(-engine.#eventLimit)
+    return engine
+  }
 
   join({ participantId, role }) {
     if (!participantId || !allowedRoles.has(role)) throw new Error('Invalid participant')
@@ -124,11 +216,12 @@ export class SessionEngineV2 {
     const { id, participantId, epoch, type, runtimeId, payload = {} } = command ?? {}
     if (typeof id !== 'string' || !id || typeof type !== 'string' || !type) return reject('invalid-command', this.#session.revision)
     const key = participantId + ':' + id
+    // Old-epoch retries must never appear successful, even when previously applied.
+    if (epoch !== this.#session.epoch) return reject('stale-epoch', this.#session.revision)
     if (this.#seen.has(key)) return copy(this.#seen.get(key))
     const p = this.#participants.get(participantId)
     if (!p?.connected) return reject('participant-disconnected', this.#session.revision)
     if (this.#session.status !== 'active') return reject('session-not-active', this.#session.revision)
-    if (epoch !== this.#session.epoch) return reject('stale-epoch', this.#session.revision)
     if (type === 'end' && participantId !== this.#session.authorityId) return reject('forbidden', this.#session.revision)
     if (type === 'reset' && p.role !== 'instructor' && this.#session.mode !== 'standalone') {
       return reject('forbidden', this.#session.revision)

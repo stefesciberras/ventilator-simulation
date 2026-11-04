@@ -26,3 +26,12 @@ Persistence, authenticated authority leases, transport adapters, wire protocol, 
 
 ## Next implementation milestone
 Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and storage, trusted lease/epoch renewal and pluggable transports; then run browser integration tests before any v1 migration.
+
+
+## Checkpoint milestone (v1.3.0.1; experimental)
+- `engine.exportCheckpoint()` captures session, runtimes, accepted-command receipts and event history.
+- `SessionEngineV2.fromCheckpoint({ checkpoint, adapter, expectedSessionId })` validates the checkpoint and reconstructs the state without replaying a drug command.
+- Live restores enter Recovering, invalidate the previous authority epoch and require a trusted host to authenticate instructor recovery.
+- `checkpointStore.mjs` provides revision-checked memory and browser-local IndexedDB adapters. These are **not distributed authority leases**.
+- The host must persist an accepted command before broadcasting/acknowledging it to participants; this atomic integration remains to be implemented.
+- Run `node scripts/session-v2-checkpoint-regression.mjs` for restart/retention coverage.

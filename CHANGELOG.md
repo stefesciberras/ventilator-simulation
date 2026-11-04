@@ -2,6 +2,14 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.1 — 2026-11-04 (development; v2 checkpoint foundation)
+- Bumped both app version constants to **1.3.0.1**, retaining existing production v1 session behavior.
+- Introduced versioned v2 checkpoint export/import with canonical patient/runtime state, participant roles, simulation clock, authority epoch, bounded event history and accepted-command receipts.
+- Recovery after engine recreation retains ActionEffect snapshots without replaying drugs; a live instructor session resumes in Recovering with a new fenced epoch until the trusted host authenticates recovery. Ended sessions remain ended.
+- Added revision-checked checkpoint storage interfaces: an in-memory test store and an offline browser IndexedDB store (atomic within one browser database).
+- Added checkpoint regression tests for duplicate drug prevention, stale-epoch commands, candidate isolation, snapshot validation, ended sessions and stale-write rejection. Included in `npm run test:core`.
+- **Not yet production-capable:** session restore is not wired to the UI, stores do not establish a cross-device authority lease, and browser peer/transport integration remains unimplemented. A trustworthy single-writer authority and persistence-before-ack protocol are prerequisites for enabling v2.
+
 ## 1.3.0.0 — 2026-11-04 (development; v2 remains opt-in)
 
 ### Versioning
