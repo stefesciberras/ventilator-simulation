@@ -1,4 +1,4 @@
-import { AnaesthSessionV2Preview, type SessionV2MonitorRuntime } from './AnaesthSessionV2Preview'
+import { AnaesthSessionV2Preview, type SessionV2MonitorRuntime, type SessionV2RespiratoryRuntime } from './AnaesthSessionV2Preview'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EDUMON_APP_VERSION } from './appVersion'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
@@ -237,6 +237,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [patientState, setPatientState] = useState<MonitorPatientState>(DEFAULT_MONITOR_STATE)
   const v2PreviewEnabled = module.id === 'ana' && new URLSearchParams(window.location.search).get('sessionV2Preview') === '1'
   const [v2EtSevo, setV2EtSevo] = useState<number | null>(null)
+  const [v2RespiratoryState, setV2RespiratoryState] = useState<SessionV2RespiratoryRuntime>({
+    estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null,
+  })
   const [v2MonitorState, setV2MonitorState] = useState<SessionV2MonitorRuntime>({ bisValue: null, simulationTime: null, tofReading: null })
   const v2TofRequestRef = useRef<(() => void) | null>(null)
   const [patientTransitionSeconds, setPatientTransitionSeconds] = useState<number>(() => {
@@ -634,6 +637,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           onPatientSnapshot={(patient) => setPatientState((current) => ({ ...current, ...patient }))}
           onVolatileSnapshot={setV2EtSevo}
           onMonitorSnapshot={setV2MonitorState}
+          onRespiratorySnapshot={setV2RespiratoryState}
           tofRequestRef={v2TofRequestRef}
         />
       )}
@@ -718,7 +722,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         />
 
         )}
-        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined} onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined} v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
 
       {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (
