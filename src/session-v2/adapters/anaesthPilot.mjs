@@ -11,6 +11,7 @@
  */
 import { createAnaesthDeclarativeActionEvaluator } from './actionEffects.mjs'
 import { applySharedEdumonActionPhysiology, sharedAnaestheticDepth } from '../../edumon/sharedActionPhysiology.mjs'
+import { effectiveSevoDepth } from '../../edumon/sharedVolatilePhysiology.mjs'
 
 const pilot = [
   {
@@ -107,15 +108,24 @@ export function resolveV2ActionNumber(runtime, target, base) {
  */
 export function projectAnaesthV2Monitor(state) {
   const resolve = (target, base) => resolveV2ActionNumber(state.actionRuntime, target, base)
-  const bounded = applySharedEdumonActionPhysiology(state.patient, resolve)
-  // v1 depthOfAnaesthesia is a baseline control and effective depth is used
-  // separately by the monitor; v2 transmits effective depth explicitly so
-  // the preview can display the same observable hypnotic state.
+  // Agent-derived baseline depth and IV hypnotic effect compose once.
+  // A missing gasRuntime (legacy/manual unit-test snapshot) preserves
+  // its existing depth baseline until an authoritative tick upgrades it.
+  const etSevo = state.gasRuntime?.etSevoPercent
+  const baseline = etSevo == null ? state.patient : {
+    ...state.patient,
+    anaestheticPhysiology: {
+      ...state.patient.anaestheticPhysiology,
+      depthOfAnaesthesia: effectiveSevoDepth(
+        etSevo, state.patient.anaestheticPhysiology?.anaestheticSensitivity ?? 0),
+    },
+  }
+  const bounded = applySharedEdumonActionPhysiology(baseline, resolve)
   return {
     ...bounded,
     anaestheticPhysiology: {
       ...bounded.anaestheticPhysiology,
-      depthOfAnaesthesia: sharedAnaestheticDepth(state.patient, resolve),
+      depthOfAnaesthesia: sharedAnaestheticDepth(baseline, resolve),
     },
   }
 }

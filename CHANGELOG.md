@@ -2,6 +2,14 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.16 — 2026-11-04 (shared volatile uptake and session-persisted EtSevo)
+- Bumped Vent and Anaesth/ITU application versions to **1.3.0.16**, retaining default production Session Engine v1.
+- Extracted the existing exponential sevoflurane end-tidal uptake equation, alveolar-ventilation fallback and MAC-to-depth relationship into the pure `src/edumon/sharedVolatilePhysiology.mjs`. The v1 Anaesth gas control now calls these functions with its existing live gas-exchange output and animation-clock increments. The existing v1 anaesthetic depth helper delegates to the same shared MAC-to-depth formula.
+- Session Engine v2 Anaesth ticks now integrate end-tidal sevoflurane using the shared uptake equation with v2's checkpointed effective ventilation and simulation time. The resulting `gasRuntime.etSevoPercent` is persisted in the canonical session checkpoint, synchronized across peers and restored without replay on reconnect; reset restores EtSevo=0.
+- The v2 monitor projection composes end-tidal volatile-derived baseline depth and IV hypnotic ActionEffects once, preserving model purity and avoiding duplicate drug application. The preview explicitly shows EtSevo and approximate MAC.
+- Added regression coverage for uptake timestep composition, MAC sensitivity, wash-in/wash-out, unchanged raw patient controls, reset, checkpoint recovery and older checkpoints lacking `gasRuntime`.
+- **Scope:** The v2 gas calculation uses estimated rather than the v1 browser's live respiratory gas-exchange output. Complete BIS/TOF measured monitoring, depth-dependent haemodynamics, agent-dependent alarm gating, EtCO2 and waveform/device parity remain future work. Clinical-dose accuracy is not claimed.
+
 ## 1.3.0.15 — 2026-11-04 (shared Anaesth/ITU ActionEffect physiology)
 - Bumped Vent and Anaesth/ITU versions to **1.3.0.15**; existing production Session Engine v1 and v2 authority, clock and storage contracts remain in place.
 - Extracted the existing EDUMON ActionEffect-mediated haemodynamics, spontaneous/mandatory respiratory mechanics, neuromuscular blockade, sympathetic stimulation, anaesthetic-depth sensitivity and hard physiological bounds into `src/edumon/sharedActionPhysiology.mjs`. The pure module accepts a patient baseline and injected numeric-effect resolver; it never reads the browser-global ActionRuntime or calls external services.

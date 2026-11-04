@@ -111,3 +111,10 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - The v2 projected output additionally carries effective depth derived from the same hypnotic effect; v1 continues to evaluate effective depth for its monitor separately so the canonical depth slider remains a baseline control. Do not apply the hypnotic effect twice.
 - MANUAL/PSV may lose spontaneous VT/RR during blockade. Mandatory ventilation settings in VC-AC/PC-AC must not be suppressed by muscle relaxant.
 - Shared physiology is pure and deterministic at a given simulationTime. Hard bounds are post-composition. The v2 monitor remains an experimental projection and its full ventilator/agent/monitor integration is not yet complete.
+
+
+## v1.3.0.16 — volatile uptake and end-tidal depth integration
+- `src/edumon/sharedVolatilePhysiology.mjs` contains side-effect-free uptake and MAC/depth functions derived from existing v1 Anaesth gas calculations. v1 injects its live alveolar ventilation; v2 injects estimated alveolar ventilation from the checkpointed action-adjusted respiratory state. The same mathematical uptake and MAC sensitivity functions are used in both.
+- The v2 Anaesth adapter tracks `gasRuntime.etSevoPercent` on authoritative ticks, persists it with patient and drug effects, and sets it to 0 on reset. Missing `gasRuntime` on legacy sessions is initialized at the next tick.
+- v2 preview projection uses EtSevo-derived depth as the effective volatile baseline and adds IV hypnotic effects once. The raw patient `anaestheticPhysiology.depthOfAnaesthesia` is not mutated by each tick.
+- The v2 preview displays EtSevo and approximate MAC. BIS/TOF numeric measurement models and live v1 gas-output parity remain subsequent milestones. Do not interpret preview EtSevo as a measured concentration or a validated clinical pharmacology model.

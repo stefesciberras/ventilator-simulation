@@ -5,6 +5,7 @@ import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
 import { markSessionLogModelState, recordSessionLogEvent } from '../teaching/session/sessionLog'
 import { latestEdumonRespiratoryOutput, resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
 import { applyAnaestheticDepthEffects, depthFromMac, resolvedAnaestheticPhysiology } from './anaestheticPhysiology'
+import { advanceEndTidalSevo, estimatedAlveolarVentilationLMin, SEVO_MAC_PERCENT } from './sharedVolatilePhysiology.mjs'
 import { currentNeuromuscularBlock, currentTofMinimumCount } from './actionPhysiology'
 import { EdumonBisTrend } from './EdumonBisTrend'
 import {
@@ -25,7 +26,6 @@ interface EdumonAnaGasControlProps {
 
 const SLIDER_SETTLE_MS = 5200
 const SEVO_LOG_SETTLE_MS = 450
-const SEVO_MAC_PERCENT = 2.0
 const TOF_MEASUREMENT_MS = 1800
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -132,13 +132,15 @@ export function EdumonAnaGasControl({ patientState, onPatientStateChange, sideCo
         const respiratoryState = resolvedMonitorRespiratorySettings(current)
         const gases = resolvedAnaestheticGases(current)
         const alveolarVentilation = output?.alveolarVentilationLMin
-          ?? Math.max(0, (respiratoryState.tidalVolumeMl - respiratoryState.deadSpaceMl) * respiratoryState.respiratoryRate / 1000)
-        const frcL = Math.max(0.5, respiratoryState.frcMl / 1000)
-        const turnoverPerSecond = alveolarVentilation / 60 / frcL
-        const timeConstant = Math.max(8, 1 / Math.max(turnoverPerSecond * 0.62, 1 / 180))
+          ?? estimatedAlveolarVentilationLMin(respiratoryState)
         const dt = wallDt * currentSimulationSpeed()
-        const fraction = 1 - Math.exp(-dt / timeConstant)
-        const nextEtSevo = clamp(etSevoRef.current + (gases.fiSevoPercent - etSevoRef.current) * fraction, 0, 8)
+        const nextEtSevo = advanceEndTidalSevo({
+          etSevoPercent: etSevoRef.current,
+          fiSevoPercent: gases.fiSevoPercent,
+          alveolarVentilationLMin: alveolarVentilation,
+          frcMl: respiratoryState.frcMl,
+          dtSeconds: dt,
+        })
         etSevoRef.current = nextEtSevo
         setEtSevo(nextEtSevo)
         const physiology = resolvedAnaestheticPhysiology(current)
