@@ -20,8 +20,10 @@ type Status = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'er
  */
 export function AnaesthSessionV2Preview({
   onPatientSnapshot,
+  onVolatileSnapshot,
 }: {
   onPatientSnapshot: (patient: Partial<MonitorPatientState>) => void
+  onVolatileSnapshot: (etSevoPercent: number | null) => void
 }) {
   const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
   const [sessionId, setSessionId] = useState('ana-preview')
@@ -43,7 +45,9 @@ export function AnaesthSessionV2Preview({
   const sequenceRef = useRef(0)
   const snapshotRef = useRef<SessionV2Snapshot | null>(null)
   const patientCallbackRef = useRef(onPatientSnapshot)
+  const volatileCallbackRef = useRef(onVolatileSnapshot)
   patientCallbackRef.current = onPatientSnapshot
+  volatileCallbackRef.current = onVolatileSnapshot
 
   useEffect(() => () => {
     closedRef.current = true
@@ -70,6 +74,10 @@ export function AnaesthSessionV2Preview({
       setNewFiSevo(actualFiSevo)
     }
     if (patient) patientCallbackRef.current(patient)
+    // The full monitor's gas footer must consume the same canonical value
+    // as this preview. Do not let its separate v1 animation clock run here.
+    const etSevo = runtime?.gasRuntime?.etSevoPercent
+    volatileCallbackRef.current(typeof etSevo === 'number' && Number.isFinite(etSevo) ? etSevo : null)
   }
   const connect = (targetSessionId = sessionId) => {
     closedRef.current = false
@@ -77,6 +85,7 @@ export function AnaesthSessionV2Preview({
     const currentAttempt = attemptRef.current
     snapshotRef.current = null
     lastAuthoritativeFiSevoRef.current = null
+    volatileCallbackRef.current(null)
     setSnapshot(null)
     setActionLibrary(null)
     setVerifiedRole(null)
@@ -206,6 +215,7 @@ export function AnaesthSessionV2Preview({
     socketRef.current = null
     snapshotRef.current = null
     lastAuthoritativeFiSevoRef.current = null
+    volatileCallbackRef.current(null)
     setStatus('disconnected')
     setSnapshot(null)
     setActionLibrary(null)
