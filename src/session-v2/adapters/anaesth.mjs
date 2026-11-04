@@ -86,7 +86,7 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
         if (Object.keys(command.payload).some(k => !['actionId', 'intensity'].includes(k))) {
           throw new Error('Untrusted action payload')
         }
-        const next = applyAction(clone(state), clone(command.payload), clone(context))
+        const next = applyAction(clone(state), clone(command.payload), { ...clone(context), commandId: command.id })
         if (!next || typeof next !== 'object' || !next.patient || !next.actionRuntime) {
           throw new Error('Action evaluator must return canonical state')
         }
