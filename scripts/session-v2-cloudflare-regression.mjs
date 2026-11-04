@@ -28,19 +28,19 @@ globalThis.WebSocketPair = class {
 globalThis.Response = class {
   constructor(body, init) { this.body = body; this.status = init.status; this.webSocket = init.webSocket; this.headers = new Headers(init.headers ?? {}) }
 }
-const state = () => ({
+const state = (ledger = persistent) => ({
   storage: {
-    async get(key) { return structuredClone(persistent.get(key)) },
+    async get(key) { return structuredClone(ledger.get(key)) },
     async put(key, value) {
       if (value === undefined && typeof key === 'object') {
-        for (const [entryKey, entryValue] of Object.entries(key)) persistent.set(entryKey, structuredClone(entryValue))
-      } else persistent.set(key, structuredClone(value))
+        for (const [entryKey, entryValue] of Object.entries(key)) ledger.set(entryKey, structuredClone(entryValue))
+      } else ledger.set(key, structuredClone(value))
     },
   },
   blockConcurrencyWhile: fn => fn(),
 })
-const request = role => ({ headers: new Headers({ Upgrade: 'websocket',
-  'x-v2-session-id': 'cloud-regression', 'x-v2-verified-role': role,
+const request = (role, sessionId = 'cloud-regression') => ({ headers: new Headers({ Upgrade: 'websocket',
+  'x-v2-session-id': sessionId, 'x-v2-verified-role': role,
   'x-v2-selected-protocol': 'loppjusim-v2' }) })
 const flush = async () => {
   for (let i = 0; i < 12; i++) await new Promise(resolve => setTimeout(resolve, 0))
@@ -98,7 +98,49 @@ try {
   await flush()
   assert.equal(candidate2.messages.find(p => p.requestId === 'post-recovery').receipt.accepted, true)
   assert.equal(persistent.get('checkpoint').snapshot.runtimes[0].state.patient.anaestheticGases.fiSevoPercent, 3)
-  console.log('Cloudflare Durable Object v2 WebSocket / persistence regression passed')
+  // Instructor-only reset must clear drugs, restore baseline, rewind the
+  // authoritative clock and publish the exact same revision to both peers.
+  command(candidate2, 'reset-denied', 'reset-denied', epoch, 'reset')
+  await flush()
+  assert.equal(candidate2.messages.find(p => p.requestId === 'reset-denied').receipt.reason, 'forbidden')
+  command(candidate2, 'pre-reset-drug', 'pre-reset-drug', epoch, 'action.invoke', { actionId: 'propofol' })
+  await flush()
+  assert.equal(persistent.get('checkpoint').snapshot.runtimes[0].state.actionRuntime.activeEffects.length, 3)
+  command(instructor2, 'tick-1', 'tick-1', epoch, 'tick', { deltaMs: 1000 })
+  await flush()
+  assert.equal(persistent.get('checkpoint').snapshot.session.clockMs, 1000)
+  command(instructor2, 'reset-1', 'reset-1', epoch, 'reset')
+  await flush()
+  assert.equal(instructor2.messages.find(p => p.requestId === 'reset-1').receipt.accepted, true)
+  const cleared = persistent.get('checkpoint').snapshot
+  assert.equal(cleared.session.clockMs, 0)
+  assert.equal(cleared.runtimes[0].state.actionRuntime.simulationTime, 0)
+  assert.deepEqual(cleared.runtimes[0].state.actionRuntime.activeEffects, [])
+  assert.deepEqual(cleared.runtimes[0].state.actionRuntime.activeToggleActions, [])
+  assert.equal(cleared.runtimes[0].state.patient.heartRate, 78)
+  assert.equal(cleared.runtimes[0].state.patient.anaestheticGases.fiSevoPercent, 0)
+  assert.equal(instructor2.messages.at(-1).snapshot.session.revision, candidate2.messages.at(-1).snapshot.session.revision)
+  assert.equal(candidate2.messages.at(-1).snapshot.runtimes[0].state.patient.heartRate, 78)
+  assert.equal(persistent.get('actionLibrary').source, 'pilot-fallback-v1',
+    'Reset preserves the original pinned action library')
+  const recoveredAfterReset = new SessionV2Room(state(), {})
+  const resetWelcome = (await recoveredAfterReset.fetch(request('instructor'))).webSocket.messages[0]
+  assert.equal(resetWelcome.snapshot.session.clockMs, 0)
+  assert.equal(resetWelcome.snapshot.runtimes[0].state.actionRuntime.activeEffects.length, 0)
+  // A brand-new session ID is routed to a different Durable Object instance,
+  // with a new immutable catalogue and clean patient. It never mutates the
+  // existing saved session or implicitly moves connected candidate browsers.
+  const newLedger = new Map()
+  const newRoom = new SessionV2Room(state(newLedger), {})
+  const fresh = (await newRoom.fetch(request('instructor', 'ana-fresh-new'))).webSocket.messages[0]
+  assert.equal(fresh.snapshot.session.id, 'ana-fresh-new')
+  assert.equal(fresh.snapshot.session.clockMs, 0)
+  assert.equal(fresh.snapshot.runtimes[0].state.patient.heartRate, 78)
+  assert.equal(fresh.snapshot.runtimes[0].state.actionRuntime.activeEffects.length, 0)
+  assert.equal(fresh.role, 'instructor')
+  assert.equal(newLedger.get('actionLibrary').source, 'pilot-fallback-v1')
+  assert.equal(persistent.get('checkpoint').snapshot.session.id, 'cloud-regression')
+  console.log('Cloudflare Durable Object v2 reset / fresh room / persistence regression passed')
 } finally {
   globalThis.WebSocketPair = oldPair
   globalThis.Response = oldResponse
