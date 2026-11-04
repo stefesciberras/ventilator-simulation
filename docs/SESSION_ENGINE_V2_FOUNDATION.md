@@ -52,3 +52,11 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - `scripts/session-v2-lan-regression.mjs` uses actual WebSocket clients to validate two-party parameter synchronization, command permission rejection, action deduplication and reconnect.
 - This is a demonstration boundary only: server memory is not restart durable, the browser simulator has not been connected, no production trusted identity provider has been installed, and the test server does not expose the production Drugs & Events action library.
 - Network security: use loopback by default. Cleartext WebSocket credentials on a LAN are unsuitable for Internet or untrusted-network deployment. Preserve the legacy v1 LAN server unchanged.
+
+
+## v1.3.0.4 opt-in browser preview and durable LAN host
+- `server/session-v2-file-authority-store.mjs` provides serialized, atomically renamed, fsync-backed checkpoint/lease storage for one Node process. Never run two processes against the same ledger; this is not distributed locking.
+- The isolated LAN test host uses disk checkpoints and instructor-side lease renewal. Recovery after process restart requires expiry of the previous lease; recovered command receipts prevent duplicate Drugs & Events.
+- `src/edumon/AnaesthSessionV2Preview.tsx` is shown only on the Anaesth route with `?sessionV2Preview=1`. It connects to the experimental LAN gateway and renders the canonical patient state through the existing monitor input, without taking over normal v1 sessions.
+- `scripts/session-v2-file-restart-regression.mjs` verifies file-backed recovery and old-authority fencing.
+- Preview is NOT an enabled production mode. Local demo drug evaluator is not loaded in the standalone LAN server; no production ActionRuntime or full physiological state model is yet integrated. No TLS, browser credential provisioning, multi-process lease coordinator or full two-browser refresh E2E test is claimed.
