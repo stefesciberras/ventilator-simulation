@@ -154,7 +154,7 @@ function ValuePanel({ label, value, unit, detail, className }: { label: string; 
 /** The monitor footer is still mounted as display state in Instructor View.
  * Do not mount two live ventilator controllers against one patient runtime.
  */
-function EdumonMonitorVentilatorStrip({ patientState, onPatientStateChange, v2RespiratoryState }: {
+function EdumonMonitorVentilatorStrip({ patientState, onPatientStateChange, v2RespiratoryState, onV2VentilatorChange }: {
   patientState: MonitorPatientState
   onPatientStateChange: (state: MonitorPatientState) => void
   v2RespiratoryState?: SessionV2RespiratoryRuntime
