@@ -2,6 +2,15 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.14 — 2026-11-04 (experimental Cloudflare authoritative clock)
+- Bumped both product versions to **1.3.0.14**. The production v1 simulator remains unchanged.
+- Introduced a single server-owned simulation clock in the Cloudflare Durable Object for opt-in Session Engine v2. A Durable Object alarm advances the authoritative checkpoint in 1-second real-time intervals, at selected speeds 0.5×, 1×, 2× or 4×, then broadcasts persisted canonical snapshots to instructor and candidate. Drug onset/recovery now progresses when the clock is running without manual ticks.
+- Clock pause/resume and speed changes are accepted only from Worker-verified instructors; connected candidates receive current running/paused status and speed as read-only metadata. Manual step commands are disabled in the preview and rejected by the server while the clock runs.
+- Clock is **paused by default**, including after DO reconstruction/recovery, and requires an instructor to explicitly resume. This avoids replaying elapsed wall time after an outage or reconnect. Reset/end stops alarms, with reset restoring zero simulated time and clearing effects.
+- Server-only automatic tick commands do not accumulate dedup receipts; external drug/parameter commands retain persisted command deduplication.
+- Added deterministic Cloudflare alarm/dual-client regression covering speeds, candidate permission rejection, pause, reset, recovered checkpoint, and resumed time.
+- **Limitations:** Cloudflare alarm scheduling is best-effort and not a clinical-grade precise timing mechanism; on delays the model advances in bounded discrete steps rather than replaying large wall-time gaps. The v2 monitor projection is still limited, and no offline LAN authority is included.
+
 ## 1.3.0.13 — 2026-11-04 (Anaesth v2 session reset and fresh-room controls)
 - Bumped Vent and Anaesth/ITU application versions to **1.3.0.13**; all v1 simulator session flows remain unchanged.
 - Added **Reset Patient** and **New Session** controls to the experimental Anaesth v2 preview, visible only when the Worker confirms the WebSocket as an instructor. Both actions require confirmation.
