@@ -16,6 +16,7 @@ const diagnostics = read('src/core/SimulationDiagnostics.ts')
 const actionLibrary = read('src/edumon/actionLibrary.ts')
 const editor = read('src/action-editor/ActionEditorApp.tsx')
 const physiology = read('src/edumon/actionPhysiology.ts')
+const sharedPhysiology = read('src/edumon/sharedActionPhysiology.mjs')
 const bounds = read('src/edumon/physiologicalBounds.ts')
 const tof = read('src/edumon/EdumonAnaGasControl.tsx')
 const bis = read('src/edumon/EdumonBisTrend.tsx')
@@ -57,9 +58,9 @@ assert(actionCss.includes('@media (max-width: 680px)') && actionCss.includes('gr
 for (const target of ['respiration.airwayObstruction','neuromuscular.tofMinimumCount']) {
   assert(targets.includes(`'${target}'`), `${target} must be a validated action target`)
 }
-assert(physiology.includes("resolveNumericActionEffect('respiration.airwayObstruction'"), 'bronchospasm must be interpreted by physiology')
+assert(sharedPhysiology.includes("resolve('respiration.airwayObstruction'"), 'bronchospasm must be interpreted by shared physiology')
 assert(physiology.includes("resolveNumericActionEffect('neuromuscular.tofMinimumCount'"), 'TOF minimum-count target must be interpreted')
-assert(physiology.includes('baselineRespiratory.spontaneousRespiratoryRate * drive * muscleFraction'), 'neuromuscular block must suppress mechanically visible spontaneous breaths')
+assert(sharedPhysiology.includes('baselineRespiratory.spontaneousRespiratoryRate * drive * muscleFraction'), 'neuromuscular block must suppress mechanically visible spontaneous breaths')
 assert(tof.includes('currentNeuromuscularBlock'), 'TOF must derive from neuromuscular block')
 assert(tof.includes('currentTofMinimumCount'), 'TOF must respect diaphragm-return minimum count')
 
@@ -133,7 +134,8 @@ assert(bounds.includes('respiratoryRate: { min: 0, max: 80 }'), 'global RR hard 
 assert(bounds.includes('tidalVolumeMl: { min: 0, max: 1000 }'), 'global tidal-volume hard bound must be 0-1000')
 assert(bounds.includes('export function applyEdumonPhysiologicalBounds'), 'hard-bound applicator must be exported')
 assert(bounds.includes('deadSpaceMl: clamp(settings.deadSpaceMl, 0, Math.max(0, tidalVolumeMl))'), 'dead space must not exceed bounded tidal volume')
-assert(physiology.includes('applyEdumonPhysiologicalBounds({'), 'action physiology must finish through hard bounds')
+assert(sharedPhysiology.includes('return applySharedEdumonBounds({'), 'shared action physiology must finish through hard bounds')
+assert(physiology.includes('applySharedEdumonActionPhysiology(state'), 'v1 action physiology must delegate to shared pure model')
 assert(!physiology.includes('heartRate: clamp(actionHeartRate + sympathetic.heartRateOffset, 0, 300)'), 'legacy scattered HR 300 clamp must be removed')
 
 for (const [name, text] of [['guide', guide], ['prompt', prompt]]) {
