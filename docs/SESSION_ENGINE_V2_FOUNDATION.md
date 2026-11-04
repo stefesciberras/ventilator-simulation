@@ -70,3 +70,10 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - Explicit opt-in requires `SESSION_V2_EXPERIMENTAL=1` in Cloudflare deployment settings and two distinct server-side secrets (`SESSION_V2_INSTRUCTOR_TOKEN`, `SESSION_V2_CANDIDATE_TOKEN`), each 32+ characters.
 - Existing Node LAN experiment remains a development harness only; the live v1 session engine is untouched.
 - Cloudflare prototype only: no true LAN offline authority, no production Auth integration, no real Anaesth/ITU/Vent physiology bridge, no session scenario runtime integration, no production candidate UI permissions beyond demo model. Not production-ready.
+
+
+## v1.3.0.11 — controlled Anaesth Actions / physiology projection pilot
+- `src/session-v2/adapters/anaesthPilot.mjs` holds three curated Anaesth fallback action definitions (Propofol, Fentanyl, Relaxant), uses the existing pure `createAnaesthDeclarativeActionEvaluator`, and derives an opt-in HR/BP/spontaneous ventilation/depth projection from the canonical ActiveEffects timeline.
+- Cloudflare `SessionV2Room` accepts those trusted `action.invoke` IDs; its outgoing snapshots include `runtime.state.monitorProjection` (derived, **not persisted**) while baseline patient and ActiveEffects continue to be stored atomically.
+- Preview renders projection into the existing monitor and shows action buttons, timeline, and instructor-only ticks. Existing v1 global ActionRuntime and regular simulator controls remain unchanged. Avoid invoking v1 actions concurrently with the pilot.
+- A pilot demonstration is not the full physiology integration: no Supabase action definition resolution, full pharmacology, kinetics, BIS/EtSevo/alarms or authoritative continuous simulation clock. Next milestone must replace curated definitions with a **versioned trusted session action library** and wire the real product-specific physiology as a side-effect-free adapter.

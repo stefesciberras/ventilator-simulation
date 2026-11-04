@@ -8,6 +8,7 @@
  */
 import { SessionEngineV2 } from '../src/session-v2/engine.mjs'
 import { createAnaesthSessionAdapter } from '../src/session-v2/adapters/anaesth.mjs'
+import { createAnaesthV2PilotEvaluator, projectAnaesthV2Monitor } from '../src/session-v2/adapters/anaesthPilot.mjs'
 
 const MAX_BYTES = 65536
 const VALID_ID = /^[a-zA-Z0-9_-]{3,80}$/
@@ -19,8 +20,18 @@ const demoPatient = {
   respiratory: { respiratoryRate: 12, fio2: 0.21, peepCmH2O: 0 },
   anaestheticGases: { fiSevoPercent: 0 },
 }
-const adapter = createAnaesthSessionAdapter({ initialPatient: demoPatient })
-const packet = (type, extra = {}) => JSON.stringify({ protocol: 2, type, ...extra })
+const adapter = createAnaesthSessionAdapter({ initialPatient: demoPatient,
+  applyAction: createAnaesthV2PilotEvaluator() })
+const snapshotForPreview = snapshot => ({ ...snapshot, runtimes: snapshot.runtimes.map(runtime => ({
+  ...runtime, state: { ...runtime.state,
+    monitorProjection: runtime.state?.patient && runtime.state?.actionRuntime
+      ? projectAnaesthV2Monitor(runtime.state) : null,
+  },
+})) })
+const packet = (type, extra = {}) => JSON.stringify({
+  protocol: 2, type, ...extra,
+  ...(extra.snapshot ? { snapshot: snapshotForPreview(extra.snapshot) } : {}),
+})
 
 export class SessionV2Room {
   constructor(state, env) {
