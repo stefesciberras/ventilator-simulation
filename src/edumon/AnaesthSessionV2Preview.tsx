@@ -58,8 +58,6 @@ export function AnaesthSessionV2Preview({
   const [bronchospasmSeverity, setBronchospasmSeverity] = useState(0)
   const lastBronchospasmTargetRef = useRef<number | null>(null)
   const lastBronchospasmSentRef = useRef<number | null>(null)
-  const [ventilationMode, setVentilationMode] = useState('MANUAL')
-  const lastVentilationModeRef = useRef<string | null>(null)
   const lastAuthoritativeFiSevoRef = useRef<number | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
   const closedRef = useRef(true)
@@ -110,11 +108,6 @@ export function AnaesthSessionV2Preview({
       lastBronchospasmTargetRef.current = actualBronchospasmTarget
       setBronchospasmSeverity(actualBronchospasmTarget)
     }
-    const actualMode = runtime?.patient?.respiratory?.ventilatorMode
-    if (typeof actualMode === 'string' && actualMode !== lastVentilationModeRef.current) {
-      lastVentilationModeRef.current = actualMode
-      setVentilationMode(actualMode)
-    }
     respiratoryCallbackRef.current({
       expiratoryResistanceCmH2OLs: runtime?.respiratoryRuntime?.expiratoryResistanceCmH2OLs ?? null,
       peakAirwayPressureCmH2O: runtime?.respiratoryRuntime?.peakAirwayPressureCmH2O ?? null,
@@ -139,7 +132,6 @@ export function AnaesthSessionV2Preview({
     lastAuthoritativeFiSevoRef.current = null
     lastBronchospasmTargetRef.current = null
     lastBronchospasmSentRef.current = null
-    lastVentilationModeRef.current = null
     volatileCallbackRef.current(null)
     monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
     respiratoryCallbackRef.current({ estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null, clockRunning: false, clockSpeed: 1, expiratoryResistanceCmH2OLs: null, peakAirwayPressureCmH2O: null })
@@ -273,7 +265,6 @@ export function AnaesthSessionV2Preview({
     snapshotRef.current = null
     lastAuthoritativeFiSevoRef.current = null
     lastBronchospasmTargetRef.current = null
-    lastVentilationModeRef.current = null
     volatileCallbackRef.current(null)
     monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
     tofRequestRef.current = null
