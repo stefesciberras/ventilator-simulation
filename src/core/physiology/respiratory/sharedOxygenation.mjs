@@ -58,8 +58,9 @@ export function advanceOxygenation(input) {
   const frcL = clamp(Math.max(frcMl, 500) / 1000, 0.5, 8)
   const inspiredOxygenFraction = clamp(fio2, 0.21, 1)
   const oxygenConsumption = Math.max(oxygenConsumptionMlMin, 0)
+  const metabolicDepletionPerSecond = oxygenConsumption / 1000 / 60 / frcL
   const oxygenDerivative = ventilation / 60 / frcL * (inspiredOxygenFraction - alveolarOxygenFraction)
-    - oxygenConsumption / 1000 / 60 / frcL
+    - metabolicDepletionPerSecond
   const nextAlveolarFraction = clamp(alveolarOxygenFraction + oxygenDerivative * deltaSeconds, 0.01, 0.95)
   const targetSpO2 = targetSpO2FromAlveolarFraction(nextAlveolarFraction, input)
   const responseSeconds = targetSpO2 < spo2Percent ? 2.5 : 4
