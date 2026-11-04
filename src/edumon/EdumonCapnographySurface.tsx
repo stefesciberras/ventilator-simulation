@@ -323,8 +323,8 @@ export function EdumonCapnographySurface({ patientState, v2RespiratoryState }: {
       })
       if (time == null || co2 == null || rate == null) return
 
-      let previous = v2LastSampleRef.current
-      if (previous == null || time < previous - SAMPLE_INTERVAL) {
+      let previous: number = v2LastSampleRef.current ?? time
+      if (v2LastSampleRef.current == null || time < previous - SAMPLE_INTERVAL) {
         // Reconnect/reset: seed a short trace from canonical simulation time,
         // never replay unbounded wall time or restart local gas exchange.
         const start = Math.max(0, time - TRACE_WINDOW_SECONDS)
@@ -342,7 +342,7 @@ export function EdumonCapnographySurface({ patientState, v2RespiratoryState }: {
       // disconnected/background tabs never block the main thread.
       let steps = 0
       while (previous + SAMPLE_INTERVAL <= time + 0.00001 && steps < 300) {
-        const sampleTime = previous + SAMPLE_INTERVAL
+        const sampleTime: number = previous + SAMPLE_INTERVAL
         const value = advanceCapnogram(
           capnogramRef.current, SAMPLE_INTERVAL, rate, co2, respiratory,
         )
