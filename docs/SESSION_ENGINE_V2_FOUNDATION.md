@@ -150,3 +150,9 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 
 ## v1.3.0.22 — Smooth waveform without dual authority
 Experimental v2 renders 50Hz local capnogram samples with up to 20 FPS repaint, interpolating only the visual timeline between authoritative clock snapshots. Halt interpolation on pause or stale heartbeat; server EtCO2 and RR remain canonical. Defer bronchospasm severity to the shared declarative Event layer.
+
+## v1.3.0.23 — Bronchospasm Event and live capnogram
+- Regression fix: v2 preview forwards authoritative `packet.clock` on both **welcome** and **snapshot**. The prior missing clock on 1Hz snapshots kept forcing the local waveform presenter into paused mode. This was the cause of ongoing visibly stuttering capnography despite the v1.3.0.22 smoother renderer.
+- Intrinsic `event.bronchospasm.set` is an instructor-only pilot Event command with 0–100% validated severity. The reducer ramps it over 2s simulated time and stores one nonstacking declarative `respiration.airwayObstruction` effect in the ActionRuntime. Do not mutate monitor values directly.
+- V2 canonical effective resistance informs **both** capnogram shape and mode-aware respiratory pressure projection, and is forwarded to the actual capnography and ventilator monitor UI; stale local ventilation controls are disabled in v2. VC Ppeak increases with resistance; PC/PSV maintain set pressure but delivered VT may fall.
+- This is a bounded educational single-compartment model, **not** parity with the full breath-by-breath loop in loppjuSIM-Vent. No auto-PEEP or full airway pressure/flow waveforms yet. Supabase action library and Scenario Studio authoring for bronchospasm remain future work.

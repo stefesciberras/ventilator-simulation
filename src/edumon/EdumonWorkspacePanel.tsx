@@ -338,7 +338,7 @@ export function EdumonWorkspacePanel({
       <EdumonTemperatureSurface patientState={patientState} />
       {view === 'instructor' && (
         <div className="edumon-instructor-ventilator-host">
-          <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} disabled={deviceControlsLocked} />
+          <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} disabled={deviceControlsLocked || v2RespiratoryState !== undefined} v2RespiratoryState={v2RespiratoryState} />
         </div>
       )}
       {teachingHost.appId === 'anaesth' && (

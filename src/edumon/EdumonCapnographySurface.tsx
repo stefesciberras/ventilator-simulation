@@ -337,7 +337,14 @@ export function EdumonCapnographySurface({ patientState, v2RespiratoryState }: {
         historyRef.current = new RollingSignalHistory<CapnographySample>(TRACE_WINDOW_SECONDS)
         previous = initial - SAMPLE_INTERVAL
       }
-      const respiratory = resolvedMonitorRespiratorySettings(patientRef.current)
+      const respiratory = {
+        ...resolvedMonitorRespiratorySettings(patientRef.current),
+        // All v2 waveform morphology comes from the canonical event-derived
+        // resistance, not a browser-owned bronchospasm slider.
+        ...(snapshot.expiratoryResistanceCmH2OLs == null ? {} : {
+          expiratoryResistanceCmH2OLs: snapshot.expiratoryResistanceCmH2OLs,
+        }),
+      }
       // A fast 4x replay may need 200 samples/s; cap each RAF catch-up so
       // disconnected/background tabs never block the main thread.
       let steps = 0

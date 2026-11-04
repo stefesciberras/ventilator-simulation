@@ -154,13 +154,15 @@ function ValuePanel({ label, value, unit, detail, className }: { label: string; 
 /** The monitor footer is still mounted as display state in Instructor View.
  * Do not mount two live ventilator controllers against one patient runtime.
  */
-function EdumonMonitorVentilatorStrip({ patientState, onPatientStateChange }: {
+function EdumonMonitorVentilatorStrip({ patientState, onPatientStateChange, v2RespiratoryState }: {
   patientState: MonitorPatientState
   onPatientStateChange: (state: MonitorPatientState) => void
+  v2RespiratoryState?: SessionV2RespiratoryRuntime
 }) {
   const view = useSimulationWorkspaceView()
   if (view !== 'monitor') return null
-  return <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange} />
+  return <EdumonVentilatorControl patientState={patientState} onPatientStateChange={onPatientStateChange}
+    disabled={v2RespiratoryState !== undefined} v2RespiratoryState={v2RespiratoryState} />
 }
 
 function EdumonLanding() {
@@ -239,7 +241,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [v2EtSevo, setV2EtSevo] = useState<number | null>(null)
   const [v2RespiratoryState, setV2RespiratoryState] = useState<SessionV2RespiratoryRuntime>({
     estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null,
-    clockRunning: false, clockSpeed: 1,
+    clockRunning: false, clockSpeed: 1, expiratoryResistanceCmH2OLs: null,
+    peakAirwayPressureCmH2O: null,
   })
   const [v2MonitorState, setV2MonitorState] = useState<SessionV2MonitorRuntime>({ bisValue: null, simulationTime: null, tofReading: null })
   const v2TofRequestRef = useRef<(() => void) | null>(null)
@@ -718,7 +721,8 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             {module.auxiliaryMonitors.map((item) => (
               <button key={item.id} type="button" className="edumon-control-tile" onClick={() => setAuxiliaryMonitor(item.id)}><span>Extra monitor</span><strong>{item.shortLabel}</strong><small>{item.description}</small></button>
             ))}
-            <EdumonMonitorVentilatorStrip patientState={effectivePatientState} onPatientStateChange={setPatientState} />
+            <EdumonMonitorVentilatorStrip patientState={effectivePatientState} onPatientStateChange={setPatientState}
+              v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} />
           </div>}
         />
 

@@ -11,6 +11,7 @@ import { applySharedEdumonActionPhysiology } from '../../edumon/sharedActionPhys
 import { resolveV2ActionNumber, projectAnaesthV2Monitor } from './anaesthPilot.mjs'
 import { advanceBisIndex, tofReadingFromBlock } from '../../edumon/sharedAnaestheticMeasurements.mjs'
 import { advanceAlveolarCo2 } from '../../core/physiology/respiratory/sharedCo2Kinetics.mjs'
+import { setBronchospasmSeverity, advanceBronchospasm, projectBronchospasmVentilation } from './bronchospasm.mjs'
 
 const clone = value => structuredClone(value)
 const finite = (value, min, max) =>
@@ -31,7 +32,7 @@ const DEVICE_LIMITS = Object.freeze({
   fio2: [0.21, 1], peepCmH2O: [0, 35],
 })
 const INPUT_TYPES = new Set(['patient.parameter.set', 'device.parameter.set',
-  'anaesth.gas.set', 'action.invoke', 'monitor.tof.measure', 'tick'])
+  'anaesth.gas.set', 'action.invoke', 'monitor.tof.measure', 'event.bronchospasm.set', 'device.ventilator.mode.set', 'tick'])
 
 function validatePathValue(payload, limits) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
@@ -61,6 +62,7 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       tidalVolumeMl: baseline.respiratory?.tidalVolumeMl ?? 500,
       alveolarVentilationLMin: 4.2, minuteVentilationLMin: 6 },
     monitorRuntime: { bisValue: 100, tofReading: null },
+    bronchospasmRuntime: { targetSeverityPercent: 0, effectiveSeverityPercent: 0 },
     display: { invasiveBloodPressure: false, bis: false, capnography: false, temperature: false },
     controls: { paused: false, waveformsFrozen: false, alarmsSilenced: false },
   })
@@ -86,6 +88,23 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
         if (!finite(command.payload?.fiSevoPercent, 0, 8)) throw new Error('Invalid FiSevo')
         return { ...state, patient: { ...state.patient, anaestheticGases: {
           ...state.patient.anaestheticGases, fiSevoPercent: command.payload.fiSevoPercent,
+        } } }
+      }
+      if (command.type === 'event.bronchospasm.set') {
+        // This is the intrinsic pilot Event; the slider changes only the
+        // canonical severity target. No client-defined effects are accepted.
+        if (actorRole !== 'instructor' && context.mode !== 'standalone')
+          throw Error('Instructor-only bronchospasm severity')
+        if (!command.payload || Object.keys(command.payload).some(k => k !== 'severityPercent'))
+          throw Error('Untrusted bronchospasm command')
+        return setBronchospasmSeverity(state, command.payload.severityPercent)
+      }
+      if (command.type === 'device.ventilator.mode.set') {
+        if (!command.payload || Object.keys(command.payload).some(k => k !== 'mode') ||
+          !['MANUAL','VC-AC','PC-AC','PSV','SIMV-VC','SIMV-PC','VG-PC'].includes(command.payload.mode))
+          throw Error('Unsupported ventilator mode')
+        return { ...state, patient: { ...state.patient, respiratory: {
+          ...state.patient.respiratory, ventilatorMode: command.payload.mode,
         } } }
       }
       if (command.type === 'action.invoke') {
@@ -122,13 +141,18 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       // Advance gas kinetics from the checkpointed effective ventilation.
       // Do not mutate raw patient controls; measured EtSevo is runtime state.
       // If an old checkpoint predates gasRuntime, initialize at 0 explicitly.
-      const resolve = (target, base) => resolveV2ActionNumber(state.actionRuntime, target, base)
-      const effective = applySharedEdumonActionPhysiology(state.patient, resolve)
+      const withEvent = advanceBronchospasm(state, delta / 1000)
+      const resolve = (target, base) => resolveV2ActionNumber(withEvent.actionRuntime, target, base)
+      const effective = applySharedEdumonActionPhysiology(withEvent.patient, resolve)
       const respiratory = effective.respiratory
+      const mechanical = projectBronchospasmVentilation(respiratory)
+      const pressureControlled = ['PC-AC','SIMV-PC','PSV'].includes(respiratory.ventilatorMode)
+      const observedRespiratory = pressureControlled
+        ? { ...respiratory, tidalVolumeMl: mechanical.tidalVolumeMl } : respiratory
       const co2 = advanceAlveolarCo2({
         previousAlveolarCo2MmHg: state.respiratoryRuntime?.alveolarCo2MmHg ?? 40,
-        respiratoryRate: respiratory.respiratoryRate,
-        tidalVolumeMl: respiratory.tidalVolumeMl,
+        respiratoryRate: observedRespiratory.respiratoryRate,
+        tidalVolumeMl: observedRespiratory.tidalVolumeMl,
         deadSpaceMl: respiratory.deadSpaceMl,
         co2ProductionMlMin: respiratory.co2ProductionMlMin,
         sex: respiratory.sex,
@@ -138,15 +162,20 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       const nextEtSevo = advanceEndTidalSevo({
         etSevoPercent: state.gasRuntime?.etSevoPercent ?? 0,
         fiSevoPercent: state.patient.anaestheticGases?.fiSevoPercent ?? 0,
-        alveolarVentilationLMin: estimatedAlveolarVentilationLMin(respiratory),
+        alveolarVentilationLMin: estimatedAlveolarVentilationLMin(observedRespiratory),
         frcMl: respiratory.frcMl,
         dtSeconds: delta / 1000,
       })
-      const next = { ...state,
-        actionRuntime: { ...state.actionRuntime,
+      const next = { ...withEvent,
+        actionRuntime: { ...withEvent.actionRuntime,
           simulationTime: state.actionRuntime.simulationTime + delta / 1000 },
         gasRuntime: { etSevoPercent: nextEtSevo },
-        respiratoryRuntime: co2,
+        respiratoryRuntime: {
+          ...co2,
+          expiratoryResistanceCmH2OLs: mechanical.airwayResistanceCmH2OLs,
+          peakAirwayPressureCmH2O: mechanical.peakAirwayPressureCmH2O,
+          expiratoryTimeConstantSeconds: mechanical.expiratoryTimeConstantSeconds,
+        },
       }
       const depth = projectAnaesthV2Monitor(next).anaestheticPhysiology.depthOfAnaesthesia
       return { ...next, monitorRuntime: { ...state.monitorRuntime,
