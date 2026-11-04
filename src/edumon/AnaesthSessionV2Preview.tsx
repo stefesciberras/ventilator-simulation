@@ -1,3 +1,4 @@
+import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 
@@ -62,22 +63,45 @@ export function AnaesthSessionV2Preview({
     const url = endpoint.trim()
     if (!/^wss?:\/\//.test(url) || !/^[a-zA-Z0-9_-]{3,80}$/.test(sessionId)) {
       setStatus('error')
-      setMessage('Invalid LAN endpoint or session ID')
+      setMessage('Invalid Cloudflare WebSocket endpoint or session ID')
+      return
+    }
+    let protocol: string
+    try {
+      protocol = encodeV2WebSocketSecret(secret)
+    } catch {
+      closedRef.current = true
+      setStatus('error')
+      setMessage('Invalid test secret. Enter a non-empty UTF-8 secret of at most 256 bytes.')
       return
     }
     let tries = 0
     const open = () => {
       if (closedRef.current || currentAttempt !== attemptRef.current) return
-      const socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}`, [`v2auth.${secret}`])
+      let socket: WebSocket
+      try {
+        socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}`, [protocol])
+      } catch {
+        closedRef.current = true
+        setStatus('error')
+        setMessage('Unable to create the WebSocket. Check the endpoint and browser security settings.')
+        return
+      }
       socketRef.current = socket
+      let welcomed = false
+      const handshakeTimeout = window.setTimeout(() => {
+        if (!welcomed && socket.readyState !== WebSocket.CLOSED) socket.close()
+      }, 10000)
       socket.onopen = () => {
-        setMessage('Connected; awaiting canonical session snapshot...')
+        setMessage('WebSocket open; awaiting canonical session snapshot...')
       }
       socket.onmessage = event => {
         let packet: any
         try { packet = JSON.parse(String(event.data)) } catch { return }
         if (packet.protocol !== 2) return
         if (packet.type === 'welcome') {
+          welcomed = true
+          window.clearTimeout(handshakeTimeout)
           tries = 0
           setStatus('connected')
           setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
@@ -97,10 +121,17 @@ export function AnaesthSessionV2Preview({
       }
       socket.onerror = () => { /* reconnect on close */ }
       socket.onclose = () => {
+        window.clearTimeout(handshakeTimeout)
         if (closedRef.current || currentAttempt !== attemptRef.current) return
+        if (tries >= 3) {
+          closedRef.current = true
+          setStatus('error')
+          setMessage('Cloudflare WebSocket connection failed. Verify the experimental flag, both secrets, Durable Object binding and deployed Worker.')
+          return
+        }
         setStatus('reconnecting')
-        setMessage('Connection lost; retrieving the canonical Durable Object snapshot...')
-        const delay = Math.min(5000, 500 * (2 ** Math.min(tries++, 4)))
+        setMessage('Connection interrupted; retrying the Cloudflare session connection...')
+        const delay = Math.min(5000, 500 * (2 ** tries++))
         window.setTimeout(open, delay)
       }
     }
