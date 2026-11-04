@@ -67,6 +67,13 @@ export class SessionEngineV2 {
     }
     if (this.#session.mode === 'self-directed' && role !== 'learner') throw new Error('Learner required')
     if (this.#session.mode === 'simulation' && role === 'learner') throw new Error('Invalid role')
+    if (this.#session.mode === 'simulation' && role === 'candidate' &&
+        [...this.#participants.values()].some(p => p.role === 'candidate' && p.id !== participantId)) {
+      throw new Error('Simulation permits one candidate')
+    }
+    if (this.#session.mode === 'self-directed' && !this.#participants.has(participantId) &&
+        this.#participants.size) throw new Error('Self-directed permits one learner')
+    if (this.#session.mode === 'standalone' && role !== 'learner') throw new Error('Standalone requires a local learner')
     if (this.#session.mode === 'teaching' && role === 'learner') throw new Error('Invalid role')
     this.#participants.set(participantId, { id: participantId, role, connected: true })
     if (this.#session.mode === 'teaching' && role === 'candidate') this.#makeRuntime(participantId)
@@ -143,14 +150,14 @@ export class SessionEngineV2 {
     const runtime = this.#runtimes.get(runtimeId)
     let nextState
     try {
-      if (type === 'reset') nextState = this.#adapter.reset(copy(runtime.state), { runtimeId, mode: this.#session.mode })
+      if (type === 'reset') nextState = this.#adapter.reset(copy(runtime.state), { runtimeId, mode: this.#session.mode, actorRole: p.role, participantId })
       else if (type === 'tick') {
         if (!Number.isFinite(payload.deltaMs) || payload.deltaMs <= 0 || payload.deltaMs > 1000) {
           return reject('invalid-tick', this.#session.revision)
         }
-        nextState = this.#adapter.apply(copy(runtime.state), copy(command), { runtimeId, mode: this.#session.mode })
+        nextState = this.#adapter.apply(copy(runtime.state), copy(command), { runtimeId, mode: this.#session.mode, actorRole: p.role, participantId })
       } else if (type !== 'end') {
-        nextState = this.#adapter.apply(copy(runtime.state), copy(command), { runtimeId, mode: this.#session.mode })
+        nextState = this.#adapter.apply(copy(runtime.state), copy(command), { runtimeId, mode: this.#session.mode, actorRole: p.role, participantId })
       }
       if (type !== 'end' && (nextState === undefined || JSON.stringify(nextState) === undefined)) {
         return reject('invalid-adapter-state', this.#session.revision)
