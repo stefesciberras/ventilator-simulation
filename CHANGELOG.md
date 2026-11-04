@@ -2,6 +2,15 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.12 — 2026-11-04 (session-pinned Anaesth ActionDefinitions)
+- Bumped both product versions to **1.3.0.12**, keeping Session Engine v1 unchanged and v2 experimental.
+- Added a strict, server-side-only Anaesth ActionDefinition loader from Supabase REST (when `SESSION_V2_ACTIONS_SUPABASE_URL` and `SESSION_V2_ACTIONS_SUPABASE_KEY` are configured), accepting only supported Anaesth/all action settings, known effect targets/operations, and bounded inputs. Fail closed if a configured Supabase catalogue is unavailable, invalid, or empty.
+- On creation of each new Cloudflare Durable Object session, persist the **validated ActionDefinition snapshot together with the initial checkpoint**, and use that fixed library for all further command processing and reconstruction. Subsequent edits in Supabase do not silently change active-scenario effects. Existing v1.3.0.11 sessions without a pinned library continue with their original pilot definitions.
+- Without optional Supabase connection settings, new experimental rooms explicitly retain a pinned three-drug pilot fallback.
+- The v2 preview now shows the **session-pinned catalogue** and lets instructor/candidate invoke selected permitted actions, replacing hard-coded three-drug buttons. User-provided definitions are never accepted from WebSocket commands.
+- Added regression coverage for catalogue validation, unsafe effects, failed fetches, versioned pinned recovery, duplicate effects and Durable Object library retention. Production v1 drugs and session behaviour are unchanged.
+- **Limitations:** This is not a live-immutable Supabase release/version table or full Anaesth pharmacodynamics. Cross-product adapters, full waveform/monitor control, true LAN offline transport and real role-based Supabase user authentication remain planned.
+
 ## 1.3.0.11 — 2026-11-04 (experimental Anaesth ActionEffects projection)
 - Bumped both product versions to **1.3.0.11**. All production Session Engine v1 flows remain default.
 - Connected three trusted, explicitly curated Anaesth fallback action definitions (Propofol, Fentanyl and Relaxant) to the opt-in Cloudflare Durable Object v2 action evaluator.
