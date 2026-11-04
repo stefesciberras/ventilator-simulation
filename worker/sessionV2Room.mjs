@@ -1,0 +1,153 @@
+/**
+ * Experimental Cloudflare Durable Object authority for Session v2.
+ * One DO per session: serial command reduction, checkpoint-before-receipt,
+ * and a single canonical runtime. No dedicated Node server is required.
+ *
+ * Identity is verified at the Worker boundary and passed as internal headers
+ * on stub.fetch(); browser-supplied participantId/role is never authoritative.
+ */
+import { SessionEngineV2 } from '../src/session-v2/engine.mjs'
+import { createAnaesthSessionAdapter } from '../src/session-v2/adapters/anaesth.mjs'
+
+const MAX_BYTES = 65536
+const VALID_ID = /^[a-zA-Z0-9_-]{3,80}$/
+const VALID_CMD = /^[a-zA-Z0-9._:-]{1,128}$/
+const TYPES = new Set(['patient.parameter.set', 'device.parameter.set', 'anaesth.gas.set', 'action.invoke', 'reset', 'tick', 'end'])
+const demoPatient = {
+  heartRate: 78, rhythm: 'sinus', systolicPressure: 122, diastolicPressure: 68,
+  spo2: 98, peripheralPerfusion: 1, temperatureC: 37,
+  respiratory: { respiratoryRate: 12, fio2: 0.21, peepCmH2O: 0 },
+  anaestheticGases: { fiSevoPercent: 0 },
+}
+const adapter = createAnaesthSessionAdapter({ initialPatient: demoPatient })
+const packet = (type, extra = {}) => JSON.stringify({ protocol: 2, type, ...extra })
+
+export class SessionV2Room {
+  constructor(state, env) {
+    this.state = state
+    this.env = env
+    this.engine = null
+    this.sessionId = null
+    this.sockets = new Map()
+    this.queue = Promise.resolve()
+    this.loaded = this.state.blockConcurrencyWhile(async () => {
+      const checkpoint = await this.state.storage.get('checkpoint')
+      if (checkpoint) {
+        this.engine = SessionEngineV2.fromCheckpoint({ checkpoint, adapter })
+        this.sessionId = this.engine.snapshot.session.id
+      }
+    })
+  }
+  persist = async engine => {
+    await this.state.storage.put('checkpoint', engine.exportCheckpoint())
+    this.engine = engine
+  }
+  send = (socket, type, extra = {}) => {
+    try { socket.send(packet(type, extra)) } catch { this.sockets.delete(socket) }
+  }
+  broadcast = () => {
+    if (!this.engine) return
+    for (const socket of this.sockets.keys()) this.send(socket, 'snapshot', { snapshot: this.engine.snapshot })
+  }
+  serialize = fn => {
+    const next = this.queue.then(fn)
+    this.queue = next.catch(() => undefined)
+    return next
+  }
+  async fetch(request) {
+    await this.loaded
+    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return new Response('Upgrade required', { status: 426 })
+    const role = request.headers.get('x-v2-verified-role')
+    const sessionId = request.headers.get('x-v2-session-id')
+    if (!VALID_ID.test(sessionId ?? '') || (role !== 'instructor' && role !== 'candidate')) {
+      return new Response('Unauthorized', { status: 403 })
+    }
+    if (this.sessionId && this.sessionId !== sessionId) return new Response('Wrong session', { status: 409 })
+    const pair = new WebSocketPair()
+    const [client, server] = Object.values(pair)
+    server.accept()
+    const identity = role === 'instructor' ? 'instructor' : 'candidate'
+    // Join/restore is queued before allowing any commands.
+    try {
+      await this.serialize(async () => {
+        if (!this.engine) {
+          if (role !== 'instructor') throw Error('instructor-required')
+          const created = new SessionEngineV2({
+            sessionId, mode: 'simulation', instructorId: 'instructor', adapter,
+          })
+          created.join({ participantId: 'candidate', role: 'candidate' })
+          created.start('instructor')
+          await this.persist(created)
+          this.sessionId = sessionId
+        } else {
+          const current = this.engine.snapshot
+          if (current.session.status === 'ended') throw Error('session-ended')
+          if (identity === 'instructor') {
+            // After DO reconstruction, fenced epoch is persisted on the first
+            // authenticated instructor reconnect, not merely on object creation.
+            if (current.session.status === 'recovering' ||
+                !current.participants.find(p => p.id === 'instructor')?.connected) {
+              const staged = this.engine.fork()
+              staged.recover('instructor')
+              await this.persist(staged)
+            }
+          } else if (!current.participants.find(p => p.id === 'candidate')?.connected) {
+            const staged = this.engine.fork()
+            staged.recover('candidate')
+            await this.persist(staged)
+          }
+        }
+      })
+    } catch {
+      server.close(1008, 'Session unavailable')
+      return new Response('Session unavailable', { status: 409 })
+    }
+    this.sockets.set(server, identity)
+    this.send(server, 'welcome', { requestId: 'hello', snapshot: this.engine.snapshot })
+    server.addEventListener('message', event => {
+      void this.serialize(async () => {
+        let msg
+        try {
+          const raw = String(event.data)
+          if (raw.length > MAX_BYTES) throw Error('too-large')
+          msg = JSON.parse(raw)
+          if (msg?.protocol !== 2 || !msg || typeof msg !== 'object') throw Error('invalid')
+        } catch { this.send(server, 'error', { reason: 'invalid-message' }); return }
+        const requestId = typeof msg.requestId === 'string' ? msg.requestId.slice(0, 128) : null
+        if (msg.type === 'resync') {
+          this.send(server, 'snapshot', { requestId, snapshot: this.engine.snapshot })
+          return
+        }
+        if (msg.type !== 'command' || !msg.command || !VALID_CMD.test(msg.command.id) ||
+            !TYPES.has(msg.command.type) || msg.command.runtimeId !== 'main' ||
+            !Number.isSafeInteger(msg.command.epoch)) {
+          this.send(server, 'error', { requestId, reason: 'invalid-command' }); return
+        }
+        const before = this.engine.snapshot.session.revision
+        const staged = this.engine.fork()
+        const receipt = staged.submit({
+          id: msg.command.id,
+          type: msg.command.type,
+          epoch: msg.command.epoch,
+          runtimeId: 'main',
+          participantId: identity,
+          payload: msg.command.payload ?? {},
+        })
+        if (receipt.accepted && staged.snapshot.session.revision > before) {
+          try {
+            await this.persist(staged)
+          } catch {
+            this.send(server, 'error', { requestId, reason: 'checkpoint-failed' })
+            return
+          }
+        }
+        this.send(server, 'receipt', { requestId, receipt })
+        if (receipt.accepted && staged.snapshot.session.revision > before) this.broadcast()
+      }).catch(() => this.send(server, 'error', { reason: 'authority-error' }))
+    })
+    const drop = () => { this.sockets.delete(server) }
+    server.addEventListener('close', drop)
+    server.addEventListener('error', drop)
+    return new Response(null, { status: 101, webSocket: client })
+  }
+}

@@ -19,11 +19,11 @@ export function AnaesthSessionV2Preview({
 }: {
   onPatientSnapshot: (patient: Partial<MonitorPatientState>) => void
 }) {
-  const [endpoint, setEndpoint] = useState(() => `ws://${window.location.hostname || '127.0.0.1'}:4174/loppjusim-v2`)
+  const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
   const [sessionId, setSessionId] = useState('ana-preview')
   const [secret, setSecret] = useState('')
   const [status, setStatus] = useState<Status>('disconnected')
-  const [message, setMessage] = useState('Experimental Anaesth LAN preview; v1 remains in use for regular sessions.')
+  const [message, setMessage] = useState('Experimental Cloudflare v2 preview; v1 remains in use for regular sessions.')
   const [snapshot, setSnapshot] = useState<SessionV2Snapshot | null>(null)
   const [newHeartRate, setNewHeartRate] = useState(90)
   const [newFiSevo, setNewFiSevo] = useState(2)
@@ -58,7 +58,7 @@ export function AnaesthSessionV2Preview({
     snapshotRef.current = null
     setSnapshot(null)
     setStatus('connecting')
-    setMessage('Connecting to opt-in test LAN authority...')
+    setMessage('Connecting to experimental Cloudflare session authority...')
     const url = endpoint.trim()
     if (!/^wss?:\/\//.test(url) || !/^[a-zA-Z0-9_-]{3,80}$/.test(sessionId)) {
       setStatus('error')
@@ -68,11 +68,11 @@ export function AnaesthSessionV2Preview({
     let tries = 0
     const open = () => {
       if (closedRef.current || currentAttempt !== attemptRef.current) return
-      const socket = new WebSocket(url)
+      const socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}`, [`v2auth.${secret}`])
       socketRef.current = socket
-      socket.onopen = () => socket.send(JSON.stringify({
-        protocol: 2, type: 'hello', requestId: 'hello', sessionId, token: secret,
-      }))
+      socket.onopen = () => {
+        setMessage('Connected; awaiting canonical session snapshot...')
+      }
       socket.onmessage = event => {
         let packet: any
         try { packet = JSON.parse(String(event.data)) } catch { return }
@@ -80,14 +80,14 @@ export function AnaesthSessionV2Preview({
         if (packet.type === 'welcome') {
           tries = 0
           setStatus('connected')
-          setMessage('Live v2 test connection; changes are committed before acknowledgement.')
+          setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
           receiveSnapshot(packet.snapshot)
         } else if (packet.type === 'snapshot') {
           receiveSnapshot(packet.snapshot)
         } else if (packet.type === 'receipt') {
           if (!packet.receipt?.accepted) setMessage(`Command rejected: ${packet.receipt?.reason ?? 'unknown'}`)
         } else if (packet.type === 'error') {
-          setMessage(`LAN authority: ${packet.reason}`)
+          setMessage(`Cloud authority: ${packet.reason}`)
           if (['unauthenticated', 'not-session-member', 'invalid-session'].includes(packet.reason)) {
             closedRef.current = true
             setStatus('error')
@@ -99,7 +99,7 @@ export function AnaesthSessionV2Preview({
       socket.onclose = () => {
         if (closedRef.current || currentAttempt !== attemptRef.current) return
         setStatus('reconnecting')
-        setMessage('LAN connection lost; attempting to recover canonical snapshot...')
+        setMessage('Connection lost; retrieving the canonical Durable Object snapshot...')
         const delay = Math.min(5000, 500 * (2 ** Math.min(tries++, 4)))
         window.setTimeout(open, delay)
       }
@@ -129,14 +129,14 @@ export function AnaesthSessionV2Preview({
   return (
     <section style={{ border: '1px solid #8696a8', borderRadius: 8, padding: 12, margin: '8px 16px', maxWidth: 680 }}
       aria-label="Experimental Session Engine v2 preview">
-      <strong>Session Engine v2 — experimental LAN preview</strong>
+      <strong>Session Engine v2 — experimental Cloudflare preview</strong>
       <p style={{ fontSize: 12, margin: '6px 0' }}>Uses demo Anaesth state, not the full physiology engine. Never use for a real clinical session.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <label>WebSocket URL <input aria-label="v2 WebSocket endpoint" value={endpoint}
+        <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
           onChange={event => setEndpoint(event.target.value)} disabled={status === 'connected'} /></label>
         <label>Session <input aria-label="v2 session ID" value={sessionId}
           onChange={event => setSessionId(event.target.value)} disabled={status === 'connected'} /></label>
-        <label>Test access secret <input type="password" autoComplete="off" aria-label="v2 test access secret"
+        <label>Experimental access secret <input type="password" autoComplete="off" aria-label="v2 test access secret"
           value={secret} onChange={event => setSecret(event.target.value)} disabled={status === 'connected'} /></label>
         {status === 'connected' || status === 'connecting' || status === 'reconnecting'
           ? <button type="button" onClick={disconnect}>Disconnect</button>

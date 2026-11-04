@@ -2,6 +2,16 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.6 — 2026-11-04 (experimental Cloudflare-native v2)
+- Bumped displayed Vent and Anaesth/ITU application versions to **1.3.0.6**. Session Engine v1 remains default.
+- Added a SQLite-backed Cloudflare Durable Object class (`SessionV2Room`) with a single authoritative Session Engine v2 reducer per room, WebSocket message processing, checkpoint-before-acknowledgement and canonical snapshot broadcasting.
+- Added a Worker route at `/api/session-v2/ws` gated by `SESSION_V2_EXPERIMENTAL=1` and distinct long Cloudflare secrets. Browser access is authenticated by the Worker before a room can be opened; roles are passed internally, not trusted from browser messages.
+- Updated Anaesth preview to connect through same-origin WebSocket using HTTPS/WSS and a test secret carried in the WebSocket subprotocol instead of a query string.
+- Added SQLite Durable Object binding/migration in Wrangler configuration, with experimental feature disabled unless explicitly configured. No dedicated Node server is needed for this cloud route.
+- On object reconstruction, the v2 engine restores from persisted checkpoint and fences prior epochs. Production Drugs & Events, ITU/Vent adapters, full physiology checkpoint parity, and true offline LAN transport remain outstanding.
+- **Requires Cloudflare configuration:** set two distinct 32+ character `SESSION_V2_INSTRUCTOR_TOKEN` and `SESSION_V2_CANDIDATE_TOKEN` secrets and set `SESSION_V2_EXPERIMENTAL=1` before opting into the preview. Secrets must not be committed to Git.
+- **Safety:** the experimental cloud room uses an Anaesth demo baseline, not the real Scenario Studio or ActionEffect library. Do not enable for live teaching until full clinical parameter parity and access-control hardening are verified.
+
 ## 1.3.0.5 — 2026-11-04 (LAN preview heartbeat reliability)
 - Bumped Vent and Anaesth/ITU application version constants to **1.3.0.5**.
 - Corrected the experimental LAN host's WebSocket upgrade handler to register heartbeat/pong liveness directly on each upgraded connection, preventing active instructor/candidate sessions from being terminated by an unhandled pong after successive heartbeat intervals.
