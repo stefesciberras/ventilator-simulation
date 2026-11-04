@@ -51,7 +51,7 @@ assert(!fs.existsSync('src/edumon/icu/capnographyEngine.ts'), 'EDUMON-ICU must n
 if (!process.exitCode) console.log('EDUMON Ana/ICU common monitor architecture regression checks passed')
 
 // The monitor strip must remain visible with or without authenticated instructor tools.
-assert(app.includes('<EdumonMonitorVentilatorStrip patientState={effectivePatientState} onPatientStateChange={setPatientState} />'), 'monitor footer must render ventilator controls directly')
+assert(app.includes('<EdumonMonitorVentilatorStrip patientState={effectivePatientState} onPatientStateChange={setPatientState}') && app.includes('v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined}'), 'monitor footer must render ventilator controls with optional canonical v2 respiratory values')
 assert(app.includes("if (view !== 'monitor') return null"), 'instructor view must not mount a second monitor ventilator controller')
 assert(workspace.includes("view === 'instructor'") && workspace.includes('<EdumonVentilatorControl'), 'instructor view must mount the same ventilator controls explicitly')
 assert(workspaceShell.includes('SimulationWorkspaceViewContext.Provider value={effectiveView}'), 'workspace must supply the actual rendered view to descendants')
