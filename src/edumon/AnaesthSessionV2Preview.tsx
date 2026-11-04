@@ -181,7 +181,7 @@ export function AnaesthSessionV2Preview({
         } else if (packet.type === 'snapshot') {
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           if (packet.clock) setClock(packet.clock as ClockControl)
-          receiveSnapshot(packet.snapshot)
+          receiveSnapshot(packet.snapshot, packet.clock as ClockControl | undefined)
         } else if (packet.type === 'clock-receipt') {
           if (packet.clock) setClock(packet.clock as ClockControl)
           setMessage(packet.accepted ? 'Authoritative simulation clock updated.' : 'Clock update failed.')
