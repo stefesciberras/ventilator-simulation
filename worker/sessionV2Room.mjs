@@ -137,7 +137,7 @@ export class SessionV2Room {
       return new Response('Session unavailable', { status: 409 })
     }
     this.sockets.set(server, identity)
-    this.send(server, 'welcome', { requestId: 'hello', snapshot: this.engine.snapshot })
+    this.send(server, 'welcome', { requestId: 'hello', role: identity, snapshot: this.engine.snapshot })
     server.addEventListener('message', event => {
       void this.serialize(async () => {
         let msg
