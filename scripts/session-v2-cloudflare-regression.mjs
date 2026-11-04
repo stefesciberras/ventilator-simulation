@@ -15,7 +15,7 @@ class MockSocket {
     this.peer.messages.push(JSON.parse(data))
   }
   close() { this.listeners.get('close')?.({}) }
-  emit(type, data) { this.listeners.get(type)?.({ data }) }
+  emit(type, data) { this.peer.listeners.get(type)?.({ data }) }
 }
 globalThis.WebSocketPair = class {
   constructor() {
