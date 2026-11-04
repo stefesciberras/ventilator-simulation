@@ -2,6 +2,16 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.19 — 2026-11-04 (shared BIS/TOF monitoring and v2 FiSevo styling)
+- Bumped both application versions to **1.3.0.19**; default v1 simulation architecture remains unchanged.
+- Restored the **neutral FiSevo monitor colour** in experimental v2. The read-only canonical FiSevo row no longer uses the yellow editable-control class; disabled browser tinting is explicitly neutralized. The existing v1 adjustable-control styling is preserved.
+- Extracted pure **BIS depth targets, 8-second response lag and TOF count/ratio model** into `sharedAnaestheticMeasurements.mjs`. Existing v1 BIS/TOF use the shared functions while keeping v1's local BIS jitter and intermittent TOF operation.
+- Experimental v2 Anaesth now stores a deterministic **BIS value** in the canonical checkpoint and updates it on authoritative simulation ticks, using effective volatile/IV hypnotic depth. Browser monitor BIS displays that value and does not advance its own local BIS clock in v2 mode.
+- New validated `monitor.tof.measure` command captures **intermittent TOF count and ratio**, calculated server-side from v2 neuromuscular block and minimum TOF effects at the time of measurement. The most recent reading and its simulation timestamp persist through reconnection and are cleared on Reset Patient. Candidate and instructor can request a measurement; no client-provided count/ratio is accepted.
+- The established TOF display and BIS monitor consume the v2 monitor snapshot in opt-in preview mode. The v1 display and runtime remain untouched outside experimental v2.
+- Added regressions for response kinetics, last-measurement semantics, malformed client payload rejection, checkpoint retention, reset, monitor wiring and read-only styling.
+- **Scope:** BIS is a deterministic educational index without clinical noise/artifact modelling; v2 TOF measures immediately on command rather than simulating the v1's short acquisition delay. Waveform history remains client presentation, not a persisted waveform. Full alarm gating and other monitor/device synchronization remain planned.
+
 ## 1.3.0.18 — 2026-11-04 (single authoritative volatile display in v2 preview)
 - Bumped Vent and Anaesth/ITU versions to **1.3.0.18**, preserving the normal v1 simulator.
 - Fixed the experimental v2 preview/full Anaesth gas-panel split-brain state. Previously, the preview restored checkpointed `gasRuntime.etSevoPercent` but the full monitor footer retained its *own* React ref/state and kept calculating sevo uptake on a browser animation loop. This made a page refresh show EtSevo 0 in the monitor despite a restored server checkpoint, and allowed the full monitor EtSevo to remain high after v2 Reset Patient.

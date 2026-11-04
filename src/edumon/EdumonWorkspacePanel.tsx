@@ -10,6 +10,7 @@ import { EdumonNibpControl } from './EdumonNibpControl'
 import { EdumonCapnographySurface } from './EdumonCapnographySurface'
 import { EdumonTemperatureSurface } from './EdumonTemperatureSurface'
 import { EdumonAnaGasControl } from './EdumonAnaGasControl'
+import type { SessionV2MonitorRuntime } from './AnaesthSessionV2Preview'
 import { EdumonVentilatorControl } from './EdumonVentilatorControl'
 import { useSimulationWorkspaceView } from '../components/SimulationWorkspaceShell'
 import { EdumonActionsPanel } from './EdumonActionsPanel'
@@ -35,6 +36,8 @@ interface EdumonWorkspacePanelProps {
   deviceControlsLocked?: boolean
   /** Present only in experimental Session v2: canonical EtSevo, null until snapshot. */
   v2VolatileState?: { etSevoPercent: number | null }
+  v2MonitorState?: SessionV2MonitorRuntime
+  onV2TofMeasure?: () => void
   sessionPanel?: ReactNode
   meanPressure: number | null
 }
@@ -55,6 +58,8 @@ export function EdumonWorkspacePanel({
   patientControlsLocked = false,
   deviceControlsLocked = false,
   v2VolatileState,
+  v2MonitorState,
+  onV2TofMeasure,
   sessionPanel,
 }: EdumonWorkspacePanelProps) {
   const view = useSimulationWorkspaceView()
@@ -335,7 +340,7 @@ export function EdumonWorkspacePanel({
         </div>
       )}
       {teachingHost.appId === 'anaesth' && (
-        <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={deviceControlsLocked} v2VolatileState={v2VolatileState} />
+        <EdumonAnaGasControl patientState={patientState} onPatientStateChange={onPatientStateChange} sideControlsLocked={deviceControlsLocked} v2VolatileState={v2VolatileState} v2MonitorState={v2MonitorState} onV2TofMeasure={onV2TofMeasure} />
       )}
       <SimulationControlFramework
         activeTab={tab}

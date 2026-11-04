@@ -2,11 +2,13 @@ import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 
+export type SessionV2MonitorRuntime = { bisValue: number | null; simulationTime: number | null;
+  tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }
 type SessionV2ActionLibrary = { version: number; source: string;
   actions: Array<{ id: string; name: string; kind: string; candidateAccess: string; mode: string }> }
 type SessionV2Snapshot = {
   session: { epoch: number; revision: number; status: string; mode: string }
-  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
+  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; gasRuntime?: { etSevoPercent: number }; monitorRuntime?: { bisValue: number; tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }; effectIndicators?: { neuromuscularBlockPercent: number }; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string; startedAtSimulationTime: number; effect: { target: string; onsetSeconds: number } }> }; patient?: Partial<MonitorPatientState> & {
     anaestheticGases?: { fiSevoPercent?: number }
   } } }>
 }
@@ -21,9 +23,13 @@ type Status = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'er
 export function AnaesthSessionV2Preview({
   onPatientSnapshot,
   onVolatileSnapshot,
+  onMonitorSnapshot,
+  tofRequestRef,
 }: {
   onPatientSnapshot: (patient: Partial<MonitorPatientState>) => void
   onVolatileSnapshot: (etSevoPercent: number | null) => void
+  onMonitorSnapshot: (state: SessionV2MonitorRuntime) => void
+  tofRequestRef: { current: (() => void) | null }
 }) {
   const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
   const [sessionId, setSessionId] = useState('ana-preview')
@@ -46,8 +52,10 @@ export function AnaesthSessionV2Preview({
   const snapshotRef = useRef<SessionV2Snapshot | null>(null)
   const patientCallbackRef = useRef(onPatientSnapshot)
   const volatileCallbackRef = useRef(onVolatileSnapshot)
+  const monitorCallbackRef = useRef(onMonitorSnapshot)
   patientCallbackRef.current = onPatientSnapshot
   volatileCallbackRef.current = onVolatileSnapshot
+  monitorCallbackRef.current = onMonitorSnapshot
 
   useEffect(() => () => {
     closedRef.current = true
@@ -78,6 +86,11 @@ export function AnaesthSessionV2Preview({
     // as this preview. Do not let its separate v1 animation clock run here.
     const etSevo = runtime?.gasRuntime?.etSevoPercent
     volatileCallbackRef.current(typeof etSevo === 'number' && Number.isFinite(etSevo) ? etSevo : null)
+    monitorCallbackRef.current({
+      bisValue: typeof runtime?.monitorRuntime?.bisValue === 'number' ? runtime.monitorRuntime.bisValue : null,
+      simulationTime: runtime?.actionRuntime?.simulationTime ?? null,
+      tofReading: runtime?.monitorRuntime?.tofReading ?? null,
+    })
   }
   const connect = (targetSessionId = sessionId) => {
     closedRef.current = false
@@ -86,6 +99,7 @@ export function AnaesthSessionV2Preview({
     snapshotRef.current = null
     lastAuthoritativeFiSevoRef.current = null
     volatileCallbackRef.current(null)
+    monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
     setSnapshot(null)
     setActionLibrary(null)
     setVerifiedRole(null)
@@ -216,6 +230,8 @@ export function AnaesthSessionV2Preview({
     snapshotRef.current = null
     lastAuthoritativeFiSevoRef.current = null
     volatileCallbackRef.current(null)
+    monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
+    tofRequestRef.current = null
     setStatus('disconnected')
     setSnapshot(null)
     setActionLibrary(null)
@@ -233,6 +249,7 @@ export function AnaesthSessionV2Preview({
     }))
     return true
   }
+  tofRequestRef.current = status === 'connected' ? () => { command('monitor.tof.measure', {}) } : null
   const controlClock = (running: boolean, speed = clock.speed) => {
     const socket = socketRef.current
     if (verifiedRole !== 'instructor' || socket?.readyState !== WebSocket.OPEN) return
@@ -288,6 +305,9 @@ export function AnaesthSessionV2Preview({
         <span>Simulated time {actionRuntime?.simulationTime ?? 0}s</span>
         <span>Clock: {clock.running ? 'Running' : 'Paused'} · {clock.speed}×</span>
         <span>Depth {patient?.anaestheticPhysiology?.depthOfAnaesthesia ?? '—'}</span>
+        <span>BIS (modelled) {runtime?.monitorRuntime?.bisValue == null ? '—' : Math.round(runtime.monitorRuntime.bisValue)}</span>
+        <span>TOF (last measurement) {runtime?.monitorRuntime?.tofReading ? `${runtime.monitorRuntime.tofReading.count}/4 · ratio ${runtime.monitorRuntime.tofReading.ratio.toFixed(2)}` : '—'}</span>
+        <button type="button" onClick={() => command('monitor.tof.measure', {})}>Measure TOF</button>
         <span>Spontaneous RR {patient?.respiratory?.spontaneousRespiratoryRate?.toFixed(1) ?? '—'}/min</span>
         <label>HR <input type="number" min={0} max={240} value={newHeartRate}
           onChange={event => setNewHeartRate(Number(event.target.value))} /></label>

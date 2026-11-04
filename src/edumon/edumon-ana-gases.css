@@ -92,6 +92,20 @@
   color: #f1d35f;
 }
 
+/* Session v2 FiSevo is a read-only monitor value, not the local adjustable
+   yellow control. Explicitly neutralize browser disabled-button tinting. */
+.edumon-gas-row.v2-readonly,
+.edumon-gas-row.v2-readonly:disabled {
+  opacity: 1;
+  cursor: default;
+  background: transparent;
+  color: #d9e3e7;
+}
+.edumon-gas-row.v2-readonly > span,
+.edumon-gas-row.v2-readonly:disabled > span { color: #9babb3; }
+.edumon-gas-row.v2-readonly > strong,
+.edumon-gas-row.v2-readonly:disabled > strong { color: #d7e8ef; }
+
 .edumon-gas-control-knob {
   position: relative;
   justify-self: center;
