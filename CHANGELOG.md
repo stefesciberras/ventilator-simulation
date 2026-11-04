@@ -2,6 +2,14 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.11 — 2026-11-04 (experimental Anaesth ActionEffects projection)
+- Bumped both product versions to **1.3.0.11**. All production Session Engine v1 flows remain default.
+- Connected three trusted, explicitly curated Anaesth fallback action definitions (Propofol, Fentanyl and Relaxant) to the opt-in Cloudflare Durable Object v2 action evaluator.
+- Action invocation persists declarative ActiveEffects in the canonical checkpoint; drugs never directly mutate raw patient parameters. An independent pure, bounded projection calculates selected HR/BP/respiratory/depth outputs from checkpointed simulation time and active effects without reading or writing the v1 global ActionRuntime.
+- Experimental preview exposes drug actions and instructor-only explicit 1-second / 10-second simulation advances, displaying simulated time, spontaneous RR, depth, and active effect count. Projection is sent as a read-only derived view, while the raw patient and effects remain authoritative.
+- Added CI coverage of drug onset, block, simulated time, duplicate prevention, candidate tick restriction, checkpoint reconstruction and reset.
+- **Not production parity:** the three pilot action definitions are curated copies, not the live Supabase action library. Preview is not the full Anaesth drug/physiology/monitoring engine, does not model real PK/PD or alarms, and can coexist with unsynchronized v1 controls. Offline LAN authority remains unimplemented.
+
 ## 1.3.0.10 — 2026-11-04 (Cloudflare Worker API routing fix)
 - Bumped Vent and Anaesth/ITU application versions to **1.3.0.10**, leaving v1 runtime behaviour unchanged.
 - Confirmed Cloudflare SPA asset fallback intercepted `/api/session-v2/status` and returned index.html instead of JSON, preventing Worker diagnostics and WebSocket upgrade requests.
