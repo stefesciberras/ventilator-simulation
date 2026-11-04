@@ -103,3 +103,11 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - Paused by default for newly created and recovered rooms. Reconstructing a Durable Object from a live checkpoint stops clock progression until an authenticated instructor rejoins and explicitly resumes; do not catch up blindly from offline wall time.
 - Reset/end stop the alarm and running flag; external manual `tick` is forbidden during clock run. v1 session infrastructure is unchanged.
 - **Technical limitation:** Durable Object alarms have scheduling jitter, and discrete ticks reflect committed alarm executions rather than precise elapsed physical time. This is educational model timing, not a medical instrument.
+
+
+## v1.3.0.15 — Pure shared EDUMON action physiology
+- A single `src/edumon/sharedActionPhysiology.mjs` module models effect-driven HR, MAP, sympathetic stimulus, respiratory drive, airway obstruction, NMB, ventilatory-mode interaction and hard physiologic limits.
+- v1 `src/edumon/actionPhysiology.ts` injects the existing browser-global v1 ActionRuntime numeric resolver. v2 `src/session-v2/adapters/anaesthPilot.mjs` injects the session-owned checkpointed v2 effect resolver. Neither path mutates the other session's ActionRuntime.
+- The v2 projected output additionally carries effective depth derived from the same hypnotic effect; v1 continues to evaluate effective depth for its monitor separately so the canonical depth slider remains a baseline control. Do not apply the hypnotic effect twice.
+- MANUAL/PSV may lose spontaneous VT/RR during blockade. Mandatory ventilation settings in VC-AC/PC-AC must not be suppressed by muscle relaxant.
+- Shared physiology is pure and deterministic at a given simulationTime. Hard bounds are post-composition. The v2 monitor remains an experimental projection and its full ventilator/agent/monitor integration is not yet complete.
