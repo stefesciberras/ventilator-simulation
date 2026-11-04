@@ -1,3 +1,4 @@
+import { sessionV2Readiness } from './sessionV2Readiness.mjs'
 import { decodeV2WebSocketSecret } from '../src/session-v2/websocketAuth.mjs'
 import { SessionV2Room } from './sessionV2Room.mjs'
 export { SessionV2Room } from './sessionV2Room.mjs'
@@ -37,30 +38,15 @@ export default {
     if (url.pathname === '/api/session-v2/status') {
       // Public diagnostics contain NO credential values or token-derived
       // information. Feature remains disabled until all requirements exist.
-      const enabled = env.SESSION_V2_EXPERIMENTAL === '1'
-      const bound = Boolean(env.SESSION_V2_ROOMS)
-      const credentialsConfigured = Boolean(
-        env.SESSION_V2_INSTRUCTOR_TOKEN && env.SESSION_V2_INSTRUCTOR_TOKEN.length >= 32 &&
-        env.SESSION_V2_CANDIDATE_TOKEN && env.SESSION_V2_CANDIDATE_TOKEN.length >= 32 &&
-        env.SESSION_V2_CANDIDATE_TOKEN !== env.SESSION_V2_INSTRUCTOR_TOKEN
-      )
-      return Response.json({
-        protocol: 2,
-        ready: enabled && bound && credentialsConfigured,
-        reason: !enabled ? 'experimental-disabled'
-          : !bound ? 'durable-object-binding-missing'
-          : !credentialsConfigured ? 'test-credentials-not-configured'
-          : 'ready',
-      }, { headers: { 'cache-control': 'no-store' } })
+      return Response.json(sessionV2Readiness(env), {
+        headers: { 'cache-control': 'no-store' },
+      })
     }
 
     if (url.pathname === '/api/session-v2/ws') {
       // This opt-in gateway must not be enabled until secrets and
       // Cloudflare Durable Object binding are configured explicitly.
-      if (env.SESSION_V2_EXPERIMENTAL !== '1' || !env.SESSION_V2_ROOMS ||
-          !env.SESSION_V2_INSTRUCTOR_TOKEN || env.SESSION_V2_INSTRUCTOR_TOKEN.length < 32 ||
-          !env.SESSION_V2_CANDIDATE_TOKEN || env.SESSION_V2_CANDIDATE_TOKEN.length < 32 ||
-          env.SESSION_V2_CANDIDATE_TOKEN === env.SESSION_V2_INSTRUCTOR_TOKEN) {
+      if (!sessionV2Readiness(env).ready) {
         return new Response('Not found', { status: 404 })
       }
       if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
