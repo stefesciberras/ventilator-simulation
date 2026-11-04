@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 
 export type SessionV2RespiratoryRuntime = { estimatedEtCo2MmHg: number | null; respiratoryRate: number | null;
-  tidalVolumeMl: number | null; simulationTime: number | null }
+  tidalVolumeMl: number | null; simulationTime: number | null;
+  clockRunning: boolean; clockSpeed: number }
 export type SessionV2MonitorRuntime = { bisValue: number | null; simulationTime: number | null;
   tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }
 type SessionV2ActionLibrary = { version: number; source: string;
@@ -68,7 +69,7 @@ export function AnaesthSessionV2Preview({
     socketRef.current?.close()
   }, [])
 
-  const receiveSnapshot = (next: SessionV2Snapshot) => {
+  const receiveSnapshot = (next: SessionV2Snapshot, authorityClock: ClockControl = { running: false, speed: 1 }) => {
     if (!next?.session || !Array.isArray(next.runtimes)) return
     const previous = snapshotRef.current
     if (previous && next.session.epoch < previous.session.epoch) return
@@ -97,6 +98,8 @@ export function AnaesthSessionV2Preview({
       respiratoryRate: runtime?.respiratoryRuntime?.respiratoryRate ?? null,
       tidalVolumeMl: runtime?.respiratoryRuntime?.tidalVolumeMl ?? null,
       simulationTime: runtime?.actionRuntime?.simulationTime ?? null,
+      clockRunning: authorityClock.running,
+      clockSpeed: authorityClock.speed,
     })
     monitorCallbackRef.current({
       bisValue: typeof runtime?.monitorRuntime?.bisValue === 'number' ? runtime.monitorRuntime.bisValue : null,
@@ -112,7 +115,7 @@ export function AnaesthSessionV2Preview({
     lastAuthoritativeFiSevoRef.current = null
     volatileCallbackRef.current(null)
     monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
-    respiratoryCallbackRef.current({ estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null })
+    respiratoryCallbackRef.current({ estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null, clockRunning: false, clockSpeed: 1 })
     setSnapshot(null)
     setActionLibrary(null)
     setVerifiedRole(null)
@@ -174,7 +177,7 @@ export function AnaesthSessionV2Preview({
           setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           if (packet.clock) setClock(packet.clock as ClockControl)
-          receiveSnapshot(packet.snapshot)
+          receiveSnapshot(packet.snapshot, packet.clock as ClockControl | undefined)
         } else if (packet.type === 'snapshot') {
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           if (packet.clock) setClock(packet.clock as ClockControl)

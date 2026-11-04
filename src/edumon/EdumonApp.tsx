@@ -239,6 +239,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const [v2EtSevo, setV2EtSevo] = useState<number | null>(null)
   const [v2RespiratoryState, setV2RespiratoryState] = useState<SessionV2RespiratoryRuntime>({
     estimatedEtCo2MmHg: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null,
+    clockRunning: false, clockSpeed: 1,
   })
   const [v2MonitorState, setV2MonitorState] = useState<SessionV2MonitorRuntime>({ bisValue: null, simulationTime: null, tofReading: null })
   const v2TofRequestRef = useRef<(() => void) | null>(null)
