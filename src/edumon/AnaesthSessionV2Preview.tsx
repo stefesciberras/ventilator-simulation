@@ -4,7 +4,7 @@ import type { MonitorPatientState } from './types'
 
 type SessionV2Snapshot = {
   session: { epoch: number; revision: number; status: string; mode: string }
-  runtimes: Array<{ id: string; state: { patient?: Partial<MonitorPatientState> & {
+  runtimes: Array<{ id: string; state: { monitorProjection?: Partial<MonitorPatientState>; actionRuntime?: { simulationTime: number; activeEffects: Array<{ actionId: string }> }; patient?: Partial<MonitorPatientState> & {
     anaestheticGases?: { fiSevoPercent?: number }
   } } }>
 }
@@ -49,7 +49,8 @@ export function AnaesthSessionV2Preview({
         next.session.revision < previous.session.revision) return
     snapshotRef.current = next
     setSnapshot(next)
-    const patient = next.runtimes.find(item => item.id === 'main')?.state.patient
+    const runtime = next.runtimes.find(item => item.id === 'main')?.state
+    const patient = runtime?.monitorProjection ?? runtime?.patient
     if (patient) patientCallbackRef.current(patient)
   }
   const connect = () => {
@@ -178,12 +179,14 @@ export function AnaesthSessionV2Preview({
       command: { id: crypto.randomUUID(), epoch, runtimeId: 'main', type, payload },
     }))
   }
-  const patient = snapshot?.runtimes.find(item => item.id === 'main')?.state.patient
+  const runtime = snapshot?.runtimes.find(item => item.id === 'main')?.state
+  const patient = runtime?.monitorProjection ?? runtime?.patient
+  const actionRuntime = runtime?.actionRuntime
   return (
     <section style={{ border: '1px solid #8696a8', borderRadius: 8, padding: 12, margin: '8px 16px', maxWidth: 680 }}
       aria-label="Experimental Session Engine v2 preview">
       <strong>Session Engine v2 — experimental Cloudflare preview</strong>
-      <p style={{ fontSize: 12, margin: '6px 0' }}>Uses demo Anaesth state, not the full physiology engine. Never use for a real clinical session.</p>
+      <p style={{ fontSize: 12, margin: '6px 0' }}>Uses a checkpointed pilot of Anaesth ActionEffects and a limited monitor projection, not the complete physiology engine. Do not use for clinical care or assessed simulation.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
           onChange={event => setEndpoint(event.target.value)} disabled={status === 'connected'} /></label>
@@ -200,12 +203,23 @@ export function AnaesthSessionV2Preview({
         <span>Epoch {snapshot.session.epoch} · Rev {snapshot.session.revision}</span>
         <span>HR {patient?.heartRate ?? '—'} bpm</span>
         <span>FiSevo {patient?.anaestheticGases?.fiSevoPercent ?? '—'}%</span>
+        <span>Simulated time {actionRuntime?.simulationTime ?? 0}s</span>
+        <span>Depth {patient?.anaestheticPhysiology?.depthOfAnaesthesia ?? '—'}</span>
+        <span>Spontaneous RR {patient?.respiratory?.spontaneousRespiratoryRate?.toFixed(1) ?? '—'}/min</span>
         <label>HR <input type="number" min={0} max={240} value={newHeartRate}
           onChange={event => setNewHeartRate(Number(event.target.value))} /></label>
         <button type="button" onClick={() => command('patient.parameter.set', { path: 'heartRate', value: newHeartRate })}>Set HR (instructor)</button>
         <label>FiSevo <input type="number" min={0} max={8} step={0.1} value={newFiSevo}
           onChange={event => setNewFiSevo(Number(event.target.value))} /></label>
         <button type="button" onClick={() => command('anaesth.gas.set', { fiSevoPercent: newFiSevo })}>Set FiSevo</button>
+        <button type="button" onClick={() => command('action.invoke', { actionId: 'propofol' })}>Propofol (pilot)</button>
+        <button type="button" onClick={() => command('action.invoke', { actionId: 'fentanyl' })}>Fentanyl (pilot)</button>
+        <button type="button" onClick={() => command('action.invoke', { actionId: 'relaxant' })}>Relaxant (pilot)</button>
+        <button type="button" onClick={() => command('tick', { deltaMs: 1000 })}>Advance 1s (instructor)</button>
+        <button type="button" onClick={() => {
+          for (let i = 0; i < 10; i++) command('tick', { deltaMs: 1000 })
+        }}>Advance 10s (instructor)</button>
+        <span>Active effects {actionRuntime?.activeEffects?.length ?? 0}</span>
       </div>}
     </section>
   )
