@@ -131,3 +131,12 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - The v1 `requestAnimationFrame` volatile uptake/depth controller must **not** run when `v2VolatileState` is supplied, including while reconnecting; locally administered FiSevo settings are disabled in this mode so v2 and v1 cannot independently own volatile state.
 - The canonical reset/recovery engine and server state are unchanged: on v2 reset EtSevo = 0, FiSevo = 0; on reconnect EtSevo and FiSevo are read from the same checkpoint. Normal sessions omit `v2VolatileState` and keep full v1 local physiology.
 - This resolves gas-footer authority only. BIS, TOF and other local device states in experimental v2 are not yet synchronized; they require separate authoritative integration.
+
+
+## v1.3.0.19 — shared BIS and intermittent TOF authority
+- `sharedAnaestheticMeasurements.mjs` is a pure model for depth-index BIS targeting with an 8-second lag, and a block/minimum-count-derived TOF response. v1 BIS retains its original local presentation jitter and v1 TOF remains an intermittent measurement; the underlying response functions are shared.
+- v2 Anaesth `monitorRuntime = {bisValue, tofReading}` is initialized by the adapter and checkpointed with the session. The authoritative simulation tick advances BIS from the effective v2 depth after gas uptake. `monitor.tof.measure` calculates and stores count/ratio and `measuredAtSimulationTime` when explicitly requested (no client-supplied measurement fields).
+- Both candidate and instructor may measure TOF, receiving the same resulting snapshot. TOF values remain fixed until another measurement even if the underlying blockade changes; reset clears TOF and restores BIS to awake 100. Older v2 checkpoints without monitorRuntime initialize their BIS at 100 on the next tick or TOF measurement.
+- `EdumonBisTrend` renders authoritative BIS and local bounded presentation trace without running its browser-only physiology clock in v2. `EdumonAnaGasControl` displays checkpointed TOF and sends the measurement request to the v2 session gateway.
+- The v2 read-only FiSevo footer uses neutral monitor text rather than yellow adjustable-control text; v1 adjustable colour is unchanged.
+- **Not yet authoritative:** BIS noise/artifact, full monitor enable/disable semantics and complete waveform history; TOF v2 has no simulated 1.8-second acquisition delay. The measurements are educational simulation values, not clinical measurements.
