@@ -25,5 +25,8 @@
         "SessionV2Room"
       ]
     }
-  ]
+  ], 
+  "vars": {
+    "SESSION_V2_EXPERIMENTAL": "1"
+  }
 }
