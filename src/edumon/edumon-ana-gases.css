@@ -92,8 +92,8 @@
   color: #f1d35f;
 }
 
-/* Session v2 FiSevo is a read-only monitor value, not the local adjustable
-   yellow control. Explicitly neutralize browser disabled-button tinting. */
+/* Session v2 FiSevo retains its traditional bright-yellow readout while
+   the setting stays read-only; neutralize disabled-button opacity. */
 .edumon-gas-row.v2-readonly,
 .edumon-gas-row.v2-readonly:disabled {
   opacity: 1;
@@ -102,9 +102,9 @@
   color: #d9e3e7;
 }
 .edumon-gas-row.v2-readonly > span,
-.edumon-gas-row.v2-readonly:disabled > span { color: #9babb3; }
+.edumon-gas-row.v2-readonly:disabled > span { color: #f1d35f; }
 .edumon-gas-row.v2-readonly > strong,
-.edumon-gas-row.v2-readonly:disabled > strong { color: #d7e8ef; }
+.edumon-gas-row.v2-readonly:disabled > strong { color: #f1d35f; }
 
 .edumon-gas-control-knob {
   position: relative;

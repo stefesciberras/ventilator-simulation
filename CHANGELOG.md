@@ -2,6 +2,10 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.20 — 2026-11-04 (restore yellow Sevo in experimental v2)
+- Restore **bright yellow (#f1d35f) FiSevo label and numeric value** in the experimental v2 read-only gas footer, without making local FiSevo editing possible. Preserve v1 appearance and behaviour.
+- Bump both application versions to **1.3.0.20**. Session physiology, BIS, TOF and clock are unchanged.
+
 ## 1.3.0.19 — 2026-11-04 (shared BIS/TOF monitoring and v2 FiSevo styling)
 - Bumped both application versions to **1.3.0.19**; default v1 simulation architecture remains unchanged.
 - Restored the **neutral FiSevo monitor colour** in experimental v2. The read-only canonical FiSevo row no longer uses the yellow editable-control class; disabled browser tinting is explicitly neutralized. The existing v1 adjustable-control styling is preserved.
