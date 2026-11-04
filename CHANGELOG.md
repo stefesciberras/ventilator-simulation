@@ -2,6 +2,13 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.25 — 2026-11-04 (shared oxygenation and authoritative v2 SpO₂)
+- Extracted the existing EDUSIM alveolar oxygen balance, V/Q/shunt/PEEP response and pulse oximeter lag into a browser-free shared kernel, used by v1 respiratory physiology and checkpointed Session Engine v2 Anaesth.
+- V2 now stores modelled alveolar O₂ fraction and SpO₂, integrating on authoritative simulated-time ticks. Ventilation/FiO₂, bronchospasm resistance, shunt and metabolic oxygen demand influence the result; the instructor-set baseline remains an upper cap.
+- The standard monitor's SpO₂ measurement consumes the authoritative v2 reading rather than the browser-local respiratory output. A read-only v2 monitor projection avoids changing the canonical patient baseline. Reset/reconnection preserve the correct oxygenation state.
+- Added regressions for apnea, desaturation, oxygen recovery, checkpoint persistence, reset and shared formula integration. Both app versions updated to **1.3.0.25**. Normal v1 remains unchanged.
+- Alarm eligibility/visibility and NIBP measurement-gated alarm state are the next independent integration milestone.
+
 ## 1.3.0.24 — 2026-11-04 (live event severity and authoritative ventilator controls)
 - Experimental v2 bronchospasm severity now sends debounced commands directly, without an Apply button. The existing server-side Event effect and simulated-time onset/recovery remain authoritative.
 - The standard ventilator controls in both Monitor and Instructor views now submit validated v2 commands for mode, FiO2, PEEP, mandatory RR, VT, I:E/inspiratory time, inspiratory flow, plateau fraction, pressure control, pressure support, volume-guarantee limit, termination sensitivity and SIMV sync window.
