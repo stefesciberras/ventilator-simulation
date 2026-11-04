@@ -10,6 +10,7 @@ import {
   type EdumonRespiratoryRuntime,
 } from './respiratoryPhysiology'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorRespiratorySettings } from './types'
+import type { SessionV2RespiratoryRuntime } from './AnaesthSessionV2Preview'
 import './edumon-capnography.css'
 
 interface CapnographySample {
@@ -187,10 +188,12 @@ function CapnographyCanvas({ samples, etCo2 }: { samples: CapnographySample[]; e
   )
 }
 
-export function EdumonCapnographySurface({ patientState }: { patientState: MonitorPatientState }) {
+export function EdumonCapnographySurface({ patientState, v2RespiratoryState }: {
+  patientState: MonitorPatientState; v2RespiratoryState?: SessionV2RespiratoryRuntime
+}) {
   const patientRef = useRef(patientState)
   const runtimeRef = useRef<EdumonRespiratoryRuntime | null>(null)
-  if (runtimeRef.current == null) runtimeRef.current = createEdumonRespiratoryRuntime(patientState, 0)
+  if (v2RespiratoryState === undefined && runtimeRef.current == null) runtimeRef.current = createEdumonRespiratoryRuntime(patientState, 0)
   const capnogramRef = useRef<CapnogramRuntime>({ breathPhase: 0, elapsedExpiration: 0, airwayCo2: 0, expiratory: false })
   const historyRef = useRef(new RollingSignalHistory<CapnographySample>(TRACE_WINDOW_SECONDS))
   const simulationTimeRef = useRef(0)
@@ -198,8 +201,8 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
   const [waveformHost, setWaveformHost] = useState<HTMLElement | null>(null)
   const [measurementHost, setMeasurementHost] = useState<HTMLElement | null>(null)
   const [samples, setSamples] = useState<CapnographySample[]>([])
-  const [etCo2, setEtCo2] = useState(runtimeRef.current.output.estimatedEtCo2MmHg)
-  const [respiratoryRate, setRespiratoryRate] = useState(runtimeRef.current.output.respiratoryRate)
+  const [etCo2, setEtCo2] = useState(runtimeRef.current?.output.estimatedEtCo2MmHg ?? 40)
+  const [respiratoryRate, setRespiratoryRate] = useState(runtimeRef.current?.output.respiratoryRate ?? 12)
 
   patientRef.current = patientState
 
@@ -235,6 +238,9 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
   }, [])
 
   useEffect(() => {
+    // In v2, render only from canonical respiratory snapshots. Never start
+    // the local v1 gas-exchange runtime or a competing simulation clock.
+    if (v2RespiratoryState !== undefined) return
     let frame = 0
     let previousWallTime = performance.now()
     let lastPublishWallTime = 0
@@ -282,19 +288,49 @@ export function EdumonCapnographySurface({ patientState }: { patientState: Monit
 
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [v2RespiratoryState !== undefined])
 
+  useEffect(() => {
+    if (v2RespiratoryState === undefined) return
+    const { estimatedEtCo2MmHg: co2, respiratoryRate: rate,
+      simulationTime: time } = v2RespiratoryState
+    if (co2 == null || rate == null || time == null) {
+      setSamples([])
+      return
+    }
+    // Waveform *presentation* is local and bounded; the physiological
+    // EtCO2, RR and simulation time are owned by the v2 session authority.
+    // Rebuild the short trace on each canonical tick instead of integrating
+    // another browser-local CO2 model. A reconnect produces the same trace.
+    const respiratory = resolvedMonitorRespiratorySettings(patientRef.current)
+    const cap = { breathPhase: 0, elapsedExpiration: 0, airwayCo2: 0, expiratory: false }
+    const start = Math.max(0, time - TRACE_WINDOW_SECONDS)
+    const first = Math.floor(start / SAMPLE_INTERVAL) * SAMPLE_INTERVAL
+    const result: CapnographySample[] = []
+    const phaseSeconds = rate > 0 ? (first % (60 / rate)) : 0
+    cap.breathPhase = rate > 0 ? phaseSeconds * rate / 60 : 0
+    for (let sampleTime = first; sampleTime <= time + SAMPLE_INTERVAL * 0.1; sampleTime += SAMPLE_INTERVAL) {
+      result.push({ time: sampleTime, co2: advanceCapnogram(
+        cap, SAMPLE_INTERVAL, rate, co2, respiratory,
+      ) })
+    }
+    setSamples(result)
+  }, [v2RespiratoryState?.estimatedEtCo2MmHg, v2RespiratoryState?.respiratoryRate,
+    v2RespiratoryState?.simulationTime, v2RespiratoryState === undefined])
+
+  const displayedEtCo2 = v2RespiratoryState === undefined ? etCo2 : v2RespiratoryState.estimatedEtCo2MmHg
+  const displayedRate = v2RespiratoryState === undefined ? respiratoryRate : v2RespiratoryState.respiratoryRate
   const waveform = waveformHost
-    ? createPortal(<CapnographyCanvas samples={samples} etCo2={etCo2} />, waveformHost)
+    ? createPortal(<CapnographyCanvas samples={samples} etCo2={displayedEtCo2 ?? 0} />, waveformHost)
     : null
 
   const measurement = measurementHost
     ? createPortal(
       <div className="edumon-value-panel edumon-value-capnography metric">
         <span className="edumon-value-label">EtCO₂</span>
-        <strong className="edumon-value-main">{Math.round(etCo2)}</strong>
+        <strong className="edumon-value-main">{displayedEtCo2 == null ? '—' : Math.round(displayedEtCo2)}</strong>
         <small className="edumon-value-unit">mmHg</small>
-        <div className="edumon-value-detail">RR {Math.round(respiratoryRate)} /min</div>
+        <div className="edumon-value-detail">RR {displayedRate == null ? '—' : Math.round(displayedRate)} /min</div>
       </div>,
       measurementHost,
     )
