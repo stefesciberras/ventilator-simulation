@@ -94,3 +94,12 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - Both operations ask for confirmation in the experimental UI; no new server, secrets or Supabase schema are required.
 
 - The experimental preview now displays a recomputed neuromuscular block percentage and Relaxant onset elapsed/total simulated seconds. This is a diagnostic of v2 effects, not a measured TOF count or full clinical response; the manual simulation clock must advance for onset to occur.
+
+
+## v1.3.0.14 — Durable Object authoritative clock
+- Optional experimental v2 Cloudflare DO room stores `clockControl: {running:boolean,speed:0.5|1|2|4}` in Durable Object storage, separate from the checkpointed engine state.
+- Instructor-only `clock.control` messages change pause/resume/speed. All connected clients receive clock metadata in welcome/snapshot packets, and command acknowledgements remain persist-before-broadcast.
+- A single Durable Object alarm runs approximately every second when enabled, invoking the pure session reducer for bounded clock ticks (500 ms at 0.5×; 1000 ms times speed at 1×/2×/4×). Tick changes are committed before publication; only the server sets `internalClock` to avoid unbounded dedup receipt growth. The WebSocket gateway strips client-supplied internal clock flags.
+- Paused by default for newly created and recovered rooms. Reconstructing a Durable Object from a live checkpoint stops clock progression until an authenticated instructor rejoins and explicitly resumes; do not catch up blindly from offline wall time.
+- Reset/end stop the alarm and running flag; external manual `tick` is forbidden during clock run. v1 session infrastructure is unchanged.
+- **Technical limitation:** Durable Object alarms have scheduling jitter, and discrete ticks reflect committed alarm executions rather than precise elapsed physical time. This is educational model timing, not a medical instrument.
