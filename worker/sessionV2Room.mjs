@@ -122,7 +122,7 @@ export class SessionV2Room {
         const current = staged.snapshot.session
         const receipt = staged.submit({ id: `clock:${current.epoch}:${current.clockMs}:${index}`,
           participantId: current.authorityId, runtimeId: 'main',
-          epoch: current.epoch, type: 'tick', payload: { deltaMs } })
+          epoch: current.epoch, type: 'tick', internalClock: true, payload: { deltaMs } })
         if (!receipt.accepted) {
           await this.setClock({ ...this.clock, running: false })
           return
