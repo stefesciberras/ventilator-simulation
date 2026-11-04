@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { LOPPJUSIM_SIMULATION_RESET_EVENT } from '../core/platformEvents'
 import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
 import { effectiveAnaestheticDepth } from './anaestheticPhysiology'
-import { BIS_TIME_CONSTANT_SECONDS, bisTargetForDepth, advanceBisIndex } from './sharedAnaestheticMeasurements.mjs'
+import { advanceBisIndex } from './sharedAnaestheticMeasurements.mjs'
 import type { MonitorPatientState } from './types'
 import { EDUMON_MONITOR_DISPLAY_ACTION_IDS, useMonitorDisplayEnabled } from './monitorDisplayActions'
 import './edumon-bis.css'
@@ -222,7 +222,6 @@ export function EdumonBisTrend({ patientState, v2BisState }: EdumonBisTrendProps
 
         const depth = effectiveAnaestheticDepth(patientRef.current, getActionRuntimeSimulationTime())
         const awake = depth === 5
-        const target = bisTargetForDepth(depth)
 
         if (awake) {
           currentBisRef.current = 100
