@@ -1,4 +1,5 @@
 import { resolveNumericActionEffect } from '../edusim/actions/ActionRuntime'
+import { anaestheticDepthFromMac } from './sharedVolatilePhysiology.mjs'
 import {
   DEFAULT_MONITOR_ANAESTHETIC_PHYSIOLOGY_SETTINGS,
   DEFAULT_MONITOR_RESPIRATORY_SETTINGS,
@@ -39,8 +40,7 @@ export function effectiveMacForSensitivity(mac: number, sensitivity: number): nu
 }
 
 export function depthFromMac(mac: number, sensitivity: number): AnaestheticDepth {
-  const effectiveMac = effectiveMacForSensitivity(mac, sensitivity)
-  return clamp(Math.round(5 - (2 * effectiveMac)), 1, 5) as AnaestheticDepth
+  return anaestheticDepthFromMac(mac, sensitivity)
 }
 
 export function currentHypnoticEffect(simulationTime: number): number {
