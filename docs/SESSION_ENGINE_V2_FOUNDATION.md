@@ -147,3 +147,6 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - The v2 Anaesth adapter persists `respiratoryRuntime` with alveolar/estimated end-tidal CO₂, RR, VT and ventilation. Its reducer advances respiratory kinetics on authoritative ticks from the v2 ActionEffect-adjusted respiratory state. Reset and checkpoint restore the values; older checkpoints populate the field at their next tick from the initial 40 mmHg baseline.
 - The experimental preview propagates CO₂, effective RR, VT and simulation time to the existing capnography component. Its local v1 respiratory runtime is suppressed in v2 mode; only the bounded waveform presentation remains browser-local. No second CO₂ oscillator is allowed.
 - This milestone does **not** implement authority for oxygenation/SpO₂, display visibility, NIBP or alarms; do not infer full capnography/ventilator synchronization from the numeric CO₂ authority.
+
+## v1.3.0.22 — Smooth waveform without dual authority
+Experimental v2 renders 50Hz local capnogram samples with up to 20 FPS repaint, interpolating only the visual timeline between authoritative clock snapshots. Halt interpolation on pause or stale heartbeat; server EtCO2 and RR remain canonical. Defer bronchospasm severity to the shared declarative Event layer.
