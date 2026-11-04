@@ -121,6 +121,8 @@ export interface MonitorPatientState {
   systolicPressure: number
   diastolicPressure: number
   spo2: number
+  /** Opt-in authoritative v2 pulse-oximeter output; not an instructor baseline. */
+  authoritativeV2Spo2?: number
   peripheralPerfusion: number
   /** Core temperature in degrees Celsius. Older scenarios/session payloads default to 37.0 °C. */
   temperatureC?: number
