@@ -32,7 +32,7 @@ assert(respiratoryRuntime.includes("../core/physiology/respiratory"), 'common ED
 assert(respiratoryRuntime.includes('currentEdumonRespiratorySpO2'), 'pulse oximetry must be able to consume the shared respiratory output')
 assert(respiratoryRuntime.includes('maxSpO2: Math.min(respiratory.maxSpO2, state.spo2)'), 'configured SpO2 must act as a ceiling rather than bypass gas exchange')
 assert(monitorEngine.includes('currentEdumonRespiratorySpO2(state.spo2)'), 'displayed pulse oximetry must use shared gas-exchange saturation')
-assert(workspace.includes('<EdumonCapnographySurface patientState={patientState} />'), 'shared EDUMON workspace must mount capnography once for both products')
+assert(workspace.includes('<EdumonCapnographySurface patientState={patientState} v2RespiratoryState={v2RespiratoryState} />'), 'shared EDUMON workspace must mount capnography once for both products and inject optional authoritative v2 readings')
 assert(capnography.includes('stepEdumonRespiratoryRuntime'), 'capnography must consume the shared EDUMON respiratory runtime')
 assert(capnography.includes('estimatedEtCo2MmHg'), 'capnography must derive EtCO2 from shared respiratory physiology')
 assert(capnography.includes('breathPhase'), 'capnography must integrate breath phase continuously instead of deriving phase directly from time and RR')

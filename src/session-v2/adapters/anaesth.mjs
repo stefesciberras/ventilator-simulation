@@ -10,6 +10,7 @@ import { advanceEndTidalSevo, estimatedAlveolarVentilationLMin } from '../../edu
 import { applySharedEdumonActionPhysiology } from '../../edumon/sharedActionPhysiology.mjs'
 import { resolveV2ActionNumber, projectAnaesthV2Monitor } from './anaesthPilot.mjs'
 import { advanceBisIndex, tofReadingFromBlock } from '../../edumon/sharedAnaestheticMeasurements.mjs'
+import { advanceAlveolarCo2 } from '../../core/physiology/respiratory/sharedCo2Kinetics.mjs'
 
 const clone = value => structuredClone(value)
 const finite = (value, min, max) =>
@@ -55,6 +56,10 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
     patient: clone(baseline),
     actionRuntime: { simulationTime: 0, activeEffects: [], activeToggleActions: [] },
     gasRuntime: { etSevoPercent: 0 },
+    respiratoryRuntime: { alveolarCo2MmHg: 40, estimatedEtCo2MmHg: 40,
+      respiratoryRate: baseline.respiratory?.respiratoryRate ?? 12,
+      tidalVolumeMl: baseline.respiratory?.tidalVolumeMl ?? 500,
+      alveolarVentilationLMin: 4.2, minuteVentilationLMin: 6 },
     monitorRuntime: { bisValue: 100, tofReading: null },
     display: { invasiveBloodPressure: false, bis: false, capnography: false, temperature: false },
     controls: { paused: false, waveformsFrozen: false, alarmsSilenced: false },
@@ -120,6 +125,16 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       const resolve = (target, base) => resolveV2ActionNumber(state.actionRuntime, target, base)
       const effective = applySharedEdumonActionPhysiology(state.patient, resolve)
       const respiratory = effective.respiratory
+      const co2 = advanceAlveolarCo2({
+        previousAlveolarCo2MmHg: state.respiratoryRuntime?.alveolarCo2MmHg ?? 40,
+        respiratoryRate: respiratory.respiratoryRate,
+        tidalVolumeMl: respiratory.tidalVolumeMl,
+        deadSpaceMl: respiratory.deadSpaceMl,
+        co2ProductionMlMin: respiratory.co2ProductionMlMin,
+        sex: respiratory.sex,
+        heightCm: respiratory.heightCm,
+        deltaSeconds: delta / 1000,
+      })
       const nextEtSevo = advanceEndTidalSevo({
         etSevoPercent: state.gasRuntime?.etSevoPercent ?? 0,
         fiSevoPercent: state.patient.anaestheticGases?.fiSevoPercent ?? 0,
@@ -131,6 +146,7 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
         actionRuntime: { ...state.actionRuntime,
           simulationTime: state.actionRuntime.simulationTime + delta / 1000 },
         gasRuntime: { etSevoPercent: nextEtSevo },
+        respiratoryRuntime: co2,
       }
       const depth = projectAnaesthV2Monitor(next).anaestheticPhysiology.depthOfAnaesthesia
       return { ...next, monitorRuntime: { ...state.monitorRuntime,
