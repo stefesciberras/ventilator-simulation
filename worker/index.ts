@@ -1,3 +1,4 @@
+import { decodeV2WebSocketSecret } from '../src/session-v2/websocketAuth.mjs'
 import { SessionV2Room } from './sessionV2Room.mjs'
 export { SessionV2Room } from './sessionV2Room.mjs'
 
@@ -51,9 +52,7 @@ export default {
       // Browser WebSocket APIs cannot set Authorization headers. Test
       // secrets travel in the Sec-WebSocket-Protocol header over WSS,
       // never in query strings or persistent URLs.
-      const protocols = (request.headers.get('Sec-WebSocket-Protocol') ?? '')
-        .split(',').map(value => value.trim())
-      const presented = protocols.find(value => value.startsWith('v2auth.'))?.slice(7) ?? ''
+      const presented = decodeV2WebSocketSecret(request.headers.get('Sec-WebSocket-Protocol')) ?? ''
       const role = tokenEquals(presented, env.SESSION_V2_INSTRUCTOR_TOKEN) ? 'instructor'
         : tokenEquals(presented, env.SESSION_V2_CANDIDATE_TOKEN) ? 'candidate' : null
       if (!role) return new Response('Unauthorized', { status: 401 })
