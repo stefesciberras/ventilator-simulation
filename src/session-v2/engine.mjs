@@ -169,7 +169,9 @@ export class SessionEngineV2 {
     if (type === 'end') this.#session.status = 'ended'
     else {
       this.#runtimes.set(runtimeId, { id: runtimeId, revision: runtime.revision + 1, state: copy(nextState) })
-      if (type === 'tick' && nextState !== runtime.state &&\n          (nextState?.actionRuntime?.simulationTime !== runtime.state?.actionRuntime?.simulationTime ||\n            !runtime.state?.actionRuntime)) this.#session.clockMs += payload.deltaMs
+      if (type === 'tick' && nextState !== runtime.state &&
+          (nextState?.actionRuntime?.simulationTime !== runtime.state?.actionRuntime?.simulationTime ||
+            !runtime.state?.actionRuntime)) this.#session.clockMs += payload.deltaMs
     }
     ++this.#session.revision
     const result = freezeState({ accepted: true, revision: this.#session.revision, runtimeRevision: type === 'end' ? null : runtime.revision + 1 })
