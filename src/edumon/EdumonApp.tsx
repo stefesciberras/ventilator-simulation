@@ -1,3 +1,4 @@
+import { AnaesthSessionV2Preview } from './AnaesthSessionV2Preview'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EDUMON_APP_VERSION } from './appVersion'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
@@ -624,6 +625,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   return (
     <main className={`app-shell edumon-app-shell edumon-module-${module.id}`}>
+      {module.id === 'ana' && new URLSearchParams(window.location.search).get('sessionV2Preview') === '1' && (
+        <AnaesthSessionV2Preview onPatientSnapshot={(patient) => setPatientState((current) => ({ ...current, ...patient }))} />
+      )}
       <TeachingCandidateOverlay
         role={teachingSession.role}
         prompt={teachingPrompts.activePrompt}
