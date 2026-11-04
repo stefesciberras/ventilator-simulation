@@ -2,6 +2,11 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.5 — 2026-11-04 (LAN preview heartbeat reliability)
+- Bumped Vent and Anaesth/ITU application version constants to **1.3.0.5**.
+- Corrected the experimental LAN host's WebSocket upgrade handler to register heartbeat/pong liveness directly on each upgraded connection, preventing active instructor/candidate sessions from being terminated by an unhandled pong after successive heartbeat intervals.
+- No changes to the production Session Engine v1 or production simulation physiology.
+
 ## 1.3.0.4 — 2026-11-04 (development; opt-in LAN browser preview and file durability)
 - Bumped Vent and Anaesth/ITU application versions to **1.3.0.4**. Existing v1 session paths remain the default.
 - Added a single-process Node file authority store using serialized transactions, fsync, atomic rename and revision/lease fencing. The LAN test server now restores canonical patient and action snapshots after restart once the previous lease expires.
