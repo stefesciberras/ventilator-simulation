@@ -69,7 +69,9 @@ export default {
       headers.set('x-v2-verified-role', role)
       headers.set('x-v2-session-id', sessionId)
       headers.set('x-v2-selected-protocol', 'loppjusim-v2')
-      headers.delete('Sec-WebSocket-Protocol')
+      // Strip the credential and forward only the public protocol so the
+      // Durable Object can negotiate it without exposing the secret.
+      headers.set('Sec-WebSocket-Protocol', 'loppjusim-v2')
       const internalRequest = new Request(request.url, { method: 'GET', headers })
       const id = env.SESSION_V2_ROOMS.idFromName(sessionId)
       return env.SESSION_V2_ROOMS.get(id).fetch(internalRequest)
