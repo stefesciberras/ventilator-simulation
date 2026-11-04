@@ -12,7 +12,7 @@ import { SessionEngineV2 } from './engine.mjs'
 export function createSessionV2AuthorityHost({
   store, adapter, authenticate, now = () => Date.now(), leaseDurationMs = 15000,
 } = {}) {
-  if (!store || !['initialize', 'load', 'acquire', 'renew', 'commit'].every(k => typeof store[k] === 'function')) {
+  if (!store || !['initialize', 'load', 'acquire', 'renew', 'commit', 'checkLease'].every(k => typeof store[k] === 'function')) {
     throw Error('Transactional authority store required')
   }
   if (typeof authenticate !== 'function') throw Error('Trusted authenticator required')
@@ -138,6 +138,20 @@ export function createSessionV2AuthorityHost({
         // Never trust command.participantId; it comes from verified credentials.
         const result = staged.submit({ ...command, participantId: actor.participantId })
         if (!result.accepted) return result
+        if (staged.snapshot.session.revision === expectedRevision) {
+          // An already-committed command is safe to acknowledge again, but
+          // only while this host still owns the authoritative lease/revision.
+          try {
+            await store.checkLease({
+              sessionId: engine.snapshot.session.id, leaseToken: lease.token,
+              expectedRevision, nowMs: now(),
+            })
+          } catch (error) {
+            stopped = true
+            throw error
+          }
+          return result
+        }
         return durable(staged, result)
       })
     },
