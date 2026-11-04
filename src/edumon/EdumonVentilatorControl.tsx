@@ -3,6 +3,7 @@ import type { VentilatorMode } from '../simulation/types'
 import { InteractiveSettingControls, type InteractiveSettingSpec } from '../components/InteractiveSettingControls'
 import { resolvedMonitorRespiratorySettings } from './respiratoryPhysiology'
 import type { MonitorPatientState, MonitorRespiratorySettings } from './types'
+import type { SessionV2RespiratoryRuntime } from './AnaesthSessionV2Preview'
 import { EDUMON_PATIENT_PROFILES } from './patientProfiles'
 import { registerSimulationResetHandler } from '../core/simulationReset'
 import './edumon-ventilator.css'
@@ -137,9 +138,10 @@ interface EdumonVentilatorControlProps {
   patientState: MonitorPatientState
   onPatientStateChange: (state: MonitorPatientState) => void
   disabled?: boolean
+  v2RespiratoryState?: SessionV2RespiratoryRuntime
 }
 
-export function EdumonVentilatorControl({ patientState, onPatientStateChange, disabled = false }: EdumonVentilatorControlProps) {
+export function EdumonVentilatorControl({ patientState, onPatientStateChange, disabled = false, v2RespiratoryState }: EdumonVentilatorControlProps) {
   const respiratory = resolvedMonitorRespiratorySettings(patientState)
   const patientRef = useRef(patientState)
   patientRef.current = patientState
@@ -236,6 +238,9 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
   }
 
   useEffect(() => {
+    // V2 session is the authority for delivered ventilation and airway
+    // pressure. Never let this v1 local control loop overwrite its state.
+    if (v2RespiratoryState !== undefined) return
     const effective = deriveEffectiveVentilation(ventilator, respiratory)
     if (
       Math.abs(effective.respiratoryRate - respiratory.respiratoryRate) > 0.001
@@ -244,10 +249,10 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     // Patient spontaneous breathing is intentionally the only external input
     // that changes effective ventilation without the ventilator itself changing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [respiratory.spontaneousRespiratoryRate, respiratory.spontaneousTidalVolumeMl])
+  }, [respiratory.spontaneousRespiratoryRate, respiratory.spontaneousTidalVolumeMl, v2RespiratoryState !== undefined])
 
   const applyValue = (key: VentilatorSettingKey, rawValue: number) => {
-    if (disabled) return
+    if (disabled || v2RespiratoryState !== undefined) return
     const next = { ...ventilator }
     if (key === 'ieRatio') next.inspiratoryTime = cycleTime(ventilator.rate) / (1 + clamp(rawValue, MIN_IE, MAX_IE))
     else (next as unknown as Record<VentilatorSettingKey, number>)[key] = rawValue
@@ -260,7 +265,7 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
   }
 
   const selectMode = (mode: EdumonVentilatorMode) => {
-    if (disabled) return
+    if (disabled || v2RespiratoryState !== undefined) return
     const next = { ...ventilator, mode }
     setVentilator(next)
     publishRespiratory(next)
@@ -271,12 +276,17 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
     [respiratory.complianceMlPerCmH2O, respiratory.spontaneousRespiratoryRate, respiratory.spontaneousTidalVolumeMl, ventilator],
   )
 
+  const displayedRate = v2RespiratoryState === undefined ? monitoring.respiratoryRate : v2RespiratoryState.respiratoryRate
+  const displayedVt = v2RespiratoryState === undefined ? monitoring.tidalVolumeMl : v2RespiratoryState.tidalVolumeMl
+  const displayedMinVent = displayedRate == null || displayedVt == null ? null : displayedRate * displayedVt / 1000
+  const displayedPeakPressure = v2RespiratoryState === undefined ? monitoring.peakPressureCmH2O : v2RespiratoryState.peakAirwayPressureCmH2O
+
   return (
     <section className="edumon-ventilator-row" aria-label="Ventilator settings and monitoring">
       <div className="edumon-ventilator-controls">
-        <label className="edumon-ventilator-mode" title={disabled ? 'Ventilator mode controlled by instructor' : 'Change ventilation mode'}>
+        <label className="edumon-ventilator-mode" title={disabled || v2RespiratoryState !== undefined ? 'Ventilator mode controlled by v2 session' : 'Change ventilation mode'}>
           <span>VENT MODE</span>
-          <select disabled={disabled} value={ventilator.mode} onChange={(event) => selectMode(event.target.value as EdumonVentilatorMode)} aria-label="Ventilation mode">
+          <select disabled={disabled || v2RespiratoryState !== undefined} value={ventilator.mode} onChange={(event) => selectMode(event.target.value as EdumonVentilatorMode)} aria-label="Ventilation mode">
             {MODES.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
           </select>
         </label>
@@ -285,17 +295,17 @@ export function EdumonVentilatorControl({ patientState, onPatientStateChange, di
           controls={controls}
           onChange={applyValue}
           overlayTargetSelector=".edumon-monitor-body"
-          disabled={disabled}
+          disabled={disabled || v2RespiratoryState !== undefined}
           className="edumon-ventilator-settings"
           ariaLabel="Ventilator settings"
         />
       </div>
 
       <div className="edumon-ventilator-monitor" aria-label="Ventilator monitored values">
-        <div><span>Resp Rate</span><strong>{Math.round(monitoring.respiratoryRate)}</strong><small>/min</small></div>
-        <div><span>TV</span><strong>{Math.round(monitoring.tidalVolumeMl)}</strong><small>mL</small></div>
-        <div><span>Min Vent</span><strong>{monitoring.minuteVentilationLMin.toFixed(1)}</strong><small>L/min</small></div>
-        <div><span>Peak Press</span><strong>{Math.round(monitoring.peakPressureCmH2O)}</strong><small>cmH₂O</small></div>
+        <div><span>Resp Rate</span><strong>{displayedRate == null ? '—' : Math.round(displayedRate)}</strong><small>/min</small></div>
+        <div><span>TV</span><strong>{displayedVt == null ? '—' : Math.round(displayedVt)}</strong><small>mL</small></div>
+        <div><span>Min Vent</span><strong>{displayedMinVent == null ? '—' : displayedMinVent.toFixed(1)}</strong><small>L/min</small></div>
+        <div><span>Peak Press</span><strong>{displayedPeakPressure == null ? '—' : Math.round(displayedPeakPressure)}</strong><small>cmH₂O</small></div>
       </div>
     </section>
   )
