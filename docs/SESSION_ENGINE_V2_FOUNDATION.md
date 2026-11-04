@@ -35,3 +35,12 @@ Integrate a pure Anaesth ActionEffect evaluator, define snapshot durability and 
 - `checkpointStore.mjs` provides revision-checked memory and browser-local IndexedDB adapters. These are **not distributed authority leases**.
 - The host must persist an accepted command before broadcasting/acknowledging it to participants; this atomic integration remains to be implemented.
 - Run `node scripts/session-v2-checkpoint-regression.mjs` for restart/retention coverage.
+
+
+## Trusted authority milestone (v1.3.0.2; experimental)
+- `authorityStore.mjs`: transactional memory and IndexedDB lease/checkpoint ledgers; token+epoch+expiry fencing and strict checkpoint revision compare-and-swap.
+- `authorityHost.mjs`: requires trusted `authenticate(credentials)`; client-provided actor IDs never grant permission.
+- New commands run only against `SessionEngineV2.fork()`. The checkpoint must be durably committed before a success receipt is exposed; failure stops the host.
+- A competing host cannot take over until the prior lease expires. Re-acquisition requires trusted instructor identity and creates a newer fenced epoch.
+- `scripts/session-v2-authority-regression.mjs` tests double-writer attempts, expiry, recovery and persistence-failure rejection.
+- Browser IndexedDB offers **single-origin** transaction atomicity only. An authenticated LAN/server coordinator is still required for multiple devices; this contract is NOT live in the app.
