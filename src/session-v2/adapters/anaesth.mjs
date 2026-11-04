@@ -6,6 +6,10 @@
  * action ID, actor permissions and the declared effect before returning next state.
  * Until configured, Drugs & Events fail closed rather than fake a physiological effect.
  */
+import { advanceEndTidalSevo, estimatedAlveolarVentilationLMin } from '../../edumon/sharedVolatilePhysiology.mjs'
+import { applySharedEdumonActionPhysiology } from '../../edumon/sharedActionPhysiology.mjs'
+import { resolveV2ActionNumber } from './anaesthPilot.mjs'
+
 const clone = value => structuredClone(value)
 const finite = (value, min, max) =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
@@ -49,6 +53,7 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
   const initial = () => ({
     patient: clone(baseline),
     actionRuntime: { simulationTime: 0, activeEffects: [], activeToggleActions: [] },
+    gasRuntime: { etSevoPercent: 0 },
     display: { invasiveBloodPressure: false, bis: false, capnography: false, temperature: false },
     controls: { paused: false, waveformsFrozen: false, alarmsSilenced: false },
   })
@@ -96,8 +101,24 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       const delta = command.payload?.deltaMs
       if (!finite(delta, 1, 1000)) throw new Error('Invalid tick')
       if (state.controls.paused) return state
-      return { ...state, actionRuntime: { ...state.actionRuntime,
-        simulationTime: state.actionRuntime.simulationTime + delta / 1000 } }
+      // Advance gas kinetics from the checkpointed effective ventilation.
+      // Do not mutate raw patient controls; measured EtSevo is runtime state.
+      // If an old checkpoint predates gasRuntime, initialize at 0 explicitly.
+      const resolve = (target, base) => resolveV2ActionNumber(state.actionRuntime, target, base)
+      const effective = applySharedEdumonActionPhysiology(state.patient, resolve)
+      const respiratory = effective.respiratory
+      const nextEtSevo = advanceEndTidalSevo({
+        etSevoPercent: state.gasRuntime?.etSevoPercent ?? 0,
+        fiSevoPercent: state.patient.anaestheticGases?.fiSevoPercent ?? 0,
+        alveolarVentilationLMin: estimatedAlveolarVentilationLMin(respiratory),
+        frcMl: respiratory.frcMl,
+        dtSeconds: delta / 1000,
+      })
+      return { ...state,
+        actionRuntime: { ...state.actionRuntime,
+          simulationTime: state.actionRuntime.simulationTime + delta / 1000 },
+        gasRuntime: { etSevoPercent: nextEtSevo },
+      }
     },
   }
 }
