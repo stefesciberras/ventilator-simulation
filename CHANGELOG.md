@@ -2,6 +2,14 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.9 — 2026-11-04 (Cloudflare WebSocket handshake diagnostics)
+- Bumped Vent and Anaesth/ITU application versions to **1.3.0.9**. Existing production v1 sessions are unchanged.
+- Added a Cloudflare Worker readiness endpoint `GET /api/session-v2/status` returning only `ready` and nonsecret configuration reason; it never reveals tokens or credential-derived data.
+- Forward the original WebSocket upgrade request to the Durable Object using `new Request(request, { headers })`, retaining the runtime's original handshake semantics while stripping the credential-bearing subprotocol.
+- Failed Durable Object upgrade requests return a controlled 503 and log only the error type, never credentials or request headers.
+- The opt-in Anaesth preview now reports WebSocket close codes and checks the readiness endpoint after retries fail, distinguishing missing Cloudflare configuration from a configured gateway with a handshake failure.
+- Actual live Cloudflare runtime/deployment status still requires external verification. The favicon.ico 404 is unrelated.
+
 ## 1.3.0.8 — 2026-11-04 (Cloudflare WebSocket subprotocol handshake)
 - Bumped Vent and Anaesth/ITU application versions to **1.3.0.8**; all production v1 sessions remain unchanged.
 - Corrected v2 Cloudflare WebSocket handshake negotiation: the browser now offers a fixed, public `loppjusim-v2` subprotocol alongside the credential-bearing, hex-encoded token.

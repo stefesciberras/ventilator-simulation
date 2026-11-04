@@ -124,18 +124,35 @@ export function AnaesthSessionV2Preview({
           }
         }
       }
-      socket.onerror = () => { /* reconnect on close */ }
-      socket.onclose = () => {
+      socket.onerror = () => { /* browser does not expose HTTP failure code here */ }
+      socket.onclose = (event) => {
         window.clearTimeout(handshakeTimeout)
         if (closedRef.current || currentAttempt !== attemptRef.current) return
         if (tries >= 3) {
           closedRef.current = true
           setStatus('error')
-          setMessage('Cloudflare WebSocket connection failed. Verify the experimental flag, both secrets, Durable Object binding and deployed Worker.')
+          setMessage('Cloudflare WebSocket failed; checking server readiness...')
+          // This endpoint exposes only a configuration readiness code.
+          // Never send the secret, offered protocols, or URL query here.
+          const checkUrl = new URL('/api/session-v2/status', window.location.origin)
+          void fetch(checkUrl, { cache: 'no-store' })
+            .then(async response => {
+              if (!response.ok) throw Error('diagnostic-unavailable')
+              const info = await response.json() as { ready?: boolean; reason?: string }
+              if (currentAttempt !== attemptRef.current) return
+              setMessage(info.ready
+                ? `Server configuration ready, but WebSocket handshake failed (close ${event.code}). Check Network → WS response status and Cloudflare Worker logs.`
+                : `Session v2 server unavailable: ${info.reason ?? 'unknown'}. Check Cloudflare Worker settings.`)
+            })
+            .catch(() => {
+              if (currentAttempt === attemptRef.current) {
+                setMessage(`WebSocket handshake failed (close ${event.code}); the server readiness endpoint is unavailable. Check Network → WS and Cloudflare deployment.`)
+              }
+            })
           return
         }
         setStatus('reconnecting')
-        setMessage('Connection interrupted; retrying the Cloudflare session connection...')
+        setMessage(`Connection closed (code ${event.code}); retrying experimental Cloudflare session...`)
         const delay = Math.min(5000, 500 * (2 ** tries++))
         window.setTimeout(open, delay)
       }

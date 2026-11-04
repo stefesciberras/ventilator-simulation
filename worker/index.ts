@@ -1,3 +1,4 @@
+import { sessionV2Readiness } from './sessionV2Readiness.mjs'
 import { decodeV2WebSocketSecret } from '../src/session-v2/websocketAuth.mjs'
 import { SessionV2Room } from './sessionV2Room.mjs'
 export { SessionV2Room } from './sessionV2Room.mjs'
@@ -34,13 +35,18 @@ export default {
       })
     }
 
+    if (url.pathname === '/api/session-v2/status') {
+      // Public diagnostics contain NO credential values or token-derived
+      // information. Feature remains disabled until all requirements exist.
+      return Response.json(sessionV2Readiness(env), {
+        headers: { 'cache-control': 'no-store' },
+      })
+    }
+
     if (url.pathname === '/api/session-v2/ws') {
       // This opt-in gateway must not be enabled until secrets and
       // Cloudflare Durable Object binding are configured explicitly.
-      if (env.SESSION_V2_EXPERIMENTAL !== '1' || !env.SESSION_V2_ROOMS ||
-          !env.SESSION_V2_INSTRUCTOR_TOKEN || env.SESSION_V2_INSTRUCTOR_TOKEN.length < 32 ||
-          !env.SESSION_V2_CANDIDATE_TOKEN || env.SESSION_V2_CANDIDATE_TOKEN.length < 32 ||
-          env.SESSION_V2_CANDIDATE_TOKEN === env.SESSION_V2_INSTRUCTOR_TOKEN) {
+      if (!sessionV2Readiness(env).ready) {
         return new Response('Not found', { status: 404 })
       }
       if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
@@ -72,9 +78,18 @@ export default {
       // Strip the credential and forward only the public protocol so the
       // Durable Object can negotiate it without exposing the secret.
       headers.set('Sec-WebSocket-Protocol', 'loppjusim-v2')
-      const internalRequest = new Request(request.url, { method: 'GET', headers })
+      // Preserve the original Worker WebSocket upgrade request, including
+      // runtime-specific handshake state, when creating the internal request.
+      const internalRequest = new Request(request, { headers })
       const id = env.SESSION_V2_ROOMS.idFromName(sessionId)
-      return env.SESSION_V2_ROOMS.get(id).fetch(internalRequest)
+      try {
+        return await env.SESSION_V2_ROOMS.get(id).fetch(internalRequest)
+      } catch (error) {
+        // Never log a credential, request headers or the encoded protocol.
+        console.error('session-v2 durable-object upgrade failed',
+          error instanceof Error ? error.name : 'unknown-error')
+        return new Response('Session authority unavailable', { status: 503 })
+      }
     }
 
     return new Response(null, { status: 404 })
