@@ -21,7 +21,7 @@ const validClock = data => data && typeof data === 'object' &&
 
 const VALID_ID = /^[a-zA-Z0-9_-]{3,80}$/
 const VALID_CMD = /^[a-zA-Z0-9._:-]{1,128}$/
-const TYPES = new Set(['patient.parameter.set', 'device.parameter.set', 'anaesth.gas.set', 'action.invoke', 'reset', 'tick', 'end'])
+const TYPES = new Set(['patient.parameter.set', 'device.parameter.set', 'anaesth.gas.set', 'action.invoke', 'monitor.tof.measure', 'reset', 'tick', 'end'])
 const demoPatient = {
   heartRate: 78, rhythm: 'sinus', systolicPressure: 122, diastolicPressure: 68,
   spo2: 98, peripheralPerfusion: 1, temperatureC: 37,
