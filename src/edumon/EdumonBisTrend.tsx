@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { LOPPJUSIM_SIMULATION_RESET_EVENT } from '../core/platformEvents'
 import { getActionRuntimeSimulationTime } from '../edusim/actions/ActionRuntime'
 import { effectiveAnaestheticDepth } from './anaestheticPhysiology'
-import type { AnaestheticDepth, MonitorPatientState } from './types'
+import { BIS_TIME_CONSTANT_SECONDS, bisTargetForDepth, advanceBisIndex } from './sharedAnaestheticMeasurements.mjs'
+import type { MonitorPatientState } from './types'
 import { EDUMON_MONITOR_DISPLAY_ACTION_IDS, useMonitorDisplayEnabled } from './monitorDisplayActions'
 import './edumon-bis.css'
 
@@ -14,20 +15,14 @@ type BisPoint = {
 
 interface EdumonBisTrendProps {
   patientState: MonitorPatientState
+  /** Present only in v2; disables independent local BIS model. */
+  v2BisState?: { value: number | null; simulationTime: number | null }
 }
 
 const BIS_WINDOW_SECONDS = 60
-const BIS_TIME_CONSTANT_SECONDS = 8
 const BIS_SAMPLE_INTERVAL_SECONDS = 0.75
 const BIS_JITTER = 7
 
-const BIS_TARGETS: Record<AnaestheticDepth, number> = {
-  1: 20,
-  2: 35,
-  3: 50,
-  4: 80,
-  5: 100,
-}
 
 // Responsive/session shells can transiently mount more than one controller tree.
 // BIS is a single physical monitor capability, so exactly one mounted surface
@@ -126,7 +121,7 @@ function BisTrendCanvas({ points }: { points: BisPoint[] }) {
   return <canvas ref={canvasRef} aria-label="BIS trend over time" />
 }
 
-export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
+export function EdumonBisTrend({ patientState, v2BisState }: EdumonBisTrendProps) {
   const ownerRef = useRef(Symbol('edumon-bis-surface'))
   const patientRef = useRef(patientState)
   const currentBisRef = useRef(100)
@@ -141,6 +136,22 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
   const bisEnabled = useMonitorDisplayEnabled(EDUMON_MONITOR_DISPLAY_ACTION_IDS.bis)
 
   patientRef.current = patientState
+
+  // The session checkpoint supplies the value and time. Keep only bounded
+  // presentation history in this browser; a reconnect must never restart
+  // a competing local BIS process or imply an authoritative historical trace.
+  useEffect(() => {
+    if (v2BisState === undefined) return
+    const time = v2BisState.simulationTime
+    const value = v2BisState.value
+    if (time == null || value == null) { setPoints([]); return }
+    setBis(Math.round(value))
+    setPoints(current => {
+      if (!current.length || time < current[current.length - 1].time) return [{ time, value }]
+      if (time === current[current.length - 1].time) return current
+      return [...current.filter(point => point.time >= time - BIS_WINDOW_SECONDS), { time, value }]
+    })
+  }, [v2BisState?.value, v2BisState?.simulationTime, v2BisState === undefined])
 
   useEffect(() => {
     const resetBisRuntime = () => {
@@ -197,7 +208,7 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
   }, [ownsSurface, bisEnabled, waveformHost, measurementHost])
 
   useEffect(() => {
-    if (!ownsSurface) return
+    if (!ownsSurface || v2BisState !== undefined) return
     let frame = 0
     let previous = performance.now()
     const tick = (now: number) => {
@@ -211,14 +222,13 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
 
         const depth = effectiveAnaestheticDepth(patientRef.current, getActionRuntimeSimulationTime())
         const awake = depth === 5
-        const target = BIS_TARGETS[depth]
+        const target = bisTargetForDepth(depth)
 
         if (awake) {
           currentBisRef.current = 100
           jitterTargetRef.current = 0
         } else {
-          const lagFraction = 1 - Math.exp(-dt / BIS_TIME_CONSTANT_SECONDS)
-          currentBisRef.current += (target - currentBisRef.current) * lagFraction
+          currentBisRef.current = advanceBisIndex(currentBisRef.current, depth, dt)
         }
 
         if (sampleAccumulatorRef.current >= BIS_SAMPLE_INTERVAL_SECONDS) {
@@ -239,7 +249,7 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [ownsSurface])
+  }, [ownsSurface, v2BisState !== undefined])
 
   const trace = ownsSurface && bisEnabled && waveformHost ? createPortal(
     <div className="edumon-trace edumon-trace-bis waveform-card">
@@ -253,7 +263,7 @@ export function EdumonBisTrend({ patientState }: EdumonBisTrendProps) {
   const measurement = ownsSurface && bisEnabled && measurementHost ? createPortal(
     <div className="edumon-value-panel edumon-value-bis metric">
       <span className="edumon-value-label">BIS</span>
-      <strong className="edumon-value-main">{bis}</strong>
+      <strong className="edumon-value-main">{v2BisState !== undefined ? (v2BisState.value == null ? '—' : Math.round(v2BisState.value)) : bis}</strong>
       <small className="edumon-value-unit">index</small>
     </div>,
     measurementHost,
