@@ -8,6 +8,7 @@ import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonTopBar, type EdumonSimulationSpeed } from './EdumonTopBar'
 import { EdumonWorkspacePanel } from './EdumonWorkspacePanel'
 import { EdumonVentilatorControl } from './EdumonVentilatorControl'
+import { setV2MonitorDisplayAuthority } from './monitorDisplayActions'
 import { EDUMON_MODULES, moduleFromPath, type EdumonAuxiliaryMonitorId, type EdumonModuleDefinition } from './modules'
 import { edumonAnaTeachingHost, edumonIcuTeachingHost } from '../teaching/hosts/edumon'
 import { SimulationHardwareControls } from '../components/SimulationHardwareControls'
@@ -452,6 +453,18 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     evaluations: v2PreviewEnabled ? (v2AlarmState?.evaluations ?? []) : edumonAlarmEvaluations,
     paused: simulationPaused || Boolean(v2PreviewEnabled && v2AlarmState?.silenced),
   })
+
+  useEffect(() => {
+    if (!v2PreviewEnabled || !v2AlarmState?.display) {
+      setV2MonitorDisplayAuthority(null)
+      return
+    }
+    setV2MonitorDisplayAuthority(v2AlarmState.display,
+      v2AlarmState.role === 'instructor'
+        ? (parameter, enabled) => v2AlarmRequestRef.current?.('alarm.display.set', { parameter, enabled })
+        : undefined)
+  }, [v2PreviewEnabled, v2AlarmState?.display, v2AlarmState?.role])
+  useEffect(() => () => setV2MonitorDisplayAuthority(null), [])
 
   useEffect(() => {
     if (!v2PreviewEnabled || !v2AlarmState?.limits) return
