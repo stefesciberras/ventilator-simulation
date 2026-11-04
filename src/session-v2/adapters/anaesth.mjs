@@ -40,6 +40,7 @@ const INPUT_TYPES = new Set(['patient.parameter.set', 'device.parameter.set',
 
 function validatePathValue(payload, limits) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+      Object.keys(payload).some(key => !['path', 'value'].includes(key)) ||
       typeof payload.path !== 'string' || !Object.hasOwn(limits, payload.path)) {
     throw new Error('Unsupported parameter')
   }
