@@ -2,6 +2,9 @@ import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 
+export type SessionV2VentilatorChange =
+  | { type: 'mode'; mode: string }
+  | { type: 'setting'; path: string; value: number }
 export type SessionV2RespiratoryRuntime = { estimatedEtCo2MmHg: number | null; respiratoryRate: number | null;
   tidalVolumeMl: number | null; simulationTime: number | null;
   expiratoryResistanceCmH2OLs: number | null; peakAirwayPressureCmH2O: number | null;
@@ -30,12 +33,14 @@ export function AnaesthSessionV2Preview({
   onMonitorSnapshot,
   onRespiratorySnapshot,
   tofRequestRef,
+  ventilatorRequestRef,
 }: {
   onPatientSnapshot: (patient: Partial<MonitorPatientState>) => void
   onVolatileSnapshot: (etSevoPercent: number | null) => void
   onMonitorSnapshot: (state: SessionV2MonitorRuntime) => void
   onRespiratorySnapshot: (state: SessionV2RespiratoryRuntime) => void
   tofRequestRef: { current: (() => void) | null }
+  ventilatorRequestRef: { current: ((change: SessionV2VentilatorChange) => void) | null }
 }) {
   const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
   const [sessionId, setSessionId] = useState('ana-preview')
@@ -52,6 +57,7 @@ export function AnaesthSessionV2Preview({
   const [newFiSevo, setNewFiSevo] = useState(0)
   const [bronchospasmSeverity, setBronchospasmSeverity] = useState(0)
   const lastBronchospasmTargetRef = useRef<number | null>(null)
+  const lastBronchospasmSentRef = useRef<number | null>(null)
   const [ventilationMode, setVentilationMode] = useState('MANUAL')
   const lastVentilationModeRef = useRef<string | null>(null)
   const lastAuthoritativeFiSevoRef = useRef<number | null>(null)
@@ -132,6 +138,7 @@ export function AnaesthSessionV2Preview({
     snapshotRef.current = null
     lastAuthoritativeFiSevoRef.current = null
     lastBronchospasmTargetRef.current = null
+    lastBronchospasmSentRef.current = null
     lastVentilationModeRef.current = null
     volatileCallbackRef.current(null)
     monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
@@ -270,6 +277,7 @@ export function AnaesthSessionV2Preview({
     volatileCallbackRef.current(null)
     monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
     tofRequestRef.current = null
+    ventilatorRequestRef.current = null
     setStatus('disconnected')
     setSnapshot(null)
     setActionLibrary(null)
@@ -288,6 +296,32 @@ export function AnaesthSessionV2Preview({
     return true
   }
   tofRequestRef.current = status === 'connected' ? () => { command('monitor.tof.measure', {}) } : null
+  ventilatorRequestRef.current = status === 'connected'
+    ? (change: SessionV2VentilatorChange) => {
+      if (change.type === 'mode') command('device.ventilator.mode.set', { mode: change.mode })
+      else command('device.parameter.set', { path: change.path, value: change.value })
+    } : null
+  useEffect(() => {
+    // Debounce command submission, not slider movement. Server owns severity.
+    if (status !== 'connected' || verifiedRole !== 'instructor' ||
+        bronchospasmSeverity === lastBronchospasmTargetRef.current ||
+        bronchospasmSeverity === lastBronchospasmSentRef.current) return
+    const handle = window.setTimeout(() => {
+      if (socketRef.current?.readyState !== WebSocket.OPEN ||
+          snapshotRef.current?.session.epoch == null) return
+      socketRef.current.send(JSON.stringify({
+        protocol: 2, type: 'command',
+        requestId: `event-${++sequenceRef.current}`,
+        command: { id: crypto.randomUUID(),
+          epoch: snapshotRef.current.session.epoch, runtimeId: 'main',
+          type: 'event.bronchospasm.set',
+          payload: { severityPercent: bronchospasmSeverity },
+        },
+      }))
+      lastBronchospasmSentRef.current = bronchospasmSeverity
+    }, 150)
+    return () => window.clearTimeout(handle)
+  }, [bronchospasmSeverity, status, verifiedRole])
   const controlClock = (running: boolean, speed = clock.speed) => {
     const socket = socketRef.current
     if (verifiedRole !== 'instructor' || socket?.readyState !== WebSocket.OPEN) return
@@ -353,15 +387,8 @@ export function AnaesthSessionV2Preview({
             <input type="range" min={0} max={100} step={5} value={bronchospasmSeverity}
               aria-label="Bronchospasm severity percent" onChange={event => setBronchospasmSeverity(Number(event.target.value))}/>
           </label>
-          <button type="button" onClick={() => command('event.bronchospasm.set', { severityPercent: bronchospasmSeverity })}
-            disabled={status !== 'connected'}>Apply bronchospasm</button>
-          <label>Ventilator mode <select aria-label="v2 ventilation mode" value={ventilationMode}
-            onChange={event => setVentilationMode(event.target.value)}>
-            {['MANUAL','VC-AC','PC-AC','PSV','SIMV-VC','SIMV-PC','VG-PC'].map(mode =>
-              <option key={mode} value={mode}>{mode}</option>)}
-          </select></label>
-          <button type="button" onClick={() => command('device.ventilator.mode.set', { mode: ventilationMode })}
-            disabled={status !== 'connected'}>Set mode</button>
+          <span style={{ fontSize: 12 }}>Live severity</span>
+
         </>}
         <span>BIS (modelled) {runtime?.monitorRuntime?.bisValue == null ? '—' : Math.round(runtime.monitorRuntime.bisValue)}</span>
         <span>TOF (last measurement) {runtime?.monitorRuntime?.tofReading ? `${runtime.monitorRuntime.tofReading.count}/4 · ratio ${runtime.monitorRuntime.tofReading.ratio.toFixed(2)}` : '—'}</span>
