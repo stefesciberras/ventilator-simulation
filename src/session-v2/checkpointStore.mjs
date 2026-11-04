@@ -48,10 +48,12 @@ export function createIndexedDbCheckpointStore({
   const database = () => {
     if (!dbPromise) {
       dbPromise = new Promise((resolve, reject) => {
-        const request = idb.open(databaseName, 1)
+        const request = idb.open(databaseName, 2)
         request.onupgradeneeded = () => {
-          if (!request.result.objectStoreNames.contains('checkpoints')) {
-            request.result.createObjectStore('checkpoints', { keyPath: 'sessionId' })
+          for (const name of ['checkpoints', 'leases']) {
+            if (!request.result.objectStoreNames.contains(name)) {
+              request.result.createObjectStore(name, { keyPath: 'sessionId' })
+            }
           }
         }
         request.onsuccess = () => resolve(request.result)

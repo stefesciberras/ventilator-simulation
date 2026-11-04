@@ -105,6 +105,27 @@ export class SessionEngineV2 {
   get events() { return copy(this.#events) }
 
   /**
+   * Internal speculative fork: stage commands without touching acknowledged
+   * state. The authority host must persist the fork's checkpoint before
+   * making the fork live or returning an accepted receipt.
+   */
+  fork() {
+    const fork = new SessionEngineV2({
+      sessionId: this.#session.id,
+      mode: this.#session.mode,
+      instructorId: this.#session.authorityId,
+      adapter: this.#adapter,
+      eventLimit: this.#eventLimit,
+    })
+    fork.#session = copy(this.#session)
+    fork.#runtimes = new Map([...this.#runtimes].map(([key, value]) => [key, copy(value)]))
+    fork.#participants = new Map([...this.#participants].map(([key, value]) => [key, copy(value)]))
+    fork.#seen = new Map([...this.#seen].map(([key, value]) => [key, copy(value)]))
+    fork.#events = copy(this.#events)
+    return fork
+  }
+
+  /**
    * Versioned durable checkpoint. Persist atomically before acknowledging a
    * command externally. Includes receipts to prevent re-executing a drug after
    * process recreation. The host is responsible for authenticating authority.
