@@ -1,74 +1,21 @@
 import { resolveNumericActionEffect } from '../edusim/actions/ActionRuntime'
-import { anaestheticStimulusResponseScale, effectiveAnaestheticDepth } from './anaestheticPhysiology'
-import { applyEdumonPhysiologicalBounds } from './physiologicalBounds'
-import { DEFAULT_MONITOR_RESPIRATORY_SETTINGS, type MonitorPatientState } from './types'
+import {
+  applySharedEdumonActionPhysiology,
+  saturatingSympatheticResponse,
+} from './sharedActionPhysiology.mjs'
+import type { MonitorPatientState } from './types'
 
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
-
-const SYMPATHETIC_SATURATION_SHAPE = 1.5
-
-export function saturatingSympatheticResponse(response: number): number {
-  const input = Math.max(0, response)
-  return ((1 + SYMPATHETIC_SATURATION_SHAPE) * input) / (1 + SYMPATHETIC_SATURATION_SHAPE * input)
-}
-
-function sympatheticResponse(state: MonitorPatientState, simulationTime: number): { heartRateOffset: number; mapOffset: number } {
-  const stimulus = Math.max(0, resolveNumericActionEffect('stimulus.sympathetic', 0, simulationTime))
-  const nociceptiveResponse = Math.max(0, resolveNumericActionEffect('anaesthesia.nociceptiveResponse', 1, simulationTime))
-  const depthResponse = anaestheticStimulusResponseScale(effectiveAnaestheticDepth(state, simulationTime))
-  const composedResponse = stimulus * nociceptiveResponse * depthResponse
-  const response = saturatingSympatheticResponse(composedResponse)
-  return { heartRateOffset: 25 * response, mapOffset: 30 * response }
-}
-
-function applyMeanPressureEffect(state: MonitorPatientState, simulationTime: number, sympatheticMapOffset: number): Pick<MonitorPatientState, 'systolicPressure' | 'diastolicPressure'> {
-  const baselineMean = state.diastolicPressure + (state.systolicPressure - state.diastolicPressure) / 3
-  const actionMean = resolveNumericActionEffect('haemodynamics.meanArterialPressure', baselineMean, simulationTime)
-  const shift = actionMean + sympatheticMapOffset - baselineMean
-  return {
-    systolicPressure: state.systolicPressure + shift,
-    diastolicPressure: state.diastolicPressure + shift,
-  }
-}
+// The established v1 ActionRuntime remains the source of active effects. The
+// pure physiology is shared with Session Engine v2, but global mutable runtime
+// state is never handed to the cloud authority.
+export { saturatingSympatheticResponse }
 
 export function applyEdumonActionPhysiology(state: MonitorPatientState, simulationTime: number): MonitorPatientState {
-  const sympathetic = sympatheticResponse(state, simulationTime)
-  const pressure = applyMeanPressureEffect(state, simulationTime, sympathetic.mapOffset)
-  const baselineRespiratory = { ...DEFAULT_MONITOR_RESPIRATORY_SETTINGS, ...(state.respiratory ?? {}) }
-  const drive = clamp(resolveNumericActionEffect('respiration.drive', 1, simulationTime), 0, 3)
-  const block = clamp(resolveNumericActionEffect('neuromuscular.block', 0, simulationTime), 0, 1)
-  const airwayObstruction = clamp(resolveNumericActionEffect('respiration.airwayObstruction', 0, simulationTime), 0, 1)
-  const muscleFraction = 1 - block
-  const ventilationMode = baselineRespiratory.ventilatorMode ?? 'MANUAL'
-  const effectiveDependsOnSpontaneousDrive = ventilationMode === 'MANUAL' || ventilationMode === 'PSV'
-
-  // The current EDUMON respiratory model does not yet separate central neural respiratory
-  // rhythm from mechanically visible breaths. Neuromuscular block therefore suppresses
-  // the observed spontaneous breath rate as well as tidal excursion. At complete block,
-  // spontaneous mechanical ventilation becomes zero while mandatory ventilation can continue.
-  const spontaneousRespiratoryRate = baselineRespiratory.spontaneousRespiratoryRate * drive * muscleFraction
-  const spontaneousTidalVolumeMl = baselineRespiratory.spontaneousTidalVolumeMl * drive * muscleFraction
-  const respiratory = {
-    ...baselineRespiratory,
-    spontaneousRespiratoryRate,
-    spontaneousTidalVolumeMl,
-    expiratoryResistanceCmH2OLs: baselineRespiratory.expiratoryResistanceCmH2OLs * (1 + 4 * airwayObstruction),
-    ...(effectiveDependsOnSpontaneousDrive ? {
-      respiratoryRate: spontaneousRespiratoryRate,
-      tidalVolumeMl: ventilationMode === 'PSV' && spontaneousRespiratoryRate > 0
-        ? baselineRespiratory.tidalVolumeMl * muscleFraction
-        : spontaneousTidalVolumeMl,
-    } : {}),
-  }
-
-  const actionHeartRate = resolveNumericActionEffect('haemodynamics.heartRate', state.heartRate, simulationTime)
-  return applyEdumonPhysiologicalBounds({
-    ...state,
-    heartRate: actionHeartRate + sympathetic.heartRateOffset,
-    ...pressure,
-    respiratory,
-  })
+  return applySharedEdumonActionPhysiology(state, (target, base) =>
+    resolveNumericActionEffect(target, base, simulationTime))
 }
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 export function currentNeuromuscularBlock(simulationTime: number): number {
   return clamp(resolveNumericActionEffect('neuromuscular.block', 0, simulationTime), 0, 1)
