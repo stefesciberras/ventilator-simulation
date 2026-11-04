@@ -39,6 +39,8 @@ interface EdumonWorkspacePanelProps {
   v2MonitorState?: SessionV2MonitorRuntime
   v2RespiratoryState?: SessionV2RespiratoryRuntime
   onV2VentilatorChange?: (change: SessionV2VentilatorChange) => void
+  onV2NibpMeasure?: () => void
+  v2NibpReading?: { systolic: number; diastolic: number; mean: number; measuredAtSimulationTime: number } | null
   onV2TofMeasure?: () => void
   sessionPanel?: ReactNode
   meanPressure: number | null
@@ -63,6 +65,8 @@ export function EdumonWorkspacePanel({
   v2MonitorState,
   v2RespiratoryState,
   onV2VentilatorChange,
+  onV2NibpMeasure,
+  v2NibpReading,
   onV2TofMeasure,
   sessionPanel,
 }: EdumonWorkspacePanelProps) {
@@ -335,7 +339,7 @@ export function EdumonWorkspacePanel({
 
   return (
     <>
-      <EdumonNibpControl patientState={patientState} />
+      <EdumonNibpControl patientState={patientState} v2Reading={v2NibpReading} onV2Measure={onV2NibpMeasure} />
       <EdumonCapnographySurface patientState={patientState} v2RespiratoryState={v2RespiratoryState} />
       <EdumonTemperatureSurface patientState={patientState} />
       {view === 'instructor' && (
