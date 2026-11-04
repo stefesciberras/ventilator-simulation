@@ -49,7 +49,9 @@ export function projectBronchospasmVentilation(respiratory) {
   const mode = respiratory.ventilatorMode ?? 'MANUAL'
   const peep = clamp(respiratory.peepCmH2O ?? 0, 0, 35)
   const ti = clamp(respiratory.ventilatorInspiratoryTimeSeconds ?? 1, .1, 10)
-  const vt = clamp(respiratory.tidalVolumeMl ?? 500, 0, 1000)
+  const vt = clamp(['VC-AC','SIMV-VC','VG-PC'].includes(mode)
+    ? (respiratory.ventilatorSetTidalVolumeMl ?? respiratory.tidalVolumeMl ?? 500)
+    : (respiratory.tidalVolumeMl ?? 500), 0, 1000)
   const defaultFlow = vt / 1000 / ti
   const flow = (respiratory.ventilatorInspiratoryFlowLMin ?? defaultFlow * 60) / 60
   const pc = Math.max(0, respiratory.ventilatorPressureControlCmH2O ?? 15)
@@ -60,7 +62,8 @@ export function projectBronchospasmVentilation(respiratory) {
     const setPressure = mode === 'PSV' ? ps : pc
     const baselineResponse = 1 - Math.exp(-ti / (8 * c))
     const obstructedResponse = 1 - Math.exp(-ti / (r * c))
-    deliveredVtMl = vt * clamp(obstructedResponse / Math.max(baselineResponse, .01), 0, 1)
+    const referenceVt = setPressure * c * 1000 * 0.7
+    deliveredVtMl = clamp(referenceVt * obstructedResponse / Math.max(baselineResponse, .01), 0, 1000)
     peakAirwayPressureCmH2O = peep + setPressure
   }
   if (mode === 'VG-PC') {
