@@ -2,6 +2,14 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.17 — 2026-11-04 (v2 reconnect volatile-state synchronization)
+- Bumped both products to **1.3.0.17**, preserving the production v1 simulator and Cloudflare v2 authority.
+- Fixed the experimental Anaesth v2 preview's FiSevo editor: its draft now initializes from the **canonical session patient** on the first welcome snapshot and updates only when the authoritative FiSevo actually changes (including reset). Continuous tick snapshots do not overwrite an unsent user edit. Connecting/disconnecting clears stale draft-sync provenance.
+- Distinguished **missing legacy EtSevo state** from an actual measured/modelled zero: absent `gasRuntime` is explicitly marked not recorded; no fabricated 0.00 MAC value is displayed.
+- Added a Cloudflare Durable Object reconstruction regression that checks nonzero end-tidal sevoflurane, inspired sevoflurane and simulation time survive disconnection/recovery without reinitialization.
+- Important limitation: checkpoints created before v1.3.0.16 have no persisted `gasRuntime`. Their historical EtSevo cannot be reconstructed; a fresh simulation must be used to test persisted volatile uptake.
+- No changes to drug models, normal v1 anaesthetic settings, existing v2 clock or device alarms.
+
 ## 1.3.0.16 — 2026-11-04 (shared volatile uptake and session-persisted EtSevo)
 - Bumped Vent and Anaesth/ITU application versions to **1.3.0.16**, retaining default production Session Engine v1.
 - Extracted the existing exponential sevoflurane end-tidal uptake equation, alveolar-ventilation fallback and MAC-to-depth relationship into the pure `src/edumon/sharedVolatilePhysiology.mjs`. The v1 Anaesth gas control now calls these functions with its existing live gas-exchange output and animation-clock increments. The existing v1 anaesthetic depth helper delegates to the same shared MAC-to-depth formula.
