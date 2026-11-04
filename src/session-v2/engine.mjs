@@ -295,7 +295,11 @@ export class SessionEngineV2 {
     }
     ++this.#session.revision
     const result = freezeState({ accepted: true, revision: this.#session.revision, runtimeRevision: type === 'end' ? null : runtime.revision + 1 })
-    this.#seen.set(key, result)
+    // Trusted server-only clock ticks are serialized with the checkpoint.
+    // Do not accumulate one receipt per second (or four per second at 4×):
+    // the committed clockMs already makes each next tick ID unique. Browser
+    // gateways never forward the internalClock marker.
+    if (command.internalClock !== true) this.#seen.set(key, result)
     const event = { sequence: this.#session.revision, epoch, commandId: id, participantId, runtimeId, type }
     this.#events.push(event)
     if (this.#events.length > this.#eventLimit) this.#events.shift()
