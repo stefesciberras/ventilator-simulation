@@ -34,6 +34,26 @@ export default {
       })
     }
 
+    if (url.pathname === '/api/session-v2/status') {
+      // Public diagnostics contain NO credential values or token-derived
+      // information. Feature remains disabled until all requirements exist.
+      const enabled = env.SESSION_V2_EXPERIMENTAL === '1'
+      const bound = Boolean(env.SESSION_V2_ROOMS)
+      const credentialsConfigured = Boolean(
+        env.SESSION_V2_INSTRUCTOR_TOKEN && env.SESSION_V2_INSTRUCTOR_TOKEN.length >= 32 &&
+        env.SESSION_V2_CANDIDATE_TOKEN && env.SESSION_V2_CANDIDATE_TOKEN.length >= 32 &&
+        env.SESSION_V2_CANDIDATE_TOKEN !== env.SESSION_V2_INSTRUCTOR_TOKEN
+      )
+      return Response.json({
+        protocol: 2,
+        ready: enabled && bound && credentialsConfigured,
+        reason: !enabled ? 'experimental-disabled'
+          : !bound ? 'durable-object-binding-missing'
+          : !credentialsConfigured ? 'test-credentials-not-configured'
+          : 'ready',
+      }, { headers: { 'cache-control': 'no-store' } })
+    }
+
     if (url.pathname === '/api/session-v2/ws') {
       // This opt-in gateway must not be enabled until secrets and
       // Cloudflare Durable Object binding are configured explicitly.
@@ -72,9 +92,18 @@ export default {
       // Strip the credential and forward only the public protocol so the
       // Durable Object can negotiate it without exposing the secret.
       headers.set('Sec-WebSocket-Protocol', 'loppjusim-v2')
-      const internalRequest = new Request(request.url, { method: 'GET', headers })
+      // Preserve the original Worker WebSocket upgrade request, including
+      // runtime-specific handshake state, when creating the internal request.
+      const internalRequest = new Request(request, { headers })
       const id = env.SESSION_V2_ROOMS.idFromName(sessionId)
-      return env.SESSION_V2_ROOMS.get(id).fetch(internalRequest)
+      try {
+        return await env.SESSION_V2_ROOMS.get(id).fetch(internalRequest)
+      } catch (error) {
+        // Never log a credential, request headers or the encoded protocol.
+        console.error('session-v2 durable-object upgrade failed',
+          error instanceof Error ? error.name : 'unknown-error')
+        return new Response('Session authority unavailable', { status: 503 })
+      }
     }
 
     return new Response(null, { status: 404 })
