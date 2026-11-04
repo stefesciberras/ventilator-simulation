@@ -81,12 +81,16 @@ export function resolveV2ActionNumber(runtime, target, base) {
       case 'offset': case 'increment': value += e.value * w * intensity; break
       case 'multiplier': value *= 1 + (e.value - 1) * w * intensity; break
       case 'set': case 'target': value += (e.value - value) * clamp(w * intensity, 0, 1); break
-      case 'constraint':
-        if (e.constraint === 'minimum') value = Math.max(value, base + (e.value - base) * w)
-        if (e.constraint === 'maximum') value = Math.min(value, base + (e.value - base) * w)
-        if (e.constraint === 'block-increase') value = Math.min(value, base)
-        if (e.constraint === 'block-decrease') value = Math.max(value, base)
+      case 'constraint': {
+        // Match the existing ActionRuntime.applyConstraint() exactly,
+        // including partial onset and intensity interpolation.
+        const strength = clamp(w * intensity, 0, 1)
+        if (e.constraint === 'minimum' && value < e.value) value += (e.value - value) * strength
+        if (e.constraint === 'maximum' && value > e.value) value += (e.value - value) * strength
+        if (e.constraint === 'block-increase') value -= Math.max(0, value - base) * strength
+        if (e.constraint === 'block-decrease') value += Math.max(0, base - value) * strength
         break
+      }
       // Trigger is evaluated by the target-specific physiology model, not a
       // numeric addition; this pilot does not support trigger projection.
       default: break
