@@ -2,6 +2,15 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.3 — 2026-11-04 (development; experimental LAN transport)
+- Bumped Vent and Anaesth/ITU application versions to **1.3.0.3**; active Session Engine v1 remains unchanged.
+- Added an isolated v2 WebSocket gateway: verified instructor/candidate joins, durable-authority command receipts, and revisioned canonical snapshot broadcasts.
+- Gateway ignores untrusted client role and participant IDs when authorizing mutations. Invalid and oversized messages are rejected.
+- Added an explicitly opt-in, separate Node LAN test server using a fixed Anaesth demo patient, server-configured credentials, and default loopback binding. The existing v1 server and /eduvent-session endpoint are unchanged.
+- Added real two-client WebSocket regression tests for bidirectional parameter updates, drug-command deduplication, unauthorized edits, synchronization and reconnect.
+- **Not deployed as live session logic:** demo host uses memory-only storage, not disk-backed restart durability; Drugs & Events run in the test adapter only, and no UI or production scenario integration exists. Plain ws:// must only be used in a trusted test network, not exposed publicly.
+- Next: durable server checkpoint store, secure provisioning, browser client adapter and full instructor/candidate UI tests.
+
 ## 1.3.0.2 — 2026-11-04 (development; trusted authority boundary)
 - Bumped Vent and Anaesth/ITU application versions to **1.3.0.2**; the v2 engine remains disabled in the live simulators.
 - Added transactional authority-ledger contract with secure short-lived lease tokens, expiry, host fencing epochs and revision-checked checkpoint commits.
