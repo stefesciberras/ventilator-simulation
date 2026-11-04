@@ -8,7 +8,9 @@
  */
 import { SessionEngineV2 } from '../src/session-v2/engine.mjs'
 import { createAnaesthSessionAdapter } from '../src/session-v2/adapters/anaesth.mjs'
-import { createAnaesthV2PilotEvaluator, projectAnaesthV2Monitor } from '../src/session-v2/adapters/anaesthPilot.mjs'
+import { projectAnaesthV2Monitor } from '../src/session-v2/adapters/anaesthPilot.mjs'
+import { loadAnaesthV2Library, legacyAnaesthV2Library, validatePinnedAnaesthV2Library,
+  anaesthV2EvaluatorFromLibrary, publicAnaesthV2Library } from '../src/session-v2/adapters/anaesthLibrary.mjs'
 
 const MAX_BYTES = 65536
 const VALID_ID = /^[a-zA-Z0-9_-]{3,80}$/
@@ -20,8 +22,8 @@ const demoPatient = {
   respiratory: { respiratoryRate: 12, fio2: 0.21, peepCmH2O: 0 },
   anaestheticGases: { fiSevoPercent: 0 },
 }
-const adapter = createAnaesthSessionAdapter({ initialPatient: demoPatient,
-  applyAction: createAnaesthV2PilotEvaluator() })
+const adapterFor = library => createAnaesthSessionAdapter({ initialPatient: demoPatient,
+  applyAction: anaesthV2EvaluatorFromLibrary(library) })
 const snapshotForPreview = snapshot => ({ ...snapshot, runtimes: snapshot.runtimes.map(runtime => ({
   ...runtime, state: { ...runtime.state,
     monitorProjection: runtime.state?.patient && runtime.state?.actionRuntime
@@ -38,13 +40,21 @@ export class SessionV2Room {
     this.state = state
     this.env = env
     this.engine = null
+    this.adapter = null
+    this.actionLibrary = null
     this.sessionId = null
     this.sockets = new Map()
     this.queue = Promise.resolve()
     this.loaded = this.state.blockConcurrencyWhile(async () => {
       const checkpoint = await this.state.storage.get('checkpoint')
       if (checkpoint) {
-        this.engine = SessionEngineV2.fromCheckpoint({ checkpoint, adapter })
+        // Legacy sessions created before the pinned-catalogue schema must
+        // retain the exact original three pilot drugs on recovery.
+        const persistedLibrary = await this.state.storage.get('actionLibrary')
+        this.actionLibrary = persistedLibrary
+          ? validatePinnedAnaesthV2Library(persistedLibrary) : legacyAnaesthV2Library()
+        this.adapter = adapterFor(this.actionLibrary)
+        this.engine = SessionEngineV2.fromCheckpoint({ checkpoint, adapter: this.adapter })
         this.sessionId = this.engine.snapshot.session.id
       }
     })
@@ -54,7 +64,10 @@ export class SessionV2Room {
     this.engine = engine
   }
   send = (socket, type, extra = {}) => {
-    try { socket.send(packet(type, extra)) } catch { this.sockets.delete(socket) }
+    try { socket.send(packet(type, { ...extra,
+      ...(extra.snapshot && this.actionLibrary
+        ? { actionLibrary: publicAnaesthV2Library(this.actionLibrary) } : {}),
+    })) } catch { this.sockets.delete(socket) }
   }
   broadcast = () => {
     if (!this.engine) return
@@ -83,12 +96,22 @@ export class SessionV2Room {
       await this.serialize(async () => {
         if (!this.engine) {
           if (role !== 'instructor') throw Error('instructor-required')
+          // Fail closed if a configured Supabase catalogue cannot be fetched
+          // or validated; never silently swap in demo drug definitions.
+          const library = await loadAnaesthV2Library(this.env)
+          const activeAdapter = adapterFor(library)
           const created = new SessionEngineV2({
-            sessionId, mode: 'simulation', instructorId: 'instructor', adapter,
+            sessionId, mode: 'simulation', instructorId: 'instructor', adapter: activeAdapter,
           })
           created.join({ participantId: 'candidate', role: 'candidate' })
           created.start('instructor')
-          await this.persist(created)
+          // Pin definition set and initial checkpoint together; a new
+          // deployment or Supabase edit cannot redefine active-session drugs.
+          await this.state.storage.put({ actionLibrary: library,
+            checkpoint: created.exportCheckpoint() })
+          this.actionLibrary = library
+          this.adapter = activeAdapter
+          this.engine = created
           this.sessionId = sessionId
         } else {
           const current = this.engine.snapshot
