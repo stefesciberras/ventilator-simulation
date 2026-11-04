@@ -2,6 +2,17 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+**Session Engine v2 current implementation and remaining work:** [docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md](docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md). The v2 pilot is **opt-in** and is not a completed/default replacement for v1. Release entries below are chronological: features listed as “not yet implemented” in older versions may have landed in later versions.
+
+### Current status after 1.3.0.26 (documentation consolidation, no runtime release)
+- **Implemented in the experimental Anaesth v2 pilot:** Durable Object checkpointed authority and clock; trusted, per-session pinned ActionDefinitions; shared ActionEffect physiology; EtSevo, BIS/TOF, CO₂, SpO₂ and bronchospasm kinetics; authoritative ventilator commands and mode-dependent educational Ppeak/VT projection; and checkpointed monitor visibility, alarm limits/eligibility, silence and completed NIBP measurements.
+- **Recent UI corrections:** the bronchospasm severity slider now submits changes without an Apply button; regular ventilator controls work via validated v2 commands; capnogram visual samples are generated locally between server snapshots, with running/speed metadata on both welcome and subsequent snapshots.
+- **Not yet completed:** full loppjuSIM-Vent breath-by-breath mechanical integration (including dynamic pressure/flow and auto-PEEP), full Scenario Studio Event/scenario orchestration, parity for ITU/Vent adapters, production local-first/LAN authority, production-grade user authentication and authorization, robust replay/schema migration, alarm presentation lifecycle parity and actual live two-browser/Cloudflare E2E verification.
+- **Evidence:** versions **1.3.0.24–1.3.0.26** were merged in PRs **#462–#464** and passed GitHub Build **#1080, #1084, #1086** respectively. This verifies code/tests/build, **not** live deployment or clinical fidelity.
+- **No version bump:** this entry links the handover document and consolidates status; the application binaries remain **1.3.0.26**.
+
+
+
 ## 1.3.0.26 — 2026-11-04 (authoritative Anaesth monitor alarms, visibility and NIBP)
 - Added checkpointed experimental v2 alarm limits, display visibility, active eligibility evaluations, alarm silence and last completed NIBP reading. The shared v1 alarm controller still owns escalation, priority, banners and sound; its v2 inputs now come from the canonical Cloudflare session rather than browser-local physiology or hidden parameter values.
 - Invasive BP, BIS and EtCO2 alarms are ineligible while their corresponding display capability is hidden; SpO2 and HR remain visible by default. The v2 monitor display switches route through validated instructor-only session commands. Candidate screens receive identical visibility and alarm evaluations on each snapshot.

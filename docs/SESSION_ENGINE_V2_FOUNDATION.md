@@ -1,5 +1,7 @@
 # Session Engine v2 — experimental foundation
 
+> **Historical, incremental design record.** This file retains the original v2 rollout decisions in chronological order; its early paragraphs describing an unwired reducer were correct **at that time**, not after v1.3.0.26. For the up-to-date architecture, implemented features, verification limits, DO NOT REGRESS rules and prioritized remaining work, see **[SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md](SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md)**. Do not reintroduce deprecated browser-local v2 physiological authorities or treat early “not implemented” sections as present-day status.
+
 Status: **opt-in, not wired into the application**. Existing v1 session hooks and transport are unchanged.
 
 ## Scope of this first implementation
