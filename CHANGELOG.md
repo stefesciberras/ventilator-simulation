@@ -2,6 +2,15 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.15 — 2026-11-04 (shared Anaesth/ITU ActionEffect physiology)
+- Bumped Vent and Anaesth/ITU versions to **1.3.0.15**; existing production Session Engine v1 and v2 authority, clock and storage contracts remain in place.
+- Extracted the existing EDUMON ActionEffect-mediated haemodynamics, spontaneous/mandatory respiratory mechanics, neuromuscular blockade, sympathetic stimulation, anaesthetic-depth sensitivity and hard physiological bounds into `src/edumon/sharedActionPhysiology.mjs`. The pure module accepts a patient baseline and injected numeric-effect resolver; it never reads the browser-global ActionRuntime or calls external services.
+- **v1 EDUMON** action physiology delegates to the shared pure module through its existing global ActionRuntime resolver, preserving the previous calculation order and output bounds.
+- **v2 Anaesth** monitor projection now delegates to the *same module*, resolving effects from the canonical per-session v2 ActionRuntime. In particular, Relaxant suppresses spontaneous mechanical breathing without reducing set mandatory ventilation in VC-AC/PC-AC; propofol/fentanyl/nociceptive/sympathetic effects use the same response path.
+- Aligned v2 effect constraints with v1 partial-intensity/onset interpolation for minimum, maximum, block-increase and block-decrease.
+- Added cross-version regression cases checking baseline purity, time-course parity, pressure/HR/respiratory responses, MANUAL/PSV/mandatory ventilation, bounds, depth, sympathetic stimulation and constraint interpolation. Updated the action-physiology regression's source assertions to cover the new shared module.
+- **Scope limitations:** the v2 monitoring preview remains opt-in; this does not yet make end-tidal volatile uptake, BIS, capnography, waveform phase, device state or alarm parity authoritative. Drug effects remain educational model approximations, not clinical dosing guidance.
+
 ## 1.3.0.14 — 2026-11-04 (experimental Cloudflare authoritative clock)
 - Bumped both product versions to **1.3.0.14**. The production v1 simulator remains unchanged.
 - Introduced a single server-owned simulation clock in the Cloudflare Durable Object for opt-in Session Engine v2. A Durable Object alarm advances the authoritative checkpoint in 1-second real-time intervals, at selected speeds 0.5×, 1×, 2× or 4×, then broadcasts persisted canonical snapshots to instructor and candidate. Drug onset/recovery now progresses when the clock is running without manual ticks.
