@@ -11,6 +11,7 @@ import { applySharedEdumonActionPhysiology } from '../../edumon/sharedActionPhys
 import { resolveV2ActionNumber, projectAnaesthV2Monitor } from './anaesthPilot.mjs'
 import { advanceBisIndex, tofReadingFromBlock } from '../../edumon/sharedAnaestheticMeasurements.mjs'
 import { advanceAlveolarCo2 } from '../../core/physiology/respiratory/sharedCo2Kinetics.mjs'
+import { advanceOxygenation } from '../../core/physiology/respiratory/sharedOxygenation.mjs'
 import { setBronchospasmSeverity, advanceBronchospasm, projectBronchospasmVentilation } from './bronchospasm.mjs'
 
 const clone = value => structuredClone(value)
@@ -63,6 +64,7 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
     actionRuntime: { simulationTime: 0, activeEffects: [], activeToggleActions: [] },
     gasRuntime: { etSevoPercent: 0 },
     respiratoryRuntime: { alveolarCo2MmHg: 40, estimatedEtCo2MmHg: 40,
+      alveolarOxygenFraction: 0.16, spo2Percent: baseline.spo2 ?? 98,
       respiratoryRate: baseline.respiratory?.respiratoryRate ?? 12,
       tidalVolumeMl: baseline.respiratory?.tidalVolumeMl ?? 500,
       alveolarVentilationLMin: 4.2, minuteVentilationLMin: 6 },
@@ -176,6 +178,22 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
         heightCm: respiratory.heightCm,
         deltaSeconds: delta / 1000,
       })
+      const oxygen = advanceOxygenation({
+        alveolarOxygenFraction: state.respiratoryRuntime?.alveolarOxygenFraction ?? 0.16,
+        spo2Percent: state.respiratoryRuntime?.spo2Percent ?? (state.patient.spo2 ?? 98),
+        respiratoryRate: observedRespiratory.respiratoryRate,
+        tidalVolumeMl: observedRespiratory.tidalVolumeMl,
+        deadSpaceMl: observedRespiratory.deadSpaceMl,
+        fio2: observedRespiratory.fio2,
+        frcMl: observedRespiratory.frcMl,
+        oxygenConsumptionMlMin: observedRespiratory.oxygenConsumptionMlMin,
+        expiratoryResistanceCmH2OLs: observedRespiratory.expiratoryResistanceCmH2OLs,
+        shuntFraction: observedRespiratory.shuntFraction,
+        complianceMlPerCmH2O: observedRespiratory.complianceMlPerCmH2O,
+        peepCmH2O: observedRespiratory.peepCmH2O,
+        maxSpO2: Math.min(observedRespiratory.maxSpO2, state.patient.spo2 ?? 100),
+        deltaSeconds: delta / 1000,
+      })
       const nextEtSevo = advanceEndTidalSevo({
         etSevoPercent: state.gasRuntime?.etSevoPercent ?? 0,
         fiSevoPercent: state.patient.anaestheticGases?.fiSevoPercent ?? 0,
@@ -188,7 +206,7 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
           simulationTime: state.actionRuntime.simulationTime + delta / 1000 },
         gasRuntime: { etSevoPercent: nextEtSevo },
         respiratoryRuntime: {
-          ...co2,
+          ...co2, ...oxygen,
           expiratoryResistanceCmH2OLs: mechanical.airwayResistanceCmH2OLs,
           peakAirwayPressureCmH2O: mechanical.peakAirwayPressureCmH2O,
           expiratoryTimeConstantSeconds: mechanical.expiratoryTimeConstantSeconds,
