@@ -8,7 +8,7 @@
  */
 import { SessionEngineV2 } from '../src/session-v2/engine.mjs'
 import { createAnaesthSessionAdapter } from '../src/session-v2/adapters/anaesth.mjs'
-import { projectAnaesthV2Monitor } from '../src/session-v2/adapters/anaesthPilot.mjs'
+import { projectAnaesthV2Monitor, resolveV2ActionNumber } from '../src/session-v2/adapters/anaesthPilot.mjs'
 import { loadAnaesthV2Library, legacyAnaesthV2Library, validatePinnedAnaesthV2Library,
   anaesthV2EvaluatorFromLibrary, publicAnaesthV2Library } from '../src/session-v2/adapters/anaesthLibrary.mjs'
 
@@ -28,6 +28,12 @@ const snapshotForPreview = snapshot => ({ ...snapshot, runtimes: snapshot.runtim
   ...runtime, state: { ...runtime.state,
     monitorProjection: runtime.state?.patient && runtime.state?.actionRuntime
       ? projectAnaesthV2Monitor(runtime.state) : null,
+    // Explicit read-only pharmacodynamic indicator: v1 monitoring surfaces
+    // do not yet offer a synchronized TOF/NMB display in the v2 preview.
+    effectIndicators: runtime.state?.actionRuntime ? {
+      neuromuscularBlockPercent: Math.round(100 * Math.max(0, Math.min(1,
+        resolveV2ActionNumber(runtime.state.actionRuntime, 'neuromuscular.block', 0)))),
+    } : null,
   },
 })) })
 const packet = (type, extra = {}) => JSON.stringify({
