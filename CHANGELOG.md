@@ -2,6 +2,14 @@
 
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
+## 1.3.0.21 — 2026-11-04 (authoritative v2 respiratory CO₂ and capnography)
+- Bumped both product versions to **1.3.0.21**, preserving default v1 runtime and established monitor styles.
+- Extracted v1 respiratory physiology's alveolar CO₂ mass balance into a pure shared `sharedCo2Kinetics.mjs`. The existing v1 respiratory engine now calls it with the established alveolar ventilation, production and body-weight assumptions, preserving the numerical CO₂ response.
+- Experimental v2 Anaesth session adapter now checkpoints `respiratoryRuntime` including modelled alveolar/estimated end-tidal CO₂ (mmHg), effective respiratory rate, tidal volume and ventilation. Authoritative ticks advance CO₂ using the same pure equation and current ActionEffect-adjusted ventilation. Reset returns to the 40 mmHg baseline; reconnect restores it without resetting the physiological timecourse.
+- v2 preview sends canonical CO₂/RR/VT/time to the parent; standard capnography numerical monitor and RR now consume these values. The v1 browser-local respiratory gas-exchange loop is disabled **only in experimental v2**. The capnogram waveform is rendered locally from canonical RR, EtCO₂ and simulated time, rather than transmitting waveform samples or integrating a second CO₂ model.
+- Added regressions checking equation parity with the previous v1 CO₂ balance, rising CO₂ under respiratory depression, session checkpoint and reset, and suppression of the competing local authority.
+- **Limits:** v2 oxygenation/SpO₂ kinetics, monitor visibility, alarms, NIBP measurement and complete ventilator/gas-exchange integration are **not** authoritative in this milestone. EtCO₂ is an educational model estimate, not a calibrated clinical measurement; waveform shape is local presentation.
+
 ## 1.3.0.20 — 2026-11-04 (restore yellow Sevo in experimental v2)
 - Restore **bright yellow (#f1d35f) FiSevo label and numeric value** in the experimental v2 read-only gas footer, without making local FiSevo editing possible. Preserve v1 appearance and behaviour.
 - Bump both application versions to **1.3.0.20**. Session physiology, BIS, TOF and clock are unchanged.
