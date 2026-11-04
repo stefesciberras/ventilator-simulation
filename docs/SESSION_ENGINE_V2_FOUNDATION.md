@@ -159,3 +159,6 @@ Experimental v2 renders 50Hz local capnogram samples with up to 20 FPS repaint, 
 
 ## v1.3.0.24 — Live bronchospasm severity and authoritative ventilator controls
 Existing ventilator controls in the experimental v2 preview send validated mode/device commands into checkpointed v2 state, retaining monitored delivery as a distinct derived projection. The bronchospasm slider submits debounced instructor-only commands without an Apply button. Normal v1 is unchanged.
+
+## v1.3.0.25 — Shared oxygenation and v2 SpO₂ authority
+The browser-free shared oxygenation kernel contains alveolar mixing, V/Q/shunt/PEEP effects and oximeter lag, reused by the established v1 respiratory engine and v2 checkpoint reducer. The canonical v2 respiratoryRuntime owns SpO₂ and alveolar O₂ fraction. V2 monitor projection supplies authoritative SpO₂ without mutating patient settings or consuming stale browser-local gas exchange. Alarms/NIBP remain next milestone.
