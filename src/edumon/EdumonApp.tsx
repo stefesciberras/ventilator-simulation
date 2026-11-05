@@ -692,6 +692,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       {v2PreviewEnabled && (
         <AnaesthSessionV2Preview
           heartRateTransitionSeconds={patientTransitionSeconds}
+          onHeartRateTransitionSecondsChange={setPatientTransitionSeconds}
           onPatientSnapshot={(patient) => setPatientState((current) => ({ ...current, ...patient }))}
           onVolatileSnapshot={setV2EtSevo}
           onMonitorSnapshot={setV2MonitorState}
