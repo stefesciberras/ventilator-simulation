@@ -60,6 +60,7 @@ export function AnaesthSessionV2Preview({
   const [sessionId, setSessionId] = useState('ana-preview')
   const [secret, setSecret] = useState('')
   const [status, setStatus] = useState<Status>('disconnected')
+  const [previewExpanded, setPreviewExpanded] = useState(false)
   const [message, setMessage] = useState('Experimental Cloudflare v2 preview; v1 remains in use for regular sessions.')
   const [snapshot, setSnapshot] = useState<SessionV2Snapshot | null>(null)
   const [actionLibrary, setActionLibrary] = useState<SessionV2ActionLibrary | null>(null)
@@ -222,6 +223,7 @@ export function AnaesthSessionV2Preview({
             ? packet.role : null
           setVerifiedRole(verifiedRoleRef.current)
           setStatus('connected')
+          setPreviewExpanded(false)
           setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           if (packet.clock) setClock(packet.clock as ClockControl)
@@ -378,7 +380,17 @@ export function AnaesthSessionV2Preview({
   return (
     <section style={{ border: '1px solid #8696a8', borderRadius: 8, padding: 12, margin: '8px 16px', maxWidth: 680 }}
       aria-label="Experimental Session Engine v2 preview">
-      <strong>Session Engine v2 — experimental Cloudflare preview</strong>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <strong>Session Engine v2 — experimental Cloudflare preview</strong>
+        <span style={{ fontSize: 12 }} role="status" aria-live="polite">
+          {status}{status === 'connected' ? ` · ${verifiedRole ?? 'participant'} · ${clock.running ? 'Running' : 'Paused'}` : ''}
+        </span>
+        <button type="button" aria-expanded={previewExpanded} aria-controls="anaesth-session-v2-controls"
+          onClick={() => setPreviewExpanded(current => !current)}>
+          {previewExpanded ? 'Collapse preview ▲' : 'Expand preview ▼'}
+        </button>
+      </div>
+      <div id="anaesth-session-v2-controls" hidden={!previewExpanded}>
       <p style={{ fontSize: 12, margin: '6px 0' }}>Uses checkpointed Anaesth ActionEffects and simplified end-tidal sevo uptake; effective anaesthetic depth combines volatile and IV hypnotic effects. The model is educational, not a complete clinical physiology engine. Drug onset follows the authoritative clock when resumed (Relaxant default onset: 120 simulated seconds). Pause/resume and speed are instructor-only. Do not use for clinical care or assessed simulation.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
@@ -470,6 +482,7 @@ export function AnaesthSessionV2Preview({
           <button type="button" onClick={newSession} disabled={resetPending}>New Session</button>
         </>}
       </div>}
+      </div>
     </section>
   )
 }
