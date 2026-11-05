@@ -29,7 +29,7 @@ const TRACES: readonly TraceSpec[] = [
 ]
 
 function paintTrace(canvas: HTMLCanvasElement, samples: MonitorSample[], spec: TraceSpec,
-  label: HTMLSpanElement | null): void {
+  labels: { max: HTMLSpanElement | null; min: HTMLSpanElement | null }): void {
   const context = canvas.getContext('2d')
   if (!context) return
   const rect = canvas.getBoundingClientRect()
@@ -45,10 +45,10 @@ function paintTrace(canvas: HTMLCanvasElement, samples: MonitorSample[], spec: T
   const scale = spec.key === 'pleth'
     ? { min: spec.autoscale.fallbackMin, max: spec.autoscale.fallbackMax }
     : autoscaleWaveformSamples(samples, sample => sample[spec.key], spec.autoscale)
-  if (label) {
-    const text = `${scale.max.toFixed(spec.decimals)} / ${scale.min.toFixed(spec.decimals)}`
-    if (label.textContent !== text) label.textContent = text
-  }
+  const maxText = scale.max.toFixed(spec.decimals)
+  const minText = scale.min.toFixed(spec.decimals)
+  if (labels.max && labels.max.textContent !== maxText) labels.max.textContent = maxText
+  if (labels.min && labels.min.textContent !== minText) labels.min.textContent = minText
   context.clearRect(0, 0, width, height)
   context.strokeStyle = 'rgba(255,255,255,0.055)'
   context.lineWidth = 1
@@ -91,7 +91,8 @@ export const AnaesthV2WaveformRenderer = memo(function AnaesthV2WaveformRenderer
   const pausedRef = useRef(paused)
   const speedRef = useRef(speed)
   const canvasesRef = useRef<(HTMLCanvasElement | null)[]>([])
-  const labelsRef = useRef<(HTMLSpanElement | null)[]>([])
+  const maxLabelsRef = useRef<(HTMLSpanElement | null)[]>([])
+  const minLabelsRef = useRef<(HTMLSpanElement | null)[]>([])
   patientRef.current = patient
   frozenRef.current = frozen
   pausedRef.current = paused
@@ -122,7 +123,7 @@ export const AnaesthV2WaveformRenderer = memo(function AnaesthV2WaveformRenderer
           const canvas = canvasesRef.current[i]
           if (!canvas) continue
           const paintedAt = measuring ? performance.now() : 0
-          paintTrace(canvas, samples, TRACES[i], labelsRef.current[i])
+          paintTrace(canvas, samples, TRACES[i], { max: maxLabelsRef.current[i], min: minLabelsRef.current[i] })
           if (measuring && performance.now() - paintedAt > 8)
             recordWaveformDiagnostic('slow-canvas-paint', {
               trace: TRACES[i].key,
@@ -146,7 +147,8 @@ export const AnaesthV2WaveformRenderer = memo(function AnaesthV2WaveformRenderer
         </div>
         <canvas ref={node => { canvasesRef.current[i] = node }} aria-label={`${spec.label} waveform`} />
         <div className="waveform-scale" aria-hidden="true">
-          <span ref={node => { labelsRef.current[i] = node }} />
+          <span ref={node => { maxLabelsRef.current[i] = node }} />
+          <span ref={node => { minLabelsRef.current[i] = node }} />
         </div>
       </div>)}
     {frozen && <div className="edumon-freeze-indicator">FROZEN</div>}
