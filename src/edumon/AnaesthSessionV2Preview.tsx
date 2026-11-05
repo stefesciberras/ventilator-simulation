@@ -1,6 +1,14 @@
 import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
+import { EDUMON_APP_VERSION } from './appVersion'
+import { setWaveformDiagnosticsEnabled, waveformDiagnosticsEnabled, recordV2SnapshotDiagnostic, recordWaveformDiagnostic, getWaveformDiagnostics, clearWaveformDiagnostics, exportWaveformDiagnostics, type V2WaveformDiagnostic } from './v2WaveformDiagnostics'
+
+// PR identifies when diagnostics were introduced. Build SHA is optional and is
+// only displayed if injected by the deployment pipeline.
+const V2_DIAGNOSTIC_PR = 'PR #474'
+const V2_BUILD_SHA = import.meta.env.VITE_BUILD_SHA || null
+const BUILD_MARKER = `EDUMON ${EDUMON_APP_VERSION} · ${V2_DIAGNOSTIC_PR} (diagnostics introduced)${V2_BUILD_SHA ? ' · '+V2_BUILD_SHA.slice(0, 10) : ''}`
 
 export type SessionV2AlarmRuntime = {
   limits: Record<string, number>;
@@ -67,6 +75,9 @@ export function AnaesthSessionV2Preview({
   const [secret, setSecret] = useState('')
   const [status, setStatus] = useState<Status>('disconnected')
   const [previewExpanded, setPreviewExpanded] = useState(false)
+  const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false)
+  const [diagnosticsEntries, setDiagnosticsEntries] = useState<readonly V2WaveformDiagnostic[]>([])
+  const [diagnosticsMessage, setDiagnosticsMessage] = useState('')
   const [message, setMessage] = useState('Experimental Cloudflare v2 preview; v1 remains in use for regular sessions.')
   const [snapshot, setSnapshot] = useState<SessionV2Snapshot | null>(null)
   const [actionLibrary, setActionLibrary] = useState<SessionV2ActionLibrary | null>(null)
@@ -100,10 +111,46 @@ export function AnaesthSessionV2Preview({
   useEffect(() => () => {
     closedRef.current = true
     socketRef.current?.close()
+    setWaveformDiagnosticsEnabled(false)
   }, [])
+
+  useEffect(() => {
+    if (!diagnosticsEnabled) return
+    const refresh = () => setDiagnosticsEntries([...getWaveformDiagnostics()].slice(-20).reverse())
+    refresh()
+    const interval = window.setInterval(refresh, 800)
+    return () => window.clearInterval(interval)
+  }, [diagnosticsEnabled])
+
+  const toggleDiagnostics = () => {
+    const next = !diagnosticsEnabled
+    setWaveformDiagnosticsEnabled(next)
+    setDiagnosticsEnabled(next)
+    setDiagnosticsMessage(next ? 'Capturing locally; reproduce the pause, then copy the log.' : 'Capture stopped.')
+    setDiagnosticsEntries([...getWaveformDiagnostics()].slice(-20).reverse())
+  }
+  const copyDiagnostics = async () => {
+    try {
+      await navigator.clipboard.writeText(exportWaveformDiagnostics(BUILD_MARKER))
+      setDiagnosticsMessage(`Copied ${getWaveformDiagnostics().length} diagnostic events. No session credentials included.`)
+    } catch {
+      setDiagnosticsMessage('Clipboard unavailable. Use the Export diagnostics button instead.')
+    }
+  }
+  const exportDiagnostics = () => {
+    const blob = new Blob([exportWaveformDiagnostics(BUILD_MARKER)], { type: 'application/json' })
+    const uri = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = uri
+    anchor.download = 'loppjusim-v2-waveform-diagnostics.json'
+    anchor.click()
+    URL.revokeObjectURL(uri)
+  }
 
   const receiveSnapshot = (next: SessionV2Snapshot, authorityClock: ClockControl = { running: false, speed: 1 }) => {
     if (!next?.session || !Array.isArray(next.runtimes)) return
+    const measuring = waveformDiagnosticsEnabled()
+    const snapshotStarted = measuring ? performance.now() : 0
     const previous = snapshotRef.current
     if (previous && next.session.epoch < previous.session.epoch) return
     if (previous && next.session.epoch === previous.session.epoch &&
@@ -161,6 +208,16 @@ export function AnaesthSessionV2Preview({
       simulationTime: runtime?.actionRuntime?.simulationTime ?? null,
       tofReading: runtime?.monitorRuntime?.tofReading ?? null,
     })
+    if (measuring) {
+      recordV2SnapshotDiagnostic({
+        revision: next.session.revision,
+        epoch: next.session.epoch,
+        simulatedTime: runtime?.actionRuntime?.simulationTime ?? null,
+        heartRate: typeof patient?.heartRate === 'number' ? patient.heartRate : null,
+        lowHeartRateLimit: runtime?.alarmRuntime?.limits?.heartRateLow ?? null,
+        processingMs: Math.round((performance.now() - snapshotStarted) * 10) / 10,
+      })
+    }
   }
   const connect = (targetSessionId = sessionId) => {
     closedRef.current = false
@@ -394,6 +451,7 @@ export function AnaesthSessionV2Preview({
       aria-label="Experimental Session Engine v2 preview">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <strong>Session Engine v2 — experimental Cloudflare preview</strong>
+        <span aria-label="v2 preview build identifier" style={{ fontSize: 11, opacity: 0.8 }}>{BUILD_MARKER}</span>
         <span style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
           role="status" aria-live="polite" aria-label={`Session connection: ${status}`}>
           <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', display: 'inline-block',
@@ -408,6 +466,27 @@ export function AnaesthSessionV2Preview({
         </button>
       </div>
       <div id="anaesth-session-v2-controls" hidden={!previewExpanded}>
+      <section aria-label="v2 waveform diagnostics" style={{ border: '1px solid #768395', borderRadius: 6, padding: 8, marginTop: 8 }}>
+        <strong>Waveform diagnostics (local, opt-in)</strong>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+          <label><input type="checkbox" checked={diagnosticsEnabled} onChange={toggleDiagnostics} /> Enable frame/snapshot logging</label>
+          <button type="button" onClick={copyDiagnostics}>Copy diagnostics</button>
+          <button type="button" onClick={exportDiagnostics}>Export diagnostics</button>
+          <button type="button" onClick={() => {
+            clearWaveformDiagnostics()
+            setDiagnosticsEntries([])
+            setDiagnosticsMessage('Diagnostic history cleared.')
+          }}>Clear logs</button>
+        </div>
+        <p style={{ fontSize: 11, margin: '6px 0' }}>
+          Capture frame gaps over 40 ms, costly redraws over 8 ms, and snapshot timing. Up to 300 entries in memory; nothing sent to Cloudflare.
+          PR number identifies the diagnostic feature, not necessarily the latest deployment commit.
+        </p>
+        <div role="status" style={{ fontSize: 11 }}>{diagnosticsMessage} · {diagnosticsEnabled ? 'Capture active' : 'Capture off'} · {diagnosticsEntries.length} latest shown</div>
+        {diagnosticsEntries.length > 0 && <pre style={{ maxHeight: 170, overflow: 'auto', fontSize: 10, whiteSpace: 'pre-wrap' }}>{
+          diagnosticsEntries.map(entry => `${entry.timestamp} ${entry.event} ${JSON.stringify(entry.details)}`).join('\n')
+        }</pre>}
+      </section>
       <p style={{ fontSize: 12, margin: '6px 0' }}>Uses checkpointed Anaesth ActionEffects and simplified end-tidal sevo uptake; effective anaesthetic depth combines volatile and IV hypnotic effects. The model is educational, not a complete clinical physiology engine. Drug onset follows the authoritative clock when resumed (Relaxant default onset: 120 simulated seconds). Pause/resume and speed are instructor-only. Do not use for clinical care or assessed simulation.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
