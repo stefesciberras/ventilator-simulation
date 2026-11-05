@@ -2,7 +2,7 @@ import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 import { EDUMON_APP_VERSION } from './appVersion'
-import { setWaveformDiagnosticsEnabled, waveformDiagnosticsEnabled, recordV2SnapshotDiagnostic, getWaveformDiagnostics, clearWaveformDiagnostics, exportWaveformDiagnostics, type V2WaveformDiagnostic } from './v2WaveformDiagnostics'
+import { setWaveformDiagnosticsEnabled, waveformDiagnosticsEnabled, recordV2SnapshotDiagnostic, recordWaveformDiagnostic, getWaveformDiagnostics, clearWaveformDiagnostics, exportWaveformDiagnostics, type V2WaveformDiagnostic } from './v2WaveformDiagnostics'
 
 // PR identifies when diagnostics were introduced. Build SHA is optional and is
 // only displayed if injected by the deployment pipeline.
@@ -116,10 +116,25 @@ export function AnaesthSessionV2Preview({
 
   useEffect(() => {
     if (!diagnosticsEnabled) return
+    let observer: PerformanceObserver | null = null
+    try {
+      if (typeof PerformanceObserver !== 'undefined' &&
+          PerformanceObserver.supportedEntryTypes.includes('longtask')) {
+        observer = new PerformanceObserver(list => {
+          for (const entry of list.getEntries()) {
+            recordWaveformDiagnostic('browser-long-task', {
+              startAtMs: Math.round(entry.startTime * 10) / 10,
+              durationMs: Math.round(entry.duration * 10) / 10,
+            })
+          }
+        })
+        observer.observe({ entryTypes: ['longtask'] })
+      }
+    } catch { /* Optional browser API; RAF diagnostics remain available. */ }
     const refresh = () => setDiagnosticsEntries([...getWaveformDiagnostics()].slice(-20).reverse())
     refresh()
     const interval = window.setInterval(refresh, 800)
-    return () => window.clearInterval(interval)
+    return () => { window.clearInterval(interval); observer?.disconnect() }
   }, [diagnosticsEnabled])
 
   const toggleDiagnostics = () => {
