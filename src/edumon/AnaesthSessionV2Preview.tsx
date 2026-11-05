@@ -77,6 +77,7 @@ export function AnaesthSessionV2Preview({
   const [status, setStatus] = useState<Status>('disconnected')
   const [previewExpanded, setPreviewExpanded] = useState(false)
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false)
+  const [liveDiagnosticsPreview, setLiveDiagnosticsPreview] = useState(true)
   const [diagnosticsEntries, setDiagnosticsEntries] = useState<readonly V2WaveformDiagnostic[]>([])
   const [diagnosticsMessage, setDiagnosticsMessage] = useState('')
   const [message, setMessage] = useState('Experimental Cloudflare v2 preview; v1 remains in use for regular sessions.')
@@ -189,11 +190,22 @@ export function AnaesthSessionV2Preview({
         longFrameObserver.observe({ type: 'long-animation-frame' })
       }
     } catch { /* Chrome's LoAF attribution is optional; long-task logging remains. */ }
+    return () => { observer?.disconnect(); longFrameObserver?.disconnect() }
+  }, [diagnosticsEnabled])
+
+  // The periodic UI refresh itself schedules React work during a capture.
+  // Keep recording independent so it can be disabled as an A/B isolation
+  // experiment without losing events from the in-memory diagnostic buffer.
+  useEffect(() => {
+    if (!diagnosticsEnabled || !liveDiagnosticsPreview) return
     const refresh = () => setDiagnosticsEntries([...getWaveformDiagnostics()].slice(-20).reverse())
     refresh()
     const interval = window.setInterval(refresh, 800)
-    return () => { window.clearInterval(interval); observer?.disconnect(); longFrameObserver?.disconnect() }
-  }, [diagnosticsEnabled])
+    return () => window.clearInterval(interval)
+  }, [diagnosticsEnabled, liveDiagnosticsPreview])
+
+  const refreshDiagnosticsPreview = () =>
+    setDiagnosticsEntries([...getWaveformDiagnostics()].slice(-20).reverse())
 
   // Periodic baseline evidence is needed even while the canonical clock is
   // paused: no snapshots or slow frames is itself meaningful.
@@ -558,6 +570,9 @@ export function AnaesthSessionV2Preview({
         <strong>Waveform diagnostics (local, opt-in)</strong>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
           <label><input type="checkbox" checked={diagnosticsEnabled} onChange={toggleDiagnostics} /> Enable frame/snapshot logging</label>
+          <label><input type="checkbox" checked={liveDiagnosticsPreview}
+            onChange={event => setLiveDiagnosticsPreview(event.target.checked)} /> Live log preview (disable for isolation)</label>
+          {!liveDiagnosticsPreview && <button type="button" onClick={refreshDiagnosticsPreview}>Refresh log view</button>}
           <button type="button" onClick={copyDiagnostics}>Copy diagnostics</button>
           <button type="button" onClick={exportDiagnostics}>Export diagnostics</button>
           <button type="button" onClick={() => {
@@ -567,7 +582,7 @@ export function AnaesthSessionV2Preview({
           }}>Clear logs</button>
         </div>
         <p style={{ fontSize: 11, margin: '6px 0' }}>
-          Capture frame gaps over 40 ms, costly redraws over 8 ms, and snapshot timing. Up to 300 entries in memory; nothing sent to Cloudflare.
+          Capture frame gaps over 40 ms, costly redraws over 8 ms, and snapshot timing. Up to 300 entries in memory; nothing sent to Cloudflare. Disabling the live preview stops only its 800 ms React UI refresh; recording and export continue.
           PR number identifies the diagnostic feature, not necessarily the latest deployment commit.
         </p>
         <div role="status" style={{ fontSize: 11 }}>{diagnosticsMessage} · {diagnosticsEnabled ? 'Capture active' : 'Capture off'} · {diagnosticsEntries.length} latest shown</div>
