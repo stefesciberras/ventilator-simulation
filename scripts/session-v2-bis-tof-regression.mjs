@@ -38,7 +38,7 @@ const send = (participantId, type, payload={}) => engine.submit({
   participantId, runtimeId: 'main', type, payload,
 })
 const state = () => engine.snapshot.runtimes[0].state
-assert.deepEqual(state().monitorRuntime, { bisValue: 100, tofReading: null })
+assert.deepEqual(state().monitorRuntime, { bisValue: 100, tofReading: null, modelledHeartRate: patient.heartRate, heartRateTransition: null })
 assert.equal(send('candidate','monitor.tof.measure').accepted,true)
 assert.deepEqual(state().monitorRuntime.tofReading, {
   count: 4, ratio: 1, measuredAtSimulationTime: 0,
@@ -65,7 +65,7 @@ assert.equal(recovered.snapshot.runtimes[0].state.monitorRuntime.bisValue,latest
 assert.deepEqual(recovered.snapshot.runtimes[0].state.monitorRuntime.tofReading,
   state().monitorRuntime.tofReading)
 assert.equal(send('inst','reset').accepted,true)
-assert.deepEqual(state().monitorRuntime, { bisValue: 100, tofReading: null })
+assert.deepEqual(state().monitorRuntime, { bisValue: 100, tofReading: null, modelledHeartRate: patient.heartRate, heartRateTransition: null })
 assert.equal(state().actionRuntime.simulationTime,0)
 assert.equal(state().gasRuntime.etSevoPercent,0)
 

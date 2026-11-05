@@ -487,10 +487,16 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
 
   useEffect(() => { persistence.writeNumber('patient-transition-seconds', patientTransitionSeconds) }, [patientTransitionSeconds, persistence])
   useEffect(() => {
+    if (v2PreviewEnabled) {
+      // V2 owns the measured HR transition; never duplicate it in the browser.
+      patientTransitionRef.current = null
+      effectivePatientRef.current = { ...patientState }
+      return
+    }
     if (scenarioTransitionRef.current) return
     if (patientTransitionSeconds <= 0) { effectivePatientRef.current = { ...patientState }; patientTransitionRef.current = null; return }
     patientTransitionRef.current = { from: { ...effectivePatientRef.current }, to: { ...patientState }, start: elapsed, duration: patientTransitionSeconds }
-  }, [patientState, patientTransitionSeconds])
+  }, [patientState, patientTransitionSeconds, v2PreviewEnabled])
 
   useEffect(() => {
     if (alarmController.candidateLocked) setAlarmLimitsOpen(false)
@@ -685,6 +691,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     <main className={`app-shell edumon-app-shell edumon-module-${module.id}`}>
       {v2PreviewEnabled && (
         <AnaesthSessionV2Preview
+          heartRateTransitionSeconds={patientTransitionSeconds}
           onPatientSnapshot={(patient) => setPatientState((current) => ({ ...current, ...patient }))}
           onVolatileSnapshot={setV2EtSevo}
           onMonitorSnapshot={setV2MonitorState}
