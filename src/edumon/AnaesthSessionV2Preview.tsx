@@ -78,6 +78,7 @@ export function AnaesthSessionV2Preview({
   const [previewExpanded, setPreviewExpanded] = useState(false)
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false)
   const [liveDiagnosticsPreview, setLiveDiagnosticsPreview] = useState(true)
+  const [isolateSnapshotUiUpdates, setIsolateSnapshotUiUpdates] = useState(false)
   const [diagnosticsEntries, setDiagnosticsEntries] = useState<readonly V2WaveformDiagnostic[]>([])
   const [diagnosticsMessage, setDiagnosticsMessage] = useState('')
   const [message, setMessage] = useState('Experimental Cloudflare v2 preview; v1 remains in use for regular sessions.')
@@ -98,6 +99,7 @@ export function AnaesthSessionV2Preview({
   const attemptRef = useRef(0)
   const sequenceRef = useRef(0)
   const snapshotRef = useRef<SessionV2Snapshot | null>(null)
+  const isolateSnapshotUiUpdatesRef = useRef(false)
   const verifiedRoleRef = useRef<'instructor' | 'candidate' | null>(null)
   const patientCallbackRef = useRef(onPatientSnapshot)
   const volatileCallbackRef = useRef(onVolatileSnapshot)
@@ -226,8 +228,27 @@ export function AnaesthSessionV2Preview({
     const next = !diagnosticsEnabled
     setWaveformDiagnosticsEnabled(next)
     setDiagnosticsEnabled(next)
+    if (next) recordWaveformDiagnostic('diagnostic-config', {
+      liveLogPreview: liveDiagnosticsPreview,
+      isolateSnapshotUiUpdates: isolateSnapshotUiUpdatesRef.current,
+    })
     setDiagnosticsMessage(next ? 'Capturing locally; reproduce the pause, then copy the log.' : 'Capture stopped.')
     setDiagnosticsEntries([...getWaveformDiagnostics()].slice(-20).reverse())
+  }
+  const toggleSnapshotUiIsolation = (enabled: boolean) => {
+    isolateSnapshotUiUpdatesRef.current = enabled
+    setIsolateSnapshotUiUpdates(enabled)
+    if (waveformDiagnosticsEnabled()) recordWaveformDiagnostic('diagnostic-config', {
+      liveLogPreview: liveDiagnosticsPreview,
+      isolateSnapshotUiUpdates: enabled,
+    })
+  }
+  const toggleLiveDiagnosticsPreview = (enabled: boolean) => {
+    setLiveDiagnosticsPreview(enabled)
+    if (waveformDiagnosticsEnabled()) recordWaveformDiagnostic('diagnostic-config', {
+      liveLogPreview: enabled,
+      isolateSnapshotUiUpdates: isolateSnapshotUiUpdatesRef.current,
+    })
   }
   const copyDiagnostics = async () => {
     try {
@@ -256,30 +277,32 @@ export function AnaesthSessionV2Preview({
     if (previous && next.session.epoch === previous.session.epoch &&
         next.session.revision < previous.session.revision) return
     snapshotRef.current = next
-    setSnapshot(next)
+    const isolateUi = isolateSnapshotUiUpdatesRef.current
+    if (!isolateUi) setSnapshot(next)
     const runtime = next.runtimes.find(item => item.id === 'main')?.state
     const patient = runtime?.monitorProjection ?? runtime?.patient
     // A form value is only a draft. Seed it from the first authoritative
     // snapshot and again when canonical FiSevo changes (including reset), but
     // never overwrite an unsent edit on each automatic clock tick.
     const actualFiSevo = runtime?.patient?.anaestheticGases?.fiSevoPercent
-    if (typeof actualFiSevo === 'number' && Number.isFinite(actualFiSevo) &&
+    if (!isolateUi && typeof actualFiSevo === 'number' && Number.isFinite(actualFiSevo) &&
       lastAuthoritativeFiSevoRef.current !== actualFiSevo) {
       lastAuthoritativeFiSevoRef.current = actualFiSevo
       setNewFiSevo(actualFiSevo)
     }
-    if (patient) patientCallbackRef.current(patient)
+    if (patient && !isolateUi) patientCallbackRef.current(patient)
     // The full monitor's gas footer must consume the same canonical value
     // as this preview. Do not let its separate v1 animation clock run here.
     const etSevo = runtime?.gasRuntime?.etSevoPercent
-    volatileCallbackRef.current(typeof etSevo === 'number' && Number.isFinite(etSevo) ? etSevo : null)
+    if (!isolateUi)
+      volatileCallbackRef.current(typeof etSevo === 'number' && Number.isFinite(etSevo) ? etSevo : null)
     const actualBronchospasmTarget = runtime?.bronchospasmRuntime?.targetSeverityPercent
-    if (typeof actualBronchospasmTarget === 'number' &&
+    if (!isolateUi && typeof actualBronchospasmTarget === 'number' &&
         lastBronchospasmTargetRef.current !== actualBronchospasmTarget) {
       lastBronchospasmTargetRef.current = actualBronchospasmTarget
       setBronchospasmSeverity(actualBronchospasmTarget)
     }
-    respiratoryCallbackRef.current({
+    if (!isolateUi) respiratoryCallbackRef.current({
       expiratoryResistanceCmH2OLs: runtime?.respiratoryRuntime?.expiratoryResistanceCmH2OLs ?? null,
       peakAirwayPressureCmH2O: runtime?.respiratoryRuntime?.peakAirwayPressureCmH2O ?? null,
       estimatedEtCo2MmHg: runtime?.respiratoryRuntime?.estimatedEtCo2MmHg ?? null,
@@ -290,7 +313,7 @@ export function AnaesthSessionV2Preview({
       clockRunning: authorityClock.running,
       clockSpeed: authorityClock.speed,
     })
-    if (runtime?.alarmRuntime?.limits) alarmCallbackRef.current({
+    if (!isolateUi && runtime?.alarmRuntime?.limits) alarmCallbackRef.current({
       limits: runtime.alarmRuntime.limits,
       display: runtime.display ?? {},
       evaluations: runtime.alarmRuntime.evaluations ?? [],
@@ -299,7 +322,7 @@ export function AnaesthSessionV2Preview({
       silencedUntilSimulationTime: runtime.alarmRuntime.silencedUntilSimulationTime ?? 0,
       role: verifiedRoleRef.current,
     })
-    monitorCallbackRef.current({
+    if (!isolateUi) monitorCallbackRef.current({
       // The alarm evaluator uses the same server-projected HR. Do not publish
       // the browser's trailing five-beat average as the v2 numeric monitor HR.
       measuredHeartRate: typeof patient?.heartRate === 'number' && Number.isFinite(patient.heartRate)
@@ -387,6 +410,12 @@ export function AnaesthSessionV2Preview({
           welcomed = true
           window.clearTimeout(handshakeTimeout)
           tries = 0
+          // A reconnect starts a fresh live view even if a brief isolation
+          // experiment was active when the previous socket closed.
+          if (isolateSnapshotUiUpdatesRef.current) {
+            isolateSnapshotUiUpdatesRef.current = false
+            setIsolateSnapshotUiUpdates(false)
+          }
           verifiedRoleRef.current = packet.role === 'instructor' || packet.role === 'candidate'
             ? packet.role : null
           setVerifiedRole(verifiedRoleRef.current)
@@ -397,8 +426,8 @@ export function AnaesthSessionV2Preview({
           if (packet.clock) setClock(packet.clock as ClockControl)
           receiveSnapshot(packet.snapshot, packet.clock as ClockControl | undefined)
         } else if (packet.type === 'snapshot') {
-          if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
-          if (packet.clock) setClock(packet.clock as ClockControl)
+          if (packet.actionLibrary && !isolateSnapshotUiUpdatesRef.current) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
+          if (packet.clock && !isolateSnapshotUiUpdatesRef.current) setClock(packet.clock as ClockControl)
           receiveSnapshot(packet.snapshot, packet.clock as ClockControl | undefined)
         } else if (packet.type === 'clock-receipt') {
           if (packet.clock) setClock(packet.clock as ClockControl)
@@ -458,6 +487,8 @@ export function AnaesthSessionV2Preview({
   }
   const disconnect = () => {
     setStatus('disconnecting')
+    isolateSnapshotUiUpdatesRef.current = false
+    setIsolateSnapshotUiUpdates(false)
     closedRef.current = true
     attemptRef.current += 1
     socketRef.current?.close()
@@ -571,8 +602,11 @@ export function AnaesthSessionV2Preview({
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
           <label><input type="checkbox" checked={diagnosticsEnabled} onChange={toggleDiagnostics} /> Enable frame/snapshot logging</label>
           <label><input type="checkbox" checked={liveDiagnosticsPreview}
-            onChange={event => setLiveDiagnosticsPreview(event.target.checked)} /> Live log preview (disable for isolation)</label>
+            onChange={event => toggleLiveDiagnosticsPreview(event.target.checked)} /> Live log preview (disable for isolation)</label>
           {!liveDiagnosticsPreview && <button type="button" onClick={refreshDiagnosticsPreview}>Refresh log view</button>}
+          <label><input type="checkbox" checked={isolateSnapshotUiUpdates}
+            disabled={status !== 'connected'}
+            onChange={event => toggleSnapshotUiIsolation(event.target.checked)} /> Pause snapshot-driven UI updates (diagnostic isolation)</label>
           <button type="button" onClick={copyDiagnostics}>Copy diagnostics</button>
           <button type="button" onClick={exportDiagnostics}>Export diagnostics</button>
           <button type="button" onClick={() => {
@@ -583,6 +617,7 @@ export function AnaesthSessionV2Preview({
         </div>
         <p style={{ fontSize: 11, margin: '6px 0' }}>
           Capture frame gaps over 40 ms, costly redraws over 8 ms, and snapshot timing. Up to 300 entries in memory; nothing sent to Cloudflare. Disabling the live preview stops only its 800 ms React UI refresh; recording and export continue.
+          Snapshot isolation leaves Cloudflare running but freezes the v2 preview and monitor numerical/alarm updates while selected; use it only for a short diagnostic comparison.
           PR number identifies the diagnostic feature, not necessarily the latest deployment commit.
         </p>
         <div role="status" style={{ fontSize: 11 }}>{diagnosticsMessage} · {diagnosticsEnabled ? 'Capture active' : 'Capture off'} · {diagnosticsEntries.length} latest shown</div>
