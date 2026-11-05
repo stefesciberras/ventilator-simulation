@@ -1,5 +1,6 @@
 import { AnaesthSessionV2Preview, type SessionV2MonitorRuntime, type SessionV2RespiratoryRuntime, type SessionV2VentilatorChange, type SessionV2AlarmRuntime } from './AnaesthSessionV2Preview'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { waveformDiagnosticsEnabled, recordWaveformDiagnostic } from './v2WaveformDiagnostics'
 import { EDUMON_APP_VERSION } from './appVersion'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
 import { generateMonitorSamples, measurementsFor, RHYTHM_LABELS } from './monitorEngine'
@@ -88,6 +89,8 @@ function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceS
     : autoscaleWaveformSamples(samples, (sample) => sample[spec.key], spec.autoscale), [samples, spec])
 
   useEffect(() => {
+    const measuring = waveformDiagnosticsEnabled()
+    const paintStarted = measuring ? performance.now() : 0
     const canvas = canvasRef.current
     if (!canvas) return
     const context = canvas.getContext('2d')
@@ -135,6 +138,12 @@ function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceS
       else context.lineTo(x, y)
     })
     context.stroke()
+    if (measuring) {
+      const paintMs = performance.now() - paintStarted
+      if (paintMs > 8) recordWaveformDiagnostic('slow-canvas-paint', {
+        trace: spec.key, paintMs: Math.round(paintMs * 10) / 10, samples: samples.length,
+      })
+    }
   }, [samples, spec, scale.min, scale.max])
 
   return (
@@ -305,13 +314,19 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     let last = performance.now()
     const tick = (now: number) => {
       const deltaSeconds = Math.min(0.1, Math.max(0, (now - last) / 1000))
+      const gapMs = now - last
       last = now
+      if (v2PreviewEnabled && waveformDiagnosticsEnabled() && gapMs > 40)
+        recordWaveformDiagnostic('raf-frame-gap', {
+          gapMs: Math.round(gapMs * 10) / 10, visibility: document.visibilityState,
+          simulationSpeed,
+        })
       setElapsed((current) => current + deltaSeconds * simulationSpeed)
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [frozen, simulationPaused, simulationSpeed])
+  }, [frozen, simulationPaused, simulationSpeed, v2PreviewEnabled])
 
   const effectivePatientState = (() => {
     const scenarioTransition = scenarioTransitionRef.current
@@ -329,7 +344,19 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     if (progress >= 1) { effectivePatientRef.current = { ...transition.to }; patientTransitionRef.current = null; return transition.to }
     return next
   })()
-  const liveSamples = useMemo(() => generateMonitorSamples(effectivePatientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE), [effectivePatientState, elapsed])
+  const liveSamples = useMemo(() => {
+    const measuring = v2PreviewEnabled && waveformDiagnosticsEnabled()
+    const started = measuring ? performance.now() : 0
+    const result = generateMonitorSamples(effectivePatientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE)
+    if (measuring) {
+      const elapsedMs = performance.now() - started
+      if (elapsedMs > 8) recordWaveformDiagnostic('slow-waveform-generation', {
+        durationMs: Math.round(elapsedMs * 10) / 10, samples: result.length,
+        simulatedTime: Math.round(elapsed * 10) / 10,
+      })
+    }
+    return result
+  }, [effectivePatientState, elapsed, v2PreviewEnabled])
   const samples = frozenSamples ?? liveSamples
   const browserMeasurements = measurementsFor(effectivePatientState)
   // The v1 HR number averages five historic beats; that lags behind a falling
