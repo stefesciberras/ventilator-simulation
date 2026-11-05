@@ -4,12 +4,18 @@ This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuS
 
 **Session Engine v2 current implementation and remaining work:** [docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md](docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md). The v2 pilot is **opt-in** and is not a completed/default replacement for v1. Release entries below are chronological: features listed as “not yet implemented” in older versions may have landed in later versions.
 
-### Current status after 1.3.0.27 (v2 main-thread profiling diagnostics)
+### Current status after 1.3.0.28 (v2 long-animation-frame source attribution)
 - **Implemented in the experimental Anaesth v2 pilot:** Durable Object checkpointed authority and clock; trusted, per-session pinned ActionDefinitions; shared ActionEffect physiology; EtSevo, BIS/TOF, CO₂, SpO₂ and bronchospasm kinetics; authoritative ventilator commands and mode-dependent educational Ppeak/VT projection; and checkpointed monitor visibility, alarm limits/eligibility, silence and completed NIBP measurements.
 - **Recent UI corrections:** the bronchospasm severity slider now submits changes without an Apply button; regular ventilator controls work via validated v2 commands; capnogram visual samples are generated locally between server snapshots, with running/speed metadata on both welcome and subsequent snapshots.
 - **Not yet completed:** full loppjuSIM-Vent breath-by-breath mechanical integration (including dynamic pressure/flow and auto-PEEP), full Scenario Studio Event/scenario orchestration, parity for ITU/Vent adapters, production local-first/LAN authority, production-grade user authentication and authorization, robust replay/schema migration, alarm presentation lifecycle parity and actual live two-browser/Cloudflare E2E verification.
 - **Evidence:** versions **1.3.0.24–1.3.0.26** were merged in PRs **#462–#464** and passed GitHub Build **#1080, #1084, #1086** respectively. This verifies code/tests/build, **not** live deployment or clinical fidelity.
 - Version **1.3.0.27** adds opt-in React commit profiling around the v2 preview, monitor, top bar and controls to locate periodic main-thread work. It does not change simulation behavior.
+
+## 1.3.0.28 — 2026-11-05 (v2 long-animation-frame source attribution)
+- The new 1.3.0.27 capture still shows recurring long tasks and waveform frame gaps, but no React commits at or above its 4 ms profiling threshold. Snapshot handling remains 0–0.1 ms; one 615 ms long task caused a matching 616 ms frame gap, and only one canvas paint exceeded 8 ms.
+- Added opt-in, feature-detected Chrome Long Animation Frames capture. Each long frame records blocking/render timing and the attributed script entry point (function, invoker type, callback invoker, duration and forced-layout time), with only the source bundle filename retained. The origin, query string and fragment are omitted.
+- This diagnostic change makes no waveform, physiology, alarm, timer or authority changes. It is intended to distinguish page JavaScript callbacks from render work or unattributed browser/extension work before applying a fix.
+- Bumped both app versions to **1.3.0.28**; production v1 and authoritative v2 behavior are unchanged.
 
 ## 1.3.0.27 — 2026-11-05 (targeted v2 main-thread diagnostics)
 - Expanded the existing opt-in waveform capture with thresholded React Profiler events for the Anaesth v2 preview, monitor console, top bar and controls. Events include component region, phase, actual/base render duration and commit timing, allowing recurring commits to be matched against the existing long-task and frame-gap timestamps.
