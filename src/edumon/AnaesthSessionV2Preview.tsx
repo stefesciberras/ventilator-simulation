@@ -30,7 +30,7 @@ type SessionV2Snapshot = {
   } } }>
 }
 type ClockControl = { running: boolean; speed: number }
-type Status = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+type Status = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'disconnecting' | 'error'
 
 /**
  * Manual, isolated LAN preview only. Normal v1 paths do not instantiate this.
@@ -289,6 +289,7 @@ export function AnaesthSessionV2Preview({
     open()
   }
   const disconnect = () => {
+    setStatus('disconnecting')
     closedRef.current = true
     attemptRef.current += 1
     socketRef.current?.close()
@@ -382,8 +383,13 @@ export function AnaesthSessionV2Preview({
       aria-label="Experimental Session Engine v2 preview">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <strong>Session Engine v2 — experimental Cloudflare preview</strong>
-        <span style={{ fontSize: 12 }} role="status" aria-live="polite">
-          {status}{status === 'connected' ? ` · ${verifiedRole ?? 'participant'} · ${clock.running ? 'Running' : 'Paused'}` : ''}
+        <span style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+          role="status" aria-live="polite" aria-label={`Session connection: ${status}`}>
+          <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', display: 'inline-block',
+            backgroundColor: status === 'connected' ? '#2eae6e' : status === 'connecting' || status === 'reconnecting' || status === 'disconnecting' ? '#e9a23b' : '#d45b5b' }} />
+          {status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting…' : status === 'reconnecting' ? 'Reconnecting…' :
+            status === 'disconnecting' ? 'Disconnecting…' : status === 'error' ? 'Connection failed' : 'Disconnected'}
+          {status === 'connected' ? ` · ${verifiedRole ?? 'participant'} · ${clock.running ? 'Running' : 'Paused'}` : ''}
         </span>
         <button type="button" aria-expanded={previewExpanded} aria-controls="anaesth-session-v2-controls"
           onClick={() => setPreviewExpanded(current => !current)}>
