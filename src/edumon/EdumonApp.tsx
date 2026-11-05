@@ -246,7 +246,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     clockRunning: false, clockSpeed: 1, expiratoryResistanceCmH2OLs: null,
     peakAirwayPressureCmH2O: null,
   })
-  const [v2MonitorState, setV2MonitorState] = useState<SessionV2MonitorRuntime>({ bisValue: null, simulationTime: null, tofReading: null })
+  const [v2MonitorState, setV2MonitorState] = useState<SessionV2MonitorRuntime>({ measuredHeartRate: null, bisValue: null, simulationTime: null, tofReading: null })
   const v2TofRequestRef = useRef<(() => void) | null>(null)
   const v2VentilatorRequestRef = useRef<((change: SessionV2VentilatorChange) => void) | null>(null)
   const v2AlarmRequestRef = useRef<((type: string, payload: object) => void) | null>(null)
@@ -326,7 +326,14 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   })()
   const liveSamples = useMemo(() => generateMonitorSamples(effectivePatientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE), [effectivePatientState, elapsed])
   const samples = frozenSamples ?? liveSamples
-  const measurements = measurementsFor(effectivePatientState)
+  const browserMeasurements = measurementsFor(effectivePatientState)
+  // The v1 HR number averages five historic beats; that lags behind a falling
+  // HR and can show ~60 while the authoritative v2 low-HR alarm fires at <50.
+  // In v2, expose the same canonical projected value used by its alarm model.
+  // Preserve v1 five-beat averaging and all other monitor measurements.
+  const measurements = v2PreviewEnabled && v2MonitorState.measuredHeartRate != null
+    ? { ...browserMeasurements, heartRate: Math.round(v2MonitorState.measuredHeartRate) }
+    : browserMeasurements
   const teachingHost = module.id === 'ana' ? edumonAnaTeachingHost : edumonIcuTeachingHost
   const sharedTeachingState = useMemo<EdumonTeachingState>(() => ({ patient: patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits, resetRevision, lastActionId: scenarioActionEvent?.actionId ?? null, actionSequence: scenarioActionEvent?.sequence ?? 0, actionSimulationTime: scenarioActionEvent?.simulationTime ?? null }), [patientState, patientTransitionSeconds, simulationPaused, simulationSpeed, alarmLimits, resetRevision, scenarioActionEvent])
   const teachingSession = useProductTeachingSession<EdumonTeachingState>({

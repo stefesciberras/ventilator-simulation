@@ -21,6 +21,7 @@ export type SessionV2RespiratoryRuntime = { estimatedEtCo2MmHg: number | null; r
   expiratoryResistanceCmH2OLs: number | null; peakAirwayPressureCmH2O: number | null;
   clockRunning: boolean; clockSpeed: number }
 export type SessionV2MonitorRuntime = { bisValue: number | null; simulationTime: number | null;
+  measuredHeartRate: number | null;
   tofReading: { count: number; ratio: number; measuredAtSimulationTime: number } | null }
 type SessionV2ActionLibrary = { version: number; source: string;
   actions: Array<{ id: string; name: string; kind: string; candidateAccess: string; mode: string }> }
@@ -152,6 +153,10 @@ export function AnaesthSessionV2Preview({
       role: verifiedRoleRef.current,
     })
     monitorCallbackRef.current({
+      // The alarm evaluator uses the same server-projected HR. Do not publish
+      // the browser's trailing five-beat average as the v2 numeric monitor HR.
+      measuredHeartRate: typeof patient?.heartRate === 'number' && Number.isFinite(patient.heartRate)
+        ? patient.heartRate : null,
       bisValue: typeof runtime?.monitorRuntime?.bisValue === 'number' ? runtime.monitorRuntime.bisValue : null,
       simulationTime: runtime?.actionRuntime?.simulationTime ?? null,
       tofReading: runtime?.monitorRuntime?.tofReading ?? null,
@@ -168,7 +173,7 @@ export function AnaesthSessionV2Preview({
     lastBronchospasmTargetRef.current = null
     lastBronchospasmSentRef.current = null
     volatileCallbackRef.current(null)
-    monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
+    monitorCallbackRef.current({ measuredHeartRate: null, bisValue: null, simulationTime: null, tofReading: null })
     respiratoryCallbackRef.current({ estimatedEtCo2MmHg: null, spo2Percent: null, respiratoryRate: null, tidalVolumeMl: null, simulationTime: null, clockRunning: false, clockSpeed: 1, expiratoryResistanceCmH2OLs: null, peakAirwayPressureCmH2O: null })
     setSnapshot(null)
     setActionLibrary(null)
@@ -304,7 +309,7 @@ export function AnaesthSessionV2Preview({
     lastAuthoritativeFiSevoRef.current = null
     lastBronchospasmTargetRef.current = null
     volatileCallbackRef.current(null)
-    monitorCallbackRef.current({ bisValue: null, simulationTime: null, tofReading: null })
+    monitorCallbackRef.current({ measuredHeartRate: null, bisValue: null, simulationTime: null, tofReading: null })
     tofRequestRef.current = null
     ventilatorRequestRef.current = null
     alarmRequestRef.current = null
