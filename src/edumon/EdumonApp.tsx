@@ -629,6 +629,16 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const toggleFreeze = displayControls.toggleFreeze
   const toggleLaser = displayControls.toggleLaser
 
+  // V2 silence is checkpointed in simulated time; the v1 wall-clock silence
+  // timer is not its authority. This countdown updates on canonical ticks and
+  // stays frozen when the simulation is paused.
+  const v2SilenceSeconds = v2AlarmState?.silenced && v2RespiratoryState.simulationTime != null
+    ? Math.max(0, Math.ceil((v2AlarmState.silencedUntilSimulationTime - v2RespiratoryState.simulationTime)))
+    : 0
+  const v2SilenceLabel = v2SilenceSeconds > 0
+    ? `${Math.floor(v2SilenceSeconds / 60)}:${String(v2SilenceSeconds % 60).padStart(2, '0')}`
+    : undefined
+
   const silenceAlarm = (durationMs: number) => {
     if (v2PreviewEnabled) {
       if (v2AlarmState?.role !== 'instructor') return
@@ -731,7 +741,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
             freezeDisabled={displayControls.freezeDisabled}
             alarmSilenced={Boolean(v2PreviewEnabled && v2AlarmState?.silenced) || alarmController.silenced}
             alarmDisabled={alarmController.candidateLocked || (v2PreviewEnabled && v2AlarmState?.role !== 'instructor')}
-            alarmLabel={alarmController.silenceLabel}
+            alarmLabel={v2PreviewEnabled ? v2SilenceLabel : alarmController.silenceLabel}
             onAlarmSilence={silenceAlarm}
             alarmTimerClassName="edumon-alarm-silence-timer"
           />}
