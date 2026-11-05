@@ -138,6 +138,21 @@ export function AnaesthSessionV2Preview({
     return () => { window.clearInterval(interval); observer?.disconnect() }
   }, [diagnosticsEnabled])
 
+  // Periodic baseline evidence is needed even while the canonical clock is
+  // paused: no snapshots or slow frames is itself meaningful.
+  useEffect(() => {
+    if (!diagnosticsEnabled) return
+    const heartbeat = () => recordWaveformDiagnostic('diagnostic-heartbeat', {
+      clockRunning: clock.running,
+      clockSpeed: clock.speed,
+      connection: status,
+      captureActive: true,
+    })
+    heartbeat()
+    const timer = window.setInterval(heartbeat, 1000)
+    return () => window.clearInterval(timer)
+  }, [diagnosticsEnabled, clock.running, clock.speed, status])
+
   const toggleDiagnostics = () => {
     const next = !diagnosticsEnabled
     setWaveformDiagnosticsEnabled(next)
