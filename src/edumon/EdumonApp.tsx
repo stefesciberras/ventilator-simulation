@@ -1,5 +1,5 @@
 import { AnaesthSessionV2Preview, type SessionV2MonitorRuntime, type SessionV2RespiratoryRuntime, type SessionV2VentilatorChange, type SessionV2AlarmRuntime } from './AnaesthSessionV2Preview'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Profiler, useEffect, useMemo, useRef, useState } from 'react'
 import { waveformDiagnosticsEnabled, recordWaveformDiagnostic } from './v2WaveformDiagnostics'
 import { EDUMON_APP_VERSION } from './appVersion'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
@@ -252,6 +252,14 @@ function TrendsPreview() {
 function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const productId = scenarioProductForEdumonModule(module.id)
   const persistence = useMemo(() => createSimulationPersistence(productId), [productId])
+  const onConsoleRender = (_id: string, phase: string, actualDuration: number, _baseDuration: number, startTime: number, commitTime: number) => {
+    if (!waveformDiagnosticsEnabled() || actualDuration < 20) return
+    recordWaveformDiagnostic('react-console-render', {
+      phase, renderMs: Math.round(actualDuration * 10) / 10,
+      commitAtMs: Math.round(commitTime * 10) / 10,
+      elapsedSinceRenderStartMs: Math.round((commitTime - startTime) * 10) / 10,
+    })
+  }
   const [patientState, setPatientState] = useState<MonitorPatientState>(DEFAULT_MONITOR_STATE)
   const v2PreviewEnabled = module.id === 'ana' && new URLSearchParams(window.location.search).get('sessionV2Preview') === '1'
   const [v2EtSevo, setV2EtSevo] = useState<number | null>(null)
@@ -784,6 +792,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         ariaLabel="EDUMON workspace pages"
         allowSwipeFromCanvas
         display={(
+        <Profiler id="anaesth-monitor-console" onRender={onConsoleRender}>
         <SimulationConsoleShell
           ariaLabel={`${module.productName} patient monitor`}
           className="edumon-console"
@@ -834,7 +843,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
               onV2VentilatorChange={v2PreviewEnabled ? change => v2VentilatorRequestRef.current?.(change) : undefined} />
           </div>}
         />
-
+        </Profiler>
         )}
         controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined} v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined} onV2VentilatorChange={v2PreviewEnabled ? change => v2VentilatorRequestRef.current?.(change) : undefined} v2NibpReading={v2PreviewEnabled ? v2AlarmState?.nibpReading ?? null : undefined} onV2NibpMeasure={v2PreviewEnabled ? () => v2AlarmRequestRef.current?.('monitor.nibp.measure', {}) : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
       />
