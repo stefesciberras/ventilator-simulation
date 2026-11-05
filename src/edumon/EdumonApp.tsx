@@ -95,8 +95,13 @@ function TraceCanvas({ samples, spec }: { samples: MonitorSample[]; spec: TraceS
 
     const rect = canvas.getBoundingClientRect()
     const ratio = window.devicePixelRatio || 1
-    canvas.width = Math.max(1, Math.round(rect.width * ratio))
-    canvas.height = Math.max(1, Math.round(rect.height * ratio))
+    const pixelWidth = Math.max(1, Math.round(rect.width * ratio))
+    const pixelHeight = Math.max(1, Math.round(rect.height * ratio))
+    // Assigning width/height clears and reallocates the canvas even if the
+    // dimensions are unchanged. Doing so on every waveform frame amplifies
+    // periodic v2 snapshot work into visible display hitches.
+    if (canvas.width !== pixelWidth) canvas.width = pixelWidth
+    if (canvas.height !== pixelHeight) canvas.height = pixelHeight
     context.setTransform(ratio, 0, 0, ratio, 0, 0)
 
     const width = rect.width
@@ -700,7 +705,13 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         <AnaesthSessionV2Preview
           heartRateTransitionSeconds={patientTransitionSeconds}
           onHeartRateTransitionSecondsChange={setPatientTransitionSeconds}
-          onPatientSnapshot={(patient) => setPatientState((current) => ({ ...current, ...patient }))}
+          onPatientSnapshot={(patient) => setPatientState((current) => {
+            const next = { ...current, ...patient }
+            // Cloudflare can broadcast a new revision every simulated second
+            // even if the monitor projection has not changed. Avoid forcing an
+            // expensive React monitor redraw for an identical patient value.
+            return JSON.stringify(next) === JSON.stringify(current) ? current : next
+          })}
           onVolatileSnapshot={setV2EtSevo}
           onMonitorSnapshot={setV2MonitorState}
           onRespiratorySnapshot={setV2RespiratoryState}
