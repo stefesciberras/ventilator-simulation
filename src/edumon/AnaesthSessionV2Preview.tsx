@@ -40,6 +40,7 @@ type Status = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'di
  */
 export function AnaesthSessionV2Preview({
   onPatientSnapshot,
+  heartRateTransitionSeconds,
   onVolatileSnapshot,
   onMonitorSnapshot,
   onRespiratorySnapshot,
@@ -49,6 +50,7 @@ export function AnaesthSessionV2Preview({
   alarmRequestRef,
 }: {
   onPatientSnapshot: (patient: Partial<MonitorPatientState>) => void
+  heartRateTransitionSeconds: number
   onVolatileSnapshot: (etSevoPercent: number | null) => void
   onMonitorSnapshot: (state: SessionV2MonitorRuntime) => void
   onRespiratorySnapshot: (state: SessionV2RespiratoryRuntime) => void
@@ -451,7 +453,7 @@ export function AnaesthSessionV2Preview({
         <span>Spontaneous RR {patient?.respiratory?.spontaneousRespiratoryRate?.toFixed(1) ?? '—'}/min</span>
         <label>HR <input type="number" min={0} max={240} value={newHeartRate}
           onChange={event => setNewHeartRate(Number(event.target.value))} /></label>
-        <button type="button" onClick={() => command('patient.parameter.set', { path: 'heartRate', value: newHeartRate })}>Set HR (instructor)</button>
+        <button type="button" onClick={() => command('patient.parameter.set', { path: 'heartRate', value: newHeartRate, transitionSeconds: heartRateTransitionSeconds })}>Set HR (instructor)</button>
         <label>FiSevo to set <input type="number" min={0} max={8} step={0.1} value={newFiSevo}
           onChange={event => setNewFiSevo(Number(event.target.value))} /></label>
         <button type="button" disabled={status !== 'connected' || !Number.isFinite(newFiSevo) || newFiSevo < 0 || newFiSevo > 8} onClick={() => command('anaesth.gas.set', { fiSevoPercent: newFiSevo })}>Set FiSevo</button>
