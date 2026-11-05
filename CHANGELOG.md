@@ -4,12 +4,19 @@ This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuS
 
 **Session Engine v2 current implementation and remaining work:** [docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md](docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md). The v2 pilot is **opt-in** and is not a completed/default replacement for v1. Release entries below are chronological: features listed as “not yet implemented” in older versions may have landed in later versions.
 
-### Current status after 1.3.0.29 (diagnostic refresh isolation)
+### Current status after 1.3.0.30 (snapshot UI isolation)
 - **Implemented in the experimental Anaesth v2 pilot:** Durable Object checkpointed authority and clock; trusted, per-session pinned ActionDefinitions; shared ActionEffect physiology; EtSevo, BIS/TOF, CO₂, SpO₂ and bronchospasm kinetics; authoritative ventilator commands and mode-dependent educational Ppeak/VT projection; and checkpointed monitor visibility, alarm limits/eligibility, silence and completed NIBP measurements.
 - **Recent UI corrections:** the bronchospasm severity slider now submits changes without an Apply button; regular ventilator controls work via validated v2 commands; capnogram visual samples are generated locally between server snapshots, with running/speed metadata on both welcome and subsequent snapshots.
 - **Not yet completed:** full loppjuSIM-Vent breath-by-breath mechanical integration (including dynamic pressure/flow and auto-PEEP), full Scenario Studio Event/scenario orchestration, parity for ITU/Vent adapters, production local-first/LAN authority, production-grade user authentication and authorization, robust replay/schema migration, alarm presentation lifecycle parity and actual live two-browser/Cloudflare E2E verification.
 - **Evidence:** versions **1.3.0.24–1.3.0.26** were merged in PRs **#462–#464** and passed GitHub Build **#1080, #1084, #1086** respectively. This verifies code/tests/build, **not** live deployment or clinical fidelity.
 - Version **1.3.0.27** adds opt-in React commit profiling around the v2 preview, monitor, top bar and controls to locate periodic main-thread work. It does not change simulation behavior.
+
+## 1.3.0.30 — 2026-11-05 (snapshot UI isolation)
+- The 1.3.0.29 capture still shows the same recurring timer/`MessagePort` JavaScript work and frame gaps. The export does not record whether the live diagnostic log preview was disabled, so that experiment cannot yet be interpreted conclusively.
+- Added a short, reversible isolation switch that continues receiving and retaining Cloudflare snapshots, but suppresses snapshot-driven React state publication to the v2 preview and monitor. It deliberately freezes the preview plus numerical/alarm UI while enabled; the server clock, physiology and diagnostic capture continue. Use only for a brief comparison, then turn it off.
+- Capture start and isolation changes now record the active diagnostic settings, making the next result interpretable. This tests whether snapshot-driven React updates are the main-thread source without changing waveform rendering or server authority.
+- Corrected the interpretation of the 1.3.0.27 `react-commit` diagnostic: this production app mounts `react-dom/client`, not React's profiling renderer, so absent Profiler events from the deployed build are inconclusive.
+- Bumped both app versions to **1.3.0.30**; v1 remains unchanged.
 
 ## 1.3.0.29 — 2026-11-05 (diagnostic refresh isolation)
 - The 1.3.0.28 capture shows recurring ~60 ms JavaScript long frames. Chrome attributes them to timer and `MessagePort` callbacks in the app bundle, but does not identify an app function. Snapshot processing remains negligible. This does not yet demonstrate the root cause.
