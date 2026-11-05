@@ -28,6 +28,10 @@ npm run dev
 npm run build
 ```
 
+## Production deployment
+
+Cloudflare production builds use the `main` branch, `npm run build` as the build command, and `npx wrangler deploy` as the deploy command. `wrangler preview` is a separate preview workflow and requires its own configuration.
+
 > For education and simulation training only. LoppjuSIM is educational simulation software and is not intended for use as a medical device, for diagnosis, patient monitoring, treatment, clinical decision-making, or in the care of real patients.
 
 © 2026 Stephen Sciberras. LoppjuSIM. All rights reserved.
