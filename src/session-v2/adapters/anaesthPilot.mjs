@@ -120,7 +120,11 @@ export function projectAnaesthV2Monitor(state) {
         etSevo, state.patient.anaestheticPhysiology?.anaestheticSensitivity ?? 0),
     },
   }
-  const bounded = applySharedEdumonActionPhysiology(baseline, resolve)
+  // Both monitor and alarms consume the same checkpointed simulated-time HR.
+  // Instructor target HR remains in patient; a transition never changes it.
+  const measuredBaseline = state.monitorRuntime?.modelledHeartRate == null ? baseline
+    : { ...baseline, heartRate: state.monitorRuntime.modelledHeartRate }
+  const bounded = applySharedEdumonActionPhysiology(measuredBaseline, resolve)
   return {
     ...bounded,
     // v2 monitor values are a read-only projection of checkpointed oxygen
