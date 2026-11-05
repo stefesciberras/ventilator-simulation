@@ -42,9 +42,9 @@ const INPUT_TYPES = new Set(['patient.parameter.set', 'device.parameter.set',
   'anaesth.gas.set', 'action.invoke', 'monitor.tof.measure', 'event.bronchospasm.set', 'device.ventilator.mode.set',
   'alarm.limits.set', 'alarm.display.set', 'alarm.silence.set', 'monitor.nibp.measure', 'tick'])
 
-function validatePathValue(payload, limits) {
+function validatePathValue(payload, limits, allowTransition = false) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
-      Object.keys(payload).some(key => !['path', 'value'].includes(key)) ||
+      Object.keys(payload).some(key => !['path', 'value', ...(allowTransition ? ['transitionSeconds'] : [])].includes(key)) ||
       typeof payload.path !== 'string' || !Object.hasOwn(limits, payload.path)) {
     throw new Error('Unsupported parameter')
   }
@@ -71,7 +71,7 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       respiratoryRate: baseline.respiratory?.respiratoryRate ?? 12,
       tidalVolumeMl: baseline.respiratory?.tidalVolumeMl ?? 500,
       alveolarVentilationLMin: 4.2, minuteVentilationLMin: 6 },
-    monitorRuntime: { bisValue: 100, tofReading: null },
+    monitorRuntime: { bisValue: 100, tofReading: null, modelledHeartRate: baseline.heartRate, heartRateTransition: null },
     bronchospasmRuntime: { targetSeverityPercent: 0, effectiveSeverityPercent: 0 },
     display: { ...DEFAULT_V2_DISPLAY },
     alarmRuntime: { limits: { ...DEFAULT_V2_ALARM_LIMITS }, nibpReading: null,
@@ -84,7 +84,22 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
       const actorRole = context.actorRole
       if (command.type === 'patient.parameter.set') {
         if (actorRole !== 'instructor' && context.mode !== 'standalone') throw new Error('Instructor-only patient control')
-        validatePathValue(command.payload, PATIENT_LIMITS)
+        validatePathValue(command.payload, PATIENT_LIMITS, command.payload?.path === 'heartRate')
+        if (command.payload.path === 'heartRate') {
+          const seconds = command.payload.transitionSeconds ?? 0
+          if (!finite(seconds, 0, 60)) throw Error('invalid-heart-rate-transition')
+          const from = state.monitorRuntime?.modelledHeartRate ?? state.patient.heartRate
+          const now = state.actionRuntime.simulationTime
+          return { ...state,
+            patient: { ...state.patient, heartRate: command.payload.value },
+            monitorRuntime: { ...state.monitorRuntime,
+              modelledHeartRate: seconds > 0 ? from : command.payload.value,
+              heartRateTransition: seconds > 0
+                ? { from, to: command.payload.value, startedAtSimulationTime: now, durationSeconds: seconds }
+                : null,
+            },
+          }
+        }
         return { ...state, patient: { ...state.patient, [command.payload.path]: command.payload.value } }
       }
       if (command.type === 'device.parameter.set') {
@@ -233,8 +248,18 @@ export function createAnaesthSessionAdapter({ initialPatient, applyAction } = {}
           expiratoryTimeConstantSeconds: mechanical.expiratoryTimeConstantSeconds,
         },
       }
-      const depth = projectAnaesthV2Monitor(next).anaestheticPhysiology.depthOfAnaesthesia
-      return { ...next, monitorRuntime: { ...state.monitorRuntime,
+      const transition = state.monitorRuntime?.heartRateTransition
+      const progress = transition
+        ? Math.min(1, Math.max(0, (next.actionRuntime.simulationTime - transition.startedAtSimulationTime) / transition.durationSeconds))
+        : 1
+      const modelledHeartRate = transition
+        ? transition.from + (transition.to - transition.from) * progress
+        : state.patient.heartRate
+      const measured = { ...next, monitorRuntime: { ...state.monitorRuntime,
+        modelledHeartRate, heartRateTransition: transition && progress < 1 ? transition : null,
+      } }
+      const depth = projectAnaesthV2Monitor(measured).anaestheticPhysiology.depthOfAnaesthesia
+      return { ...measured, monitorRuntime: { ...measured.monitorRuntime,
         bisValue: advanceBisIndex(state.monitorRuntime?.bisValue ?? 100, depth, delta / 1000),
         tofReading: state.monitorRuntime?.tofReading ?? null,
       } }
