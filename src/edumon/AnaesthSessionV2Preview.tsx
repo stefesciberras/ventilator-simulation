@@ -4,11 +4,12 @@ import type { MonitorPatientState } from './types'
 import { EDUMON_APP_VERSION } from './appVersion'
 import { setWaveformDiagnosticsEnabled, waveformDiagnosticsEnabled, recordV2SnapshotDiagnostic, recordWaveformDiagnostic, getWaveformDiagnostics, clearWaveformDiagnostics, exportWaveformDiagnostics, type V2WaveformDiagnostic } from './v2WaveformDiagnostics'
 
-// PR identifies when diagnostics were introduced. Build SHA is optional and is
-// only displayed if injected by the deployment pipeline.
-const V2_DIAGNOSTIC_PR = 'PR #474'
-const V2_BUILD_SHA = import.meta.env.VITE_BUILD_SHA || null
-const BUILD_MARKER = `EDUMON ${EDUMON_APP_VERSION} · ${V2_DIAGNOSTIC_PR} (diagnostics introduced)${V2_BUILD_SHA ? ' · '+V2_BUILD_SHA.slice(0, 10) : ''}`
+// A PR number is not a build identifier: a deployment may contain later
+// commits and a squash-merge creates a new SHA. Show the exact built source
+// revision and build time. PR #476 introduced this provenance display.
+const V2_BUILD_SHA = import.meta.env.VITE_BUILD_SHA || 'unknown'
+const V2_BUILD_TIME = import.meta.env.VITE_BUILD_TIME || 'unknown'
+const BUILD_MARKER = `EDUMON ${EDUMON_APP_VERSION} · build ${V2_BUILD_SHA.slice(0, 12)} · ${V2_BUILD_TIME} · marker PR #476`
 
 export type SessionV2AlarmRuntime = {
   limits: Record<string, number>;
@@ -136,6 +137,21 @@ export function AnaesthSessionV2Preview({
     const interval = window.setInterval(refresh, 800)
     return () => { window.clearInterval(interval); observer?.disconnect() }
   }, [diagnosticsEnabled])
+
+  // Periodic baseline evidence is needed even while the canonical clock is
+  // paused: no snapshots or slow frames is itself meaningful.
+  useEffect(() => {
+    if (!diagnosticsEnabled) return
+    const heartbeat = () => recordWaveformDiagnostic('diagnostic-heartbeat', {
+      clockRunning: clock.running,
+      clockSpeed: clock.speed,
+      connection: status,
+      captureActive: true,
+    })
+    heartbeat()
+    const timer = window.setInterval(heartbeat, 1000)
+    return () => window.clearInterval(timer)
+  }, [diagnosticsEnabled, clock.running, clock.speed, status])
 
   const toggleDiagnostics = () => {
     const next = !diagnosticsEnabled
