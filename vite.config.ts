@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite'
+// @ts-ignore Node built-in resolves at build time; this app does not install @types/node.
 import { execFileSync } from 'node:child_process'
+declare const process: { env: Record<string, string | undefined> }
 import react from '@vitejs/plugin-react'
 import { cloudflare } from '@cloudflare/vite-plugin'
 
