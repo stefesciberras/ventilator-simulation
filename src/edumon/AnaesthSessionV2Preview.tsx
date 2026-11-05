@@ -2,7 +2,7 @@ import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
 import { EDUMON_APP_VERSION } from './appVersion'
-import { setWaveformDiagnosticsEnabled, waveformDiagnosticsEnabled, recordV2SnapshotDiagnostic, recordWaveformDiagnostic, getWaveformDiagnostics, clearWaveformDiagnostics, exportWaveformDiagnostics, type V2WaveformDiagnostic } from './v2WaveformDiagnostics'
+import { setWaveformDiagnosticsEnabled, waveformDiagnosticsEnabled, recordV2SnapshotDiagnostic, getWaveformDiagnostics, clearWaveformDiagnostics, exportWaveformDiagnostics, type V2WaveformDiagnostic } from './v2WaveformDiagnostics'
 
 // PR identifies when diagnostics were introduced. Build SHA is optional and is
 // only displayed if injected by the deployment pipeline.
