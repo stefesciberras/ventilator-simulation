@@ -4,12 +4,18 @@ This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuS
 
 **Session Engine v2 current implementation and remaining work:** [docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md](docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md). The v2 pilot is **opt-in** and is not a completed/default replacement for v1. Release entries below are chronological: features listed as “not yet implemented” in older versions may have landed in later versions.
 
-### Current status after 1.3.0.28 (v2 long-animation-frame source attribution)
+### Current status after 1.3.0.29 (diagnostic refresh isolation)
 - **Implemented in the experimental Anaesth v2 pilot:** Durable Object checkpointed authority and clock; trusted, per-session pinned ActionDefinitions; shared ActionEffect physiology; EtSevo, BIS/TOF, CO₂, SpO₂ and bronchospasm kinetics; authoritative ventilator commands and mode-dependent educational Ppeak/VT projection; and checkpointed monitor visibility, alarm limits/eligibility, silence and completed NIBP measurements.
 - **Recent UI corrections:** the bronchospasm severity slider now submits changes without an Apply button; regular ventilator controls work via validated v2 commands; capnogram visual samples are generated locally between server snapshots, with running/speed metadata on both welcome and subsequent snapshots.
 - **Not yet completed:** full loppjuSIM-Vent breath-by-breath mechanical integration (including dynamic pressure/flow and auto-PEEP), full Scenario Studio Event/scenario orchestration, parity for ITU/Vent adapters, production local-first/LAN authority, production-grade user authentication and authorization, robust replay/schema migration, alarm presentation lifecycle parity and actual live two-browser/Cloudflare E2E verification.
 - **Evidence:** versions **1.3.0.24–1.3.0.26** were merged in PRs **#462–#464** and passed GitHub Build **#1080, #1084, #1086** respectively. This verifies code/tests/build, **not** live deployment or clinical fidelity.
 - Version **1.3.0.27** adds opt-in React commit profiling around the v2 preview, monitor, top bar and controls to locate periodic main-thread work. It does not change simulation behavior.
+
+## 1.3.0.29 — 2026-11-05 (diagnostic refresh isolation)
+- The 1.3.0.28 capture shows recurring ~60 ms JavaScript long frames. Chrome attributes them to timer and `MessagePort` callbacks in the app bundle, but does not identify an app function. Snapshot processing remains negligible. This does not yet demonstrate the root cause.
+- Added a reversible **Live log preview** switch. Disabling it stops only the diagnostic panel's 800 ms React state refresh; Long Task/LoAF observation and the bounded in-memory event buffer continue, and Copy/Export still use the full current buffer. A manual refresh button updates the displayed entries on demand.
+- This isolates diagnostic UI refresh work from capture work. It makes no waveform, physiology, alarm, authority, or v1 runtime changes. Next comparison should use the same running session and capture duration with preview enabled versus disabled.
+- Bumped both app versions to **1.3.0.29**.
 
 ## 1.3.0.28 — 2026-11-05 (v2 long-animation-frame source attribution)
 - The new 1.3.0.27 capture still shows recurring long tasks and waveform frame gaps, but no React commits at or above its 4 ms profiling threshold. Snapshot handling remains 0–0.1 ms; one 615 ms long task caused a matching 616 ms frame gap, and only one canvas paint exceeded 8 ms.
