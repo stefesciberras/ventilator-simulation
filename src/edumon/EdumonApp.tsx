@@ -337,20 +337,16 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     return () => cancelAnimationFrame(frame)
   }, [frozen, simulationPaused, simulationSpeed, v2PreviewEnabled])
 
-  // R1: the v2 waveform canvas owns its 60 Hz clock. The parent retains a
-  // coarse elapsed clock for scenario UI and non-waveform controls, avoiding a
-  // React render of the entire monitor on every animation frame.
+  // v2 already publishes canonical simulated time in each authoritative
+  // snapshot. Do not maintain a second 250-ms React state clock in the parent:
+  // it rerenders the entire monitor repeatedly and can stall the RAF renderer.
+  // The +TRACE_WINDOW_SECONDS offset preserves the existing scenario/UI time
+  // origin; the waveform renderer keeps its own continuously advancing clock.
   useEffect(() => {
-    if (!v2PreviewEnabled || frozen || simulationPaused) return
-    let last = performance.now()
-    const timer = window.setInterval(() => {
-      const now = performance.now()
-      const delta = Math.min(0.5, Math.max(0, (now - last) / 1000))
-      last = now
-      setElapsed(current => current + delta * simulationSpeed)
-    }, 250)
-    return () => window.clearInterval(timer)
-  }, [v2PreviewEnabled, frozen, simulationPaused, simulationSpeed])
+    if (!v2PreviewEnabled || v2RespiratoryState.simulationTime == null) return
+    const canonicalElapsed = TRACE_WINDOW_SECONDS + v2RespiratoryState.simulationTime
+    setElapsed(current => current === canonicalElapsed ? current : canonicalElapsed)
+  }, [v2PreviewEnabled, v2RespiratoryState.simulationTime])
 
   const effectivePatientState = (() => {
     const scenarioTransition = scenarioTransitionRef.current
