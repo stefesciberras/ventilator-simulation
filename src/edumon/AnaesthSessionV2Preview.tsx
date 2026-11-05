@@ -126,6 +126,8 @@ export function AnaesthSessionV2Preview({
             recordWaveformDiagnostic('browser-long-task', {
               startAtMs: Math.round(entry.startTime * 10) / 10,
               durationMs: Math.round(entry.duration * 10) / 10,
+              attributionCount: Array.isArray((entry as PerformanceEntry & { attribution?: unknown[] }).attribution)
+                ? (entry as PerformanceEntry & { attribution: unknown[] }).attribution.length : 0,
             })
           }
         })

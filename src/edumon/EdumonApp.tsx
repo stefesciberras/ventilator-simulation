@@ -253,12 +253,17 @@ function TrendsPreview() {
 function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const productId = scenarioProductForEdumonModule(module.id)
   const persistence = useMemo(() => createSimulationPersistence(productId), [productId])
-  const onMonitorProfile = (_id: string, phase: string, renderMs: number,
-    _baseMs: number, startedAt: number, committedAt: number) => {
-    if (!v2PreviewEnabled || !waveformDiagnosticsEnabled() || renderMs < 15) return
-    recordWaveformDiagnostic('react-monitor-render', {
-      phase, renderMs: Math.round(renderMs * 10) / 10,
-      elapsedToCommitMs: Math.round((committedAt - startedAt) * 10) / 10,
+  const onV2Profile = (id: string, phase: string, actualDuration: number,
+    baseDuration: number, startTime: number, commitTime: number) => {
+    // This callback runs on every React commit. Keep capture thresholded so
+    // diagnostics do not flood the bounded event buffer.
+    if (!v2PreviewEnabled || !waveformDiagnosticsEnabled() || actualDuration < 4) return
+    recordWaveformDiagnostic('react-commit', {
+      component: id, phase,
+      actualDurationMs: Math.round(actualDuration * 10) / 10,
+      baseDurationMs: Math.round(baseDuration * 10) / 10,
+      commitAtMs: Math.round(commitTime * 10) / 10,
+      renderToCommitMs: Math.round((commitTime - startTime) * 10) / 10,
     })
   }
   const [patientState, setPatientState] = useState<MonitorPatientState>(DEFAULT_MONITOR_STATE)
@@ -750,8 +755,10 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   ]
 
   return (
+    <Profiler id="anaesth-v2-root" onRender={onV2Profile}>
     <main className={`app-shell edumon-app-shell edumon-module-${module.id}`}>
       {v2PreviewEnabled && (
+        <Profiler id="anaesth-v2-preview" onRender={onV2Profile}>
         <AnaesthSessionV2Preview
           heartRateTransitionSeconds={patientTransitionSeconds}
           onHeartRateTransitionSecondsChange={setPatientTransitionSeconds}
@@ -770,6 +777,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           alarmRequestRef={v2AlarmRequestRef}
           onAlarmSnapshot={setV2AlarmState}
         />
+        </Profiler>
       )}
       <TeachingCandidateOverlay
         role={teachingSession.role}
@@ -780,6 +788,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         onSubmit={teachingPrompts.submitResponse}
       />
       <TeachingMediaCandidateOverlay role={teachingSession.role} presentation={liveTeachingMedia.activePresentation} />
+      <Profiler id="anaesth-v2-topbar" onRender={onV2Profile}>
       <EdumonTopBar
         module={module}
         simulationPaused={simulationPaused}
@@ -793,6 +802,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         diagnosticsAction={<SimulationDiagnosticsMenu actions={edumonDiagnosticActions} />}
         onAbout={() => setTopPanel('about')}
       />
+      </Profiler>
 
       <SimulationWorkspaceShell
         // Temporarily disable the Anaesth Monitor/Instructor selector. The shared
@@ -807,7 +817,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         ariaLabel="EDUMON workspace pages"
         allowSwipeFromCanvas
         display={(
-        <Profiler id="anaesth-v2-console" onRender={onMonitorProfile}>
+        <Profiler id="anaesth-v2-console" onRender={onV2Profile}>
         <SimulationConsoleShell
           ariaLabel={`${module.productName} patient monitor`}
           className="edumon-console"
@@ -863,7 +873,31 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
         />
         </Profiler>
         )}
-        controls={<EdumonWorkspacePanel patientState={effectivePatientState} onPatientStateChange={setPatientState} transitionSeconds={patientTransitionSeconds} onTransitionSecondsChange={setPatientTransitionSeconds} teachingHost={teachingHost} teachingRole={teachingSession.role} teachingSessionId={teachingSession.session?.id ?? null} candidateCount={candidateCount} patientControlsLocked={candidateLocked} deviceControlsLocked={false} v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined} v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined} v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined} onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined} onV2VentilatorChange={v2PreviewEnabled ? change => v2VentilatorRequestRef.current?.(change) : undefined} v2NibpReading={v2PreviewEnabled ? v2AlarmState?.nibpReading ?? null : undefined} onV2NibpMeasure={v2PreviewEnabled ? () => v2AlarmRequestRef.current?.('monitor.nibp.measure', {}) : undefined} sessionPanel={sessionPanel} meanPressure={measurements.meanPressure} />}
+        controls={(
+          <Profiler id="anaesth-v2-controls" onRender={onV2Profile}>
+            <EdumonWorkspacePanel
+              patientState={effectivePatientState}
+              onPatientStateChange={setPatientState}
+              transitionSeconds={patientTransitionSeconds}
+              onTransitionSecondsChange={setPatientTransitionSeconds}
+              teachingHost={teachingHost}
+              teachingRole={teachingSession.role}
+              teachingSessionId={teachingSession.session?.id ?? null}
+              candidateCount={candidateCount}
+              patientControlsLocked={candidateLocked}
+              deviceControlsLocked={false}
+              v2VolatileState={v2PreviewEnabled ? { etSevoPercent: v2EtSevo } : undefined}
+              v2MonitorState={v2PreviewEnabled ? v2MonitorState : undefined}
+              v2RespiratoryState={v2PreviewEnabled ? v2RespiratoryState : undefined}
+              onV2TofMeasure={v2PreviewEnabled && v2TofRequestRef.current ? () => v2TofRequestRef.current?.() : undefined}
+              onV2VentilatorChange={v2PreviewEnabled ? change => v2VentilatorRequestRef.current?.(change) : undefined}
+              v2NibpReading={v2PreviewEnabled ? v2AlarmState?.nibpReading ?? null : undefined}
+              onV2NibpMeasure={v2PreviewEnabled ? () => v2AlarmRequestRef.current?.('monitor.nibp.measure', {}) : undefined}
+              sessionPanel={sessionPanel}
+              meanPressure={measurements.meanPressure}
+            />
+          </Profiler>
+        )}
       />
 
       {scenarioRuntime.scenario && scenarioRuntime.stage && scenarioRuntime.status !== 'idle' && (
@@ -907,6 +941,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
       <InstructorAccountDialog auth={accountAuth} locked={accountChangeLocked} />
       <SimulationAboutDialog open={topPanel === 'about'} productLabel={module.productName} title={module.subtitle} description="An interactive patient-monitor simulator for anaesthesia, acute care and intensive-care education." version={EDUMON_APP_VERSION} onClose={() => setTopPanel(null)} wakeLock={screenWakeLock} diagnostics={edumonDiagnosticActions} />
     </main>
+    </Profiler>
   )
 }
 
