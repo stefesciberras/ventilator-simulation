@@ -452,6 +452,9 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     policy: { syncAlarms: true, candidateCanEditAlarms: false, alarmsSilent: false },
     evaluations: v2PreviewEnabled ? (v2AlarmState?.evaluations ?? []) : edumonAlarmEvaluations,
     paused: simulationPaused || Boolean(v2PreviewEnabled && v2AlarmState?.silenced),
+    // Shorter resolved-alarm history in the educational v2 pilot only.
+    // Keep the existing 10-second yellow transition and v1 defaults.
+    retainedMs: v2PreviewEnabled ? 30_000 : 120_000,
   })
 
   useEffect(() => {
