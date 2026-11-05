@@ -41,6 +41,7 @@ type Status = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'di
 export function AnaesthSessionV2Preview({
   onPatientSnapshot,
   heartRateTransitionSeconds,
+  onHeartRateTransitionSecondsChange,
   onVolatileSnapshot,
   onMonitorSnapshot,
   onRespiratorySnapshot,
@@ -51,6 +52,7 @@ export function AnaesthSessionV2Preview({
 }: {
   onPatientSnapshot: (patient: Partial<MonitorPatientState>) => void
   heartRateTransitionSeconds: number
+  onHeartRateTransitionSecondsChange: (seconds: number) => void
   onVolatileSnapshot: (etSevoPercent: number | null) => void
   onMonitorSnapshot: (state: SessionV2MonitorRuntime) => void
   onRespiratorySnapshot: (state: SessionV2RespiratoryRuntime) => void
@@ -417,7 +419,9 @@ export function AnaesthSessionV2Preview({
       {snapshot && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <span>Epoch {snapshot.session.epoch} · Rev {snapshot.session.revision}</span>
         <span>Role: {verifiedRole ?? 'unknown'}</span>
-        <span>HR {patient?.heartRate ?? '—'} bpm</span>
+        <span>HR (modelled) {typeof patient?.heartRate === 'number' ? Math.round(patient.heartRate) : '—'} bpm</span>
+        <span>HR target {runtime?.patient?.heartRate ?? '—'} bpm</span>
+        <span>HR low alarm threshold {runtime?.alarmRuntime?.limits?.heartRateLow ?? '—'} bpm</span>
         <span>FiSevo {patient?.anaestheticGases?.fiSevoPercent ?? '—'}%</span>
         <span>EtSevo (v2) {runtime?.gasRuntime?.etSevoPercent?.toFixed(2) ?? 'Not recorded in this older session'}{runtime?.gasRuntime ? '%' : ''}</span>
         <span>EtSevo MAC {typeof runtime?.gasRuntime?.etSevoPercent === 'number' ? (runtime.gasRuntime.etSevoPercent / 2).toFixed(2) : '—'} (approx.)</span>
@@ -451,9 +455,20 @@ export function AnaesthSessionV2Preview({
         <span>TOF (last measurement) {runtime?.monitorRuntime?.tofReading ? `${runtime.monitorRuntime.tofReading.count}/4 · ratio ${runtime.monitorRuntime.tofReading.ratio.toFixed(2)}` : '—'}</span>
         <button type="button" onClick={() => command('monitor.tof.measure', {})}>Measure TOF</button>
         <span>Spontaneous RR {patient?.respiratory?.spontaneousRespiratoryRate?.toFixed(1) ?? '—'}/min</span>
-        <label>HR <input type="number" min={0} max={240} value={newHeartRate}
-          onChange={event => setNewHeartRate(Number(event.target.value))} /></label>
-        <button type="button" onClick={() => command('patient.parameter.set', { path: 'heartRate', value: newHeartRate, transitionSeconds: heartRateTransitionSeconds })}>Set HR (instructor)</button>
+        {verifiedRole === 'instructor' && <>
+          <label>Target HR <input type="number" min={0} max={240} value={newHeartRate}
+            aria-label="v2 target HR" onChange={event => setNewHeartRate(Number(event.target.value))} /></label>
+          <label>HR transition <select aria-label="v2 HR transition duration" value={heartRateTransitionSeconds}
+            onChange={event => onHeartRateTransitionSecondsChange(Number(event.target.value))}>
+            {[0, 5, 10, 30, 60].map(seconds =>
+              <option key={seconds} value={seconds}>{seconds === 0 ? 'Immediate' : `${seconds} seconds`}</option>)}
+          </select></label>
+          <button type="button" disabled={status !== 'connected' || !Number.isFinite(newHeartRate) ||
+            newHeartRate < 0 || newHeartRate > 240}
+            onClick={() => command('patient.parameter.set', {
+              path: 'heartRate', value: newHeartRate, transitionSeconds: heartRateTransitionSeconds,
+            })}>Set HR (instructor)</button>
+        </>}
         <label>FiSevo to set <input type="number" min={0} max={8} step={0.1} value={newFiSevo}
           onChange={event => setNewFiSevo(Number(event.target.value))} /></label>
         <button type="button" disabled={status !== 'connected' || !Number.isFinite(newFiSevo) || newFiSevo < 0 || newFiSevo > 8} onClick={() => command('anaesth.gas.set', { fiSevoPercent: newFiSevo })}>Set FiSevo</button>
