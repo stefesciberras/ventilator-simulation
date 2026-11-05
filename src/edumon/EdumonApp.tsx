@@ -4,6 +4,7 @@ import { waveformDiagnosticsEnabled, recordWaveformDiagnostic } from './v2Wavefo
 import { EDUMON_APP_VERSION } from './appVersion'
 import { DEFAULT_MONITOR_STATE, type MonitorPatientState, type MonitorSample } from './types'
 import { generateMonitorSamples, measurementsFor, RHYTHM_LABELS } from './monitorEngine'
+import { AnaesthV2WaveformRenderer } from './AnaesthV2WaveformRenderer'
 import { SecondaryMonitorSurface } from '../components/SecondaryMonitorSurface'
 import { EdumonTeachingLibraries } from './EdumonTeachingLibraries'
 import { EdumonTopBar, type EdumonSimulationSpeed } from './EdumonTopBar'
@@ -317,7 +318,7 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   }, [])
 
   useEffect(() => {
-    if (frozen || simulationPaused) return
+    if (frozen || simulationPaused || v2PreviewEnabled) return
     let frame = 0
     let last = performance.now()
     const tick = (now: number) => {
@@ -335,6 +336,21 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
   }, [frozen, simulationPaused, simulationSpeed, v2PreviewEnabled])
+
+  // R1: the v2 waveform canvas owns its 60 Hz clock. The parent retains a
+  // coarse elapsed clock for scenario UI and non-waveform controls, avoiding a
+  // React render of the entire monitor on every animation frame.
+  useEffect(() => {
+    if (!v2PreviewEnabled || frozen || simulationPaused) return
+    let last = performance.now()
+    const timer = window.setInterval(() => {
+      const now = performance.now()
+      const delta = Math.min(0.5, Math.max(0, (now - last) / 1000))
+      last = now
+      setElapsed(current => current + delta * simulationSpeed)
+    }, 250)
+    return () => window.clearInterval(timer)
+  }, [v2PreviewEnabled, frozen, simulationPaused, simulationSpeed])
 
   const effectivePatientState = (() => {
     const scenarioTransition = scenarioTransitionRef.current
@@ -355,7 +371,10 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
   const liveSamples = useMemo(() => {
     const measuring = v2PreviewEnabled && waveformDiagnosticsEnabled()
     const started = measuring ? performance.now() : 0
-    const result = generateMonitorSamples(effectivePatientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE)
+    // The v2 waveform renderer is the sole caller of the shared waveform
+    // generator in v2. Calling it here would race its independent clock and
+    // rewind/reset the rolling signal history.
+    const result = v2PreviewEnabled ? [] : generateMonitorSamples(effectivePatientState, elapsed, TRACE_WINDOW_SECONDS, SAMPLE_RATE)
     if (measuring) {
       const elapsedMs = performance.now() - started
       if (elapsedMs > 8) recordWaveformDiagnostic('slow-waveform-generation', {
@@ -812,10 +831,13 @@ function EdumonMonitor({ module }: { module: EdumonModuleDefinition }) {
           />}
           status={<div className="alarm-row"><div className="alarm-slot" aria-live="polite"><SharedAlarmBanner level={alarmController.level} labels={alarmController.labels} silenced={Boolean(v2PreviewEnabled && v2AlarmState?.silenced) || alarmController.silenced} /></div></div>}
           display={<div className="edumon-monitor-body">
-            <div className="edumon-waveform-area waveforms">
-              {TRACE_SPECS.map((spec) => <TraceCanvas key={spec.key} samples={samples} spec={spec} />)}
-              {frozen && <div className="edumon-freeze-indicator">FROZEN</div>}
-            </div>
+            {v2PreviewEnabled
+              ? <AnaesthV2WaveformRenderer patient={effectivePatientState} frozen={frozen}
+                  paused={simulationPaused} speed={simulationSpeed} initialTime={TRACE_WINDOW_SECONDS} />
+              : <div className="edumon-waveform-area waveforms">
+                  {TRACE_SPECS.map((spec) => <TraceCanvas key={spec.key} samples={samples} spec={spec} />)}
+                  {frozen && <div className="edumon-freeze-indicator">FROZEN</div>}
+                </div>}
 
             <aside className="edumon-measurements metrics-panel" aria-label="Measured values">
               <div className="metrics-actions">
