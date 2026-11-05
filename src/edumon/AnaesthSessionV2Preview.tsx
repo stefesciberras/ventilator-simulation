@@ -118,6 +118,7 @@ export function AnaesthSessionV2Preview({
   useEffect(() => {
     if (!diagnosticsEnabled) return
     let observer: PerformanceObserver | null = null
+    let longFrameObserver: PerformanceObserver | null = null
     try {
       if (typeof PerformanceObserver !== 'undefined' &&
           PerformanceObserver.supportedEntryTypes.includes('longtask')) {
@@ -134,10 +135,64 @@ export function AnaesthSessionV2Preview({
         observer.observe({ entryTypes: ['longtask'] })
       }
     } catch { /* Optional browser API; RAF diagnostics remain available. */ }
+    try {
+      if (typeof PerformanceObserver !== 'undefined' &&
+          PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')) {
+        longFrameObserver = new PerformanceObserver(list => {
+          for (const entry of list.getEntries()) {
+            const frame = entry as PerformanceEntry & {
+              blockingDuration?: number
+              renderStart?: number
+              styleAndLayoutStart?: number
+              scripts?: Array<PerformanceEntry & {
+                invoker?: string
+                invokerType?: string
+                sourceFunctionName?: string
+                sourceURL?: string
+                forcedStyleAndLayoutDuration?: number
+                pauseDuration?: number
+              }>
+            }
+            const scripts = (frame.scripts ?? []).slice(0, 8).map(script => {
+              // Keep the bundle filename for source mapping, but omit origin,
+              // query string and fragment from this manually exported log.
+              let sourceFile = ''
+              if (script.sourceURL) {
+                try {
+                  sourceFile = new URL(script.sourceURL, window.location.href)
+                    .pathname.split('/').filter(Boolean).pop() ?? ''
+                } catch { /* Missing/invalid source URL is represented as empty. */ }
+              }
+              return {
+                durationMs: Math.round(script.duration * 10) / 10,
+                invoker: (script.invoker ?? '').slice(0, 100),
+                invokerType: (script.invokerType ?? '').slice(0, 40),
+                functionName: (script.sourceFunctionName ?? '').slice(0, 100),
+                sourceFile,
+                forcedLayoutMs: Math.round((script.forcedStyleAndLayoutDuration ?? 0) * 10) / 10,
+                pauseMs: Math.round((script.pauseDuration ?? 0) * 10) / 10,
+              }
+            })
+            recordWaveformDiagnostic('browser-long-animation-frame', {
+              startAtMs: Math.round(entry.startTime * 10) / 10,
+              durationMs: Math.round(entry.duration * 10) / 10,
+              blockingDurationMs: Math.round((frame.blockingDuration ?? 0) * 10) / 10,
+              renderDurationMs: frame.renderStart
+                ? Math.round((entry.startTime + entry.duration - frame.renderStart) * 10) / 10 : 0,
+              styleAndLayoutMs: frame.styleAndLayoutStart
+                ? Math.round((entry.startTime + entry.duration - frame.styleAndLayoutStart) * 10) / 10 : 0,
+              scriptCount: frame.scripts?.length ?? 0,
+              scripts: JSON.stringify(scripts),
+            })
+          }
+        })
+        longFrameObserver.observe({ type: 'long-animation-frame' })
+      }
+    } catch { /* Chrome's LoAF attribution is optional; long-task logging remains. */ }
     const refresh = () => setDiagnosticsEntries([...getWaveformDiagnostics()].slice(-20).reverse())
     refresh()
     const interval = window.setInterval(refresh, 800)
-    return () => { window.clearInterval(interval); observer?.disconnect() }
+    return () => { window.clearInterval(interval); observer?.disconnect(); longFrameObserver?.disconnect() }
   }, [diagnosticsEnabled])
 
   // Periodic baseline evidence is needed even while the canonical clock is
