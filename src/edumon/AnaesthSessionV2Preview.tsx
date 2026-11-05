@@ -9,6 +9,7 @@ export type SessionV2AlarmRuntime = {
     priority: 'warning' | 'critical'; immediateCritical: boolean }>;
   nibpReading: { systolic: number; diastolic: number; mean: number; measuredAtSimulationTime: number } | null;
   silenced: boolean;
+  silencedUntilSimulationTime: number;
   role: 'instructor' | 'candidate' | null;
 }
 export type SessionV2VentilatorChange =
@@ -143,6 +144,7 @@ export function AnaesthSessionV2Preview({
       evaluations: runtime.alarmRuntime.evaluations ?? [],
       nibpReading: runtime.alarmRuntime.nibpReading ?? null,
       silenced: runtime.alarmRuntime.silenced ?? false,
+      silencedUntilSimulationTime: runtime.alarmRuntime.silencedUntilSimulationTime ?? 0,
       role: verifiedRoleRef.current,
     })
     monitorCallbackRef.current({
