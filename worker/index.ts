@@ -1,6 +1,7 @@
 import { sessionV2Readiness } from './sessionV2Readiness.mjs'
 import { decodeV2WebSocketSecret } from '../src/session-v2/websocketAuth.mjs'
 import { SessionV2Room } from './sessionV2Room.mjs'
+import { describeSessionV2GatewayError } from './sessionV2ErrorDiagnostics.mjs'
 export { SessionV2Room } from './sessionV2Room.mjs'
 
 type V2Env = {
@@ -83,11 +84,18 @@ export default {
       const internalRequest = new Request(request, { headers })
       const id = env.SESSION_V2_ROOMS.idFromName(sessionId)
       try {
-        return await env.SESSION_V2_ROOMS.get(id).fetch(internalRequest)
+        const response = await env.SESSION_V2_ROOMS.get(id).fetch(internalRequest)
+        if (response.status !== 101) {
+          console.error('session-v2 durable-object upgrade returned non-101', {
+            status: response.status,
+          })
+        }
+        return response
       } catch (error) {
         // Never log a credential, request headers or the encoded protocol.
         console.error('session-v2 durable-object upgrade failed',
-          error instanceof Error ? error.name : 'unknown-error')
+          describeSessionV2GatewayError(error, [env.SESSION_V2_INSTRUCTOR_TOKEN,
+            env.SESSION_V2_CANDIDATE_TOKEN]))
         return new Response('Session authority unavailable', { status: 503 })
       }
     }
