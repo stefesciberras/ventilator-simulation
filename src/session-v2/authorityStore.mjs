@@ -89,6 +89,13 @@ export function createMemoryAuthorityStore() {
       leases.set(sessionId, updated)
       return clone(updated)
     },
+    async saveSessionData({ sessionId, leaseToken, expectedRevision, nowMs, data }) {
+      await this.checkLease({ sessionId, leaseToken, expectedRevision, nowMs })
+      // No asynchronous work between validation and write in this reference store.
+      const current = leases.get(sessionId)
+      if (current.token !== leaseToken || current.untilMs <= nowMs || revision(checkpoints.get(sessionId)) !== expectedRevision) conflict('authority-lease-lost')
+      checkpoints.get(sessionId).localSessionData = clone(data)
+    },
     async commit({ checkpoint, expectedRevision, leaseToken, nowMs }) {
       const id = checkpoint?.snapshot?.session?.id
       const before = checkpoints.get(id)
@@ -145,8 +152,7 @@ export function createIndexedDbAuthorityStore({
       Promise.resolve().then(() => operation({ request, abort })).then(value => {
         result = value
       }).catch(error => {
-        if (tx.readyState === 'active') abort(error)
-        else failure = error
+        try { abort(error) } catch { failure = error }
       })
       tx.oncomplete = () => failure ? reject(failure) : resolve(result)
       tx.onabort = () => reject(failure ?? tx.error ?? Error('IndexedDB transaction aborted'))
@@ -198,6 +204,16 @@ export function createIndexedDbAuthorityStore({
         const next = { ...current, untilMs: nowMs + ttlMs }
         await request('leases', 'put', next)
         return clone(next)
+      })
+    },
+    async saveSessionData({ sessionId, leaseToken, expectedRevision, nowMs, data }) {
+      return transact(['checkpoints', 'leases'], 'readwrite', async ({ request }) => {
+        const record = await request('checkpoints', 'get', sessionId)
+        const lease = await request('leases', 'get', sessionId)
+        if (!lease || lease.token !== leaseToken || lease.untilMs <= nowMs) conflict('authority-lease-lost')
+        if (!record || revision(record.checkpoint) !== expectedRevision || record.checkpoint.snapshot.session.epoch !== lease.epoch) conflict('checkpoint-revision-conflict')
+        record.checkpoint.localSessionData = clone(data)
+        await request('checkpoints', 'put', record)
       })
     },
     async commit({ checkpoint, expectedRevision, leaseToken, nowMs }) {

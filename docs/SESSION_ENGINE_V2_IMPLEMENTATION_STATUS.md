@@ -198,3 +198,10 @@ Start from `main` after v1.3.0.26 and this document, consult the exact current s
 Implemented: `src/session-v2/anaesthSession.mjs` owns the existing initial patient, pinned-catalogue adapter factory and presentation projections. Cloudflare consumes the same module. It performs no network calls, scheduling or storage. Checkpoint version 1 and Cloudflare protocol remain unchanged.
 
 Next: build browser-local authority around the existing authority host and IndexedDB store, including coordinated catalogue/clock persistence, lease renewal and safe-paused recovery. Then introduce the session-client boundary and offline peer transport. No browser-local session mode or WebRTC pairing is enabled by this extraction.
+
+
+## 1.3.0.32 — 2026-11-06 (experimental browser-local authority)
+- Added Local / Cloud host selection in the Anaesth v2 panel. Local uses the shared engine, a built-in pilot catalogue and IndexedDB checkpoints; no simulation network connection is opened.
+- Local checkpoints retain pinned definitions and clock settings. Recovery pauses time, leases prevent concurrent tab writers, and hidden tabs pause. Reconnect with the same session ID after the previous 15-second lease expires.
+- Added IndexedDB-backed regression coverage (fake-indexeddb) for ownership, HR alarms, drug deduplication, recovery and suspension. Browser/device validation remains outstanding.
+- Both products advance to 1.3.0.32. Local mode currently runs on the main thread and is single-browser only; downloaded production catalogues, offline application loading and LAN transport remain pending.

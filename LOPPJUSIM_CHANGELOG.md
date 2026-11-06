@@ -12,6 +12,12 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 1.3.0.32 — 2026-11-06 (experimental browser-local authority)
+- Added Local / Cloud host selection in the Anaesth v2 panel. Local uses the shared engine, a built-in pilot catalogue and IndexedDB checkpoints; no simulation network connection is opened.
+- Local checkpoints retain pinned definitions and clock settings. Recovery pauses time, leases prevent concurrent tab writers, and hidden tabs pause. Reconnect with the same session ID after the previous 15-second lease expires.
+- Added IndexedDB-backed regression coverage (fake-indexeddb) for ownership, HR alarms, drug deduplication, recovery and suspension. Browser/device validation remains outstanding.
+- Both products advance to 1.3.0.32. Local mode currently runs on the main thread and is single-browser only; downloaded production catalogues, offline application loading and LAN transport remain pending.
+
 ## 1.3.0.31 — 2026-11-06 (shared Anaesth v2 session foundation)
 - Extracted the existing Anaesth adapter setup, initial patient, monitor/effect projection and public catalogue projection into `src/session-v2/anaesthSession.mjs` for reuse by future local authority.
 - Cloudflare now consumes these shared functions. Its authentication, clock scheduling, checkpoint persistence, recovery and wire format remain unchanged; v1 is unaffected.

@@ -1,3 +1,4 @@
+import { createLocalSessionTransport } from '../session-v2/localSessionTransport.mjs'
 import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
 import type { MonitorPatientState } from './types'
@@ -71,6 +72,7 @@ export function AnaesthSessionV2Preview({
   onAlarmSnapshot: (state: SessionV2AlarmRuntime | null) => void
   alarmRequestRef: { current: ((type: string, payload: object) => void) | null }
 }) {
+  const [hostMode, setHostMode] = useState<'cloud' | 'local'>('cloud')
   const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
   const [sessionId, setSessionId] = useState('ana-preview')
   const [secret, setSecret] = useState('')
@@ -94,7 +96,7 @@ export function AnaesthSessionV2Preview({
   const lastBronchospasmTargetRef = useRef<number | null>(null)
   const lastBronchospasmSentRef = useRef<number | null>(null)
   const lastAuthoritativeFiSevoRef = useRef<number | null>(null)
-  const socketRef = useRef<WebSocket | null>(null)
+  const socketRef = useRef<WebSocket | ReturnType<typeof createLocalSessionTransport> | null>(null)
   const closedRef = useRef(true)
   const attemptRef = useRef(0)
   const sequenceRef = useRef(0)
@@ -363,14 +365,14 @@ export function AnaesthSessionV2Preview({
     setStatus('connecting')
     setMessage('Connecting to experimental Cloudflare session authority...')
     const url = endpoint.trim()
-    if (!/^wss?:\/\//.test(url) || !/^[a-zA-Z0-9_-]{3,80}$/.test(targetSessionId)) {
+    if ((hostMode === 'cloud' && !/^wss?:\/\//.test(url)) || !/^[a-zA-Z0-9_-]{3,80}$/.test(targetSessionId)) {
       setStatus('error')
       setMessage('Invalid Cloudflare WebSocket endpoint or session ID')
       return
     }
     let protocol: string
     try {
-      protocol = encodeV2WebSocketSecret(secret)
+      protocol = hostMode === 'cloud' ? encodeV2WebSocketSecret(secret) : 'loppjusim-v2'
     } catch {
       closedRef.current = true
       setStatus('error')
@@ -380,9 +382,9 @@ export function AnaesthSessionV2Preview({
     let tries = 0
     const open = () => {
       if (closedRef.current || currentAttempt !== attemptRef.current) return
-      let socket: WebSocket
+      let socket: WebSocket | ReturnType<typeof createLocalSessionTransport>
       try {
-        socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(targetSessionId)}`, ['loppjusim-v2', protocol])
+        socket = hostMode === 'local' ? createLocalSessionTransport(targetSessionId) : new WebSocket(`${url}?sessionId=${encodeURIComponent(targetSessionId)}`, ['loppjusim-v2', protocol])
       } catch {
         closedRef.current = true
         setStatus('error')
@@ -402,7 +404,7 @@ export function AnaesthSessionV2Preview({
         }
         setMessage('WebSocket open; awaiting canonical session snapshot...')
       }
-      socket.onmessage = event => {
+      socket.onmessage = (event: { data: unknown }) => {
         let packet: any
         try { packet = JSON.parse(String(event.data)) } catch { return }
         if (packet.protocol !== 2) return
@@ -421,7 +423,7 @@ export function AnaesthSessionV2Preview({
           setVerifiedRole(verifiedRoleRef.current)
           setStatus('connected')
           setPreviewExpanded(false)
-          setMessage('Live Cloudflare preview; changes are persisted before acknowledgement.')
+          setMessage(hostMode === 'local' ? 'Local authority · built-in pilot catalogue · this browser only. Reconnect with the same session ID to restore paused.' : 'Live Cloudflare preview; changes are persisted before acknowledgement.')
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           if (packet.clock) setClock(packet.clock as ClockControl)
           receiveSnapshot(packet.snapshot, packet.clock as ClockControl | undefined)
@@ -441,7 +443,7 @@ export function AnaesthSessionV2Preview({
           }
           if (!packet.receipt?.accepted && !String(packet.requestId ?? '').startsWith('reset-')) setMessage(`Command rejected: ${packet.receipt?.reason ?? 'unknown'}`)
         } else if (packet.type === 'error') {
-          setMessage(`Cloud authority: ${packet.reason}`)
+          setMessage(`${hostMode === 'local' ? 'Local' : 'Cloud'} authority: ${packet.reason}`)
           if (['unauthenticated', 'not-session-member', 'invalid-session'].includes(packet.reason)) {
             closedRef.current = true
             setStatus('error')
@@ -450,9 +452,16 @@ export function AnaesthSessionV2Preview({
         }
       }
       socket.onerror = () => { /* browser does not expose HTTP failure code here */ }
-      socket.onclose = (event) => {
+      socket.onclose = (event: { code: number }) => {
         window.clearTimeout(handshakeTimeout)
         if (closedRef.current || currentAttempt !== attemptRef.current) return
+        if (hostMode === 'local') {
+          closedRef.current = true
+          setStatus('error')
+          setClock({ running: false, speed: 1 })
+          if (snapshotRef.current) receiveSnapshot(snapshotRef.current, { running: false, speed: 1 })
+          return
+        }
         if (tries >= 3) {
           closedRef.current = true
           setStatus('error')
@@ -627,6 +636,10 @@ export function AnaesthSessionV2Preview({
       </section>
       <p style={{ fontSize: 12, margin: '6px 0' }}>Uses checkpointed Anaesth ActionEffects and simplified end-tidal sevo uptake; effective anaesthetic depth combines volatile and IV hypnotic effects. The model is educational, not a complete clinical physiology engine. Drug onset follows the authoritative clock when resumed (Relaxant default onset: 120 simulated seconds). Pause/resume and speed are instructor-only. Do not use for clinical care or assessed simulation.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <label>Session host <select value={hostMode} disabled={status !== 'disconnected' && status !== 'error'} onChange={event => setHostMode(event.target.value as 'cloud' | 'local')}>
+          <option value="cloud">Cloud</option><option value="local">Local (experimental, single browser)</option>
+        </select></label>
+        {hostMode === 'local' && <span>Built-in pilot drugs. After refresh, select Local and reconnect to the same ID. Allow 15 seconds after closing the previous tab.</span>}
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
           onChange={event => setEndpoint(event.target.value)} disabled={status === 'connected'} /></label>
         <label>Session <input aria-label="v2 session ID" value={sessionId}
@@ -635,7 +648,7 @@ export function AnaesthSessionV2Preview({
           value={secret} onChange={event => setSecret(event.target.value)} disabled={status === 'connected'} /></label>
         {status === 'connected' || status === 'connecting' || status === 'reconnecting'
           ? <button type="button" onClick={disconnect}>Disconnect</button>
-          : <button type="button" onClick={() => connect()} disabled={!secret}>Connect</button>}
+          : <button type="button" onClick={() => connect()} disabled={hostMode === 'cloud' && !secret}>Connect</button>}
       </div>
       <p role="status" style={{ fontSize: 12 }}>{status}: {message}</p>
       {snapshot && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
