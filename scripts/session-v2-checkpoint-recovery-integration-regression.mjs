@@ -80,7 +80,7 @@ try {
     { path: 'heartRate', value: 40, transitionSeconds: 10 })).accepted, true)
   assert.equal((await send(candidate, 'propofol', firstEpoch, 'action.invoke',
     { actionId: 'propofol' })).accepted, true)
-  assert.equal(runtime().actionRuntime.activeEffects.length, 1)
+  assert.ok(runtime().actionRuntime.activeEffects.length > 0, 'Propofol adds its declarative effect set')
   await clock(instructor, 'start', true)
   for (let t = 0; t < 8; t++) await first.alarm()
   assert.equal(checkpoint().snapshot.session.clockMs, 8000)
@@ -130,7 +130,7 @@ try {
   const replay = await send(reconnectCandidate, 'propofol', epoch,
     'action.invoke', { actionId: 'propofol' })
   assert.equal(replay.accepted, true)
-  assert.equal(runtime().actionRuntime.activeEffects.length, 1)
+  assert.deepEqual(runtime().actionRuntime.activeEffects, effectsBefore, 'Retry must not duplicate any propofol effects')
 
   await recovered.alarm()
   assert.equal(checkpoint().snapshot.session.clockMs, 8000, 'Recovery stays paused')
