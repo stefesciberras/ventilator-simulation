@@ -205,3 +205,9 @@ Next: build browser-local authority around the existing authority host and Index
 - Local checkpoints retain pinned definitions and clock settings. Recovery pauses time, leases prevent concurrent tab writers, and hidden tabs pause. Reconnect with the same session ID after the previous 15-second lease expires.
 - Added IndexedDB-backed regression coverage (fake-indexeddb) for ownership, HR alarms, drug deduplication, recovery and suspension. Browser/device validation remains outstanding.
 - Both products advance to 1.3.0.32. Local mode currently runs on the main thread and is single-browser only; downloaded production catalogues, offline application loading and LAN transport remain pending.
+
+## 1.3.0.33 — 2026-11-06 (experimental local peer pairing)
+- Added manual WebRTC offer/answer pairing for one instructor and one candidate. No external signalling, STUN or TURN service is configured; a reachable local network is required.
+- Instructor owns the existing IndexedDB-backed runtime and clock. Candidate uses canonical snapshots and authenticated candidate-only commands, with shared adapter authorization and retained command receipts.
+- Re-pairing replaces the old connection without recreating the runtime. Instructor recovery remains paused; candidate cannot promote itself or control the clock. Sessions created before this version need a new local session ID for pairing.
+- Both product versions are 1.3.0.33. Automated wire/authentication/re-pairing tests use a WebRTC test double; real two-device ICE/network behaviour remains for manual verification. Offline app loading, QR exchange, automatic reconnect and production catalogue downloads remain pending.
