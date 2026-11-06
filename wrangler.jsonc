@@ -3,7 +3,7 @@
   "name": "ventilator-simulation",
   "compatibility_date": "2026-10-11",
   "main": "./worker/index.ts",
-"keep_vars": true,
+  "keep_vars": true,
   "assets": {
     "not_found_handling": "single-page-application",
     "run_worker_first": [
@@ -25,8 +25,21 @@
         "SessionV2Room"
       ]
     }
-  ], 
+  ],
   "vars": {
     "SESSION_V2_EXPERIMENTAL": "1"
+  },
+  "previews": {
+    "vars": {
+      "SESSION_V2_EXPERIMENTAL": "1"
+    },
+    "durable_objects": {
+      "bindings": [
+        {
+          "name": "SESSION_V2_ROOMS",
+          "class_name": "SessionV2Room"
+        }
+      ]
+    }
   }
 }
