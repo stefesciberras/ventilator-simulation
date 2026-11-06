@@ -7,10 +7,9 @@
  * on stub.fetch(); browser-supplied participantId/role is never authoritative.
  */
 import { SessionEngineV2 } from '../src/session-v2/engine.mjs'
-import { createAnaesthSessionAdapter } from '../src/session-v2/adapters/anaesth.mjs'
-import { projectAnaesthV2Monitor, resolveV2ActionNumber } from '../src/session-v2/adapters/anaesthPilot.mjs'
-import { loadAnaesthV2Library, legacyAnaesthV2Library, validatePinnedAnaesthV2Library,
-  anaesthV2EvaluatorFromLibrary, publicAnaesthV2Library } from '../src/session-v2/adapters/anaesthLibrary.mjs'
+import { createAnaesthV2SessionAdapter, projectAnaesthV2SessionSnapshot,
+  projectAnaesthV2SessionLibrary } from '../src/session-v2/anaesthSession.mjs'
+import { loadAnaesthV2Library, legacyAnaesthV2Library, validatePinnedAnaesthV2Library } from '../src/session-v2/adapters/anaesthLibrary.mjs'
 
 const MAX_BYTES = 65536
 const CLOCK_INTERVAL_MS = 1000
@@ -22,29 +21,9 @@ const validClock = data => data && typeof data === 'object' &&
 const VALID_ID = /^[a-zA-Z0-9_-]{3,80}$/
 const VALID_CMD = /^[a-zA-Z0-9._:-]{1,128}$/
 const TYPES = new Set(['patient.parameter.set', 'device.parameter.set', 'anaesth.gas.set', 'action.invoke', 'monitor.tof.measure', 'event.bronchospasm.set', 'device.ventilator.mode.set', 'alarm.limits.set', 'alarm.display.set', 'alarm.silence.set', 'monitor.nibp.measure', 'reset', 'tick', 'end'])
-const demoPatient = {
-  heartRate: 78, rhythm: 'sinus', systolicPressure: 122, diastolicPressure: 68,
-  spo2: 98, peripheralPerfusion: 1, temperatureC: 37,
-  respiratory: { respiratoryRate: 12, fio2: 0.21, peepCmH2O: 0 },
-  anaestheticGases: { fiSevoPercent: 0 },
-}
-const adapterFor = library => createAnaesthSessionAdapter({ initialPatient: demoPatient,
-  applyAction: anaesthV2EvaluatorFromLibrary(library) })
-const snapshotForPreview = snapshot => ({ ...snapshot, runtimes: snapshot.runtimes.map(runtime => ({
-  ...runtime, state: { ...runtime.state,
-    monitorProjection: runtime.state?.patient && runtime.state?.actionRuntime
-      ? projectAnaesthV2Monitor(runtime.state) : null,
-    // Explicit read-only pharmacodynamic indicator: v1 monitoring surfaces
-    // do not yet offer a synchronized TOF/NMB display in the v2 preview.
-    effectIndicators: runtime.state?.actionRuntime ? {
-      neuromuscularBlockPercent: Math.round(100 * Math.max(0, Math.min(1,
-        resolveV2ActionNumber(runtime.state.actionRuntime, 'neuromuscular.block', 0)))),
-    } : null,
-  },
-})) })
 const packet = (type, extra = {}) => JSON.stringify({
   protocol: 2, type, ...extra,
-  ...(extra.snapshot ? { snapshot: snapshotForPreview(extra.snapshot) } : {}),
+  ...(extra.snapshot ? { snapshot: projectAnaesthV2SessionSnapshot(extra.snapshot) } : {}),
 })
 
 export class SessionV2Room {
@@ -74,7 +53,7 @@ export class SessionV2Room {
         const persistedLibrary = await this.state.storage.get('actionLibrary')
         this.actionLibrary = persistedLibrary
           ? validatePinnedAnaesthV2Library(persistedLibrary) : legacyAnaesthV2Library()
-        this.adapter = adapterFor(this.actionLibrary)
+        this.adapter = createAnaesthV2SessionAdapter(this.actionLibrary)
         this.engine = SessionEngineV2.fromCheckpoint({ checkpoint, adapter: this.adapter })
         this.sessionId = this.engine.snapshot.session.id
       }
@@ -88,7 +67,7 @@ export class SessionV2Room {
     try { socket.send(packet(type, { ...extra,
       ...(['welcome','snapshot','clock-receipt'].includes(type) ? { clock: this.clock } : {}),
       ...(extra.snapshot && this.actionLibrary
-        ? { actionLibrary: publicAnaesthV2Library(this.actionLibrary) } : {}),
+        ? { actionLibrary: projectAnaesthV2SessionLibrary(this.actionLibrary) } : {}),
     })) } catch { this.sockets.delete(socket) }
   }
   broadcast = () => {
@@ -160,7 +139,7 @@ export class SessionV2Room {
           // Fail closed if a configured Supabase catalogue cannot be fetched
           // or validated; never silently swap in demo drug definitions.
           const library = await loadAnaesthV2Library(this.env)
-          const activeAdapter = adapterFor(library)
+          const activeAdapter = createAnaesthV2SessionAdapter(library)
           const created = new SessionEngineV2({
             sessionId, mode: 'simulation', instructorId: 'instructor', adapter: activeAdapter,
           })

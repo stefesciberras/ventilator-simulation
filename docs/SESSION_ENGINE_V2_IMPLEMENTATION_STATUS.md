@@ -191,3 +191,10 @@ Earlier v2 foundations (.0–.20) are described chronologically in [SESSION_ENGI
 Start from `main` after v1.3.0.26 and this document, consult the exact current source before editing, and work in small focused PRs with tests before merge. Do not rely on historic pilot wording for current implementation. Check version constants, pinned action library contracts, WebSocket protocol, adapter and UI authority boundaries. Prioritize **P0 two-browser verification and alarms** before expanding physiological modelling; next substantive architecture milestone is replacing pilot pressure projection with shared Vent breath mechanics and providing Scenario Studio-authored bronchospasm events. Maintain an explicit distinction between **implemented**, **experimental/partial**, **planned**, **historical/deprecated** and **live independently verified**.
 
 **Historical approaches not to reintroduce:** browser-global ActionRuntime as v2 authority, duplicated browser respiratory gas exchange, one-Hz rebuild/frozen capnogram after clock snapshots, separate bronchospasm Apply button, greyed-out v2 ventilator controls with a duplicate preview selector, unconditional monitor alarms for hidden channels, continuous reassessment of old NIBP readings, resetting EtSevo on page refresh, untrusted browser-supplied identity/effects, and declaring a GitHub CI pass equivalent to a verified deployed session.
+
+
+### Local-first extraction — 1.3.0.31 (6 November 2026)
+
+Implemented: `src/session-v2/anaesthSession.mjs` owns the existing initial patient, pinned-catalogue adapter factory and presentation projections. Cloudflare consumes the same module. It performs no network calls, scheduling or storage. Checkpoint version 1 and Cloudflare protocol remain unchanged.
+
+Next: build browser-local authority around the existing authority host and IndexedDB store, including coordinated catalogue/clock persistence, lease renewal and safe-paused recovery. Then introduce the session-client boundary and offline peer transport. No browser-local session mode or WebRTC pairing is enabled by this extraction.

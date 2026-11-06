@@ -12,6 +12,12 @@ This file is the cross-thread source of truth for incremental code changes made 
 
 ---
 
+## 1.3.0.31 — 2026-11-06 (shared Anaesth v2 session foundation)
+- Extracted the existing Anaesth adapter setup, initial patient, monitor/effect projection and public catalogue projection into `src/session-v2/anaesthSession.mjs` for reuse by future local authority.
+- Cloudflare now consumes these shared functions. Its authentication, clock scheduling, checkpoint persistence, recovery and wire format remain unchanged; v1 is unaffected.
+- Added an offline setup/projection regression covering the HR transition/alarm relationship, active drug effects, checkpoint preservation and restoration. Existing Cloudflare integration tests continue to cover the extracted path.
+- Both application versions are **1.3.0.31**. This is an extraction only: browser-local authority and offline pairing are still pending.
+
 ## 2026-11-02 — Autosave shared Drug & Event library
 
 **Versions after change**

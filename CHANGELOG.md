@@ -11,6 +11,12 @@ This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuS
 - **Evidence:** versions **1.3.0.24–1.3.0.26** were merged in PRs **#462–#464** and passed GitHub Build **#1080, #1084, #1086** respectively. This verifies code/tests/build, **not** live deployment or clinical fidelity.
 - Version **1.3.0.27** adds opt-in React commit profiling around the v2 preview, monitor, top bar and controls to locate periodic main-thread work. It does not change simulation behavior.
 
+## 1.3.0.31 — 2026-11-06 (shared Anaesth v2 session foundation)
+- Extracted the existing Anaesth adapter setup, initial patient, monitor/effect projection and public catalogue projection into `src/session-v2/anaesthSession.mjs` for reuse by future local authority.
+- Cloudflare now consumes these shared functions. Its authentication, clock scheduling, checkpoint persistence, recovery and wire format remain unchanged; v1 is unaffected.
+- Added an offline setup/projection regression covering the HR transition/alarm relationship, active drug effects, checkpoint preservation and restoration. Existing Cloudflare integration tests continue to cover the extracted path.
+- Both application versions are **1.3.0.31**. This is an extraction only: browser-local authority and offline pairing are still pending.
+
 ## 1.3.0.30 — 2026-11-05 (snapshot UI isolation)
 - The 1.3.0.29 capture still shows the same recurring timer/`MessagePort` JavaScript work and frame gaps. The export does not record whether the live diagnostic log preview was disabled, so that experiment cannot yet be interpreted conclusively.
 - Added a short, reversible isolation switch that continues receiving and retaining Cloudflare snapshots, but suppresses snapshot-driven React state publication to the v2 preview and monitor. It deliberately freezes the preview plus numerical/alarm UI while enabled; the server clock, physiology and diagnostic capture continue. Use only for a brief comparison, then turn it off.
