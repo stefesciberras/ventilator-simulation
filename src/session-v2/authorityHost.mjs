@@ -167,6 +167,17 @@ export function createSessionV2AuthorityHost({
       })
     },
 
+    saveSessionData({ credentials, data }) {
+      return serialized(async () => {
+        const actor = await identity(credentials)
+        requireHost(actor)
+        try {
+          await store.saveSessionData({ sessionId: engine.snapshot.session.id,
+            leaseToken: lease.token, expectedRevision, nowMs: now(), data })
+        } catch (error) { stopped = true; throw error }
+      })
+    },
+
     renew({ credentials }) {
       return serialized(async () => {
         const actor = await identity(credentials)
