@@ -1,3 +1,4 @@
+import { createCandidatePeerTransport } from '../session-v2/peerSession.mjs'
 import { createLocalSessionTransport } from '../session-v2/localSessionTransport.mjs'
 import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
 import { useEffect, useRef, useState } from 'react'
@@ -72,7 +73,11 @@ export function AnaesthSessionV2Preview({
   onAlarmSnapshot: (state: SessionV2AlarmRuntime | null) => void
   alarmRequestRef: { current: ((type: string, payload: object) => void) | null }
 }) {
-  const [hostMode, setHostMode] = useState<'cloud' | 'local'>('cloud')
+  const [hostMode, setHostMode] = useState<'cloud' | 'local' | 'peer'>('cloud')
+  const [pairingInput, setPairingInput] = useState('')
+  const [pairingOutput, setPairingOutput] = useState('')
+  const [pairingStatus, setPairingStatus] = useState('')
+  const [pairingBusy, setPairingBusy] = useState(false)
   const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
   const [sessionId, setSessionId] = useState('ana-preview')
   const [secret, setSecret] = useState('')
@@ -363,7 +368,8 @@ export function AnaesthSessionV2Preview({
     setResetPending(false)
     setClock({ running: false, speed: 1 })
     setStatus('connecting')
-    setMessage('Connecting to experimental Cloudflare session authority...')
+    setPairingOutput('')
+    setMessage(hostMode === 'cloud' ? 'Connecting to Cloudflare authority…' : hostMode === 'peer' ? 'Generating answer; return it to the instructor to complete pairing…' : 'Opening local authority…')
     const url = endpoint.trim()
     if ((hostMode === 'cloud' && !/^wss?:\/\//.test(url)) || !/^[a-zA-Z0-9_-]{3,80}$/.test(targetSessionId)) {
       setStatus('error')
@@ -384,7 +390,7 @@ export function AnaesthSessionV2Preview({
       if (closedRef.current || currentAttempt !== attemptRef.current) return
       let socket: WebSocket | ReturnType<typeof createLocalSessionTransport>
       try {
-        socket = hostMode === 'local' ? createLocalSessionTransport(targetSessionId) : new WebSocket(`${url}?sessionId=${encodeURIComponent(targetSessionId)}`, ['loppjusim-v2', protocol])
+        socket = hostMode === 'peer' ? createCandidatePeerTransport(pairingInput, setPairingOutput) : hostMode === 'local' ? createLocalSessionTransport(targetSessionId) : new WebSocket(`${url}?sessionId=${encodeURIComponent(targetSessionId)}`, ['loppjusim-v2', protocol])
       } catch {
         closedRef.current = true
         setStatus('error')
@@ -395,7 +401,7 @@ export function AnaesthSessionV2Preview({
       let welcomed = false
       const handshakeTimeout = window.setTimeout(() => {
         if (!welcomed && socket.readyState !== WebSocket.CLOSED) socket.close()
-      }, 10000)
+      }, hostMode === 'peer' ? 180000 : 10000)
       socket.onopen = () => {
         if (socket.protocol !== 'loppjusim-v2') {
           setMessage('Cloudflare did not negotiate the required Session v2 protocol.')
@@ -423,7 +429,7 @@ export function AnaesthSessionV2Preview({
           setVerifiedRole(verifiedRoleRef.current)
           setStatus('connected')
           setPreviewExpanded(false)
-          setMessage(hostMode === 'local' ? 'Local authority · built-in pilot catalogue · this browser only. Reconnect with the same session ID to restore paused.' : 'Live Cloudflare preview; changes are persisted before acknowledgement.')
+          setMessage(hostMode !== 'cloud' ? 'Local session · built-in pilot catalogue. Instructor owns simulation; candidate receives canonical state.' : 'Live Cloudflare preview; changes are persisted before acknowledgement.')
           if (packet.actionLibrary) setActionLibrary(packet.actionLibrary as SessionV2ActionLibrary)
           if (packet.clock) setClock(packet.clock as ClockControl)
           receiveSnapshot(packet.snapshot, packet.clock as ClockControl | undefined)
@@ -443,7 +449,7 @@ export function AnaesthSessionV2Preview({
           }
           if (!packet.receipt?.accepted && !String(packet.requestId ?? '').startsWith('reset-')) setMessage(`Command rejected: ${packet.receipt?.reason ?? 'unknown'}`)
         } else if (packet.type === 'error') {
-          setMessage(`${hostMode === 'local' ? 'Local' : 'Cloud'} authority: ${packet.reason}`)
+          setMessage(`${hostMode !== 'cloud' ? 'Local' : 'Cloud'} authority: ${packet.reason}`)
           if (['unauthenticated', 'not-session-member', 'invalid-session'].includes(packet.reason)) {
             closedRef.current = true
             setStatus('error')
@@ -455,7 +461,7 @@ export function AnaesthSessionV2Preview({
       socket.onclose = (event: { code: number }) => {
         window.clearTimeout(handshakeTimeout)
         if (closedRef.current || currentAttempt !== attemptRef.current) return
-        if (hostMode === 'local') {
+        if (hostMode !== 'cloud') {
           closedRef.current = true
           setStatus('error')
           setClock({ running: false, speed: 1 })
@@ -636,10 +642,27 @@ export function AnaesthSessionV2Preview({
       </section>
       <p style={{ fontSize: 12, margin: '6px 0' }}>Uses checkpointed Anaesth ActionEffects and simplified end-tidal sevo uptake; effective anaesthetic depth combines volatile and IV hypnotic effects. The model is educational, not a complete clinical physiology engine. Drug onset follows the authoritative clock when resumed (Relaxant default onset: 120 simulated seconds). Pause/resume and speed are instructor-only. Do not use for clinical care or assessed simulation.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <label>Session host <select value={hostMode} disabled={status !== 'disconnected' && status !== 'error'} onChange={event => setHostMode(event.target.value as 'cloud' | 'local')}>
-          <option value="cloud">Cloud</option><option value="local">Local (experimental, single browser)</option>
+        <label>Session host <select value={hostMode} disabled={status !== 'disconnected' && status !== 'error'} onChange={event => setHostMode(event.target.value as 'cloud' | 'local' | 'peer')}>
+          <option value="peer">Local network — candidate</option><option value="cloud">Cloud</option><option value="local">Local — instructor (experimental)</option>
         </select></label>
         {hostMode === 'local' && <span>Built-in pilot drugs. After refresh, select Local and reconnect to the same ID. Allow 15 seconds after closing the previous tab.</span>}
+        {hostMode !== 'cloud' && <div style={{ width: '100%' }}>
+          <p>Instructor: connect Local, create an offer and give it to the candidate. Candidate: paste the offer below and Connect; return the generated answer. Instructor: paste that answer and Accept. Keep pairing text private. Reconnect by exchanging a fresh offer/answer.</p>
+          <textarea aria-label="Received pairing text" placeholder="Paste offer (candidate) or answer (instructor)" value={pairingInput} onChange={e => setPairingInput(e.target.value)} style={{ width: '100%' }} />
+          {hostMode === 'local' && <>
+            <button disabled={status !== 'connected' || pairingBusy} onClick={async () => {
+              setPairingBusy(true); setPairingOutput('')
+              try { const channel = socketRef.current as ReturnType<typeof createLocalSessionTransport>; setPairingOutput(await channel.createOffer!(setPairingStatus)) }
+              catch (error) { setPairingStatus(String(error)) } finally { setPairingBusy(false) }
+            }}>Create candidate offer</button>
+            <button disabled={status !== 'connected' || pairingBusy || !pairingInput} onClick={async () => {
+              try { await (socketRef.current as ReturnType<typeof createLocalSessionTransport>).acceptAnswer!(pairingInput); setPairingStatus('Answer accepted; connecting…') }
+              catch (error) { setPairingStatus(String(error)) }
+            }}>Accept candidate answer</button>
+          </>}
+          <textarea aria-label="Generated pairing text" readOnly value={pairingOutput} placeholder="Generated offer or answer appears here; select and copy it" style={{ width: '100%' }} />
+          <div role="status">{pairingBusy ? 'Gathering connection details…' : pairingStatus}</div>
+        </div>}
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}
           onChange={event => setEndpoint(event.target.value)} disabled={status === 'connected'} /></label>
         <label>Session <input aria-label="v2 session ID" value={sessionId}

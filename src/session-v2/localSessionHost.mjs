@@ -5,7 +5,7 @@ import { createAnaesthV2SessionAdapter, projectAnaesthV2SessionSnapshot,
   projectAnaesthV2SessionLibrary } from './anaesthSession.mjs'
 import { legacyAnaesthV2Library, validatePinnedAnaesthV2Library } from './adapters/anaesthLibrary.mjs'
 
-// Local owner capability stays in this closure. No remote participant API yet.
+// Owner and candidate capabilities stay in this closure; transports never supply roles.
 export async function createLocalSessionHost({ sessionId, store = createIndexedDbAuthorityStore(),
   library = legacyAnaesthV2Library(), now = () => Date.now(), onSnapshot = () => {} } = {}) {
   if (!/^[a-zA-Z0-9_-]{3,80}$/.test(sessionId ?? '')) throw Error('invalid-session')
@@ -22,12 +22,14 @@ export async function createLocalSessionHost({ sessionId, store = createIndexedD
     commit: args => store.commit({ ...args, checkpoint: withData(args.checkpoint) }),
   }
   const capability = {}
+  const candidateCapability = {}
   const adapter = createAnaesthV2SessionAdapter(pinned)
   const host = createSessionV2AuthorityHost({ store: persistence, adapter, now,
-    authenticate: value => value === capability ? { participantId: 'instructor', role: 'instructor' } : null })
+    authenticate: value => value === capability ? { participantId: 'instructor', role: 'instructor' } : value === candidateCapability ? { participantId: 'candidate', role: 'candidate' } : null })
   if (existing) await host.takeover({ sessionId, credentials: capability })
   else {
     const engine = new SessionEngineV2({ sessionId, mode: 'simulation', instructorId: 'instructor', adapter })
+    engine.join({ participantId: 'candidate', role: 'candidate' })
     engine.start('instructor')
     await host.create({ initialEngine: engine, credentials: capability })
   }
@@ -53,6 +55,19 @@ export async function createLocalSessionHost({ sessionId, store = createIndexedD
   }
   return {
     get current() { return view() },
+    connectCandidate: () => serial(async () => {
+      if (!host.snapshot.participants.some(p => p.id === 'candidate')) throw Error('Create a new local session to enable candidate pairing')
+      await host.reconnect({ credentials: candidateCapability })
+      publish()
+      return { ...view(), role: 'candidate' }
+    }),
+    submitCandidate: command => serial(async () => {
+      if (!command || typeof command.id !== 'string' || !/^[a-zA-Z0-9._:-]{1,128}$/.test(command.id)) throw Error('invalid-command')
+      const clean = { id: command.id, epoch: command.epoch, runtimeId: 'main', type: command.type, payload: command.payload ?? {} }
+      const receipt = await host.submit({ credentials: candidateCapability, command: clean })
+      if (receipt.accepted) publish()
+      return receipt
+    }),
     controlClock: next => serial(async () => { await setClock(next); publish() }),
     submit: command => serial(async () => {
       if (command.type === 'tick' && clock.running) throw Error('clock-already-running')

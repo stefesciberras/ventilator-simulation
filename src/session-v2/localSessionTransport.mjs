@@ -1,16 +1,24 @@
+import { createInstructorPeer } from './peerSession.mjs'
 import { createLocalSessionHost } from './localSessionHost.mjs'
 
 // In-process implementation of the preview's message channel. No network socket.
 export function createLocalSessionTransport(sessionId) {
+  let peer
   let host, timer, closed = false
   const channel = {
     readyState: 0, protocol: 'loppjusim-v2',
     onopen: null, onmessage: null, onclose: null, onerror: null,
+    async createOffer(status) {
+      if (!host || closed) throw Error('Connect a local instructor session first')
+      peer?.close(); peer = createInstructorPeer(host, sessionId, status)
+      return peer.offer()
+    },
+    async acceptAnswer(text) { if (!peer) throw Error('Create an offer first'); await peer.accept(text) },
     send(raw) { void receive(raw).catch(fail) },
     close() {
       if (closed) return
       closed = true; channel.readyState = 3
-      clearInterval(timer); host?.close()
+      clearInterval(timer); peer?.close(); host?.close()
       document.removeEventListener('visibilitychange', visibility)
       channel.onclose?.({ code: 1000 })
     },
@@ -35,7 +43,7 @@ export function createLocalSessionTransport(sessionId) {
   // Let the caller register listeners before opening.
   queueMicrotask(async () => {
     try {
-      host = await createLocalSessionHost({ sessionId, onSnapshot: value => emit('snapshot', value) })
+      host = await createLocalSessionHost({ sessionId, onSnapshot: value => { emit('snapshot', value); peer?.publish(value) } })
       if (closed) { host.close(); return }
       channel.readyState = 1; channel.onopen?.({})
       emit('welcome', host.current)

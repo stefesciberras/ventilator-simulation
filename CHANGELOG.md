@@ -11,6 +11,12 @@ This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuS
 - **Evidence:** versions **1.3.0.24–1.3.0.26** were merged in PRs **#462–#464** and passed GitHub Build **#1080, #1084, #1086** respectively. This verifies code/tests/build, **not** live deployment or clinical fidelity.
 - Version **1.3.0.27** adds opt-in React commit profiling around the v2 preview, monitor, top bar and controls to locate periodic main-thread work. It does not change simulation behavior.
 
+## 1.3.0.33 — 2026-11-06 (experimental local peer pairing)
+- Added manual WebRTC offer/answer pairing for one instructor and one candidate. No external signalling, STUN or TURN service is configured; a reachable local network is required.
+- Instructor owns the existing IndexedDB-backed runtime and clock. Candidate uses canonical snapshots and authenticated candidate-only commands, with shared adapter authorization and retained command receipts.
+- Re-pairing replaces the old connection without recreating the runtime. Instructor recovery remains paused; candidate cannot promote itself or control the clock. Sessions created before this version need a new local session ID for pairing.
+- Both product versions are 1.3.0.33. Automated wire/authentication/re-pairing tests use a WebRTC test double; real two-device ICE/network behaviour remains for manual verification. Offline app loading, QR exchange, automatic reconnect and production catalogue downloads remain pending.
+
 ## 1.3.0.32 — 2026-11-06 (experimental browser-local authority)
 - Added Local / Cloud host selection in the Anaesth v2 panel. Local uses the shared engine, a built-in pilot catalogue and IndexedDB checkpoints; no simulation network connection is opened.
 - Local checkpoints retain pinned definitions and clock settings. Recovery pauses time, leases prevent concurrent tab writers, and hidden tabs pause. Reconnect with the same session ID after the previous 15-second lease expires.
