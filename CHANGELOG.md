@@ -1,5 +1,14 @@
 # loppjuSIM Changelog
 
+## 1.3.0.35 — Offline app shell and local reload recovery (2026-11-07)
+
+- Opening the Anaesth v2 pilot prepares a verified offline shell, including lazy assets, on each device. Availability is shown explicitly; simulator routes reload from that complete build offline. API/auth/pairing/library responses are never cached.
+- Updates wait for all open app tabs to close, preserving running sessions. Build-specific shell URLs and content hashes prevent mixed-deployment caches. Incomplete caches can be repaired online with Check offline availability.
+- Remember only the last successful local role/session ID, never credentials or pairing text. Instructor reload selects that saved session; Connect restores its IndexedDB checkpoint paused (allow 15 seconds for the old ownership lease). Candidates remain candidates and need fresh pairing after reload.
+- Offline reconnection still requires manual offer/answer exchange. Automatic links need internet; offline instructions and errors explain this. Offline shell availability does not make cloud sessions or online content libraries available offline. Site data must be retained.
+- Both MV and EDUMON: 1.3.0.35. Automated shell/cache and IndexedDB recovery regressions; physical offline-browser verification remains required.
+
+
 ## 1.3.0.34 — Automatic local candidate pairing (2026-11-07)
 
 - Local instructors can create a five-minute, single-candidate link. Candidates open/paste the link and Connect; offer/answer exchange is automatic.

@@ -1,3 +1,5 @@
+import { readLocalSelection, saveLocalSelection } from '../session-v2/localSessionPreferences.mjs'
+import { OfflineStatus } from '../offline/OfflineStatus'
 import { createAutomaticCandidateTransport } from '../session-v2/automaticPairing.mjs'
 import { createCandidatePeerTransport } from '../session-v2/peerSession.mjs'
 import { createLocalSessionTransport } from '../session-v2/localSessionTransport.mjs'
@@ -74,17 +76,17 @@ export function AnaesthSessionV2Preview({
   onAlarmSnapshot: (state: SessionV2AlarmRuntime | null) => void
   alarmRequestRef: { current: ((type: string, payload: object) => void) | null }
 }) {
-  const [hostMode, setHostMode] = useState<'cloud' | 'local' | 'peer'>(() => location.hash.startsWith('#local-pair=') ? 'peer' : 'cloud')
+  const [hostMode, setHostMode] = useState<'cloud' | 'local' | 'peer'>(() => location.hash.startsWith('#local-pair=') ? 'peer' : (readLocalSelection()?.mode ?? 'cloud'))
   const [pairingInput, setPairingInput] = useState(() => location.hash.startsWith('#local-pair=') ? location.href : '')
   const [candidateLink, setCandidateLink] = useState('')
   const [pairingOutput, setPairingOutput] = useState('')
   const [pairingStatus, setPairingStatus] = useState('')
   const [pairingBusy, setPairingBusy] = useState(false)
   const [endpoint, setEndpoint] = useState(() => `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/session-v2/ws`)
-  const [sessionId, setSessionId] = useState('ana-preview')
+  const [sessionId, setSessionId] = useState(() => readLocalSelection()?.sessionId ?? 'ana-preview')
   const [secret, setSecret] = useState('')
   const [status, setStatus] = useState<Status>('disconnected')
-  const [previewExpanded, setPreviewExpanded] = useState(() => location.hash.startsWith('#local-pair='))
+  const [previewExpanded, setPreviewExpanded] = useState(() => location.hash.startsWith('#local-pair=') || Boolean(readLocalSelection()))
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false)
   const [liveDiagnosticsPreview, setLiveDiagnosticsPreview] = useState(true)
   const [isolateSnapshotUiUpdates, setIsolateSnapshotUiUpdates] = useState(false)
@@ -402,7 +404,7 @@ export function AnaesthSessionV2Preview({
       socketRef.current = socket
       let welcomed = false
       const handshakeTimeout = window.setTimeout(() => {
-        if (!welcomed && socket.readyState !== WebSocket.CLOSED) socket.close()
+        if (!welcomed && socket.readyState !== WebSocket.CLOSED) { setMessage('Connection timed out. Offline candidates need a fresh manual offer/answer; automatic links require internet.'); socket.close() }
       }, hostMode === 'peer' ? 180000 : 10000)
       socket.onopen = () => {
         if (socket.protocol !== 'loppjusim-v2') {
@@ -417,6 +419,7 @@ export function AnaesthSessionV2Preview({
         try { packet = JSON.parse(String(event.data)) } catch { return }
         if (packet.protocol !== 2) return
         if (packet.type === 'welcome') {
+          saveLocalSelection(hostMode, targetSessionId)
           welcomed = true
           window.clearTimeout(handshakeTimeout)
           tries = 0
@@ -451,7 +454,7 @@ export function AnaesthSessionV2Preview({
           }
           if (!packet.receipt?.accepted && !String(packet.requestId ?? '').startsWith('reset-')) setMessage(`Command rejected: ${packet.receipt?.reason ?? 'unknown'}`)
         } else if (packet.type === 'error') {
-          setMessage(`${hostMode !== 'cloud' ? 'Local' : 'Cloud'} authority: ${packet.reason}`)
+          setMessage(packet.reason === 'lease-held' ? 'The saved session is still owned by another tab or its previous lease. Close that tab, wait 15 seconds, then Connect again.' : `${hostMode !== 'cloud' ? 'Local' : 'Cloud'} authority: ${packet.reason}`)
           if (['unauthenticated', 'not-session-member', 'invalid-session'].includes(packet.reason)) {
             closedRef.current = true
             setStatus('error')
@@ -613,6 +616,7 @@ export function AnaesthSessionV2Preview({
           {previewExpanded ? 'Collapse preview ▲' : 'Expand preview ▼'}
         </button>
       </div>
+      <OfflineStatus />
       <div id="anaesth-session-v2-controls" hidden={!previewExpanded}>
       <section aria-label="v2 waveform diagnostics" style={{ border: '1px solid #768395', borderRadius: 6, padding: 8, marginTop: 8 }}>
         <strong>Waveform diagnostics (local, opt-in)</strong>
@@ -647,7 +651,7 @@ export function AnaesthSessionV2Preview({
         <label>Session host <select value={hostMode} disabled={status !== 'disconnected' && status !== 'error'} onChange={event => setHostMode(event.target.value as 'cloud' | 'local' | 'peer')}>
           <option value="peer">Local network — candidate</option><option value="cloud">Cloud</option><option value="local">Local — instructor (experimental)</option>
         </select></label>
-        {hostMode === 'local' && <span>Built-in pilot drugs. After refresh, select Local and reconnect to the same ID. Allow 15 seconds after closing the previous tab.</span>}
+        {hostMode === 'local' && <span>Built-in pilot drugs. After reload, your last Local session ID is selected. Press Connect to restore it paused. Allow 15 seconds after closing the previous tab.</span>}
         {hostMode !== 'cloud' && <div style={{ width: '100%' }}>
           <p>Connect the local instructor, then create a candidate link and open it on the candidate device. On that device press Connect. Pairing needs internet; the connected simulation runs directly over the local network. Links expire after 5 minutes and support one candidate.</p>
           {hostMode === 'local' && <>

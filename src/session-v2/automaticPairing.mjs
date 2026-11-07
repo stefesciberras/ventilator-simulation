@@ -33,6 +33,7 @@ export async function createAutomaticInvitation(offer, accept, status, signal) {
   return url.href
 }
 export function createAutomaticCandidateTransport(link) {
+  if (globalThis.navigator?.onLine === false) throw Error('Automatic pairing needs internet. Ask the instructor for a fresh manual offer, paste it here, then return the generated answer.')
   const { id, token } = parseCandidateLink(link)
   const controller = new AbortController()
   let peer, closed = false
