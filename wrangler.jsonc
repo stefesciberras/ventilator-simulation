@@ -12,6 +12,7 @@
   },
   "durable_objects": {
     "bindings": [
+      { "name": "LOCAL_PAIRING_ROOMS", "class_name": "LocalPairingRoom" },
       {
         "name": "SESSION_V2_ROOMS",
         "class_name": "SessionV2Room"
@@ -24,7 +25,8 @@
       "new_sqlite_classes": [
         "SessionV2Room"
       ]
-    }
+    },
+    { "tag": "local-pairing-1", "new_sqlite_classes": ["LocalPairingRoom"] }
   ], 
   "vars": {
     "SESSION_V2_EXPERIMENTAL": "1"

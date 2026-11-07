@@ -1,8 +1,10 @@
+import { createAutomaticInvitation } from './automaticPairing.mjs'
 import { createInstructorPeer } from './peerSession.mjs'
 import { createLocalSessionHost } from './localSessionHost.mjs'
 
 // In-process implementation of the preview's message channel. No network socket.
 export function createLocalSessionTransport(sessionId) {
+  let invitation
   let peer
   let host, timer, closed = false
   const channel = {
@@ -10,15 +12,22 @@ export function createLocalSessionTransport(sessionId) {
     onopen: null, onmessage: null, onclose: null, onerror: null,
     async createOffer(status) {
       if (!host || closed) throw Error('Connect a local instructor session first')
-      peer?.close(); peer = createInstructorPeer(host, sessionId, status)
+      invitation?.abort(); peer?.close(); peer = createInstructorPeer(host, sessionId, status)
       return peer.offer()
+    },
+    async createInvitation(status) {
+      const offer = await channel.createOffer(status)
+      if (closed) throw Error('Instructor disconnected; connect again')
+      const invitedPeer = peer
+      invitation = new AbortController()
+      return createAutomaticInvitation(offer, text => invitedPeer.accept(text), status, invitation.signal)
     },
     async acceptAnswer(text) { if (!peer) throw Error('Create an offer first'); await peer.accept(text) },
     send(raw) { void receive(raw).catch(fail) },
     close() {
       if (closed) return
       closed = true; channel.readyState = 3
-      clearInterval(timer); peer?.close(); host?.close()
+      clearInterval(timer); invitation?.abort(); peer?.close(); host?.close()
       document.removeEventListener('visibilitychange', visibility)
       channel.onclose?.({ code: 1000 })
     },

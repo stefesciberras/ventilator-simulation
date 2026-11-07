@@ -1,5 +1,13 @@
 # loppjuSIM Changelog
 
+## 1.3.0.34 — Automatic local candidate pairing (2026-11-07)
+
+- Local instructors can create a five-minute, single-candidate link. Candidates open/paste the link and Connect; offer/answer exchange is automatic.
+- A separate short-lived Cloudflare Durable Object stores only connection descriptions, with separate random owner/candidate capabilities, expiry and cleanup. Simulation authority, checkpoints and commands remain local/direct peer-to-peer. Internet is required for automatic pairing/re-pairing, not for an established LAN connection.
+- Manual offline pairing remains supported; invalid/incomplete/wrong-direction text now produces actionable errors. No Cloudflare branch preview configuration added.
+- Both MV and EDUMON versions: 1.3.0.34. Automated regression/build verification; real two-device browser verification remains required.
+
+
 This is the cross-product development changelog for loppjuSIM-MV (Vent), loppjuSIM-Anaesth, and loppjuSIM-ITU. Product-specific details and older release histories may be maintained separately.
 
 **Session Engine v2 current implementation and remaining work:** [docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md](docs/SESSION_ENGINE_V2_IMPLEMENTATION_STATUS.md). The v2 pilot is **opt-in** and is not a completed/default replacement for v1. Release entries below are chronological: features listed as “not yet implemented” in older versions may have landed in later versions.

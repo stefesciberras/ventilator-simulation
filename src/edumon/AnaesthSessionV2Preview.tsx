@@ -1,3 +1,4 @@
+import { createAutomaticCandidateTransport } from '../session-v2/automaticPairing.mjs'
 import { createCandidatePeerTransport } from '../session-v2/peerSession.mjs'
 import { createLocalSessionTransport } from '../session-v2/localSessionTransport.mjs'
 import { encodeV2WebSocketSecret } from '../session-v2/websocketAuth.mjs'
@@ -73,8 +74,9 @@ export function AnaesthSessionV2Preview({
   onAlarmSnapshot: (state: SessionV2AlarmRuntime | null) => void
   alarmRequestRef: { current: ((type: string, payload: object) => void) | null }
 }) {
-  const [hostMode, setHostMode] = useState<'cloud' | 'local' | 'peer'>('cloud')
-  const [pairingInput, setPairingInput] = useState('')
+  const [hostMode, setHostMode] = useState<'cloud' | 'local' | 'peer'>(() => location.hash.startsWith('#local-pair=') ? 'peer' : 'cloud')
+  const [pairingInput, setPairingInput] = useState(() => location.hash.startsWith('#local-pair=') ? location.href : '')
+  const [candidateLink, setCandidateLink] = useState('')
   const [pairingOutput, setPairingOutput] = useState('')
   const [pairingStatus, setPairingStatus] = useState('')
   const [pairingBusy, setPairingBusy] = useState(false)
@@ -82,7 +84,7 @@ export function AnaesthSessionV2Preview({
   const [sessionId, setSessionId] = useState('ana-preview')
   const [secret, setSecret] = useState('')
   const [status, setStatus] = useState<Status>('disconnected')
-  const [previewExpanded, setPreviewExpanded] = useState(false)
+  const [previewExpanded, setPreviewExpanded] = useState(() => location.hash.startsWith('#local-pair='))
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false)
   const [liveDiagnosticsPreview, setLiveDiagnosticsPreview] = useState(true)
   const [isolateSnapshotUiUpdates, setIsolateSnapshotUiUpdates] = useState(false)
@@ -369,7 +371,7 @@ export function AnaesthSessionV2Preview({
     setClock({ running: false, speed: 1 })
     setStatus('connecting')
     setPairingOutput('')
-    setMessage(hostMode === 'cloud' ? 'Connecting to Cloudflare authority…' : hostMode === 'peer' ? 'Generating answer; return it to the instructor to complete pairing…' : 'Opening local authority…')
+    setMessage(hostMode === 'cloud' ? 'Connecting to Cloudflare authority…' : hostMode === 'peer' ? 'Pairing with instructor…' : 'Opening local authority…')
     const url = endpoint.trim()
     if ((hostMode === 'cloud' && !/^wss?:\/\//.test(url)) || !/^[a-zA-Z0-9_-]{3,80}$/.test(targetSessionId)) {
       setStatus('error')
@@ -390,11 +392,11 @@ export function AnaesthSessionV2Preview({
       if (closedRef.current || currentAttempt !== attemptRef.current) return
       let socket: WebSocket | ReturnType<typeof createLocalSessionTransport>
       try {
-        socket = hostMode === 'peer' ? createCandidatePeerTransport(pairingInput, setPairingOutput) : hostMode === 'local' ? createLocalSessionTransport(targetSessionId) : new WebSocket(`${url}?sessionId=${encodeURIComponent(targetSessionId)}`, ['loppjusim-v2', protocol])
-      } catch {
+        socket = hostMode === 'peer' ? (pairingInput.includes('#local-pair=') ? createAutomaticCandidateTransport(pairingInput.trim()) : createCandidatePeerTransport(pairingInput, setPairingOutput)) : hostMode === 'local' ? createLocalSessionTransport(targetSessionId) : new WebSocket(`${url}?sessionId=${encodeURIComponent(targetSessionId)}`, ['loppjusim-v2', protocol])
+      } catch (error) {
         closedRef.current = true
         setStatus('error')
-        setMessage('Unable to create the WebSocket. Check the endpoint and browser security settings.')
+        setMessage(error instanceof Error ? error.message : 'Unable to connect')
         return
       }
       socketRef.current = socket
@@ -647,8 +649,18 @@ export function AnaesthSessionV2Preview({
         </select></label>
         {hostMode === 'local' && <span>Built-in pilot drugs. After refresh, select Local and reconnect to the same ID. Allow 15 seconds after closing the previous tab.</span>}
         {hostMode !== 'cloud' && <div style={{ width: '100%' }}>
-          <p>Instructor: connect Local, create an offer and give it to the candidate. Candidate: paste the offer below and Connect; return the generated answer. Instructor: paste that answer and Accept. Keep pairing text private. Reconnect by exchanging a fresh offer/answer.</p>
-          <textarea aria-label="Received pairing text" placeholder="Paste offer (candidate) or answer (instructor)" value={pairingInput} onChange={e => setPairingInput(e.target.value)} style={{ width: '100%' }} />
+          <p>Connect the local instructor, then create a candidate link and open it on the candidate device. On that device press Connect. Pairing needs internet; the connected simulation runs directly over the local network. Links expire after 5 minutes and support one candidate.</p>
+          {hostMode === 'local' && <>
+            <button disabled={status !== 'connected' || pairingBusy} onClick={async () => {
+              setPairingBusy(true); setCandidateLink('')
+              try { setCandidateLink(await (socketRef.current as ReturnType<typeof createLocalSessionTransport>).createInvitation!(setPairingStatus)); setPairingStatus('Share the candidate link; waiting for candidate…') }
+              catch (error) { setPairingStatus(String(error)) } finally { setPairingBusy(false) }
+            }}>Create candidate link</button>
+            {candidateLink && <><input aria-label="Candidate link" readOnly value={candidateLink} onFocus={e => e.target.select()} style={{ width: '100%' }} />
+              <button onClick={() => { void navigator.clipboard.writeText(candidateLink).then(() => setPairingStatus('Link copied'), () => setPairingStatus('Select and copy the link above')) }}>Copy candidate link</button></>}
+          </>}
+          <p>Candidate: paste a candidate link below and press Connect, or use the manual offer/answer controls for offline pairing.</p>
+          <textarea aria-label="Received pairing text" placeholder="Paste candidate link or manual offer/answer" value={pairingInput} onChange={e => setPairingInput(e.target.value)} style={{ width: '100%' }} />
           {hostMode === 'local' && <>
             <button disabled={status !== 'connected' || pairingBusy} onClick={async () => {
               setPairingBusy(true); setPairingOutput('')
