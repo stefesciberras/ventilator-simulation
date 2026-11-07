@@ -1,5 +1,13 @@
 # loppjuSIM development change log
 
+## 1.3.0.34 — Automatic local candidate pairing (2026-11-07)
+
+- Local instructors can create a five-minute, single-candidate link. Candidates open/paste the link and Connect; offer/answer exchange is automatic.
+- A separate short-lived Cloudflare Durable Object stores only connection descriptions, with separate random owner/candidate capabilities, expiry and cleanup. Simulation authority, checkpoints and commands remain local/direct peer-to-peer. Internet is required for automatic pairing/re-pairing, not for an established LAN connection.
+- Manual offline pairing remains supported; invalid/incomplete/wrong-direction text now produces actionable errors. No Cloudflare branch preview configuration added.
+- Both MV and EDUMON versions: 1.3.0.34. Automated regression/build verification; real two-device browser verification remains required.
+
+
 This file is the cross-thread source of truth for incremental code changes made to the loppjuSIM repository.
 
 ## Change policy

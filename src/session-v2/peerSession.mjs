@@ -2,7 +2,12 @@
 const MAX = 256 * 1024
 export function parsePairing(text, type) {
   if (typeof text !== 'string' || text.length > MAX) throw Error('Pairing text too large')
-  const value = JSON.parse(text)
+  text = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')
+  if (!text) throw Error(`Paste the complete ${type} text first`)
+  let value
+  try { value = JSON.parse(text) } catch { throw Error(`Incomplete or damaged ${type} text; copy the complete generated text`) }
+  if (!value || typeof value !== 'object') throw Error('Invalid pairing text; copy the complete generated text')
+  if (value.description?.type && value.description.type !== type) throw Error(`Expected an ${type}, but received an ${value.description.type}. Candidate uses the instructor offer; instructor uses the candidate answer.`)
   if (value.protocol !== 2 || value.description?.type !== type ||
       typeof value.description.sdp !== 'string' || !/^[a-zA-Z0-9_-]{3,80}$/.test(value.sessionId) ||
       typeof value.token !== 'string' || value.token.length < 32) throw Error('Invalid pairing text')

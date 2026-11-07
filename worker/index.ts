@@ -2,6 +2,7 @@ import { sessionV2Readiness } from './sessionV2Readiness.mjs'
 import { decodeV2WebSocketSecret } from '../src/session-v2/websocketAuth.mjs'
 import { SessionV2Room } from './sessionV2Room.mjs'
 import { describeSessionV2GatewayError } from './sessionV2ErrorDiagnostics.mjs'
+export { LocalPairingRoom } from './localPairing.mjs'
 export { SessionV2Room } from './sessionV2Room.mjs'
 
 type V2Env = {
@@ -9,6 +10,7 @@ type V2Env = {
     idFromName: (name: string) => unknown
     get: (id: unknown) => { fetch: (request: Request) => Promise<Response> }
   }
+  LOCAL_PAIRING_ROOMS?: V2Env['SESSION_V2_ROOMS']
   SESSION_V2_EXPERIMENTAL?: string
   SESSION_V2_INSTRUCTOR_TOKEN?: string
   SESSION_V2_CANDIDATE_TOKEN?: string
@@ -27,6 +29,15 @@ const tokenEquals = (left: string, right: string): boolean => {
 export default {
   async fetch(request: Request, env: V2Env): Promise<Response> {
     const url = new URL(request.url)
+
+    if (url.pathname.startsWith('/api/local-pairing/')) {
+      const roomId = url.pathname.slice('/api/local-pairing/'.length)
+      if (!/^[a-f0-9]{64}$/.test(roomId)) return new Response('Invalid pairing ID', { status: 400 })
+      if (request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return new Response('Forbidden', { status: 403 })
+      if (!env.LOCAL_PAIRING_ROOMS) return new Response('Automatic pairing unavailable', { status: 503 })
+      const stub = env.LOCAL_PAIRING_ROOMS.get(env.LOCAL_PAIRING_ROOMS.idFromName(roomId))
+      return stub.fetch(request)
+    }
 
     if (url.pathname === '/api/health') {
       return Response.json({
