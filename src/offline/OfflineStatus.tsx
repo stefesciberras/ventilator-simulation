@@ -1,6 +1,8 @@
+import { verifyOfflinePage } from './readiness.mjs'
 import { useEffect, useState } from 'react'
 
-export function OfflineStatus() {
+export function OfflineStatus({ canReload }: { canReload: boolean }) {
+  const [needsReload, setNeedsReload] = useState(false)
   const [message, setMessage] = useState('Preparing this device for offline use…')
   const [online, setOnline] = useState(navigator.onLine)
   const [retry, setRetry] = useState(0)
@@ -23,14 +25,20 @@ export function OfflineStatus() {
       const check = async () => {
         if (registration.waiting) { report('Update downloaded. Finish your session, then close all loppjuSIM tabs and reopen to use it.'); return }
         if (!registration.active) { report('Downloading offline files. Keep this page open until ready.'); return }
-        const ready = await new Promise<boolean>(resolve => {
+        const result = await new Promise<{ ready: boolean; version: string }>(resolve => {
           const channel = new MessageChannel()
-          const done = (value: boolean) => { clearTimeout(timer); channel.port1.close(); resolve(value) }
-          const timer = window.setTimeout(() => done(false), 30000)
-          channel.port1.onmessage = event => done(event.data?.ready === true)
+          const done = (value: { ready: boolean; version: string }) => { clearTimeout(timer); channel.port1.close(); resolve(value) }
+          const timer = window.setTimeout(() => done({ ready: false, version: '' }), 30000)
+          channel.port1.onmessage = event => done({ ready: event.data?.ready === true, version: String(event.data?.version ?? '') })
           registration.active!.postMessage({ type: 'OFFLINE_STATUS', repair: retry > 0 && online }, [channel.port2])
         })
-        report(ready ? 'Ready for offline use on this device.' : 'Offline files are incomplete. Reconnect to internet and retry preparation.')
+        const readiness = await verifyOfflinePage({ controller: navigator.serviceWorker.controller, complete: result.ready, version: result.version, url: location.href })
+        if (stopped) return
+        setNeedsReload(readiness === 'reload')
+        report(readiness === 'ready' ? 'Ready for offline use on this device — cached page verified.'
+          : readiness === 'reload' ? 'Files downloaded. Finish setup with one normal reload while online, then check again before disconnecting internet.'
+          : readiness === 'incomplete' ? 'Offline files are incomplete. Reconnect to internet and retry preparation.'
+          : 'Offline page could not be verified. Close all loppjuSIM tabs, reopen online and check again. Use this same browser and site address when offline.')
       }
       const installing = () => {
         const worker = registration.installing
@@ -44,6 +52,8 @@ export function OfflineStatus() {
       }
       registration.addEventListener('updatefound', installing)
       listeners.push(() => registration.removeEventListener('updatefound', installing))
+      navigator.serviceWorker.addEventListener('controllerchange', check)
+      listeners.push(() => navigator.serviceWorker.removeEventListener('controllerchange', check))
       installing(); await check()
       if (online) void registration.update().catch(() => {})
     })().catch(() => report('Offline preparation unavailable. Reconnect to internet and retry.'))
@@ -52,6 +62,9 @@ export function OfflineStatus() {
   return <div role="status" style={{ padding: '8px 0', fontSize: 13 }}>
     <strong>{online ? 'Offline availability: ' : 'Offline: '}</strong>{message}{' '}
     <button type="button" onClick={() => setRetry(value => value + 1)}>Check offline availability</button>
+    {needsReload && <button type="button" disabled={!canReload} onClick={() => location.reload()}>Finish offline setup (reload)</button>}
+    {needsReload && !canReload && <p>Disconnect the session before finishing offline setup.</p>}
+    <p>Prepare both devices separately in the browser you will use. Offline reload: use normal Reload, not Ctrl+Shift+R or Shift+Reload (which bypass the offline loader).</p>
     {!online && <p>Restore the instructor’s saved Local session, then exchange a fresh manual offer/answer with the candidate. Automatic candidate links need internet. Recovery starts paused; press Resume when ready.</p>}
     <p>Keep this browser’s site data to retain offline files and saved sessions. Cloud sessions and online libraries still need internet.</p>
   </div>

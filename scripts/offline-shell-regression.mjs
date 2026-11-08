@@ -1,3 +1,4 @@
+import { verifyOfflinePage } from '../src/offline/readiness.mjs'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -58,6 +59,18 @@ try {
     return result
   }
   online = false
+  const probeUrl = 'https://sim.test/edumon/ana?sessionV2Preview=1#local-pair=private'
+  const proof = options => verifyOfflinePage({ controller: {}, complete: true, version: manifest.version, url: probeUrl, fetcher: async (url, init) => {
+    assert.equal(init.cache, 'only-if-cached')
+    assert.equal(init.mode, 'same-origin')
+    assert(!url.includes('private'))
+    return fetchEvent(url, 'same-origin')
+  }, ...options })
+  assert.equal(await proof({ controller: null }), 'reload')
+  assert.equal(await proof({ complete: false }), 'incomplete')
+  assert.equal(await proof({}), 'ready')
+  assert.equal(await proof({ version: 'wrong-build' }), 'unverified')
+  assert.equal(await proof({ fetcher: async () => { throw Error('no controller') } }), 'unverified')
   const navigation = await fetchEvent('/edumon/ana?sessionV2Preview=1')
   assert.equal(navigation.redirected, false, 'cached navigation response must not retain redirect metadata')
   assert.equal(navigation.headers.get('content-type'), 'text/html')
@@ -74,6 +87,11 @@ try {
   await check(false); assert.equal(status.ready, true)
   cachesData.get('loppjusim-shell-' + manifest.version).delete('/assets/lazy.js')
   await check(false); assert.equal(status.ready, false)
+  const shellCache = cachesData.get('loppjusim-shell-' + manifest.version)
+  const shellResponse = shellCache.get(manifest.shell)
+  shellCache.delete(manifest.shell)
+  assert.equal((await fetchEvent('/edumon/ana?offline-shell-check=1', 'same-origin')).status, 503)
+  shellCache.set(manifest.shell, shellResponse)
   online = true; await check(true); assert.equal(status.ready, true)
   // A mixed or broken deployment cannot replace a valid active build.
   corrupt = true

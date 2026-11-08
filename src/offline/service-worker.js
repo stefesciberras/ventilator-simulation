@@ -35,6 +35,13 @@ self.addEventListener('fetch', event => {
   const simulatorRoute = url.pathname === '/' || /^\/(edumon|eduvent)(\/|$)/.test(url.pathname)
   // Only the immutable build shell and explicitly listed static assets are cached.
   // API, auth, WebSocket, pairing and remote libraries always bypass this worker.
+  if (simulatorRoute && url.searchParams.get('offline-shell-check') === '1') {
+    event.respondWith((async () => {
+      const cached = await (await caches.open(cacheName)).match(manifest.shell)
+      return new Response(null, { status: cached ? 200 : 503, headers: { 'x-loppjusim-offline-build': manifest.version, 'cache-control': 'no-store' } })
+    })())
+    return
+  }
   const path = request.mode === 'navigate' && simulatorRoute ? manifest.shell : paths.has(url.pathname) ? url.pathname : null
   if (!path) return
   event.respondWith((async () => {
