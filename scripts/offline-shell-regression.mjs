@@ -27,12 +27,20 @@ try {
     },
     async keys() { return [...cachesData.keys()] }, async delete(name) { return cachesData.delete(name) },
   }
-  let online = true, corrupt = false
+  let online = true, corrupt = false, foreignRedirect = false
   const events = {}
   const context = {
     self: { location: { origin: 'https://sim.test' }, addEventListener: (name, fn) => { events[name] = fn } },
-    URL, caches, crypto: webcrypto, Uint8Array,
-    fetch: async request => { if (!online) throw Error('offline'); const body = bodies.get(key(request)); return new Response(corrupt ? 'wrong deployment' : body, { status: body ? 200 : 404 }) },
+    URL, Response, caches, crypto: webcrypto, Uint8Array,
+    fetch: async (request, options) => {
+      if (!online) throw Error('offline')
+      const path = key(request), body = bodies.get(path)
+      if (path.endsWith('.html') && options?.redirect !== 'follow') throw TypeError('Cloudflare 307 rejected')
+      const response = new Response(corrupt ? 'wrong deployment' : body, { status: body ? 200 : 404, headers: { 'content-type': path.endsWith('.html') ? 'text/html' : 'text/plain' } })
+      Object.defineProperty(response, 'url', { value: foreignRedirect ? 'https://other.test/file' : 'https://sim.test' + path.replace(/\.html$/, '') })
+      Object.defineProperty(response, 'redirected', { value: path.endsWith('.html') })
+      return response
+    },
   }
   const workerSource = await readFile(join(dir, 'offline-sw.js'), 'utf8')
   vm.runInNewContext(workerSource, context)
@@ -50,7 +58,10 @@ try {
     return result
   }
   online = false
-  assert.match(await (await fetchEvent('/edumon/ana?sessionV2Preview=1')).text(), /version|script/)
+  const navigation = await fetchEvent('/edumon/ana?sessionV2Preview=1')
+  assert.equal(navigation.redirected, false, 'cached navigation response must not retain redirect metadata')
+  assert.equal(navigation.headers.get('content-type'), 'text/html')
+  assert.match(await navigation.text(), /version|script/)
   assert.equal(await (await fetchEvent('/assets/lazy.js', 'cors')).text(), 'export default 1')
   for (const url of ['/api/session-v2/ws', '/api/local-pairing/secret', '/auth/callback?token=secret', 'https://remote.test/assets/main.js']) assert.equal(fetchEvent(url), undefined)
   assert.equal(fetchEvent('/edumon/ana', 'navigate', 'POST'), undefined)
@@ -70,6 +81,10 @@ try {
   await assert.rejects(lifecycle('install'), /Offline download incomplete/)
   assert(cachesData.has('loppjusim-shell-' + manifest.version))
   assert(!cachesData.has('loppjusim-shell-broken-build'))
+  corrupt = false; foreignRedirect = true
+  vm.runInNewContext(workerSource.replace(manifest.version, 'foreign-build'), { ...context })
+  await assert.rejects(lifecycle('install'), /changed origin/)
+  assert(cachesData.has('loppjusim-shell-' + manifest.version))
   await writeFile(join(dir, 'NIBP.svg'), '<svg>changed</svg>')
   const next = await buildOfflineShell(dir)
   assert.notEqual(next.version, manifest.version)
