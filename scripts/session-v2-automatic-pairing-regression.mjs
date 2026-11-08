@@ -79,5 +79,13 @@ try {
     transport.close(); assert.equal(transport.readyState, 3)
   } finally { globalThis.RTCPeerConnection = previousRtc }
 
+  globalThis.fetch = async () => { throw TypeError('Failed to fetch') }
+  let reason
+  const unavailable = createAutomaticCandidateTransport(`https://test/anaesth#local-pair=${'d'.repeat(64)}.${candidate}`)
+  unavailable.onmessage = event => { reason = JSON.parse(event.data).reason }
+  for (let n = 0; n < 20 && !reason; n++) await new Promise(resolve => setTimeout(resolve, 5))
+  assert.match(reason, /Candidate links require internet/)
+  assert.match(reason, /manual offer and answer/)
+  assert.equal(unavailable.readyState, 3)
 } finally { globalThis.fetch = originalFetch; globalThis.location = originalLocation }
 console.log('Automatic pairing exchange, capability separation, single-use, expiry and diagnostic regressions passed')

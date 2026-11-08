@@ -8,7 +8,9 @@ export function parseCandidateLink(text) {
   return { id: match[1], token: match[2] }
 }
 async function request(id, token, method = 'GET', body, signal) {
-  const response = await fetch(`/api/local-pairing/${id}`, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000), cache: 'no-store', credentials: 'omit' })
+  let response
+  try { response = await fetch(`/api/local-pairing/${id}`, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000), cache: 'no-store', credentials: 'omit' }) }
+  catch { throw Error('Candidate links require internet for each connection. Without internet, use a fresh manual offer and answer on the same Wi-Fi.') }
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw Error(data.error || 'Automatic pairing unavailable. Check internet access or use manual pairing.')
   return data

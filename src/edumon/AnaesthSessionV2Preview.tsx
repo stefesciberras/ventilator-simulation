@@ -616,7 +616,7 @@ export function AnaesthSessionV2Preview({
           {previewExpanded ? 'Collapse preview ▲' : 'Expand preview ▼'}
         </button>
       </div>
-      <OfflineStatus />
+      <OfflineStatus canReload={status === 'disconnected' || status === 'error'} />
       <div id="anaesth-session-v2-controls" hidden={!previewExpanded}>
       <section aria-label="v2 waveform diagnostics" style={{ border: '1px solid #768395', borderRadius: 6, padding: 8, marginTop: 8 }}>
         <strong>Waveform diagnostics (local, opt-in)</strong>
@@ -659,24 +659,30 @@ export function AnaesthSessionV2Preview({
               setPairingBusy(true); setCandidateLink('')
               try { setCandidateLink(await (socketRef.current as ReturnType<typeof createLocalSessionTransport>).createInvitation!(setPairingStatus)); setPairingStatus('Share the candidate link; waiting for candidate…') }
               catch (error) { setPairingStatus(String(error)) } finally { setPairingBusy(false) }
-            }}>Create candidate link</button>
+            }}>Create candidate link (internet required)</button>
             {candidateLink && <><input aria-label="Candidate link" readOnly value={candidateLink} onFocus={e => e.target.select()} style={{ width: '100%' }} />
               <button onClick={() => { void navigator.clipboard.writeText(candidateLink).then(() => setPairingStatus('Link copied'), () => setPairingStatus('Select and copy the link above')) }}>Copy candidate link</button></>}
           </>}
-          <p>Candidate: paste a candidate link below and press Connect, or use the manual offer/answer controls for offline pairing.</p>
+          <p><strong>Reconnecting offline:</strong> a candidate link cannot be reused without internet. Keep both devices on the same Wi-Fi. Instructor creates a new manual offer; candidate pastes it below and presses Connect; candidate returns the generated answer; instructor pastes it below and presses Accept manual answer.</p>
+          {hostMode === 'peer' && pairingInput.includes('#local-pair=') && <button disabled={status === 'connected' || status === 'connecting'} onClick={() => {
+            setPairingInput(''); setPairingOutput('')
+            if (location.hash.startsWith('#local-pair=')) history.replaceState(history.state, '', location.pathname + location.search)
+            setPairingStatus('Paste a fresh manual offer from the instructor, then press Connect. Return the generated answer to the instructor.')
+          }}>Use manual pairing (no internet)</button>}
           <textarea aria-label="Received pairing text" placeholder="Paste candidate link or manual offer/answer" value={pairingInput} onChange={e => setPairingInput(e.target.value)} style={{ width: '100%' }} />
           {hostMode === 'local' && <>
             <button disabled={status !== 'connected' || pairingBusy} onClick={async () => {
               setPairingBusy(true); setPairingOutput('')
               try { const channel = socketRef.current as ReturnType<typeof createLocalSessionTransport>; setPairingOutput(await channel.createOffer!(setPairingStatus)) }
               catch (error) { setPairingStatus(String(error)) } finally { setPairingBusy(false) }
-            }}>Create candidate offer</button>
+            }}>Create manual offer (no internet)</button>
             <button disabled={status !== 'connected' || pairingBusy || !pairingInput} onClick={async () => {
               try { await (socketRef.current as ReturnType<typeof createLocalSessionTransport>).acceptAnswer!(pairingInput); setPairingStatus('Answer accepted; connecting…') }
               catch (error) { setPairingStatus(String(error)) }
-            }}>Accept candidate answer</button>
+            }}>Accept manual answer</button>
           </>}
           <textarea aria-label="Generated pairing text" readOnly value={pairingOutput} placeholder="Generated offer or answer appears here; select and copy it" style={{ width: '100%' }} />
+          {pairingOutput && <button onClick={() => { void navigator.clipboard.writeText(pairingOutput).then(() => setPairingStatus('Pairing text copied'), () => setPairingStatus('Select and copy the complete generated text above')) }}>Copy generated pairing text</button>}
           <div role="status">{pairingBusy ? 'Gathering connection details…' : pairingStatus}</div>
         </div>}
         <label>Cloudflare WebSocket <input aria-label="v2 WebSocket endpoint" value={endpoint}

@@ -1,5 +1,13 @@
 # loppjuSIM Changelog
 
+## 1.3.0.37 — Verify offline readiness and clarify reconnection (2026-11-08)
+
+- User confirmed the failed offline reconnect used an online candidate link. Clearly label internet-required links versus manual offers/answers, add a manual-pairing switch that clears the old link, and provide actionable link-network errors even when Wi-Fi keeps navigator.onLine true. Add a copy button for generated manual text.
+- Offline readiness now requires complete assets, a controlling worker, and a same-origin cache-only page probe with the expected build identity. An uncontrolled first-load tab is prompted to finish setup with a normal online reload, disabled during a connected session. No automatic reload, activation, session deletion or checkpoint changes.
+- Explain per-browser/per-device preparation and normal reload versus force-refresh bypass. The reported physical offline reload failure is not yet reproduced; these changes tighten verification rather than asserting its cause.
+- Both products: 1.3.0.37. Tests cover cache-only probes, missing controller/cache/build mismatch, and failed online-link exchange. Real browser readiness observed on 1.3.0.36; offline network disconnection requires user verification.
+
+
 ## 1.3.0.36 — Fix offline preparation on Cloudflare (2026-11-08)
 
 - Production verification identified Cloudflare's HTTP 307 canonical redirect from the versioned `.html` shell to its extensionless URL. The offline downloader previously rejected all redirects, failing installation despite correct asset checksums.
