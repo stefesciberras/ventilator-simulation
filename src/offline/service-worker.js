@@ -7,9 +7,16 @@ const digest = async bytes => Array.from(new Uint8Array(await crypto.subtle.dige
 async function prepare() {
   const cache = await caches.open(cacheName)
   for (const file of manifest.files) {
-    const response = await fetch(file.url, { cache: 'no-store', credentials: 'omit', redirect: 'error' })
-    if (!response.ok || await digest(await response.clone().arrayBuffer()) !== file.hash) throw Error('Offline download incomplete')
-    await cache.put(file.url, response)
+    const response = await fetch(file.url, { cache: 'no-store', credentials: 'omit', redirect: 'follow' })
+    // Cloudflare canonicalizes .html URLs with a same-origin 307 redirect.
+    // The final bytes must still exactly match this build's manifest.
+    if (response.url && new URL(response.url).origin !== self.location.origin) throw Error(`Offline download changed origin: ${file.url}`)
+    if (!response.ok) throw Error(`Offline download failed (${response.status}): ${file.url}`)
+    const bytes = await response.arrayBuffer()
+    if (await digest(bytes) !== file.hash) throw Error(`Offline download incomplete (checksum mismatch): ${file.url}`)
+    // Store a fresh response so a redirected response is not replayed into a
+    // navigation request whose redirect mode may be manual.
+    await cache.put(file.url, new Response(bytes, { status: response.status, statusText: response.statusText, headers: response.headers }))
   }
 }
 self.addEventListener('install', event => {

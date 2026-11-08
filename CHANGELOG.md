@@ -1,5 +1,12 @@
 # loppjuSIM Changelog
 
+## 1.3.0.36 — Fix offline preparation on Cloudflare (2026-11-08)
+
+- Production verification identified Cloudflare's HTTP 307 canonical redirect from the versioned `.html` shell to its extensionless URL. The offline downloader previously rejected all redirects, failing installation despite correct asset checksums.
+- Follow canonical redirects, require a same-origin final response and verify the exact manifest checksum. Cache a fresh response without redirect metadata so offline navigation can reuse it safely. Existing sessions/checkpoints are untouched.
+- Regression coverage now simulates the production HTML redirect, checks offline response headers/redirect metadata, and rejects cross-origin or checksum-invalid responses while preserving the active build. Both products: 1.3.0.36.
+
+
 ## 1.3.0.35 — Offline app shell and local reload recovery (2026-11-07)
 
 - Opening the Anaesth v2 pilot prepares a verified offline shell, including lazy assets, on each device. Availability is shown explicitly; simulator routes reload from that complete build offline. API/auth/pairing/library responses are never cached.
